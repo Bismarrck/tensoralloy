@@ -13,12 +13,15 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def cutoff(r, rc, name=None):
+def cutoff(r: tf.Tensor, rc: float, name=None):
     """
     The cutoff function.
+
+    f_c(r) = 0.5 * [ cos(min(r / rc) * pi) + 1 ]
+
     """
     with ops.name_scope(name, "fc", [r]) as name:
-        rc = ops.convert_to_tensor(rc, dtype=tf.float32, name="rc")
+        rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
         ratio = math_ops.div(r, rc, name='ratio')
         z = math_ops.minimum(ratio, 1.0, name='minimum')
         z = math_ops.cos(z * np.pi, name='cos') + 1.0
