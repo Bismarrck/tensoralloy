@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-
+The implementations of Behler's Symmetry Functions.
 """
 from __future__ import print_function, absolute_import
 
@@ -31,20 +31,20 @@ def cutoff_fxn(r, rc):
     return (np.cos(np.minimum(r / rc, 1.0) * np.pi) + 1.0) * 0.5
 
 
-def get_neighbour_list(r, cutoff):
+def get_neighbour_list(r, rc):
     """
     A naive implementation of calculating neighbour list for non-periodic
     molecules.
 
     Args:
       r: a `[N, N]` array as the pairwise interatomic distances.
-      cutoff: a float as the cutoff radius.
+      rc: a float as the cutoff radius.
 
     Returns:
       neighbours: a `[N, N]` boolean array as the neighbour results.
 
     """
-    neighbours = r < cutoff
+    neighbours = r < rc
     np.fill_diagonal(neighbours, False)
     return neighbours
 
@@ -86,56 +86,67 @@ def get_radial_fingerprints(coords, r, rc, etas):
     return x
 
 
-atoms = read('B28.xyz', index=0, format='xyz')
-assert isinstance(atoms, Atoms)
-
-atoms.set_cell([10.0, 10.0, 10.0])
-atoms.set_pbc([False, False, False])
-
-eta_list = [0.05, 4., 20., 80.]
-N = len(atoms)
-ndim = len(eta_list)
-rc = 6.0
-rs = 0.0
-
-ii, jj = neighbor_list('ij', atoms, rc)
-vi = []
-for k in range(ndim):
-    vi.append([(ii[idx], k) for idx in range(len(ii))])
-
-ij = list(zip(ii, jj))
-
-
-graph = tf.Graph()
-
-with graph.as_default():
-
-    R = tf.placeholder(tf.float64, shape=(N, 3), name='R')
-    rd = pairwise_dist(R, R, name='dist')
-
-    rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
-    eta = tf.constant(eta_list, dtype=tf.float64, name='eta')
-    dd = tf.gather_nd(rd, ij)
-    fc_dd = cutoff(dd, rc, name='cutoff')
-
-    x = tf.Variable(tf.zeros((N, ndim), dtype=tf.float64))
-    v = tf.negative(tf.tensordot(eta, tf.div(tf.square(dd), rc2), axes=0))
+def inference_aa_radial(r: tf.Tensor, rc: float, eta: list, ij, vi):
+    """
+    The implementation of Behler's radial symmetry function.
+    """
+    ndim = len(eta)
+    N = r.shape[0]
+    rd = pairwise_dist(r, r, name='pdist')
+    rc2 = tf.constant(rc ** 2, dtype=tf.float64, name='rc2')
+    eta = tf.constant(eta, dtype=tf.float64, name='eta')
+    rd = tf.gather_nd(rd, ij, name='rd')
+    rd2 = tf.square(rd, name='rd2')
+    fc_dd = cutoff(rd, rc, name='cutoff')
+    g = tf.Variable(tf.zeros((N, ndim), dtype=tf.float64), trainable=False)
+    v = tf.negative(tf.tensordot(eta, tf.div(rd2, rc2), axes=0))
     v = tf.exp(v, name='exp')
     v = tf.multiply(v, fc_dd, name='damped')
-
     ops = []
     for row in range(ndim):
-        ops.append(tf.scatter_nd_add(x, vi[row], v[row]))
-    op = tf.group(ops)
+        ops.append(tf.scatter_nd_add(g, vi[row], v[row]))
+    with tf.control_dependencies(ops):
+        return tf.identity(g)
 
-    with tf.Session() as sess:
 
-        tf.global_variables_initializer().run()
-        v_val, x_val, _ = sess.run([v, x, op], feed_dict={R: atoms.get_positions()})
+def main():
 
-    z_val = get_radial_fingerprints(atoms.get_positions(),
-                                    pairwise_distances(atoms.get_positions()),
-                                    rc,
-                                    eta_list)
+    atoms = read('B28.xyz', index=0, format='xyz')
+    assert isinstance(atoms, Atoms)
 
-    print(np.abs(x_val - z_val).max())
+    atoms.set_cell([10.0, 10.0, 10.0])
+    atoms.set_pbc([False, False, False])
+
+    eta_list = [0.05, 4., 20., 80.]
+    N = len(atoms)
+    ndim = len(eta_list)
+    rc = 6.0
+    ii, jj = neighbor_list('ij', atoms, rc)
+    vi = []
+    for k in range(ndim):
+        vi.append([(ii[idx], k) for idx in range(len(ii))])
+    ij = list(zip(ii, jj))
+
+
+    graph = tf.Graph()
+
+    with graph.as_default():
+
+        R = tf.placeholder(tf.float64, shape=(N, 3), name='R')
+        x = inference_aa_radial(R, rc, eta_list, ij, vi)
+
+        with tf.Session() as sess:
+
+            tf.global_variables_initializer().run()
+            x_val = sess.run(x, feed_dict={R: atoms.get_positions()})
+
+        z_val = get_radial_fingerprints(atoms.get_positions(),
+                                        pairwise_distances(atoms.get_positions()),
+                                        rc,
+                                        eta_list)
+
+        print(np.abs(x_val - z_val).max())
+
+
+if __name__ == "__main__":
+    main()
