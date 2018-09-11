@@ -6,8 +6,14 @@ functions.
 from __future__ import print_function, absolute_import
 
 import numpy as np
+import tensorflow as tf
 import nose
+from nose.tools import assert_less
+from behler import build_angular_v2g_map, build_radial_v2g_map
+from behler import angular_function, radial_function
+from ase.io import read
 from itertools import product
+from sklearn.metrics import pairwise_distances
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -127,7 +133,46 @@ def get_augular_fingerprints_naive(coords, r, rc, etas, gammas, zetas):
 
 
 def test_single():
-    pass
+    """
+    Test the single version of `radial_function` and `angular_function`.
+    """
+    atoms = read('test_files/B28.xyz', index=0, format='xyz')
+    atoms.set_cell([20.0, 20.0, 20.0])
+    atoms.set_pbc([False, False, False])
+    coords = atoms.get_positions()
+    rr = pairwise_distances(coords)
+
+    eta = [0.05, 4., 20., 80.]
+    angular_eta = [0.005, ]
+    gamma = [1.0, -1.0]
+    zeta = [1.0, 4.0]
+    rc = 6.0
+    natoms = len(atoms)
+
+    ndim_angular = len(angular_eta) * len(zeta) * len(gamma)
+    ndim_radial = len(eta)
+
+    p_v2g_map, pairs = build_radial_v2g_map(atoms, rc, ndim_radial)
+    t_v2g_map, triples = build_angular_v2g_map(pairs, ndim_angular)
+
+    with tf.Graph().as_default():
+        R = tf.placeholder(tf.float64, shape=(natoms, 3), name='R')
+        gr = radial_function(R, rc, eta, pairs['ij'], p_v2g_map)
+        ga = angular_function(R, rc, triples, angular_eta, gamma, zeta,
+                              t_v2g_map)
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+
+            gr_vals, ga_vals = sess.run([gr, ga],
+                                        feed_dict={R: atoms.get_positions()})
+
+        zr_vals = get_radial_fingerprints(coords, rr, rc, eta)
+        za_vals = get_augular_fingerprints_naive(coords, rr, rc, angular_eta,
+                                                 gamma, zeta)
+
+        assert_less(np.linalg.norm(gr_vals - zr_vals), 1e-6)
+        assert_less(np.linalg.norm(ga_vals - za_vals), 1e-6)
 
 
 if __name__ == "__main__":
