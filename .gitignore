@@ -107,3 +107,6 @@ venv.bak/
 
 # Local tests
 test.py
+
+# Ignore PyCharm settings
+.idea
