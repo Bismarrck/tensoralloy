@@ -5,6 +5,7 @@ The implementations of Behler's Symmetry Functions.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utilities import cutoff, pairwise_dist
@@ -13,7 +14,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def build_radial_v2g_map(atoms: Atoms, rc: float, n_etas: int):
+def build_radial_v2g_map(atoms: Atoms, rc: float, ndim: int, map_to_vec=False):
     """
 
     Parameters
@@ -22,12 +23,18 @@ def build_radial_v2g_map(atoms: Atoms, rc: float, n_etas: int):
         An `ase.Atoms` object representing a structure.
     rc : float
         The cutoff radius.
-    n_etas : int
+    ndim : int
         The number of `eta` for radial symmetry functions.
+    map_to_vec : bool
+        If False (default), those indices shall map computed values to the raw
+        interatomic distance matrix with shape `[N, N]`.
+        If True, those indices shall map computed values to the flatten upper
+        triangular part with shape `[1 + N*N, ]`. Atom indices start from
+        1 and index 0 indicates a virtual/dummy value.
 
     Returns
     -------
-    v2g_map : Sized
+    v2g_map : array_like
         A list of (i, l) pairs where i is the index of the center atom and k is
         the index of the corresponding `eta`.
     pairs : dict
@@ -43,11 +50,18 @@ def build_radial_v2g_map(atoms: Atoms, rc: float, n_etas: int):
 
     """
     ii, jj = neighbor_list('ij', atoms, rc)
-    ij = list(zip(ii, jj))
-    v2g_map = []
-    for k in range(n_etas):
-        v2g_map.append([(ii[idx], k) for idx in range(len(ii))])
-    return v2g_map, {'ii': ii, 'jj': jj, 'ij': ij}
+    if not map_to_vec:
+        ij = list(zip(ii, jj))
+    else:
+        natoms = len(atoms)
+        ij = np.zeros_like(ii)
+        for i in range(len(ii)):
+            ij[i] = ii[i] * natoms + jj[i] + 1
+    v2g_map = np.zeros((ndim, len(ii), 2), dtype=np.int32)
+    for k in range(ndim):
+        v2g_map[k, :, 0] = ii
+        v2g_map[k, :, 1] = k
+    return v2g_map, {'ii': ii, 'jj': jj, 'ij': ij, 'map_to_vec': map_to_vec}
 
 
 def build_angular_v2g_map(pairs, ndim):
@@ -63,7 +77,7 @@ def build_angular_v2g_map(pairs, ndim):
 
     Returns
     -------
-    v2g_map : Sized
+    v2g_map : array_like
         A list of (i, l) pairs where i is the index of the center atom and k is
         the index of the corresponding `eta`.
     triples : dict
@@ -74,7 +88,7 @@ def build_angular_v2g_map(pairs, ndim):
     nl = {}
     for idx, atomi in enumerate(pairs['ii']):
         nl[atomi] = nl.get(atomi, []) + [pairs['jj'][idx]]
-    n = 0
+    length = 0
     for atomi, jlist in nl.items():
         for atomj in jlist:
             for atomk in jlist:
@@ -84,10 +98,11 @@ def build_angular_v2g_map(pairs, ndim):
                 triples['ik'].append((atomi, atomk))
                 triples['jk'].append((atomj, atomk))
                 triples['ii'].append(atomi)
-                n += 1
-    v2g_map = []
+                length += 1
+    v2g_map = np.zeros((ndim, length, 2), dtype=np.int32)
     for k in range(ndim):
-        v2g_map.append([(triples['ii'][idx], k) for idx in range(n)])
+        v2g_map[k, :, 0] = triples['ii']
+        v2g_map[k, :, 1] = k
     return v2g_map, triples
 
 
