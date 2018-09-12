@@ -90,7 +90,7 @@ def pairwise_dist(xx, yy=None, name=None):
             nb = tf.reshape(nb, [batch_size, 1, -1])
 
             # Use einsum to compute matrix multiplications
-            xy = tf.einsum('ijk,ilk->ijl', na, nb, name='einsum')
+            xy = tf.einsum('ijk,ilk->ijl', xx, yy, name='einsum')
 
         # return pairwise euclidead difference matrix
         zz = tf.maximum(na - tf.multiply(two, xy, name='2xy') + nb, zero)
