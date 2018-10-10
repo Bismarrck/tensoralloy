@@ -211,29 +211,31 @@ def build_angular_v2g_map(pairs, ndim):
     return v2g_map, triples
 
 
-def radial_function(R: tf.Tensor, rc: float, eta_list: list, ij: list,
-                    v_to_g_map):
+def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, eta_list, ilist,
+                    jlist, Slist, v2g_map, cell):
     """
     The implementation of Behler's radial symmetry function for a single
     structure.
     """
-    ndim = len(eta_list)
-    N = R.shape[0]
-    r = pairwise_dist(R, R, name='pdist')
-    rc2 = tf.constant(rc ** 2, dtype=tf.float64, name='rc2')
-    eta = tf.constant(eta_list, dtype=tf.float64, name='eta')
-    r = tf.gather_nd(r, ij, name='rd')
-    r2 = tf.square(r, name='rd2')
-    fc_r = cutoff(r, rc, name='cutoff')
-    g = tf.Variable(tf.zeros((N, ndim), dtype=tf.float64), trainable=False)
-    v = tf.negative(tf.tensordot(eta, tf.div(r2, rc2), axes=0))
-    v = tf.exp(v, name='exp')
-    v = tf.multiply(v, fc_r, name='damped')
-    ops = []
-    for row in range(ndim):
-        ops.append(tf.scatter_nd_add(g, v_to_g_map[row], v[row]))
-    with tf.control_dependencies(ops):
-        return tf.identity(g)
+    with tf.name_scope("G2"):
+        with tf.name_scope("mic"):
+            Ri = tf.gather_nd(R, ilist, name='Ri')
+            Rj = tf.gather_nd(R, jlist, name='Rj')
+            Slist = tf.constant(Slist, dtype=tf.float64, name='Slist')
+            cell = tf.constant(cell, dtype=tf.float64, name='cell')
+            Dlist = Rj - Ri + tf.matmul(Slist, cell)
+            dlist = tf.norm(Dlist, axis=1, name='dlist')
+        rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
+        r = tf.identity(dlist, name='r')
+        r2 = tf.square(r, name='r2')
+        fc_r = cutoff(r, rc=rc, name='fc_r')
+        eta = tf.constant(eta_list, dtype=tf.float64, name='eta')
+        v = tf.div(r2, rc2, name='div')
+        v = tf.tensordot(eta, v, 0, name='tensordot')
+        v = tf.exp(tf.negative(v, name='neg'), name='exp')
+        v = tf.multiply(v, fc_r, name='vfcr')
+        v = tf.reshape(v, [-1], name='flatten')
+        return tf.scatter_nd_add(g, v2g_map, v)
 
 
 def angular_function(R: tf.Tensor, rc: float, indices: dict, eta_list: list,
