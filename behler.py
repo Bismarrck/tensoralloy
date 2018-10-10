@@ -16,6 +16,35 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def compute_dimension(terms: List[str], rdim, adim):
+    """
+    Compute the total dimension of the feature vector.
+
+    Parameters
+    ----------
+    terms : List[str]
+        A list of str as all k-body terms.
+    rdim : int
+        The total number of radial parameter sets.
+    adim : int
+        The total number of angular parameter sets.
+
+    Returns
+    -------
+    ndim : int
+        The total dimension of the feature vector.
+
+    """
+    ndim = 0
+    for term in terms:
+        k = len(get_elements_from_kbody_term(term))
+        if k == 2:
+            ndim += rdim
+        else:
+            ndim += adim
+    return ndim
+
+
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     """
     Return the atoms in the given k-body term.
