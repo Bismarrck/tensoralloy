@@ -111,7 +111,8 @@ def get_kbody_terms(elements: List[str], k_max=3):
             center = elements[i]
             for j in range(n):
                 for k in range(j, n):
-                    term = "{}{}{}".format(center, elements[j], elements[k])
+                    suffix = "".join(sorted([elements[j], elements[k]]))
+                    term = "{}{}".format(center, suffix)
                     mapping[elements[i]].append(term)
     if k_max >= 4:
         raise ValueError("`k_max>=4` is not supported yet!")
