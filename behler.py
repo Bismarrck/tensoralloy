@@ -10,10 +10,17 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, pairwise_dist
 from itertools import chain
+from collections import namedtuple
 from typing import List
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+RadialMap = namedtuple('RadialMap',
+                       ('v2g_map', 'ilist', 'jlist', 'Slist', 'cell'))
+
+AngularMap = namedtuple('AngularMap', ('v2g_map', ))
 
 
 def compute_dimension(terms: List[str], rdim, adim):
@@ -120,54 +127,55 @@ def get_kbody_terms(elements: List[str], k_max=3):
     return terms, mapping
 
 
-def build_radial_v2g_map(atoms: Atoms, rc: float, ndim: int, map_to_vec=False):
+def build_radial_v2g_map(atoms: Atoms, kbody_terms: List[str], rc, n_etas):
     """
+    Build the values-to-features mapping for radial symmetry functions.
 
     Parameters
     ----------
     atoms : Atoms
         An `ase.Atoms` object representing a structure.
+    kbody_terms : List[str]
+        A list of str as all k-body terms.
     rc : float
         The cutoff radius.
-    ndim : int
+    n_etas : int
         The number of `eta` for radial symmetry functions.
-    map_to_vec : bool
-        If False (default), those indices shall map computed values to the raw
-        interatomic distance matrix with shape `[N, N]`.
-        If True, those indices shall map computed values to the flatten upper
-        triangular part with shape `[1 + N*N, ]`. Atom indices start from
-        1 and index 0 indicates a virtual/dummy value.
 
     Returns
     -------
-    v2g_map : array_like
-        A list of (i, l) pairs where i is the index of the center atom and k is
-        the index of the corresponding `eta`.
-    pairs : dict
-        A dict with three key-value pairs:
+    radial : Pairs
+        A namedtuple with these properties:
 
-        'ii' : list
+        'v2g_map' : array_like
+            A list of (atomi, etai, termi) where atomi is the index of the
+            center atom, etai is the index of the `eta` and termi is the index
+            of the corresponding 2-body term.
+        'ilist' : array_like
             A list of first atom indices.
-        'jj' : list
+        'jlist' : array_like
             A list of second atom indices.
-        'ij' : list
+        'Slist' : array_like
             A list of (i, j) pairs where i is the index of the center atom and j
             is the index of its neighbor atom.
+        'cell': array_like
+            The boundary cell of the structure.
 
     """
-    ii, jj = neighbor_list('ij', atoms, rc)
-    if not map_to_vec:
-        ij = list(zip(ii, jj))
-    else:
-        natoms = len(atoms)
-        ij = np.zeros_like(ii)
-        for i in range(len(ii)):
-            ij[i] = ii[i] * natoms + jj[i] + 1
-    v2g_map = np.zeros((ndim, len(ii), 2), dtype=np.int32)
-    for k in range(ndim):
-        v2g_map[k, :, 0] = ii
-        v2g_map[k, :, 1] = k
-    return v2g_map, {'ii': ii, 'jj': jj, 'ij': ij, 'map_to_vec': map_to_vec}
+    ilist, jlist, Slist = neighbor_list('ijS', atoms, rc)
+    n = len(ilist)
+    tlist = np.zeros_like(ilist)
+    for i in range(n):
+        tlist[i] = kbody_terms.index('{}{}'.format(ilist[i], jlist[i]))
+    v2g_map = np.zeros_like((n * n_etas, 3), dtype=np.int32)
+    for etai in range(n_etas):
+        istart = etai * n
+        istop = istart + n
+        v2g_map[istart: istop, 0] = ilist
+        v2g_map[istart: istop, 1] = etai
+        v2g_map[istart: istop, 2] = tlist
+    return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist,
+                     cell=atoms.cell)
 
 
 def build_angular_v2g_map(pairs, ndim):
