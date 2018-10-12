@@ -260,27 +260,26 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
                       jkSlist=jkS)
 
 
-def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, eta_list, ilist,
-                    jlist, Slist, v2g_map, cell):
+def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, etas,
+                    ilist: tf.Tensor, jlist: tf.Tensor, Slist: tf.Tensor,
+                    v2g_map: tf.Tensor, cell: tf.Tensor):
     """
     The implementation of Behler's radial symmetry function for a single
     structure.
     """
     with tf.name_scope("G2"):
         with tf.name_scope("mic"):
-            Ri = tf.gather_nd(R, ilist, name='Ri')
-            Rj = tf.gather_nd(R, jlist, name='Rj')
-            Slist = tf.constant(Slist, dtype=tf.float64, name='Slist')
-            cell = tf.constant(cell, dtype=tf.float64, name='cell')
+            Ri = tf.gather(R, ilist, name='Ri')
+            Rj = tf.gather(R, jlist, name='Rj')
             Dlist = Rj - Ri + tf.matmul(Slist, cell)
             dlist = tf.norm(Dlist, axis=1, name='dlist')
         rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
         r = tf.identity(dlist, name='r')
         r2 = tf.square(r, name='r2')
         fc_r = cutoff(r, rc=rc, name='fc_r')
-        eta = tf.constant(eta_list, dtype=tf.float64, name='eta')
+        etas = tf.constant(etas, dtype=tf.float64, name='etas')
         v = tf.div(r2, rc2, name='div')
-        v = tf.tensordot(eta, v, 0, name='tensordot')
+        v = tf.tensordot(etas, v, 0, name='tensordot')
         v = tf.exp(tf.negative(v, name='neg'), name='exp')
         v = tf.multiply(v, fc_r, name='vfcr')
         v = tf.reshape(v, [-1], name='flatten')
