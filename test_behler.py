@@ -8,8 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
-from behler import get_elements_from_kbody_term, get_kbody_terms
-from behler import compute_dimension
+from behler import get_kbody_terms, compute_dimension
 from behler import radial_function, angular_function
 from behler import build_radial_v2g_map, build_angular_v2g_map
 from nose.plugins.skip import SkipTest
@@ -18,6 +17,7 @@ from ase import Atoms
 from ase.io import read
 from itertools import product
 from sklearn.metrics import pairwise_distances
+from sklearn.model_selection import ParameterGrid
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -197,6 +197,7 @@ def test_main():
     beta = np.array([0.005, ])
     gamma = np.array([1.0, -1.0])
     zeta = np.array([1.0, 4.0])
+    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
 
     rc = 6.5
     atoms = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
@@ -227,6 +228,17 @@ def test_main():
     gr = gr.numpy()
     d1 = np.abs(amp[:, 0: 8] - gr[:, :8])
     d2 = np.abs(amp[:, 20: 28] - gr[:, 20: 28])
+    assert_less(d1.max(), 1e-8)
+    assert_less(d2.max(), 1e-8)
+
+    amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
+    ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
+                          amap.jk, amap.ijSlist, amap.ikSlist, amap.jkSlist,
+                          total_dim)
+
+    ga = ga.numpy()
+    d1 = np.abs(amp[:, 8: 20] - ga[:, 8: 20])
+    d2 = np.abs(amp[:, 28:] - ga[:, 28:])
     assert_less(d1.max(), 1e-8)
     assert_less(d2.max(), 1e-8)
 

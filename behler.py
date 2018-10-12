@@ -197,7 +197,8 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
     return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
-def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
+def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
+                          kbody_terms: List[str], kbody_sizes: List[int]):
     """
     Build the values-to-features mapping for angular symmetry functions.
 
@@ -209,6 +210,8 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
         The mapping for radial symmetry functions.
     kbody_terms : List[str]
         A list of str as all k-body terms.
+    kbody_sizes : List[int]
+        A list of int as the sizes of the k-body terms.
 
     Returns
     -------
@@ -233,6 +236,7 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
 
     """
     symbols = atoms.get_chemical_symbols()
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     nl_indices = {}
     nl_shifts = {}
     for i, atomi in enumerate(rmap.ilist):
@@ -245,12 +249,12 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
         total_dim += (n - 1 + 1) * (n - 1) // 2
 
     v2g_map = np.zeros((total_dim, 2), dtype=np.int32)
-    ij = np.zeros_like(v2g_map)
-    ik = np.zeros_like(v2g_map)
-    jk = np.zeros_like(v2g_map)
-    ijS = np.zeros((total_dim, 3))
-    ikS = np.zeros((total_dim, 3))
-    jkS = np.zeros((total_dim, 3))
+    ij = np.zeros_like(v2g_map, dtype=np.int32)
+    ik = np.zeros_like(v2g_map, dtype=np.int32)
+    jk = np.zeros_like(v2g_map, dtype=np.int32)
+    ijS = np.zeros((total_dim, 3), dtype=np.int32)
+    ikS = np.zeros((total_dim, 3), dtype=np.int32)
+    jkS = np.zeros((total_dim, 3), dtype=np.int32)
 
     row = 0
     for atomi, nl in nl_indices.items():
@@ -269,7 +273,8 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
                 ijS[row] = iSlist[j]
                 ikS[row] = iSlist[k]
                 jkS[row] = iSlist[k] - iSlist[j]
-                v2g_map[row] = atomi, kbody_terms.index(term)
+                v2g_map[row] = atomi, offsets[kbody_terms.index(term)]
+                row += 1
 
     return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
                       jkSlist=jkS)
@@ -308,30 +313,11 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
             return tf.convert_to_tensor(g, dtype=tf.float64, name='gr')
 
 
-def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
-                     grid: ParameterGrid, ij, ik, jk, ijS, ikS, jkS):
+def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
+                     ik, jk, ijS, ikS, jkS, total_dim):
     """
     The implementation of Behler's angular symmetry function for a single
     structure.
-
-    Parameters
-    ----------
-    R : tf.Tensor
-        A `float32` or `float64` tensor of shape `[N, 3]` as the cartesian
-        coordinates of a structure where N is the number of atoms.
-    rc : float
-        A float or float tensor as the cutoff radius.
-    g : tf.Variable
-        A `float32` or `float64` tensor of shape `[N, n_dims]` as the computed
-        atomic features.
-    v2g_map : tf.Tensor
-
-    cell : tf.Tensor
-        A `float32` or `float64` tensor of shape `[3, 3]` as the unit cell of
-        the structure.
-    grid : ParameterGrid
-        The
-
     """
     with tf.name_scope("G4"):
 
@@ -339,30 +325,33 @@ def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
             one = tf.constant(1.0, dtype=tf.float64)
             two = tf.constant(2.0, dtype=tf.float64)
             rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
+            v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
 
         with tf.name_scope("Rij"):
             Ri_ij = tf.gather(R, ij[:, 0])
             Rj_ij = tf.gather(R, ij[:, 1])
+            ijS = tf.convert_to_tensor(ijS, dtype=tf.float64, name='ijS')
             D_ij = Rj_ij - Ri_ij + tf.matmul(ijS, cell)
             r_ij = tf.norm(D_ij, axis=1)
 
         with tf.name_scope("Rik"):
             Ri_ik = tf.gather(R, ik[:, 0])
             Rk_ik = tf.gather(R, ik[:, 1])
+            ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
             D_ik = Rk_ik - Ri_ik + tf.matmul(ikS, cell)
             r_ik = tf.norm(D_ik, axis=1)
 
         with tf.name_scope("Rik"):
             Rj_jk = tf.gather(R, jk[:, 0])
             Rk_jk = tf.gather(R, jk[:, 1])
+            jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
             D_jk = Rk_jk - Rj_jk + tf.matmul(jkS, cell)
             r_jk = tf.norm(D_jk, axis=1)
 
         # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
         with tf.name_scope("cosine"):
             upper = tf.square(r_ij) + tf.square(r_ik) - tf.square(r_jk)
-            lower = tf.multiply(r_ij, r_ik, name='bc')
-            lower = tf.multiply(two, lower, name='2bc')
+            lower = two * tf.multiply(r_ij, r_ik, name='bc')
             theta = tf.div(upper, lower, name='theta')
 
         # Compute the damping term: $f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})$
@@ -375,18 +364,25 @@ def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
         # Compute $R_{ij}^{2} + R_{ik}^{2} + R_{jk}^{2}$
         with tf.name_scope("r2"):
             r2_ij = tf.square(r_ij, name='r2_ij')
-            r2_ik = tf.square(r_ij, name='r2_ik')
-            r2_jk = tf.square(r_ij, name='r2_jk')
+            r2_ik = tf.square(r_ik, name='r2_ik')
+            r2_jk = tf.square(r_jk, name='r2_jk')
             r2 = r2_ij + r2_ik + r2_jk
             r2c = tf.div(r2, rc2, name='r2_rc2')
 
-        with tf.name_scope("g"):
+        with tf.name_scope("features"):
+            g = tf.Variable(tf.zeros((R.shape[0], total_dim), dtype=tf.float64),
+                            name='g', trainable=False)
             for row, params in enumerate(grid):
                 with tf.name_scope("p{}".format(row)):
-                    gamma = params['gamma']
-                    zeta = params['zeta']
-                    beta = params['beta']
+                    gamma = tf.constant(
+                        params['gamma'], dtype=tf.float64, name='gamma')
+                    zeta = tf.constant(
+                        params['zeta'], dtype=tf.float64, name='zeta')
+                    beta = tf.constant(
+                        params['beta'], dtype=tf.float64, name='beta')
                     c = (one + gamma * theta)**zeta * two**(1.0 - zeta)
                     v = c * tf.exp(-beta * r2c) * fc_r_ijk
-                    g = tf.scatter_nd_add(g, v2g_map, v)
-            return g
+                    step = tf.constant([0, row], dtype=tf.int32, name='step')
+                    v2g_row = tf.add(v2g_base, step, name='v2g_row')
+                    g = tf.scatter_nd_add(g, v2g_row, v)
+            return tf.convert_to_tensor(g, dtype=tf.float64, name='ga')
