@@ -29,33 +29,42 @@ AngularMap = namedtuple(
 )
 
 
-def compute_dimension(terms: List[str], rdim, adim):
+def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
+                      n_zetas):
     """
     Compute the total dimension of the feature vector.
 
     Parameters
     ----------
-    terms : List[str]
+    kbody_terms : List[str]
         A list of str as all k-body terms.
-    rdim : int
-        The total number of radial parameter sets.
-    adim : int
-        The total number of angular parameter sets.
+    n_etas : int
+        The number of `eta` for radial functions.
+    n_betas : int
+        The number of `beta` for angular functions.
+    n_gammas : int
+        The number of `gamma` for angular functions.
+    n_zetas : int
+        The number of `zeta` for angular functions.
 
     Returns
     -------
-    ndim : int
+    total_dim : int
         The total dimension of the feature vector.
+    kbody_sizes : List[int]
 
     """
-    ndim = 0
-    for term in terms:
-        k = len(get_elements_from_kbody_term(term))
+    total_dim = 0
+    kbody_sizes = []
+    for kbody_term in kbody_terms:
+        k = len(get_elements_from_kbody_term(kbody_term))
         if k == 2:
-            ndim += rdim
+            n = n_etas
         else:
-            ndim += adim
-    return ndim
+            n = n_gammas * n_betas * n_zetas
+        total_dim += n
+        kbody_sizes.append(n)
+    return total_dim, kbody_sizes
 
 
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
@@ -133,7 +142,8 @@ def get_kbody_terms(elements: List[str], k_max=3):
     return terms, mapping
 
 
-def build_radial_v2g_map(atoms: Atoms, kbody_terms: List[str], rc, n_etas):
+def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
+                         kbody_sizes: List[int]):
     """
     Build the values-to-features mapping for radial symmetry functions.
 
@@ -141,16 +151,18 @@ def build_radial_v2g_map(atoms: Atoms, kbody_terms: List[str], rc, n_etas):
     ----------
     atoms : Atoms
         An `ase.Atoms` object representing a structure.
-    kbody_terms : List[str]
-        A list of str as all k-body terms.
     rc : float
         The cutoff radius.
     n_etas : int
         The number of `eta` for radial symmetry functions.
+    kbody_terms : List[str]
+        A list of str as all k-body terms.
+    kbody_sizes : List[int]
+        A list of int as the sizes of the k-body terms.
 
     Returns
     -------
-    radial : Pairs
+    radial : RadialMap
         A namedtuple with these properties:
 
         'v2g_map' : array_like
@@ -168,18 +180,20 @@ def build_radial_v2g_map(atoms: Atoms, kbody_terms: List[str], rc, n_etas):
             The boundary cell of the structure.
 
     """
+    symbols = atoms.get_chemical_symbols()
     ilist, jlist, Slist = neighbor_list('ijS', atoms, rc)
     n = len(ilist)
     tlist = np.zeros_like(ilist)
     for i in range(n):
-        tlist[i] = kbody_terms.index('{}{}'.format(ilist[i], jlist[i]))
-    v2g_map = np.zeros_like((n * n_etas, 3), dtype=np.int32)
+        tlist[i] = kbody_terms.index(
+            '{}{}'.format(symbols[ilist[i]], symbols[jlist[i]]))
+    v2g_map = np.zeros((n * n_etas, 2), dtype=np.int32)
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     for etai in range(n_etas):
         istart = etai * n
         istop = istart + n
         v2g_map[istart: istop, 0] = ilist
-        v2g_map[istart: istop, 1] = etai
-        v2g_map[istart: istop, 2] = tlist
+        v2g_map[istart: istop, 1] = offsets[tlist] + etai
     return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
@@ -261,8 +275,8 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap, kbody_terms):
                       jkSlist=jkS)
 
 
-def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
-                    etas, ilist, jlist, Slist):
+def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
+                    total_dim):
     """
     The implementation of Behler's radial symmetry function for a single
     structure.
@@ -276,6 +290,7 @@ def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
         with tf.name_scope("rij"):
             Ri = tf.gather(R, ilist, name='Ri')
             Rj = tf.gather(R, jlist, name='Rj')
+            Slist = tf.convert_to_tensor(Slist, dtype=tf.float64, name='Slist')
             Dlist = Rj - Ri + tf.matmul(Slist, cell)
             r = tf.norm(Dlist, axis=1, name='r')
             r2 = tf.square(r, name='r2')
@@ -284,10 +299,13 @@ def radial_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
         with tf.name_scope("fc"):
             fc_r = cutoff(r, rc=rc, name='fc_r')
 
-        with tf.name_scope("g"):
-            v = tf.exp(-tf.tensordot(etas, r2c), name='exp') * fc_r
+        with tf.name_scope("features"):
+            g = tf.Variable(tf.zeros((R.shape[0], total_dim), dtype=tf.float64),
+                            name='g', trainable=False)
+            v = tf.exp(-tf.tensordot(etas, r2c, axes=0)) * fc_r
             v = tf.reshape(v, [-1], name='flatten')
-            return tf.scatter_nd_add(g, v2g_map, v)
+            g = tf.scatter_nd_add(g, v2g_map, v)
+            return tf.convert_to_tensor(g, dtype=tf.float64, name='gr')
 
 
 def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
@@ -321,7 +339,6 @@ def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
             one = tf.constant(1.0, dtype=tf.float64)
             two = tf.constant(2.0, dtype=tf.float64)
             rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
-            n_dims = tf.constant(len(grid), name='n_dims')
 
         with tf.name_scope("Rij"):
             Ri_ij = tf.gather(R, ij[:, 0])
@@ -368,8 +385,8 @@ def angular_function(R: tf.Tensor, rc: float, g: tf.Variable, v2g_map, cell,
                 with tf.name_scope("p{}".format(row)):
                     gamma = params['gamma']
                     zeta = params['zeta']
-                    eta = params['eta']
+                    beta = params['beta']
                     c = (one + gamma * theta)**zeta * two**(1.0 - zeta)
-                    v = c * tf.exp(-eta * r2c) * fc_r_ijk
+                    v = c * tf.exp(-beta * r2c) * fc_r_ijk
                     g = tf.scatter_nd_add(g, v2g_map, v)
             return g

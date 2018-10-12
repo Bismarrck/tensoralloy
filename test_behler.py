@@ -8,10 +8,13 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
+from behler import get_elements_from_kbody_term, get_kbody_terms
+from behler import compute_dimension
+from behler import radial_function, angular_function
+from behler import build_radial_v2g_map, build_angular_v2g_map
 from nose.plugins.skip import SkipTest
 from nose.tools import assert_less
-from behler import build_angular_v2g_map, build_radial_v2g_map
-from behler import angular_function, radial_function
+from ase import Atoms
 from ase.io import read
 from itertools import product
 from sklearn.metrics import pairwise_distances
@@ -185,6 +188,47 @@ def test_single():
 
         assert_less(np.linalg.norm(gr_vals - zr_vals), 1e-6)
         assert_less(np.linalg.norm(ga_vals - za_vals), 1e-6)
+
+
+def test_main():
+    amp = np.load('test_files/amp_Pd3O2.npz')['g']
+
+    eta = np.array([0.05, 4., 20., 80.])
+    beta = np.array([0.005, ])
+    gamma = np.array([1.0, -1.0])
+    zeta = np.array([1.0, 4.0])
+
+    rc = 6.5
+    atoms = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
+                  cell=np.array([[7.78, 0., 0.],
+                                 [0., 5.50129076, 0.],
+                                 [0., 0., 15.37532269]]),
+                  positions=np.array([[3.89, 0., 8.37532269],
+                                      [0., 2.75064538, 8.37532269],
+                                      [3.89, 2.75064538, 8.37532269],
+                                      [5.835, 1.37532269, 8.5],
+                                      [5.835, 7.12596807, 8.]]))
+
+    symbols = atoms.get_chemical_symbols()
+    kbody_terms, mapping = get_kbody_terms(list(set(symbols)), k_max=3)
+    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
+                                               len(gamma), len(zeta))
+
+    rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms, kbody_sizes)
+
+    tf.reset_default_graph()
+    tf.enable_eager_execution()
+
+    R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
+    cell = tf.constant(atoms.cell, tf.float64, name='cell')
+
+    gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist, rmap.jlist,
+                         rmap.Slist, total_dim)
+    gr = gr.numpy()
+    d1 = np.abs(amp[:, 0: 8] - gr[:, :8])
+    d2 = np.abs(amp[:, 20: 28] - gr[:, 20: 28])
+    assert_less(d1.max(), 1e-8)
+    assert_less(d2.max(), 1e-8)
 
 
 if __name__ == "__main__":
