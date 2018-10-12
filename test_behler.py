@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
+from nose.plugins.skip import SkipTest
 from nose.tools import assert_less
 from behler import build_angular_v2g_map, build_radial_v2g_map
 from behler import angular_function, radial_function
@@ -17,6 +18,16 @@ from sklearn.metrics import pairwise_distances
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def skip(func):
+    """
+    A decorator for skipping tests.
+    """
+    def _():
+        raise SkipTest("Test %s is skipped" % func.__name__)
+    _.__name__ = func.__name__
+    return _
 
 
 def cutoff_fxn(r, rc):
@@ -132,6 +143,7 @@ def get_augular_fingerprints_naive(coords, r, rc, etas, gammas, zetas):
     return x / 2.0
 
 
+@skip
 def test_single():
     """
     Test the single version of `radial_function` and `angular_function`.
