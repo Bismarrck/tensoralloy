@@ -309,8 +309,9 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
                             name='g', trainable=False)
             v = tf.exp(-tf.tensordot(etas, r2c, axes=0)) * fc_r
             v = tf.reshape(v, [-1], name='flatten')
-            g = tf.scatter_nd_add(g, v2g_map, v)
-            return tf.convert_to_tensor(g, dtype=tf.float64, name='gr')
+            # FIXME: `scatter_nd_add` breaks the calculation of gradients!
+            op = tf.scatter_nd_add(g, v2g_map, v, name='op')
+            return op
 
 
 def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
