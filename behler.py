@@ -305,13 +305,9 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
             fc_r = cutoff(r, rc=rc, name='fc_r')
 
         with tf.name_scope("features"):
-            g = tf.Variable(tf.zeros((R.shape[0], total_dim), dtype=tf.float64),
-                            name='g', trainable=False)
             v = tf.exp(-tf.tensordot(etas, r2c, axes=0)) * fc_r
             v = tf.reshape(v, [-1], name='flatten')
-            # FIXME: `scatter_nd_add` breaks the calculation of gradients!
-            op = tf.scatter_nd_add(g, v2g_map, v, name='op')
-            return op
+            return tf.scatter_nd(v2g_map, v, (R.shape[0], total_dim), name='g')
 
 
 def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
@@ -371,8 +367,8 @@ def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
             r2c = tf.div(r2, rc2, name='r2_rc2')
 
         with tf.name_scope("features"):
-            g = tf.Variable(tf.zeros((R.shape[0], total_dim), dtype=tf.float64),
-                            name='g', trainable=False)
+            shape = (R.shape[0], total_dim)
+            g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
             for row, params in enumerate(grid):
                 with tf.name_scope("p{}".format(row)):
                     gamma = tf.constant(
@@ -385,5 +381,5 @@ def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
                     v = c * tf.exp(-beta * r2c) * fc_r_ijk
                     step = tf.constant([0, row], dtype=tf.int32, name='step')
                     v2g_row = tf.add(v2g_base, step, name='v2g_row')
-                    g = tf.scatter_nd_add(g, v2g_row, v)
-            return tf.convert_to_tensor(g, dtype=tf.float64, name='ga')
+                    g = g + tf.scatter_nd(v2g_row, v, shape, 'g{}'.format(row))
+            return g
