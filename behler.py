@@ -182,6 +182,9 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
     """
     symbols = atoms.get_chemical_symbols()
     ilist, jlist, Slist = neighbor_list('ijS', atoms, rc)
+    ilist = ilist.astype(np.int32)
+    jlist = jlist.astype(np.int32)
+    Slist = Slist.astype(np.int32)
     n = len(ilist)
     tlist = np.zeros_like(ilist)
     for i in range(n):
@@ -305,9 +308,10 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
             fc_r = cutoff(r, rc=rc, name='fc_r')
 
         with tf.name_scope("features"):
+            shape = tf.constant([R.shape[0], total_dim], tf.int32, name='shape')
             v = tf.exp(-tf.tensordot(etas, r2c, axes=0)) * fc_r
             v = tf.reshape(v, [-1], name='flatten')
-            return tf.scatter_nd(v2g_map, v, (R.shape[0], total_dim), name='g')
+            return tf.scatter_nd(v2g_map, v, shape, name='g')
 
 
 def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
@@ -367,7 +371,7 @@ def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
             r2c = tf.div(r2, rc2, name='r2_rc2')
 
         with tf.name_scope("features"):
-            shape = (R.shape[0], total_dim)
+            shape = tf.constant((R.shape[0], total_dim), tf.int32, name='shape')
             g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
             for row, params in enumerate(grid):
                 with tf.name_scope("p{}".format(row)):
