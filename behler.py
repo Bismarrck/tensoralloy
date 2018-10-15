@@ -398,8 +398,8 @@ def batch_radial_function(R, rc, v2g_map, clist, etas, ilist, jlist, Slist,
         with tf.name_scope("features"):
             shape = tf.constant([batch_size, n_atoms, total_dim],
                                 dtype=tf.int32, name='shape')
-            v = tf.exp(-tf.einsum('i,jk->ikj', etas, r2c))
-            v = tf.einsum('ijk,ij->ijk', tf.transpose(v), fc_r)
+            v = tf.exp(-tf.einsum('i,jk->jik', etas, r2c))
+            v = tf.einsum('ijk,ik->ijk', v, fc_r)
             v = tf.reshape(v, [batch_size, -1], name='flatten')
             return tf.scatter_nd(v2g_map, v, shape, name='g')
 
