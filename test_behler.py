@@ -12,6 +12,7 @@ from behler import get_kbody_terms, compute_dimension
 from behler import radial_function, angular_function
 from behler import build_radial_v2g_map, build_angular_v2g_map
 from behler import batch_build_radial_v2g_map, batch_radial_function
+from behler import batch_build_angular_v2g_map, batch_angular_function
 from nose.tools import assert_less
 from ase import Atoms
 from ase.io import read
@@ -238,7 +239,7 @@ def test_batch_monoatomic_molecule():
     molecules.
     """
     trajectory = read('test_files/B28.xyz', index='0:2', format='xyz')
-    targets = np.zeros((2, 28, 4), dtype=np.float64)
+    targets = np.zeros((2, 28, 8), dtype=np.float64)
     positions = np.zeros((2, 29, 3), dtype=np.float64)
     clist = np.zeros((2, 3, 3), dtype=np.float64)
     rc = 6.0
@@ -250,7 +251,7 @@ def test_batch_monoatomic_molecule():
     for i, atoms in enumerate(trajectory):
         atoms.set_cell([20.0, 20.0, 20.0])
         atoms.set_pbc([False, False, False])
-        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')[:, :4]
+        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')
         positions[i, 1:] = atoms.positions
         clist[i] = atoms.cell
 
@@ -261,7 +262,7 @@ def test_batch_monoatomic_molecule():
     grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
 
     elements = ['B']
-    kbody_terms, mapping = get_kbody_terms(elements, k_max=2)
+    kbody_terms, mapping = get_kbody_terms(elements, k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
 
@@ -274,7 +275,16 @@ def test_batch_monoatomic_molecule():
     g = batch_radial_function(positions, rc, rmap.v2g_map, clist, eta,
                               rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
     values = g.numpy()[:, 1:, :]
-    assert_less(np.abs(values - targets).max(), 1e-8)
+    assert_less(np.abs(values[:, :, :4] - targets[:, :, :4]).max(), 1e-8)
+
+    amap = batch_build_angular_v2g_map(trajectory, rmap, nijk_max,
+                                       kbody_terms, kbody_sizes)
+    g = batch_angular_function(positions, rc, amap.v2g_map, clist, grid,
+                               amap.ij, amap.ik, amap.jk, amap.ijSlist,
+                               amap.ikSlist, amap.jkSlist, total_dim)
+
+    values = g.numpy()[:, 1:, :]
+    assert_less(np.abs(values[:, :, 4:] - targets[:, :, 4:]).max(), 1e-8)
 
 
 if __name__ == "__main__":

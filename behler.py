@@ -284,6 +284,91 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
     return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
+def batch_build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap,
+                                nijk_max, kbody_terms: List[str],
+                                kbody_sizes: List[int]):
+    """
+    Build the values-to-features mapping for angular symmetry functions.
+
+    Parameters
+    ----------
+    trajectory : List[Atoms]
+        A list of `ase.Atoms` objects.
+    rmap : RadialMap
+        The mapping for radial symmetry functions.
+    nijk_max : int
+        The maximum number of `Angle[i,j,k]` that one `Atoms` object has.
+    kbody_terms : List[str]
+        A list of str as all k-body terms.
+    kbody_sizes : List[int]
+        A list of int as the sizes of the k-body terms.
+
+    Returns
+    -------
+    angular : AngularMap
+        A namedtuple with these properties:
+
+        'v2g_map' : array_like
+            A list of (atomi, termi) where atomi is the index of the center atom
+            and termi is the index of the corresponding 3-body term.
+        'ij' : array_like
+            A list of (i, j) as the indices for r_{i,j}.
+        'ik' : array_like
+            A list of (i, k) as the indices for r_{i,k}.
+        'jk' : array_like
+            A list of (j, k) as the indices for r_{j,k}.
+        'ijSlist' : array_like
+            The cell boundary shift vectors for all r_{i,j}.
+        'ikSlist' : array_like
+            The cell boundary shift vectors for all r_{i,k}.
+        'jkSlist' : array_like
+            The cell boundary shift vectors for all r_{j,k}.
+
+    """
+    batch_size = len(trajectory)
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
+    v2g_map = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
+    ij = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
+    ik = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
+    jk = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
+    ijS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
+    ikS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
+    jkS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
+
+    for idx, atoms in enumerate(trajectory):
+        symbols = ['X'] + atoms.get_chemical_symbols()
+        nl_indices = {}
+        nl_shifts = {}
+        for i, atomi in enumerate(rmap.ilist[idx]):
+            if atomi == 0:
+                break
+            nl_indices[atomi] = nl_indices.get(atomi, []) + [rmap.jlist[idx, i]]
+            nl_shifts[atomi] = nl_shifts.get(atomi, []) + [rmap.Slist[idx, i]]
+        row = 0
+        for atomi, nl in nl_indices.items():
+            num = len(nl)
+            prefix = '{}'.format(symbols[atomi])
+            iSlist = nl_shifts[atomi]
+            for j in range(num):
+                atomj = nl[j]
+                for k in range(j + 1, num):
+                    atomk = nl[k]
+                    suffix = ''.join(sorted([symbols[atomj], symbols[atomk]]))
+                    term = '{}{}'.format(prefix, suffix)
+                    if 'X' in term:
+                        print('warning')
+                    ij[:, idx, row] = atomi, atomj
+                    ik[:, idx, row] = atomi, atomk
+                    jk[:, idx, row] = atomj, atomk
+                    ijS[idx, row] = iSlist[j]
+                    ikS[idx, row] = iSlist[k]
+                    jkS[idx, row] = iSlist[k] - iSlist[j]
+                    v2g_map[idx, row] = idx, atomi, offsets[kbody_terms.index(term)]
+                    row += 1
+    return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
+                      jkSlist=jkS)
+
+
 def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
                           kbody_terms: List[str], kbody_sizes: List[int]):
     """
@@ -433,6 +518,85 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
             v = tf.exp(-tf.tensordot(etas, r2c, axes=0)) * fc_r
             v = tf.reshape(v, [-1], name='flatten')
             return tf.scatter_nd(v2g_map, v, shape, name='g')
+
+
+def batch_angular_function(R, rc, v2g_map, clist, grid: ParameterGrid, ij, ik,
+                           jk, ijS, ikS, jkS, total_dim):
+    """
+    The implementation of Behler's angular symmetry function for a single
+    structure.
+    """
+    with tf.name_scope("G4"):
+
+        with tf.name_scope("constants"):
+            one = tf.constant(1.0, dtype=tf.float64)
+            two = tf.constant(2.0, dtype=tf.float64)
+            rc2 = tf.constant(rc**2, dtype=tf.float64, name='rc2')
+            clist = tf.convert_to_tensor(clist, dtype=tf.float64, name='clist')
+            v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
+            batch_size = R.shape[0]
+            n_atoms = R.shape[1]
+
+        with tf.name_scope("Rij"):
+            Ri_ij = batch_gather_positions(R, ij[0])
+            Rj_ij = batch_gather_positions(R, ij[1])
+            ijS = tf.convert_to_tensor(ijS, dtype=tf.float64, name='ijS')
+            D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, clist)
+            r_ij = tf.norm(D_ij, axis=2)
+
+        with tf.name_scope("Rik"):
+            Ri_ik = batch_gather_positions(R, ik[0])
+            Rk_ik = batch_gather_positions(R, ik[1])
+            ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
+            D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, clist)
+            r_ik = tf.norm(D_ik, axis=2)
+
+        with tf.name_scope("Rik"):
+            Rj_jk = batch_gather_positions(R, jk[0])
+            Rk_jk = batch_gather_positions(R, jk[1])
+            jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
+            D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, clist)
+            r_jk = tf.norm(D_jk, axis=2)
+
+        # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
+        with tf.name_scope("cosine"):
+            upper = tf.square(r_ij) + tf.square(r_ik) - tf.square(r_jk)
+            lower = two * tf.multiply(r_ij, r_ik, name='bc')
+            theta = tf.div(upper, lower, name='theta')
+
+        # Compute the damping term: $f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})$
+        with tf.name_scope("fc"):
+            fc_r_ij = cutoff(r_ij, rc, name='fc_r_ij')
+            fc_r_ik = cutoff(r_ik, rc, name='fc_r_ik')
+            fc_r_jk = cutoff(r_jk, rc, name='fc_r_jk')
+            fc_r_ijk = fc_r_ij * fc_r_ik * fc_r_jk
+
+        # Compute $R_{ij}^{2} + R_{ik}^{2} + R_{jk}^{2}$
+        with tf.name_scope("r2"):
+            r2_ij = tf.square(r_ij, name='r2_ij')
+            r2_ik = tf.square(r_ik, name='r2_ik')
+            r2_jk = tf.square(r_jk, name='r2_jk')
+            r2 = r2_ij + r2_ik + r2_jk
+            r2c = tf.div(r2, rc2, name='r2_rc2')
+
+        with tf.name_scope("features"):
+            shape = tf.constant((batch_size, n_atoms, total_dim),
+                                dtype=tf.int32, name='shape')
+            g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
+            for row, params in enumerate(grid):
+                with tf.name_scope("p{}".format(row)):
+                    gamma = tf.constant(
+                        params['gamma'], dtype=tf.float64, name='gamma')
+                    zeta = tf.constant(
+                        params['zeta'], dtype=tf.float64, name='zeta')
+                    beta = tf.constant(
+                        params['beta'], dtype=tf.float64, name='beta')
+                    c = (one + gamma * theta)**zeta * two**(1.0 - zeta)
+                    v = c * tf.exp(-beta * r2c) * fc_r_ijk
+                    step = tf.constant([0, 0, row], dtype=tf.int32, name='step')
+                    v2g_row = tf.add(v2g_base, step, name='v2g_row')
+                    g = g + tf.scatter_nd(v2g_row, v, shape, 'g{}'.format(row))
+            return g
 
 
 def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
