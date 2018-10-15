@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
-from utils import cutoff
+from utils import cutoff, batch_gather_positions
 from itertools import chain
 from collections import namedtuple
 from sklearn.model_selection import ParameterGrid
@@ -140,6 +140,90 @@ def get_kbody_terms(elements: List[str], k_max=3):
         raise ValueError("`k_max>=4` is not supported yet!")
     terms = list(chain(*[mapping[element] for element in elements]))
     return terms, mapping
+
+
+def batch_build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
+                               kbody_terms: List[str], kbody_sizes: List[int]):
+    """
+    Build the values-to-features mapping for radial symmetry functions.
+
+    Parameters
+    ----------
+    trajectory : List[Atoms]
+        A list of `ase.Atoms` objects.
+    rc : float
+        The cutoff radius.
+    n_etas : int
+        The number of `eta` for radial symmetry functions.
+    nij_max : int
+        The maximum size of `ilist`.
+    kbody_terms : List[str]
+        A list of str as all k-body terms.
+    kbody_sizes : List[int]
+        A list of int as the sizes of the k-body terms.
+
+    Returns
+    -------
+    list_of_radials : RadialMap
+        A namedtuple with these properties:
+
+        'v2g_map' : array_like
+            A list of (atomi, etai, termi) where atomi is the index of the
+            center atom, etai is the index of the `eta` and termi is the index
+            of the corresponding 2-body term.
+        'ilist' : array_like
+            A list of first atom indices.
+        'jlist' : array_like
+            A list of second atom indices.
+        'Slist' : array_like
+            A list of (i, j) pairs where i is the index of the center atom and j
+            is the index of its neighbor atom.
+        'cell': array_like
+            The boundary cell of the structure.
+
+    """
+
+    def _align(alist, is_indices=True):
+        if np.ndim(alist) == 1:
+            nlist = np.zeros(nij_max, dtype=np.int32)
+        else:
+            nlist = np.zeros([nij_max] + list(alist.shape[1:]), dtype=np.int32)
+        length = len(alist)
+        nlist[:length] = alist
+        if is_indices:
+            nlist[:length] += 1
+        return nlist
+
+    batch_size = len(trajectory)
+    v2g_map = np.zeros((batch_size, nij_max * n_etas, 3), dtype=np.int32)
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
+    ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
+    jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
+    Slist = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
+    tlist = np.zeros(nij_max, dtype=np.int32)
+
+    for atomk, atoms in enumerate(trajectory):
+        symbols = atoms.get_chemical_symbols()
+        kilist, kjlist, kSlist = neighbor_list('ijS', atoms, rc)
+        n = len(kilist)
+        kilist = _align(kilist, True)
+        kjlist = _align(kjlist, True)
+        kSlist = _align(kSlist, False)
+        ilist[atomk] = kilist
+        jlist[atomk] = kjlist
+        Slist[atomk] = kSlist
+        tlist.fill(0)
+        for i in range(n):
+            symboli = symbols[kilist[i] - 1]
+            symbolj = symbols[kjlist[i] - 1]
+            tlist[i] = kbody_terms.index('{}{}'.format(symboli, symbolj))
+        for etai in range(n_etas):
+            istart = etai * nij_max
+            istop = istart + nij_max
+            v2g_map[atomk, istart: istop, 0] = atomk
+            v2g_map[atomk, istart: istop, 1] = kilist
+            v2g_map[atomk, istart: istop, 2] = offsets[tlist] + etai
+    return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
 def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
@@ -281,6 +365,43 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
 
     return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
                       jkSlist=jkS)
+
+
+def batch_radial_function(R, rc, v2g_map, clist, etas, ilist, jlist, Slist,
+                          total_dim):
+    """
+    The implementation of Behler's radial symmetry function for a single
+    structure.
+    """
+    with tf.name_scope("G2"):
+
+        with tf.name_scope("constants"):
+            rc2 = tf.constant(rc ** 2, dtype=tf.float64, name='rc2')
+            etas = tf.constant(etas, dtype=tf.float64, name='etas')
+            R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
+            Slist = tf.convert_to_tensor(Slist, dtype=tf.float64, name='Slist')
+            clist = tf.convert_to_tensor(clist, dtype=tf.float64, name='clist')
+            batch_size = R.shape[0]
+            n_atoms = R.shape[1]
+
+        with tf.name_scope("rij"):
+            Ri = batch_gather_positions(R, ilist, name='Ri')
+            Rj = batch_gather_positions(R, jlist, name='Rj')
+            Dlist = Rj - Ri + tf.einsum('ijk,ikl->ijl', Slist, clist)
+            r = tf.norm(Dlist, axis=2, name='r')
+            r2 = tf.square(r, name='r2')
+            r2c = tf.div(r2, rc2, name='div')
+
+        with tf.name_scope("fc"):
+            fc_r = cutoff(r, rc=rc, name='fc_r')
+
+        with tf.name_scope("features"):
+            shape = tf.constant([batch_size, n_atoms, total_dim],
+                                dtype=tf.int32, name='shape')
+            v = tf.exp(-tf.einsum('i,jk->ikj', etas, r2c))
+            v = tf.einsum('ijk,ij->ijk', tf.transpose(v), fc_r)
+            v = tf.reshape(v, [batch_size, -1], name='flatten')
+            return tf.scatter_nd(v2g_map, v, shape, name='g')
 
 
 def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,

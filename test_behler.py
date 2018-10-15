@@ -11,26 +11,18 @@ import nose
 from behler import get_kbody_terms, compute_dimension
 from behler import radial_function, angular_function
 from behler import build_radial_v2g_map, build_angular_v2g_map
-from nose.plugins.skip import SkipTest
+from behler import batch_build_radial_v2g_map, batch_radial_function
 from nose.tools import assert_less
 from ase import Atoms
 from ase.io import read
+from ase.neighborlist import neighbor_list
 from itertools import product
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
+from misc import skip
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def skip(func):
-    """
-    A decorator for skipping tests.
-    """
-    def _():
-        raise SkipTest("Test %s is skipped" % func.__name__)
-    _.__name__ = func.__name__
-    return _
 
 
 def cutoff_fxn(r, rc):
@@ -178,6 +170,7 @@ def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         return tf.add(gr, ga, name='g')
 
 
+@skip
 def test_monoatomic_molecule():
     """
     Test `radial_function` and `angular_function` for a mono-atomic molecule.
@@ -199,6 +192,7 @@ def test_monoatomic_molecule():
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
+@skip
 def test_single_structure():
     """
     Test `radial_function` and `angular_function` for a periodic structure.
@@ -215,6 +209,72 @@ def test_single_structure():
                                       [5.835, 7.12596807, 8.]]))
     g = _symmetry_function(atoms, rc=6.5, name_scope='Pd3O2')
     assert_less(np.abs(amp - g).max(), 1e-8)
+
+
+def get_ij_ijk_max(trajectory, rc) -> (int, int):
+    """
+    Return the maximum number of unique `R(ij)` and `Angle(i,j,k)` from one
+    `Atoms` object.
+    """
+    nij_max = 0
+    nijk_max = 0
+    for atoms in trajectory:
+        ilist, jlist = neighbor_list('ij', atoms, rc)
+        nij_max = max(len(ilist), nij_max)
+        nl = {}
+        for i, atomi in enumerate(ilist):
+            nl[atomi] = nl.get(atomi, []) + [jlist[i]]
+        ntotal = 0
+        for atomi, nlist in nl.items():
+            n = len(nlist)
+            ntotal += (n - 1 + 1) * (n - 1) // 2
+        nijk_max = max(ntotal, nijk_max)
+    return nij_max, nijk_max
+
+
+def test_batch_monoatomic_molecule():
+    """
+    Test `radial_function` and `angular_function` for several mono-atomic
+    molecules.
+    """
+    trajectory = read('test_files/B28.xyz', index='0:2', format='xyz')
+    targets = np.zeros((2, 28, 4), dtype=np.float64)
+    positions = np.zeros((2, 29, 3), dtype=np.float64)
+    clist = np.zeros((2, 3, 3), dtype=np.float64)
+    rc = 6.0
+    nij_max = 756
+    nijk_max = 9828
+    if nij_max is None:
+        nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
+
+    for i, atoms in enumerate(trajectory):
+        atoms.set_cell([20.0, 20.0, 20.0])
+        atoms.set_pbc([False, False, False])
+        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')[:, :4]
+        positions[i, 1:] = atoms.positions
+        clist[i] = atoms.cell
+
+    eta = np.array([0.05, 4., 20., 80.])
+    beta = np.array([0.005, ])
+    gamma = np.array([1.0, -1.0])
+    zeta = np.array([1.0, 4.0])
+    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+
+    elements = ['B']
+    kbody_terms, mapping = get_kbody_terms(elements, k_max=2)
+    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
+                                               len(gamma), len(zeta))
+
+    rmap = batch_build_radial_v2g_map(trajectory, rc, len(eta), nij_max,
+                                      kbody_terms, kbody_sizes)
+
+    tf.reset_default_graph()
+    tf.enable_eager_execution()
+
+    g = batch_radial_function(positions, rc, rmap.v2g_map, clist, eta,
+                              rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
+    values = g.numpy()[:, 1:, :]
+    assert_less(np.abs(values - targets).max(), 1e-8)
 
 
 if __name__ == "__main__":
