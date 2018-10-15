@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines helper functions.
+This module defines tensorflow-based functions.
 """
 from __future__ import print_function, absolute_import
 
@@ -11,6 +11,41 @@ from tensorflow.python.ops import math_ops
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def batch_gather_positions(R, indices, name=None):
+    """
+    A special batched implementation for `tf.gather` for gathering positions.
+
+    Parameters
+    ----------
+    R : array_like or tf.Tensor
+        An array of shape `[batch_size, n_atoms, 3]` as the atomic positions for
+        several structures.
+    indices : array_like or tf.Tensor
+        An array of shape `[batch_size, nij_max]`. `indices[i]` denotes the
+        slicing indices for structure `i`.
+    name : str
+        The name of this op.
+
+    Returns
+    -------
+    R : tf.Tensor
+        A `float64` tensor of shape `[batch_size, nij_max, 3]`.
+
+    """
+    with ops.name_scope(name, "gather_r", [R, indices]) as name:
+        R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
+        indices = tf.convert_to_tensor(indices, dtype=tf.int32, name='indices')
+        batch_size = R.shape[0]
+        step = R.shape[1]
+        delta = tf.range(0, batch_size * step, step, dtype=tf.int32)
+        delta = tf.reshape(delta, (-1, 1), name='delta')
+        R = tf.reshape(R, (-1, 3), name='flat_R')
+        indices = tf.add(indices, delta, name='indices')
+        indices = tf.reshape(indices, (-1,), name='flat_idx')
+        positions = tf.gather(R, indices, name='gather')
+        return tf.reshape(positions, (batch_size, -1, 3), name=name)
 
 
 def indexedslices_to_dense(sparse_delta, dense_shape=None, name=None):
