@@ -66,9 +66,10 @@ def get_neighbour_list(r, rc):
     return neighbours
 
 
-def get_radial_fingerprints(coords, r, rc, etas):
+def get_radial_fingerprints_v1(coords, r, rc, etas):
     """
-    Return the fingerprints from the radial gaussian functions.
+    Calculate the fingerprints from the radial functions for a mono-atomic
+    molecule.
 
     Args:
       coords: a `[N, 3]` array as the cartesian coordinates.
@@ -103,9 +104,10 @@ def get_radial_fingerprints(coords, r, rc, etas):
     return x
 
 
-def get_augular_fingerprints_naive(coords, r, rc, etas, gammas, zetas):
+def get_augular_fingerprints_v1(coords, r, rc, etas, gammas, zetas):
     """
-    Return the fingerprints from the augular functions.
+    Calculate the fingerprints from the augular functions for a mono-atomic
+    molecule.
 
     Args:
       coords: a `[N, 3]` array as the cartesian coordinates.
@@ -146,60 +148,62 @@ def get_augular_fingerprints_naive(coords, r, rc, etas, gammas, zetas):
     return x / 2.0
 
 
-@skip
-def test_single():
+def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     """
-    Test the single version of `radial_function` and `angular_function`.
+    Compute the symmetry function descriptors for unit tests.
+    """
+    eta = np.array([0.05, 4., 20., 80.])
+    beta = np.array([0.005, ])
+    gamma = np.array([1.0, -1.0])
+    zeta = np.array([1.0, 4.0])
+    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+    symbols = atoms.get_chemical_symbols()
+    kbody_terms, mapping = get_kbody_terms(list(set(symbols)), k_max=3)
+    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
+                                               len(gamma), len(zeta))
+    tf.reset_default_graph()
+    tf.enable_eager_execution()
+
+    with tf.name_scope(name_scope):
+        R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
+        cell = tf.constant(atoms.cell, tf.float64, name='cell')
+        rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms, kbody_sizes)
+        amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
+
+        gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist, rmap.jlist,
+                             rmap.Slist, total_dim)
+        ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
+                              amap.jk, amap.ijSlist, amap.ikSlist, amap.jkSlist,
+                              total_dim)
+        return tf.add(gr, ga, name='g')
+
+
+def test_monoatomic_molecule():
+    """
+    Test `radial_function` and `angular_function` for a mono-atomic molecule.
     """
     atoms = read('test_files/B28.xyz', index=0, format='xyz')
     atoms.set_cell([20.0, 20.0, 20.0])
     atoms.set_pbc([False, False, False])
     coords = atoms.get_positions()
     rr = pairwise_distances(coords)
-
     eta = [0.05, 4., 20., 80.]
-    angular_eta = [0.005, ]
+    beta = [0.005, ]
     gamma = [1.0, -1.0]
     zeta = [1.0, 4.0]
     rc = 6.0
-    natoms = len(atoms)
-
-    ndim_angular = len(angular_eta) * len(zeta) * len(gamma)
-    ndim_radial = len(eta)
-
-    p_v2g_map, pairs = build_radial_v2g_map(atoms, rc, ndim_radial)
-    t_v2g_map, triples = build_angular_v2g_map(pairs, ndim_angular)
-
-    with tf.Graph().as_default():
-        R = tf.placeholder(tf.float64, shape=(natoms, 3), name='R')
-        gr = radial_function(R, rc, eta, pairs['ij'], p_v2g_map)
-        ga = angular_function(R, rc, triples, angular_eta, gamma, zeta,
-                              t_v2g_map)
-
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-
-            gr_vals, ga_vals = sess.run([gr, ga],
-                                        feed_dict={R: atoms.get_positions()})
-
-        zr_vals = get_radial_fingerprints(coords, rr, rc, eta)
-        za_vals = get_augular_fingerprints_naive(coords, rr, rc, angular_eta,
-                                                 gamma, zeta)
-
-        assert_less(np.linalg.norm(gr_vals - zr_vals), 1e-6)
-        assert_less(np.linalg.norm(ga_vals - za_vals), 1e-6)
+    zr = get_radial_fingerprints_v1(coords, rr, rc, eta)
+    za = get_augular_fingerprints_v1(coords, rr, rc, beta, gamma, zeta)
+    z = np.hstack((zr, za))
+    g = _symmetry_function(atoms, rc=rc, name_scope='B28')
+    assert_less(np.abs(z - g).max(), 1e-8)
 
 
-def test_main():
+def test_single_structure():
+    """
+    Test `radial_function` and `angular_function` for a periodic structure.
+    """
     amp = np.load('test_files/amp_Pd3O2.npz')['g']
-
-    eta = np.array([0.05, 4., 20., 80.])
-    beta = np.array([0.005, ])
-    gamma = np.array([1.0, -1.0])
-    zeta = np.array([1.0, 4.0])
-    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
-
-    rc = 6.5
     atoms = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
                   cell=np.array([[7.78, 0., 0.],
                                  [0., 5.50129076, 0.],
@@ -209,38 +213,8 @@ def test_main():
                                       [3.89, 2.75064538, 8.37532269],
                                       [5.835, 1.37532269, 8.5],
                                       [5.835, 7.12596807, 8.]]))
-
-    symbols = atoms.get_chemical_symbols()
-    kbody_terms, mapping = get_kbody_terms(list(set(symbols)), k_max=3)
-    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
-                                               len(gamma), len(zeta))
-
-    rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms, kbody_sizes)
-
-    tf.reset_default_graph()
-    tf.enable_eager_execution()
-
-    R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
-    cell = tf.constant(atoms.cell, tf.float64, name='cell')
-
-    gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist, rmap.jlist,
-                         rmap.Slist, total_dim)
-    gr = gr.numpy()
-    d1 = np.abs(amp[:, 0: 8] - gr[:, :8])
-    d2 = np.abs(amp[:, 20: 28] - gr[:, 20: 28])
-    assert_less(d1.max(), 1e-8)
-    assert_less(d2.max(), 1e-8)
-
-    amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
-    ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
-                          amap.jk, amap.ijSlist, amap.ikSlist, amap.jkSlist,
-                          total_dim)
-
-    ga = ga.numpy()
-    d1 = np.abs(amp[:, 8: 20] - ga[:, 8: 20])
-    d2 = np.abs(amp[:, 28:] - ga[:, 28:])
-    assert_less(d1.max(), 1e-8)
-    assert_less(d2.max(), 1e-8)
+    g = _symmetry_function(atoms, rc=6.5, name_scope='Pd3O2')
+    assert_less(np.abs(amp - g).max(), 1e-8)
 
 
 if __name__ == "__main__":
