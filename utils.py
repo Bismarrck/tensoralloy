@@ -13,6 +13,38 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def indexedslices_to_dense(sparse_delta, dense_shape=None, name=None):
+    """
+    Convert a sparse `IndexedSlices` tensor to a dense tensor.
+
+    Parameters
+    ----------
+    sparse_delta : tf.IndexedSlices
+        A sparse representation of a set of tensor slices at given indices.
+        The IndexedSlices class is used principally in the definition of
+        gradients for operations that have sparse gradients (e.g. tf.gather).
+    dense_shape : array_like or tf.Tensor or None
+        A list (array, tuple) or a `tf.Tensor` as the shape of the dense tensor.
+        If None, `sparse_delta.dense_shape` will be used.
+    name : str
+        The name of this op.
+
+    Returns
+    -------
+    dense : tf.Tensor
+        The dense representation of `sparse_delta`.
+
+    """
+    with ops.name_scope(name, "sparse_to_dense", [sparse_delta]) as name:
+        indices = tf.reshape(sparse_delta.indices, (-1, 1), name='reshape')
+        if dense_shape is None:
+            dense_shape = sparse_delta.dense_shape
+        else:
+            dense_shape = ops.convert_to_tensor(
+                dense_shape, dtype=tf.int32, name='dense_shape')
+        return tf.scatter_nd(indices, sparse_delta.values, dense_shape, name)
+
+
 def cutoff(r: tf.Tensor, rc: float, name=None):
     """
     The cutoff function.
