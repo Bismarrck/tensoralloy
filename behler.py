@@ -112,6 +112,8 @@ def get_kbody_terms(elements: List[str], k_max=3):
         A list of str as all k-body terms.
     mapping : dict
         A dict mapping k-body terms to each type of element.
+    elements : List[str]
+        A list of str as the ordered unique elements.
 
     """
     elements = sorted(list(set(elements)))
@@ -139,7 +141,7 @@ def get_kbody_terms(elements: List[str], k_max=3):
     if k_max >= 4:
         raise ValueError("`k_max>=4` is not supported yet!")
     terms = list(chain(*[mapping[element] for element in elements]))
-    return terms, mapping
+    return terms, mapping, elements
 
 
 def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
@@ -164,7 +166,7 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
 
     Returns
     -------
-    list_of_radials : RadialMap
+    rmap : RadialMap
         A namedtuple with these properties:
 
         'v2g_map' : array_like
@@ -246,7 +248,7 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
 
     Returns
     -------
-    angular : AngularMap
+    amap : AngularMap
         A namedtuple with these properties:
 
         'v2g_map' : array_like
