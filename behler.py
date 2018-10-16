@@ -10,7 +10,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, batch_gather_positions
 from itertools import chain
-from collections import namedtuple
+from collections import namedtuple, Counter
 from sklearn.model_selection import ParameterGrid
 from typing import List
 
@@ -144,8 +144,58 @@ def get_kbody_terms(elements: List[str], k_max=3):
     return terms, mapping, elements
 
 
+class IndexTransformer:
+    """
+    If a dataset has different stoichiometries, a global ordered symbols list
+    should be kept. This class is used to transform the local indices of the
+    symbols of arbitrary `Atoms` to the global indexing system.
+    """
+
+    def __init__(self, elements_and_counts: Counter, atoms: Atoms,
+                 virtual_atom=True):
+        """
+        Initialization method.
+        """
+        self.elements_and_counts = elements_and_counts
+        self.atoms = atoms
+        elements = sorted(elements_and_counts.keys())
+        offsets = np.cumsum([elements_and_counts[e] for e in elements])[:-1]
+        offsets = np.insert(offsets, 0, 0)
+        delta = Counter()
+        index_map = {}
+        for i, atom in enumerate(atoms):
+            symbol = atom.symbol
+            extra = int(virtual_atom)
+            idx_old = i + extra
+            idx_new = offsets[elements.index(symbol)] + delta[symbol] + extra
+            index_map[idx_old] = idx_new
+            delta[atom.symbol] += 1
+        reverse_map = {v: k for k, v in index_map.items()}
+        if virtual_atom:
+            index_map[0] = 0
+            reverse_map[0] = 0
+        self.index_map = index_map
+        self.reverse_map = reverse_map
+
+    def __call__(self, index_or_indices, reverse=False):
+        """
+        Do the in-place index transformation and return the array.
+        """
+        if reverse:
+            index_map = self.reverse_map
+        else:
+            index_map = self.index_map
+        if not hasattr(index_or_indices, "__len__"):
+            return index_map[index_or_indices]
+        else:
+            for i in range(len(index_or_indices)):
+                index_or_indices[i] = index_map[index_or_indices[i]]
+            return index_or_indices
+
+
 def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
-                         kbody_terms: List[str], kbody_sizes: List[int]):
+                         kbody_terms: List[str], kbody_sizes: List[int],
+                         elements_and_counts: Counter):
     """
     Build the values-to-features mapping for radial symmetry functions.
 
@@ -163,6 +213,8 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
         A list of str as all k-body terms.
     kbody_sizes : List[int]
         A list of int as the sizes of the k-body terms.
+    elements_and_counts : Counter
+        The ordered unique elements and their maximum occurances.
 
     Returns
     -------
@@ -204,32 +256,35 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
     Slist = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
     tlist = np.zeros(nij_max, dtype=np.int32)
 
-    for atomk, atoms in enumerate(trajectory):
+    for idx, atoms in enumerate(trajectory):
+        transformer = IndexTransformer(elements_and_counts, atoms)
         symbols = atoms.get_chemical_symbols()
         kilist, kjlist, kSlist = neighbor_list('ijS', atoms, rc)
         n = len(kilist)
         kilist = _align(kilist, True)
         kjlist = _align(kjlist, True)
         kSlist = _align(kSlist, False)
-        ilist[atomk] = kilist
-        jlist[atomk] = kjlist
-        Slist[atomk] = kSlist
+        ilist[idx] = transformer(kilist.copy())
+        jlist[idx] = transformer(kjlist.copy())
+        Slist[idx] = kSlist
         tlist.fill(0)
         for i in range(n):
             symboli = symbols[kilist[i] - 1]
             symbolj = symbols[kjlist[i] - 1]
             tlist[i] = kbody_terms.index('{}{}'.format(symboli, symbolj))
+        kilist = transformer(kilist)
         for etai in range(n_etas):
             istart = etai * nij_max
             istop = istart + nij_max
-            v2g_map[atomk, istart: istop, 0] = atomk
-            v2g_map[atomk, istart: istop, 1] = kilist
-            v2g_map[atomk, istart: istop, 2] = offsets[tlist] + etai
+            v2g_map[idx, istart: istop, 0] = idx
+            v2g_map[idx, istart: istop, 1] = kilist
+            v2g_map[idx, istart: istop, 2] = offsets[tlist] + etai
     return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
 def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
-                          kbody_terms: List[str], kbody_sizes: List[int]):
+                          kbody_terms: List[str], kbody_sizes: List[int],
+                          elements_and_counts: Counter):
     """
     Build the values-to-features mapping for angular symmetry functions.
 
@@ -245,6 +300,8 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
         A list of str as all k-body terms.
     kbody_sizes : List[int]
         A list of int as the sizes of the k-body terms.
+    elements_and_counts : Counter
+        The ordered unique elements and their maximum occurances.
 
     Returns
     -------
@@ -279,35 +336,41 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
     jkS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
 
     for idx, atoms in enumerate(trajectory):
+        transformer = IndexTransformer(elements_and_counts, atoms)
         symbols = ['X'] + atoms.get_chemical_symbols()
         nl_indices = {}
-        nl_shifts = {}
+        nl_vectors = {}
         for i, atomi in enumerate(rmap.ilist[idx]):
             if atomi == 0:
                 break
             nl_indices[atomi] = nl_indices.get(atomi, []) + [rmap.jlist[idx, i]]
-            nl_shifts[atomi] = nl_shifts.get(atomi, []) + [rmap.Slist[idx, i]]
-        row = 0
+            nl_vectors[atomi] = nl_vectors.get(atomi, []) + [rmap.Slist[idx, i]]
+        count = 0
         for atomi, nl in nl_indices.items():
             num = len(nl)
-            prefix = '{}'.format(symbols[atomi])
-            iSlist = nl_shifts[atomi]
+            prefix = '{}'.format(symbols[transformer(atomi, True)])
+            iSlist = nl_vectors[transformer(atomi, True)]
             for j in range(num):
                 atomj = nl[j]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    suffix = ''.join(sorted([symbols[atomj], symbols[atomk]]))
+                    suffix = ''.join(sorted([
+                        symbols[transformer(atomj, True)],
+                        symbols[transformer(atomk, True)]])
+                    )
                     term = '{}{}'.format(prefix, suffix)
                     if 'X' in term:
                         print('warning')
-                    ij[:, idx, row] = atomi, atomj
-                    ik[:, idx, row] = atomi, atomk
-                    jk[:, idx, row] = atomj, atomk
-                    ijS[idx, row] = iSlist[j]
-                    ikS[idx, row] = iSlist[k]
-                    jkS[idx, row] = iSlist[k] - iSlist[j]
-                    v2g_map[idx, row] = idx, atomi, offsets[kbody_terms.index(term)]
-                    row += 1
+                    ij[:, idx, count] = atomi, atomj
+                    ik[:, idx, count] = atomi, atomk
+                    jk[:, idx, count] = atomj, atomk
+                    ijS[idx, count] = iSlist[j]
+                    ikS[idx, count] = iSlist[k]
+                    jkS[idx, count] = iSlist[k] - iSlist[j]
+                    v2g_map[idx, count, 0] = idx
+                    v2g_map[idx, count, 1] = atomi
+                    v2g_map[idx, count, 2] = offsets[kbody_terms.index(term)]
+                    count += 1
     return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
                       jkSlist=jkS)
 
