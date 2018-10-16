@@ -349,7 +349,7 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
         for atomi, nl in nl_indices.items():
             num = len(nl)
             prefix = '{}'.format(symbols[transformer(atomi, True)])
-            iSlist = nl_vectors[transformer(atomi, True)]
+            iSlist = nl_vectors[atomi]
             for j in range(num):
                 atomj = nl[j]
                 for k in range(j + 1, num):
