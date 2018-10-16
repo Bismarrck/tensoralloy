@@ -17,8 +17,9 @@ from ase.io import read
 from ase.neighborlist import neighbor_list
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
-from itertools import product
+from itertools import product, repeat
 from typing import List
+from collections import Counter
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -238,11 +239,10 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
     symbols = atoms.get_chemical_symbols()
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     nl_indices = {}
-    nl_shifts = {}
+    nl_vectors = {}
     for i, atomi in enumerate(rmap.ilist):
         nl_indices[atomi] = nl_indices.get(atomi, []) + [rmap.jlist[i]]
-        nl_shifts[atomi] = nl_shifts.get(atomi, []) + [rmap.Slist[i]]
-
+        nl_vectors[atomi] = nl_vectors.get(atomi, []) + [rmap.Slist[i]]
     total_dim = 0
     for atomi, nl in nl_indices.items():
         n = len(nl)
@@ -260,7 +260,7 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
     for atomi, nl in nl_indices.items():
         num = len(nl)
         prefix = '{}'.format(symbols[atomi])
-        iSlist = nl_shifts[atomi]
+        iSlist = nl_vectors[atomi]
         for j in range(num):
             atomj = nl[j]
             for k in range(j + 1, num):
@@ -396,7 +396,7 @@ def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     zeta = np.array([1.0, 4.0])
     grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
     symbols = atoms.get_chemical_symbols()
-    kbody_terms, mapping = get_kbody_terms(list(set(symbols)), k_max=3)
+    kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
     tf.reset_default_graph()
@@ -405,15 +405,15 @@ def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     with tf.name_scope(name_scope):
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell, tf.float64, name='cell')
-        rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms, kbody_sizes)
+        rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms,
+                                    kbody_sizes)
         amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
-
-        gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist, rmap.jlist,
-                             rmap.Slist, total_dim)
+        gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist,
+                             rmap.jlist, rmap.Slist, total_dim)
         ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
                               amap.jk, amap.ijSlist, amap.ikSlist, amap.jkSlist,
                               total_dim)
-        return tf.add(gr, ga, name='g')
+        return tf.add(gr, ga, name='g'), kbody_terms, kbody_sizes
 
 
 def test_monoatomic_molecule():
@@ -433,7 +433,7 @@ def test_monoatomic_molecule():
     zr = get_radial_fingerprints_v1(coords, rr, rc, eta)
     za = get_augular_fingerprints_v1(coords, rr, rc, beta, gamma, zeta)
     z = np.hstack((zr, za))
-    g = _symmetry_function(atoms, rc=rc, name_scope='B28')
+    g, _, _ = _symmetry_function(atoms, rc=rc, name_scope='B28')
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
@@ -451,7 +451,7 @@ def test_single_structure():
                                       [3.89, 2.75064538, 8.37532269],
                                       [5.835, 1.37532269, 8.5],
                                       [5.835, 7.12596807, 8.]]))
-    g = _symmetry_function(atoms, rc=6.5, name_scope='Pd3O2')
+    g, _, _ = _symmetry_function(atoms, rc=6.5, name_scope='Pd3O2')
     assert_less(np.abs(amp - g).max(), 1e-8)
 
 
@@ -494,7 +494,7 @@ def test_batch_monoatomic_molecule():
     for i, atoms in enumerate(trajectory):
         atoms.set_cell([20.0, 20.0, 20.0])
         atoms.set_pbc([False, False, False])
-        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')
+        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')[0]
         positions[i, 1:] = atoms.positions
         clist[i] = atoms.cell
 
@@ -505,14 +505,16 @@ def test_batch_monoatomic_molecule():
     grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
 
     elements = ['B']
-    kbody_terms, mapping = get_kbody_terms(elements, k_max=3)
+    elements_and_counts = Counter({'B': 28})
+    kbody_terms, mapping, _ = get_kbody_terms(elements, k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
 
     rmap = behler.build_radial_v2g_map(trajectory, rc, len(eta), nij_max,
-                                       kbody_terms, kbody_sizes)
+                                       kbody_terms, kbody_sizes,
+                                       elements_and_counts)
     amap = behler.build_angular_v2g_map(trajectory, rmap, nijk_max, kbody_terms,
-                                        kbody_sizes)
+                                        kbody_sizes, elements_and_counts)
 
     tf.reset_default_graph()
     tf.enable_eager_execution()
@@ -525,6 +527,84 @@ def test_batch_monoatomic_molecule():
     g = gr + ga
     values = g.numpy()[:, 1:, :]
     assert_less(np.abs(values - targets).max(), 1e-8)
+
+
+def test_main():
+    trajectory = read('test_files/qm7m.xyz', index=':', format='xyz')
+
+    rc = 6.0
+    eta = np.array([0.05, 4., 20., 80.])
+    beta = np.array([0.005, ])
+    gamma = np.array([1.0, -1.0])
+    zeta = np.array([1.0, 4.0])
+    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+
+    counter = Counter()
+    for atoms in trajectory:
+        for element, n in Counter(atoms.get_chemical_symbols()).items():
+            counter[element] = max(counter[element], n)
+
+    batch_size = len(trajectory)
+    n_atoms = sum(counter.values())
+    kbody_terms, mapping, elements = get_kbody_terms(list(counter.keys()),
+                                                     k_max=3)
+    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
+                                               len(gamma), len(zeta))
+
+    symbols = []
+    for element in elements:
+        symbols.extend(list(repeat(element, counter[element])))
+    element_offsets = np.insert(np.cumsum([counter[e] for e in elements]), 0, 0)
+
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
+    targets = np.zeros((batch_size, n_atoms, total_dim))
+    for i, atoms in enumerate(trajectory):
+        g, local_terms, local_sizes = _symmetry_function(
+            atoms, rc, atoms.get_chemical_formula())
+        local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
+        row = Counter()
+        for k, atom in enumerate(atoms):
+            atom_kbody_terms = mapping[atom.symbol]
+            j = row[atom.symbol] + element_offsets[elements.index(atom.symbol)]
+            for term in atom_kbody_terms:
+                if term not in local_terms:
+                    continue
+                idx = kbody_terms.index(term)
+                istart = offsets[idx]
+                istop = istart + kbody_sizes[idx]
+                idx = local_terms.index(term)
+                lstart = local_offsets[idx]
+                lstop = lstart + local_sizes[idx]
+                targets[i, j, istart: istop] = g[k, lstart: lstop]
+            row[atom.symbol] += 1
+
+    nij_max = 198
+    nijk_max = 1217
+    if nij_max is None:
+        nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
+
+    rmap = behler.build_radial_v2g_map(trajectory, rc, len(eta), nij_max,
+                                       kbody_terms, kbody_sizes, counter)
+    amap = behler.build_angular_v2g_map(trajectory, rmap, nijk_max, kbody_terms,
+                                        kbody_sizes, counter)
+
+    positions = np.zeros((batch_size, n_atoms + 1, 3))
+    clist = np.zeros((batch_size, 3, 3))
+
+    for i, atoms in enumerate(trajectory):
+        transformer = behler.IndexTransformer(counter, atoms)
+        for j, atom in enumerate(atoms):
+            positions[i, transformer(j) + 1] = atom.position
+        clist[i] = atoms.cell
+
+    gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
+                                rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
+    ga = behler.angular_function(positions, rc, amap.v2g_map, clist, grid,
+                                 amap.ij, amap.ik, amap.jk, amap.ijSlist,
+                                 amap.ikSlist, amap.jkSlist, total_dim)
+    g = gr + ga
+    values = g[:, 1:, :]
+    print(np.abs(values - targets).max())
 
 
 if __name__ == "__main__":
