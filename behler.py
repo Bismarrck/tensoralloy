@@ -359,8 +359,6 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
                         symbols[transformer(atomk, True)]])
                     )
                     term = '{}{}'.format(prefix, suffix)
-                    if 'X' in term:
-                        print('warning')
                     ij[:, idx, count] = atomi, atomj
                     ik[:, idx, count] = atomi, atomk
                     jk[:, idx, count] = atomj, atomk

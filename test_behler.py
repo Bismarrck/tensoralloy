@@ -17,7 +17,7 @@ from ase.io import read
 from ase.neighborlist import neighbor_list
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
-from itertools import product, repeat
+from itertools import product
 from typing import List
 from collections import Counter
 
@@ -550,14 +550,10 @@ def test_main():
                                                      k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
-
-    symbols = []
-    for element in elements:
-        symbols.extend(list(repeat(element, counter[element])))
     element_offsets = np.insert(np.cumsum([counter[e] for e in elements]), 0, 0)
 
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    targets = np.zeros((batch_size, n_atoms, total_dim))
+    targets = np.zeros((batch_size, n_atoms + 1, total_dim))
     for i, atoms in enumerate(trajectory):
         g, local_terms, local_sizes = _symmetry_function(
             atoms, rc, atoms.get_chemical_formula())
@@ -575,7 +571,7 @@ def test_main():
                 idx = local_terms.index(term)
                 lstart = local_offsets[idx]
                 lstop = lstart + local_sizes[idx]
-                targets[i, j, istart: istop] = g[k, lstart: lstop]
+                targets[i, j + 1, istart: istop] = g[k, lstart: lstop]
             row[atom.symbol] += 1
 
     nij_max = 198
@@ -594,7 +590,7 @@ def test_main():
     for i, atoms in enumerate(trajectory):
         transformer = behler.IndexTransformer(counter, atoms)
         for j, atom in enumerate(atoms):
-            positions[i, transformer(j) + 1] = atom.position
+            positions[i, transformer(j + 1)] = atom.position
         clist[i] = atoms.cell
 
     gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
@@ -603,8 +599,8 @@ def test_main():
                                  amap.ij, amap.ik, amap.jk, amap.ijSlist,
                                  amap.ikSlist, amap.jkSlist, total_dim)
     g = gr + ga
-    values = g[:, 1:, :]
-    print(np.abs(values - targets).max())
+    values = g.numpy()
+    assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
 
 
 if __name__ == "__main__":
