@@ -9,12 +9,20 @@ __email__ = 'Bismarrck@me.com'
 
 from nose import main
 from nose.tools import assert_almost_equal, assert_equal, assert_dict_equal
-from data_ops import read, find_neighbor_sizes
+from file_io import read, find_neighbor_sizes
 
 
 def test_read_xyz():
+    xyzfile = 'test_files/B28.xyz'
+    database = read(xyzfile, verbose=False, num_examples=2)
+    atoms = database.get_atoms('id=2')
+    assert_equal(len(database), 2)
+    assert_almost_equal(atoms.positions[1, 1], 10.65007390)
+
+
+def test_read_extxyz():
     xyzfile = 'test_files/examples.extxyz'
-    database = read(xyzfile, verbose=False, append=False)
+    database = read(xyzfile, verbose=False)
     atoms = database.get_atoms('id=2')
     thres = 1e-6
     metadata = database.metadata
@@ -28,7 +36,7 @@ def test_read_xyz():
 
 def test_find_neighbors():
     xyzfile = 'test_files/examples.extxyz'
-    database = read(xyzfile, verbose=False, append=False)
+    database = read(xyzfile, verbose=False)
     find_neighbor_sizes(database, rc=6.0, n_jobs=1)
     assert_equal(database.metadata['nij_max'], 358)
 

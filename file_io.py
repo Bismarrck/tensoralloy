@@ -23,15 +23,6 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-# The regex pattern for parsing the second line.
-energy_patt = re.compile(r"Lattice=\"(.*)\".*energy=([\d.-]+)\s+pbc=\"(.*)\"")
-
-# The regex pattern for parsing the later lines.
-string_patt = re.compile(r"([A-Za-z]{1,2})\s+([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)"
-                         r"\s+\d+\s+\d.\d+\s+\d+\s+([\d.-]+)\s+([\d.-]+)\s+"
-                         r"([\d.-]+)")
-
-
 class VirtualCalculator(Calculator):
     """
     A virtual calculator just returning the provided energy and forces.
@@ -80,9 +71,9 @@ def _read_pbc(string: str):
     return [True if x == "T" else False for x in string.split()]
 
 
-def read(filename, num_examples=None, verbose=True, append=False):
+def _read_extxyz(filename, ext=True, num_examples=None, verbose=True):
     """
-    Read `Atoms` objects from a xyz file.`
+    Read `Atoms` objects from a extxyz file.
 
     Parameters
     ----------
@@ -90,17 +81,26 @@ def read(filename, num_examples=None, verbose=True, append=False):
         The xyz file to read.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
-    append : bool
-        The parsed `Atoms` objects shall be appended to the database.
     verbose : bool
         If True, the reading progress shall be logged.
 
     Returns
     -------
-    db : SQLite3Database
+    database : SQLite3Database
         The database for the given xyz file.
 
     """
+    if ext:
+        energy_patt = re.compile(r"Lattice=\"(.*)\".*"
+                                 r"energy=([\d.-]+)\s+pbc=\"(.*)\"")
+        string_patt = re.compile(r"([A-Za-z]{1,2})\s+([\d.-]+)\s+([\d.-]+)"
+                                 r"\s+([\d.-]+)\s+\d+\s+\d.\d+\s+\d+\s+"
+                                 r"([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)")
+    else:
+        energy_patt = re.compile(r"([\d.-]+)")
+        string_patt = re.compile(r"([A-Za-z]{1,2})\s+"
+                                 r"([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)")
+
     logstr = "\rProgress: {:7d}  /  {:7d} | Speed = {:.1f}"
     atoms = None
     count = 0
@@ -109,7 +109,7 @@ def read(filename, num_examples=None, verbose=True, append=False):
     natoms = 0
     max_occurs = Counter()
     dbfile = '{}.db'.format(splitext(filename)[0])
-    if exists(dbfile) and not append:
+    if exists(dbfile):
         remove(dbfile)
     database = connect(name=dbfile)
     tic = time.time()
@@ -132,18 +132,25 @@ def read(filename, num_examples=None, verbose=True, append=False):
             elif stage == 1:
                 m = energy_patt.search(line)
                 if m:
-                    energy = float(m.group(2))
-                    atoms.set_cell(_read_cell(m.group(1)))
-                    atoms.set_pbc(_read_pbc(m.group(3)))
+                    if ext:
+                        energy = float(m.group(2))
+                        atoms.set_cell(_read_cell(m.group(1)))
+                        atoms.set_pbc(_read_pbc(m.group(3)))
+                    else:
+                        energy = float(m.group(1))
+                        atoms.set_pbc([False, False, False])
                     atoms.info[VirtualCalculator.ENERGY_KEY] = energy
                     stage += 1
             elif stage == 2:
                 m = string_patt.search(line)
                 if m:
-                    floats = [float(v) for v in m.groups()[1: 7]]
-                    atoms.append(Atom(symbol=m.group(1),
-                                      position=floats[:3]))
-                    atoms.info[VirtualCalculator.FORCES_KEY][ai, :] = floats[3:]
+                    if ext:
+                        floats = [float(v) for v in m.groups()[1: 7]]
+                        forces = floats[3:]
+                        atoms.info[VirtualCalculator.FORCES_KEY][ai, :] = forces
+                    else:
+                        floats = [float(v) for v in m.groups()[1: 4]]
+                    atoms.append(Atom(symbol=m.group(1), position=floats[:3]))
                     ai += 1
                     if ai == natoms:
                         atoms.calc.calculate()
@@ -161,8 +168,46 @@ def read(filename, num_examples=None, verbose=True, append=False):
         if verbose:
             print("")
             print("Total time: %.3f s\n" % (time.time() - tic))
-    database.metadata = {'max_occurs': max_occurs}
+    database.metadata = {'max_occurs': max_occurs, 'extxyz': ext}
     return database
+
+
+def read(filename, num_examples=None, verbose=True):
+    """
+    Read `Atoms` objects from a file.
+
+    Parameters
+    ----------
+    filename : str
+        The file to read. Can be a `xyz` file, a `extxyz` file or a `db` file.
+    num_examples : int
+        An `int` indicating the maximum number of examples to read.
+    verbose : bool
+        If True, the reading progress shall be logged.
+
+    Returns
+    -------
+    database : SQLite3Database
+        The database for the given xyz file.
+
+    """
+    file_type = splitext(filename)[1][1:]
+
+    if file_type == 'db':
+        database = connect(filename)
+        validated_keys = ('max_occurs', 'ext')
+        for key in validated_keys:
+            if key not in database.metadata:
+                print("Warning: the key '{}' is missing!".format(key))
+        return database
+    elif file_type == 'extxyz':
+        return _read_extxyz(filename, ext=True, num_examples=num_examples,
+                            verbose=verbose)
+    elif file_type == 'xyz':
+        return _read_extxyz(filename, ext=False, num_examples=num_examples,
+                            verbose=verbose)
+    else:
+        raise ValueError("Unknown file type: {}".format(file_type))
 
 
 def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
