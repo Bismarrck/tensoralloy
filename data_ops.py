@@ -12,9 +12,11 @@ from ase import Atoms, Atom
 from ase.db import connect
 from ase.db.sqlite import SQLite3Database
 from ase.calculators.calculator import Calculator
+from ase.neighborlist import neighbor_list
 from collections import Counter
 from os.path import splitext, exists
 from os import remove
+from joblib import Parallel, delayed
 
 
 __author__ = 'Xin Chen'
@@ -163,18 +165,41 @@ def read(filename, num_examples=None, verbose=True, append=False):
     return database
 
 
-def find_neighbors(db: SQLite3Database, rc: float, n_jobs=-1):
+def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
     """
-    Update the neighbor lists of all `Atoms` objects in the database.
+    Find `nij_max` and `nijk_max` of all `Atoms` objects in the database.
 
     Parameters
     ----------
-    db : SQLite3Database
+    database : SQLite3Database
         The database to update. This db must be created by the function `read`.
     rc : float
         The cutoff radius.
     n_jobs : int
-
+        The maximum number of concurrently running jobs. If -1 all CPUs are
+        used. If 1 is given, no parallel computing code is used at all, which is
+        useful for debugging. For n_jobs below -1, (n_cpus + 1 + n_jobs) are
+        used. Thus for n_jobs = -2, all CPUs but one are used.
 
     """
-    pass
+
+    def _pipeline(aid):
+        atoms = database.get_atoms(id=aid)
+        ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
+        nij = len(ilist)
+        nl = {}
+        for i, atomi in enumerate(ilist):
+            nl[atomi] = nl.get(atomi, []) + [jlist[i]]
+        nijk = 0
+        for atomi, nlist in nl.items():
+            n = len(nlist)
+            nijk += (n - 1 + 1) * (n - 1) // 2
+        return nij, nijk
+
+    results = Parallel(n_jobs=n_jobs, verbose=5)(
+        delayed(_pipeline)(jid) for jid in range(1, len(database) + 1)
+    )
+    nij_max, nijk_max = np.asarray(results, dtype=int).max(axis=0).tolist()
+    metadata = database.metadata
+    metadata.update({'nij_max': nij_max, 'nijk_max': nijk_max})
+    database.metadata = metadata
