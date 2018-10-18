@@ -110,3 +110,6 @@ test.py
 
 # Ignore PyCharm settings
 .idea
+
+# Ignore sqlite database files
+test_files/*.db
