@@ -246,5 +246,5 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
     )
     nij_max, nijk_max = np.asarray(results, dtype=int).max(axis=0).tolist()
     metadata = database.metadata
-    metadata.update({'nij_max': nij_max, 'nijk_max': nijk_max})
+    metadata.update({'nij_max': nij_max, 'nijk_max': nijk_max, 'rc': rc})
     database.metadata = metadata
