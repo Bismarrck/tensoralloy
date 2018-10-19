@@ -207,17 +207,17 @@ class IndexTransformer:
                 index_or_indices[i] = index_map[index_or_indices[i]]
             return index_or_indices
 
-    def map(self, positions):
+    def map(self, data):
         """
-        Map the original positions array of shape `[len(symbols), 3]` to the
-        standard positions array of shape [N, 3] where:
+        Map the original positions and forces array of shape `[len(symbols), 3]`
+        to the standard array of shape [N, 3] where:
             `N = sum(max_occurs.values()) + virtual_atom`
         """
-        positions = np.asarray(positions)
-        if np.ndim(positions) == 2:
-            positions = positions[np.newaxis, ...]
+        data = np.asarray(data)
+        if np.ndim(data) == 2:
+            data = data[np.newaxis, ...]
 
-        num_examples, num_atoms, num_axes = positions.shape
+        num_examples, num_atoms, num_axes = data.shape
         if num_atoms != len(self._symbols):
             raise ValueError(
                 "The shape should be [{}, 3] but is [{}, 3]".format(
@@ -227,12 +227,12 @@ class IndexTransformer:
                 "The last dimension should be 3 but not {}".format(num_axes))
 
         extra = int(self._virtual_atom)
-        dtype = positions.dtype
+        dtype = data.dtype
         r = np.zeros((num_examples, self._count + extra, 3), dtype=dtype)
         for i in range(num_examples):
             for j in range(num_atoms):
-                r[i, self.__call__(j + extra)] = positions[i, j]
-        if np.ndim(positions) == 2:
+                r[i, self.__call__(j + extra)] = data[i, j]
+        if np.ndim(data) == 2:
             r = np.squeeze(r, axis=0)
         return r
 
