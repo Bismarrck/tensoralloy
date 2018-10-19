@@ -25,6 +25,23 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
+              cell=np.array([[7.78, 0., 0.],
+                             [0., 5.50129076, 0.],
+                             [0., 0., 15.37532269]]),
+              positions=np.array([[3.89, 0., 8.37532269],
+                                  [0., 2.75064538, 8.37532269],
+                                  [3.89, 2.75064538, 8.37532269],
+                                  [5.835, 1.37532269, 8.5],
+                                  [5.835, 7.12596807, 8.]]))
+
+eta = np.array([0.05, 4.0, 20.0, 80.0])
+beta = np.array([0.005, ])
+gamma = np.array([1.0, -1.0])
+zeta = np.array([1.0, 4.0])
+grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+
+
 def cutoff_fxn(r, rc):
     """
     The vectorized cutoff function.
@@ -82,7 +99,7 @@ def get_radial_fingerprints_v1(coords, r, rc, etas):
     rc2 = rc ** 2
     fr = cutoff_fxn(r, rc)
 
-    for l, eta in enumerate(etas):
+    for k, etak in enumerate(etas):
         for i in range(natoms):
             v = 0.0
             ri = coords[i]
@@ -91,8 +108,8 @@ def get_radial_fingerprints_v1(coords, r, rc, etas):
                     continue
                 rs = coords[j]
                 ris = np.sum(np.square(ri - rs))
-                v += np.exp(-eta * ris / rc2) * fr[i, j]
-            x[i, l] = v
+                v += np.exp(-etak * ris / rc2) * fr[i, j]
+            x[i, k] = v
     return x
 
 
@@ -119,9 +136,9 @@ def get_augular_fingerprints_v1(coords, r, rc, etas, gammas, zetas):
     rr = r + np.eye(natoms) * rc
     r2 = rr ** 2
     rc2 = rc ** 2
-    fr = cutoff_fxn(rr, rc)
+    fc = cutoff_fxn(rr, rc)
     x = np.zeros((natoms, ndim))
-    for l, (eta, gamma, zeta) in enumerate(params):
+    for row, (etak, gammak, zetak) in enumerate(params):
         for i in range(natoms):
             for j in range(natoms):
                 if j == i:
@@ -132,11 +149,11 @@ def get_augular_fingerprints_v1(coords, r, rc, etas, gammas, zetas):
                     rij = coords[j] - coords[i]
                     rik = coords[k] - coords[i]
                     theta = np.dot(rij, rik) / (r[i, j] * r[i, k])
-                    v = (1 + gamma * theta)**zeta
-                    v *= np.exp(-eta * (r2[i, j] + r2[i, k] + r2[j, k]) / rc2)
-                    v *= fr[i, j] * fr[j, k] * fr[i, k]
-                    x[i, l] += v
-        x[:, l] *= 2.0**(1 - zeta)
+                    v = (1 + gammak * theta)**zetak
+                    v *= np.exp(-etak * (r2[i, j] + r2[i, k] + r2[j, k]) / rc2)
+                    v *= fc[i, j] * fc[j, k] * fc[i, k]
+                    x[i, row] += v
+        x[:, row] *= 2.0**(1 - zetak)
     return x / 2.0
 
 
@@ -280,8 +297,7 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
                       jkSlist=jkS)
 
 
-def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
-                    total_dim):
+def radial_function(R, rc, v2g_map, cell, etas, ilist, jlist, Slist, total_dim):
     """
     The implementation of Behler's radial symmetry function for a single
     structure.
@@ -311,8 +327,8 @@ def radial_function(R: tf.Tensor, rc, v2g_map, cell, etas, ilist, jlist, Slist,
             return tf.scatter_nd(v2g_map, v, shape, name='g')
 
 
-def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
-                     ik, jk, ijS, ikS, jkS, total_dim):
+def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
+                     jkS, total_dim):
     """
     The implementation of Behler's angular symmetry function for a single
     structure.
@@ -370,16 +386,16 @@ def angular_function(R: tf.Tensor, rc, v2g_map, cell, grid: ParameterGrid, ij,
         with tf.name_scope("features"):
             shape = tf.constant((R.shape[0], total_dim), tf.int32, name='shape')
             g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-            for row, params in enumerate(grid):
+            for row, params in enumerate(params_grid):
                 with tf.name_scope("p{}".format(row)):
-                    gamma = tf.constant(
+                    gamma_ = tf.constant(
                         params['gamma'], dtype=tf.float64, name='gamma')
-                    zeta = tf.constant(
+                    zeta_ = tf.constant(
                         params['zeta'], dtype=tf.float64, name='zeta')
-                    beta = tf.constant(
+                    beta_ = tf.constant(
                         params['beta'], dtype=tf.float64, name='beta')
-                    c = (one + gamma * theta)**zeta * two**(1.0 - zeta)
-                    v = c * tf.exp(-beta * r2c) * fc_r_ijk
+                    c = (one + gamma_ * theta)**zeta_ * two**(1.0 - zeta_)
+                    v = c * tf.exp(-beta_ * r2c) * fc_r_ijk
                     step = tf.constant([0, row], dtype=tf.int32, name='step')
                     v2g_row = tf.add(v2g_base, step, name='v2g_row')
                     g = g + tf.scatter_nd(v2g_row, v, shape, 'g{}'.format(row))
@@ -390,11 +406,6 @@ def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     """
     Compute the symmetry function descriptors for unit tests.
     """
-    eta = np.array([0.05, 4., 20., 80.])
-    beta = np.array([0.005, ])
-    gamma = np.array([1.0, -1.0])
-    zeta = np.array([1.0, 4.0])
-    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
     symbols = atoms.get_chemical_symbols()
     kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
@@ -418,17 +429,13 @@ def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
 
 def test_monoatomic_molecule():
     """
-    Test `radial_function` and `angular_function` for a mono-atomic molecule.
+    Test computing descriptors of a single mono-atomic molecule.
     """
     atoms = read('test_files/B28.xyz', index=0, format='xyz')
     atoms.set_cell([20.0, 20.0, 20.0])
     atoms.set_pbc([False, False, False])
     coords = atoms.get_positions()
     rr = pairwise_distances(coords)
-    eta = [0.05, 4., 20., 80.]
-    beta = [0.005, ]
-    gamma = [1.0, -1.0]
-    zeta = [1.0, 4.0]
     rc = 6.0
     zr = get_radial_fingerprints_v1(coords, rr, rc, eta)
     za = get_augular_fingerprints_v1(coords, rr, rc, beta, gamma, zeta)
@@ -439,19 +446,10 @@ def test_monoatomic_molecule():
 
 def test_single_structure():
     """
-    Test `radial_function` and `angular_function` for a periodic structure.
+    Test computing descriptors of a single multi-elements periodic structure.
     """
     amp = np.load('test_files/amp_Pd3O2.npz')['g']
-    atoms = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
-                  cell=np.array([[7.78, 0., 0.],
-                                 [0., 5.50129076, 0.],
-                                 [0., 0., 15.37532269]]),
-                  positions=np.array([[3.89, 0., 8.37532269],
-                                      [0., 2.75064538, 8.37532269],
-                                      [3.89, 2.75064538, 8.37532269],
-                                      [5.835, 1.37532269, 8.5],
-                                      [5.835, 7.12596807, 8.]]))
-    g, _, _ = _symmetry_function(atoms, rc=6.5, name_scope='Pd3O2')
+    g, _, _ = _symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
     assert_less(np.abs(amp - g).max(), 1e-8)
 
 
@@ -476,10 +474,9 @@ def get_ij_ijk_max(trajectory, rc) -> (int, int):
     return nij_max, nijk_max
 
 
-def test_batch_monoatomic_molecule():
+def test_batch_one_element():
     """
-    Test `radial_function` and `angular_function` for several mono-atomic
-    molecules.
+    Test computing descriptors of a batch of mono-atomic molecules.
     """
     trajectory = read('test_files/B28.xyz', index='0:2', format='xyz')
     targets = np.zeros((2, 28, 8), dtype=np.float64)
@@ -497,12 +494,6 @@ def test_batch_monoatomic_molecule():
         targets[i] = _symmetry_function(atoms, rc, name_scope='B28')[0]
         positions[i, 1:] = atoms.positions
         clist[i] = atoms.cell
-
-    eta = np.array([0.05, 4., 20., 80.])
-    beta = np.array([0.005, ])
-    gamma = np.array([1.0, -1.0])
-    zeta = np.array([1.0, 4.0])
-    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
 
     elements = ['B']
     elements_and_counts = Counter({'B': 28})
@@ -529,16 +520,19 @@ def test_batch_monoatomic_molecule():
     assert_less(np.abs(values - targets).max(), 1e-8)
 
 
-def test_main():
+def test_manybody_k():
+    """
+    Test computing descriptors for different `k_max`.
+    """
+    pass
+
+
+def test_batch_multi_elements():
+    """
+    Test computing descriptors of a batch of multi-elements molecules.
+    """
     trajectory = read('test_files/qm7m.xyz', index=':', format='xyz')
-
     rc = 6.0
-    eta = np.array([0.05, 4., 20., 80.])
-    beta = np.array([0.005, ])
-    gamma = np.array([1.0, -1.0])
-    zeta = np.array([1.0, 4.0])
-    grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
-
     counter = Counter()
     for atoms in trajectory:
         for element, n in Counter(atoms.get_chemical_symbols()).items():
