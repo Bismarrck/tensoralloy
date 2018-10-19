@@ -588,9 +588,9 @@ def test_main():
     clist = np.zeros((batch_size, 3, 3))
 
     for i, atoms in enumerate(trajectory):
-        transformer = behler.IndexTransformer(counter, atoms)
-        for j, atom in enumerate(atoms):
-            positions[i, transformer(j + 1)] = atom.position
+        symbols = atoms.get_chemical_symbols()
+        transformer = behler.IndexTransformer(counter, symbols)
+        positions[i] = transformer.map(atoms.positions)
         clist[i] = atoms.cell
 
     gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
