@@ -20,7 +20,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 @dataclass(frozen=True)
-class RadialMap:
+class RadialIndexedSlices:
     """
     A `dataclass` contains indexed slices for radial functions.
     
@@ -46,7 +46,7 @@ class RadialMap:
 
 
 @dataclass
-class AngularMap:
+class AngularIndexedSlices:
     """
     A `dataclass` contains indexed slices for angular functions.
 
@@ -327,22 +327,8 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
 
     Returns
     -------
-    rmap : RadialMap
-        A namedtuple with these properties:
-
-        'v2g_map' : array_like
-            A list of (atomi, etai, termi) where atomi is the index of the
-            center atom, etai is the index of the `eta` and termi is the index
-            of the corresponding 2-body term.
-        'ilist' : array_like
-            A list of first atom indices.
-        'jlist' : array_like
-            A list of second atom indices.
-        'Slist' : array_like
-            A list of (i, j) pairs where i is the index of the center atom and j
-            is the index of its neighbor atom.
-        'cell': array_like
-            The boundary cell of the structure.
+    rmap : RadialIndexedSlices
+        The indexed slices for radial functions.
 
     """
 
@@ -396,12 +382,12 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
             v2g_map[idx, istart: istop, 0] = idx
             v2g_map[idx, istart: istop, 1] = kilist
             v2g_map[idx, istart: istop, 2] = offsets[tlist] + etai
-    return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
+    return RadialIndexedSlices(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
-def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
-                          kbody_terms: List[str], kbody_sizes: List[int],
-                          elements_and_counts: Counter):
+def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialIndexedSlices,
+                          nijk_max, kbody_terms: List[str],
+                          kbody_sizes: List[int], max_occurs: Counter):
     """
     Build the values-to-features mapping for angular symmetry functions.
 
@@ -409,7 +395,7 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
     ----------
     trajectory : List[Atoms]
         A list of `ase.Atoms` objects.
-    rmap : RadialMap
+    rmap : RadialIndexedSlices
         The mapping for radial symmetry functions.
     nijk_max : int
         The maximum number of `Angle[i,j,k]` that one `Atoms` object has.
@@ -417,15 +403,13 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
         A list of str as all k-body terms.
     kbody_sizes : List[int]
         A list of int as the sizes of the k-body terms.
-    elements_and_counts : Counter
-        The ordered unique elements and their maximum occurances.
+    max_occurs : Counter
+        The maximum occurance for each type of element.
 
     Returns
     -------
-    amap : AngularMap
-        A namedtuple with these properties:
-
-
+    slices : AngularIndexedSlices
+        The indexed slices for angular functions.
 
     """
     batch_size = len(trajectory)
@@ -440,7 +424,7 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
 
     for idx, atoms in enumerate(trajectory):
         symbols = atoms.get_chemical_symbols()
-        transformer = IndexTransformer(elements_and_counts, symbols)
+        transformer = IndexTransformer(max_occurs, symbols)
         nl_indices = {}
         nl_vectors = {}
         for i, atomi in enumerate(rmap.ilist[idx]):
@@ -472,8 +456,8 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
                     v2g_map[idx, count, 1] = atomi
                     v2g_map[idx, count, 2] = offsets[kbody_terms.index(term)]
                     count += 1
-    return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
-                      jkSlist=jkS)
+    return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
+                                ikSlist=ikS, jkSlist=jkS)
 
 
 def radial_function(R, rc, v2g_map, clist, etas, ilist, jlist, Slist,

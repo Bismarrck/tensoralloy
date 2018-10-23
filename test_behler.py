@@ -11,7 +11,8 @@ import nose
 import behler
 from unittest import TestCase
 from utils import cutoff
-from behler import get_kbody_terms, compute_dimension, RadialMap, AngularMap
+from behler import get_kbody_terms, compute_dimension
+from behler import RadialIndexedSlices, AngularIndexedSlices
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
@@ -223,7 +224,7 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
 
     Returns
     -------
-    radial : RadialMap
+    radial : RadialIndexedSlices
         A namedtuple with these properties:
 
         'v2g_map' : array_like
@@ -258,10 +259,10 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
         istop = istart + n
         v2g_map[istart: istop, 0] = ilist
         v2g_map[istart: istop, 1] = offsets[tlist] + etai
-    return RadialMap(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
+    return RadialIndexedSlices(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
 
 
-def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
+def build_angular_v2g_map(atoms: Atoms, rmap: RadialIndexedSlices,
                           kbody_terms: List[str], kbody_sizes: List[int]):
     """
     Build the values-to-features mapping for angular symmetry functions.
@@ -270,7 +271,7 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
     ----------
     atoms : Atoms
         An `ase.Atoms` object representing a structure.
-    rmap : RadialMap
+    rmap : RadialIndexedSlices
         The mapping for radial symmetry functions.
     kbody_terms : List[str]
         A list of str as all k-body terms.
@@ -279,7 +280,7 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
 
     Returns
     -------
-    angular : AngularMap
+    angular : AngularIndexedSlices
         A namedtuple with these properties:
 
         'v2g_map' : array_like
@@ -339,8 +340,8 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialMap,
                 v2g_map[row] = atomi, offsets[kbody_terms.index(term)]
                 row += 1
 
-    return AngularMap(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS, ikSlist=ikS,
-                      jkSlist=jkS)
+    return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
+                                ikSlist=ikS, jkSlist=jkS)
 
 
 def radial_function(R, rc, v2g_map, cell, etas, ilist, jlist, Slist, total_dim):
