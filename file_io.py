@@ -210,7 +210,8 @@ def read(filename, num_examples=None, verbose=True):
         raise ValueError("Unknown file type: {}".format(file_type))
 
 
-def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
+def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
+                        n_jobs=-1):
     """
     Find `nij_max` and `nijk_max` of all `Atoms` objects in the database.
 
@@ -220,6 +221,8 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
         The database to update. This db must be created by the function `read`.
     rc : float
         The cutoff radius.
+    k_max : int
+        The maximum k for the many-body expansion scheme.
     n_jobs : int
         The maximum number of concurrently running jobs. If -1 all CPUs are
         used. If 1 is given, no parallel computing code is used at all, which is
@@ -227,18 +230,29 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, n_jobs=-1):
         used. Thus for n_jobs = -2, all CPUs but one are used.
 
     """
-
     def _pipeline(aid):
         atoms = database.get_atoms(id=aid)
         ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
-        nij = len(ilist)
-        nl = {}
-        for i, atomi in enumerate(ilist):
-            nl[atomi] = nl.get(atomi, []) + [jlist[i]]
-        nijk = 0
-        for atomi, nlist in nl.items():
-            n = len(nlist)
-            nijk += (n - 1 + 1) * (n - 1) // 2
+        if k_max >= 2:
+            nij = len(ilist)
+        else:
+            symbols = atoms.get_chemical_symbols()
+            nij = 0
+            for k in range(len(ilist)):
+                if symbols[ilist[k]] == symbols[jlist[k]]:
+                   nij += 1
+        if k_max == 3:
+            nl = {}
+            for i, atomi in enumerate(ilist):
+                if atomi not in nl:
+                    nl[atomi] = []
+                nl[atomi].append(jlist[i])
+            nijk = 0
+            for atomi, nlist in nl.items():
+                n = len(nlist)
+                nijk += (n - 1 + 1) * (n - 1) // 2
+        else:
+            nijk = 0
         return nij, nijk
 
     results = Parallel(n_jobs=n_jobs, verbose=5)(
