@@ -402,7 +402,7 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
             return g
 
 
-def _symmetry_function(atoms: Atoms, rc: float, name_scope: str):
+def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     """
     Compute the symmetry function descriptors for unit tests.
     """
@@ -440,7 +440,7 @@ def test_monoatomic_molecule():
     zr = get_radial_fingerprints_v1(coords, rr, rc, eta)
     za = get_augular_fingerprints_v1(coords, rr, rc, beta, gamma, zeta)
     z = np.hstack((zr, za))
-    g, _, _ = _symmetry_function(atoms, rc=rc, name_scope='B28')
+    g, _, _ = symmetry_function(atoms, rc=rc, name_scope='B28')
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
@@ -449,11 +449,11 @@ def test_single_structure():
     Test computing descriptors of a single multi-elements periodic structure.
     """
     amp = np.load('test_files/amp_Pd3O2.npz')['g']
-    g, _, _ = _symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
+    g, _, _ = symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
     assert_less(np.abs(amp - g).max(), 1e-8)
 
 
-def get_ij_ijk_max(trajectory, rc) -> (int, int):
+def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     """
     Return the maximum number of unique `R(ij)` and `Angle(i,j,k)` from one
     `Atoms` object.
@@ -461,16 +461,27 @@ def get_ij_ijk_max(trajectory, rc) -> (int, int):
     nij_max = 0
     nijk_max = 0
     for atoms in trajectory:
+        symbols = atoms.get_chemical_symbols()
         ilist, jlist = neighbor_list('ij', atoms, rc)
-        nij_max = max(len(ilist), nij_max)
-        nl = {}
-        for i, atomi in enumerate(ilist):
-            nl[atomi] = nl.get(atomi, []) + [jlist[i]]
-        ntotal = 0
-        for atomi, nlist in nl.items():
-            n = len(nlist)
-            ntotal += (n - 1 + 1) * (n - 1) // 2
-        nijk_max = max(ntotal, nijk_max)
+        if k_max >= 2:
+            nij_max = max(len(ilist), nij_max)
+        else:
+            nij = 0
+            for k in range(len(ilist)):
+                if symbols[ilist[k]] == symbols[jlist[k]]:
+                   nij += 1
+            nij_max = max(nij_max, nij)
+        if k_max == 3:
+            nl = {}
+            for i, atomi in enumerate(ilist):
+                nl[atomi] = nl.get(atomi, []) + [jlist[i]]
+            ntotal = 0
+            for atomi, nlist in nl.items():
+                n = len(nlist)
+                ntotal += (n - 1 + 1) * (n - 1) // 2
+            nijk_max = max(ntotal, nijk_max)
+        else:
+            nijk_max = 0
     return nij_max, nijk_max
 
 
@@ -491,7 +502,7 @@ def test_batch_one_element():
     for i, atoms in enumerate(trajectory):
         atoms.set_cell([20.0, 20.0, 20.0])
         atoms.set_pbc([False, False, False])
-        targets[i] = _symmetry_function(atoms, rc, name_scope='B28')[0]
+        targets[i] = symmetry_function(atoms, rc, name_scope='B28')[0]
         positions[i, 1:] = atoms.positions
         clist[i] = atoms.cell
 
@@ -524,7 +535,42 @@ def test_manybody_k():
     """
     Test computing descriptors for different `k_max`.
     """
-    pass
+    symbols = Pd3O2.get_chemical_symbols()
+    elements = list(set(symbols))
+    rc = 6.0
+    max_occurs = Counter(symbols)
+    transformer = behler.IndexTransformer(max_occurs, symbols)
+    positions = transformer.map(Pd3O2.positions)
+    clist = np.reshape(Pd3O2.cell, (1, 3, 3))
+    ref, ref_terms, ref_sizes = symmetry_function(Pd3O2, rc, 'all')
+    ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
+
+    for k_max in (1, 2, 3):
+        kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
+        kdim, kbody_sizes = compute_dimension(
+            kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
+        nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
+        rmap = behler.build_radial_v2g_map([Pd3O2], rc, len(eta), nij_max,
+                                           kbody_terms, kbody_sizes, max_occurs,
+                                           k_max=k_max)
+
+        g = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
+                                   rmap.ilist, rmap.jlist, rmap.Slist, kdim)
+        if k_max == 3:
+            amap = behler.build_angular_v2g_map([Pd3O2], rmap, nijk_max,
+                                                kbody_terms, kbody_sizes,
+                                                max_occurs)
+            g += behler.angular_function(positions, rc, amap.v2g_map, clist,
+                                         grid, amap.ij, amap.ik, amap.jk,
+                                         amap.ijSlist, amap.ikSlist,
+                                         amap.jkSlist, kdim)
+
+        columns = []
+        for i, ref_term in enumerate(ref_terms):
+            if ref_term in kbody_terms:
+                columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
+        print('k_max = {}, diff_max = {:.8f}'.format(
+            k_max, np.abs(ref.numpy()[:, columns] - g.numpy()[0, 1:]).max()))
 
 
 def test_batch_multi_elements():
@@ -549,7 +595,7 @@ def test_batch_multi_elements():
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
     for i, atoms in enumerate(trajectory):
-        g, local_terms, local_sizes = _symmetry_function(
+        g, local_terms, local_sizes = symmetry_function(
             atoms, rc, atoms.get_chemical_formula())
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
         row = Counter()
