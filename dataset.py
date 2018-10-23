@@ -16,12 +16,17 @@ from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes
 from misc import RANDOM_STATE, check_path
 from sklearn.model_selection import train_test_split
+from collections import namedtuple
 from os.path import join
-from typing import List
+from typing import List, Dict
 
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+DecodedExample = namedtuple('DecodedExample',
+                            (''))
 
 
 def _bytes_feature(value):
@@ -36,6 +41,85 @@ def _float_feature(value):
     Convert the `value` to Protobuf float32.
     """
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+
+
+class Serializer:
+    """
+    This class is used to serialize training examples.
+    """
+
+    def __init__(self, k_max):
+        """
+        Initialization method.
+        """
+        self.k_max = k_max
+
+    def encode(self, positions, cell, y_true, f_true, rslices, aslices):
+        """
+        Encode the data and return a `tf.train.Example`.
+        """
+        feature = {
+            'positions': _bytes_feature(positions),
+            'cell': _bytes_feature(cell),
+            'y_true': _bytes_feature(y_true),
+            'f_true': _bytes_feature(f_true),
+            'r_v2g': _bytes_feature(rslices.v2g_map.tostring()),
+            'r_ilist': _bytes_feature(rslices.ilist.tostring()),
+            'r_jlist': _bytes_feature(rslices.jlist.tostring()),
+            'r_Slist': _bytes_feature(rslices.Slist.tostring()),
+        }
+        if self.k_max == 3:
+            feature.update({
+                'a_v2g': _bytes_feature(aslices.v2g_map.tostring()),
+                'a_ij': _bytes_feature(aslices.ik.tostring()),
+                'a_ik': _bytes_feature(aslices.ij.tostring()),
+                'a_jk': _bytes_feature(aslices.jk.tostring()),
+                'a_ijSlist': _bytes_feature(aslices.ijSlist.tostring()),
+                'a_ikSlist': _bytes_feature(aslices.ikSlist.tostring()),
+                'a_jkSlist': _bytes_feature(aslices.jkSlist.tostring()),
+            })
+        return Example(features=Features(feature=feature))
+
+    def _decode_positions(self, example: Dict[str, tf.Tensor]):
+        """
+        """
+        positions = tf.decode_raw(example['positions'], tf.float64)
+        positions.set_shape()
+        return tf.reshape(positions, ())
+
+    def decode_example(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode the parsed single example.
+        """
+        pass
+
+    def decode_protobuf(self, example_proto: tf.Tensor):
+        """
+        Decode the scalar string Tensor, which is a single serialized Example.
+        See `_parse_single_example_raw` documentation for more details.
+        """
+        feature_list = {
+            'positions': tf.FixedLenFeature([], tf.string),
+            'cell': tf.FixedLenFeature([], tf.string),
+            'y_true': tf.FixedLenFeature([], tf.string),
+            'f_true': tf.FixedLenFeature([], tf.string),
+            'r_v2g': tf.FixedLenFeature([], tf.string),
+            'r_ilist': tf.FixedLenFeature([], tf.string),
+            'r_jlist': tf.FixedLenFeature([], tf.string),
+            'r_Slist': tf.FixedLenFeature([], tf.string),
+        }
+        if self.k_max == 3:
+            feature_list.update({
+                'a_v2g': tf.FixedLenFeature([], tf.string),
+                'a_ij': tf.FixedLenFeature([], tf.string),
+                'a_ik': tf.FixedLenFeature([], tf.string),
+                'a_jk': tf.FixedLenFeature([], tf.string),
+                'a_ijSlist': tf.FixedLenFeature([], tf.string),
+                'a_ikSlist': tf.FixedLenFeature([], tf.string),
+                'a_jkSlist': tf.FixedLenFeature([], tf.string),
+            })
+        example = tf.parse_single_example(example_proto, feature_list)
+        return self.decode_example(example)
 
 
 class Dataset:
@@ -74,7 +158,7 @@ class Dataset:
         self._beta = beta
         self._gamma = gamma
         self._zeta = zeta
-        self._setup()
+        self._read_database()
 
     @property
     def database(self):
@@ -89,6 +173,14 @@ class Dataset:
         Return the name of this dataset.
         """
         return self._name
+
+    @property
+    def trainable_properties(self) -> List[str]:
+        """
+        Return a list of str as the trainable properties. Currently only energy
+        and forces are supported.
+        """
+        return self._trainable_properties
 
     @property
     def k_max(self):
@@ -116,13 +208,16 @@ class Dataset:
         """ Return the number of examples in this dataset. """
         return len(self._database)
 
-    def _setup(self):
+    def _read_database(self):
         """
-        Post-initialization.
+        Read the metadata of the database and finalize the initialization.
         """
         find_neighbor_sizes(self._database, self._rc, k_max=self._k_max)
 
         metadata = self._database.metadata
+        trainable_properties = ['energy']
+        if metadata['ext']:
+            trainable_properties += ['forces']
         max_occurs = metadata['max_occurs']
         nij_max = metadata['nij_max']
         nijk_max = metadata['nijk_max']
@@ -143,6 +238,7 @@ class Dataset:
         self._total_size = total_size
         self._elements = elements
         self._mapping = mapping
+        self._trainable_properties = trainable_properties
 
     def convert_atoms_to_example(self, atoms: Atoms) -> Example:
         """
@@ -233,3 +329,43 @@ class Dataset:
             train,
             verbose=verbose,
         )
+
+    def decode_protobuf(self, example_proto):
+        """
+        Decode the protobuf into a tuple of tensors.
+
+        Parameters
+        ----------
+        example_proto : tf.Tensor
+            A scalar string Tensor, a single serialized Example. See
+            `_parse_single_example_raw` documentation for more details.
+
+        Returns
+        -------
+        example : DecodedExample
+            A `DecodedExample` from a tfrecords file.
+
+        """
+        feature_list = {
+            'positions': tf.FixedLenFeature([], tf.string),
+            'cell': tf.FixedLenFeature([], tf.string),
+            'y_true': tf.FixedLenFeature([], tf.string),
+            'f_true': tf.FixedLenFeature([], tf.string),
+            'r_v2g': tf.FixedLenFeature([], tf.string),
+            'r_ilist': tf.FixedLenFeature([], tf.string),
+            'r_jlist': tf.FixedLenFeature([], tf.string),
+            'r_Slist': tf.FixedLenFeature([], tf.string),
+        }
+        if self._k_max == 3:
+            feature_list.update({
+                'a_v2g': tf.FixedLenFeature([], tf.string),
+                'a_ij': tf.FixedLenFeature([], tf.string),
+                'a_ik': tf.FixedLenFeature([], tf.string),
+                'a_jk': tf.FixedLenFeature([], tf.string),
+                'a_ijSlist': tf.FixedLenFeature([], tf.string),
+                'a_ikSlist': tf.FixedLenFeature([], tf.string),
+                'a_jkSlist': tf.FixedLenFeature([], tf.string),
+            })
+        example = tf.parse_single_example(example_proto, feature_list)
+
+
