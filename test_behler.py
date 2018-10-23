@@ -9,9 +9,10 @@ import numpy as np
 import tensorflow as tf
 import nose
 import behler
+from unittest import TestCase
 from utils import cutoff
 from behler import get_kbody_terms, compute_dimension, RadialMap, AngularMap
-from nose.tools import assert_less
+from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
@@ -20,6 +21,7 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import List
 from collections import Counter
+from misc import skip
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -40,6 +42,45 @@ beta = np.array([0.005, ])
 gamma = np.array([1.0, -1.0])
 zeta = np.array([1.0, 4.0])
 grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+
+
+class IndexTransformerTest(TestCase):
+    """
+    A set of unit tests for the class `IndexTransformer`.
+    """
+
+    def setUp(self):
+        """
+        Setup the tests.
+        """
+        symbols = Pd3O2.get_chemical_symbols()
+        max_occurs = Counter({'Pd': 4, 'O': 5})
+        self.clf = behler.IndexTransformer(max_occurs, symbols)
+        self.clf_no_extra = behler.IndexTransformer(Counter(symbols), symbols,
+                                                    virtual_atom=False)
+
+    def test_forward(self):
+        assert_equal(len(self.clf.reference_symbols), 9)
+
+        array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
+        results = self.clf.gather(array).flatten().tolist()
+        assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
+
+        results = self.clf_no_extra.gather(array).flatten().tolist()
+        assert_list_equal(results, [4, 5, 1, 2, 3])
+
+        array = np.expand_dims([7, 1, 2, 3, 4, 5], axis=1)
+        results = self.clf.gather(array).flatten().tolist()
+        assert_list_equal(results, [7, 4, 5, 7, 7, 7, 1, 2, 3, 7])
+
+    def test_reverse(self):
+        array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
+        results = self.clf.gather(array, True).flatten().tolist()
+        assert_list_equal(results, [1, 2, 3, 4, 5])
+
+        array = np.expand_dims([4, 5, 1, 2, 3], axis=1)
+        results = self.clf_no_extra.gather(array, True).flatten().tolist()
+        assert_list_equal(results, [1, 2, 3, 4, 5])
 
 
 def cutoff_fxn(r, rc):
@@ -427,6 +468,7 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         return tf.add(gr, ga, name='g'), kbody_terms, kbody_sizes
 
 
+@skip
 def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
@@ -444,6 +486,7 @@ def test_monoatomic_molecule():
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
+@skip
 def test_single_structure():
     """
     Test computing descriptors of a single multi-elements periodic structure.
@@ -485,6 +528,7 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     return nij_max, nijk_max
 
 
+@skip
 def test_batch_one_element():
     """
     Test computing descriptors of a batch of mono-atomic molecules.
@@ -531,6 +575,7 @@ def test_batch_one_element():
     assert_less(np.abs(values - targets).max(), 1e-8)
 
 
+@skip
 def test_manybody_k():
     """
     Test computing descriptors for different `k_max`.
@@ -540,7 +585,7 @@ def test_manybody_k():
     rc = 6.0
     max_occurs = Counter(symbols)
     transformer = behler.IndexTransformer(max_occurs, symbols)
-    positions = transformer.map(Pd3O2.positions)
+    positions = transformer.gather(Pd3O2.positions)
     clist = np.reshape(Pd3O2.cell, (1, 3, 3))
     ref, ref_terms, ref_sizes = symmetry_function(Pd3O2, rc, 'all')
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
@@ -573,6 +618,7 @@ def test_manybody_k():
             k_max, np.abs(ref.numpy()[:, columns] - g.numpy()[0, 1:]).max()))
 
 
+@skip
 def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.
@@ -630,7 +676,7 @@ def test_batch_multi_elements():
     for i, atoms in enumerate(trajectory):
         symbols = atoms.get_chemical_symbols()
         transformer = behler.IndexTransformer(counter, symbols)
-        positions[i] = transformer.map(atoms.positions)
+        positions[i] = transformer.gather(atoms.positions)
         clist[i] = atoms.cell
 
     gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,

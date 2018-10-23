@@ -161,18 +161,18 @@ class IndexTransformer:
         self._count = sum(max_occurs.values())
         self._virtual_atom = virtual_atom
 
-        extra = int(virtual_atom)
+        istart = int(virtual_atom)
         elements = sorted(max_occurs.keys())
         offsets = np.cumsum([max_occurs[e] for e in elements])[:-1]
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
         for i, symbol in enumerate(symbols):
-            idx_old = i + extra
-            idx_new = offsets[elements.index(symbol)] + delta[symbol] + extra
+            idx_old = i + istart
+            idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
             index_map[idx_old] = idx_new
             delta[symbol] += 1
-        reverse_map = {v: k - extra for k, v in index_map.items()}
+        reverse_map = {v: k for k, v in index_map.items()}
         if virtual_atom:
             index_map[0] = 0
             reverse_map[0] = 0
@@ -192,6 +192,14 @@ class IndexTransformer:
         """
         return self._symbols
 
+    @property
+    def reference_symbols(self) -> List[str]:
+        """
+        Return a list of str as the ordered chemical symbols of the reference
+        (global) stoichiometry.
+        """
+        return sorted(self._max_occurs.elements())
+
     def __call__(self, index_or_indices, reverse=False):
         """
         Do the in-place index transformation and return the array.
@@ -207,39 +215,44 @@ class IndexTransformer:
                 index_or_indices[i] = index_map[index_or_indices[i]]
             return index_or_indices
 
-    def map(self, data):
+    def gather(self, params, reverse=False):
         """
-        Map the original positions and forces array of shape `[len(symbols), 3]`
-        to the standard array of shape [N, 3] where:
-            `N = sum(max_occurs.values()) + virtual_atom`
+        Gather slices from `params` at `axis`.
+
+        `params` should be an array of rank 2 or 3 and `axis = params.ndim - 2`.
+        The dimension `params.shape[axis]` must be ether `len(self.symbols)` if
+        `reverse == False` or `N = sum(max_occurs.values()) + virtual_atom` if
+        `reverse == True`.
         """
-        data = np.asarray(data)
-        if np.ndim(data) == 2:
-            data = data[np.newaxis, ...]
-
-        num_examples, num_atoms, num_axes = data.shape
-        if num_atoms != len(self._symbols):
-            raise ValueError(
-                "The shape should be [{}, 3] but is [{}, 3]".format(
-                    self._count, num_atoms))
-        if num_axes != 3:
-            raise ValueError(
-                "The last dimension should be 3 but not {}".format(num_axes))
-
+        params = np.asarray(params)
+        rank = np.ndim(params)
         extra = int(self._virtual_atom)
-        dtype = data.dtype
-        r = np.zeros((num_examples, self._count + extra, 3), dtype=dtype)
-        for i in range(num_examples):
-            for j in range(num_atoms):
-                r[i, self.__call__(j + extra)] = data[i, j]
-        if np.ndim(data) == 2:
-            r = np.squeeze(r, axis=0)
-        return r
+        if rank == 2:
+            params = params[np.newaxis, ...]
+        if self._virtual_atom:
+            if not reverse and params.shape[1] == len(self._symbols):
+                params = np.insert(params, 0, 0, axis=1)
+
+        indices = []
+        if reverse:
+            for i in range(extra, extra + len(self._symbols)):
+                indices.append(self.index_map[i])
+        else:
+            for i in range(extra + self._count):
+                if self._virtual_atom:
+                    index = self.reverse_map.get(i, 0)
+                else:
+                    index = self.reverse_map[i]
+                indices.append(index)
+        params = params[:, indices]
+        if rank == 2:
+            params = np.squeeze(params, axis=0)
+        return params
 
 
 def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
                          kbody_terms: List[str], kbody_sizes: List[int],
-                         max_occurs: Counter):
+                         max_occurs: Counter, k_max=3):
     """
     Build the values-to-features mapping for radial symmetry functions.
 
@@ -259,6 +272,8 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
         A list of int as the sizes of the k-body terms.
     max_occurs : Counter
         The ordered unique elements and their maximum occurances.
+    k_max : int
+        The maximum k for the many-body expansion.
 
     Returns
     -------
@@ -304,6 +319,14 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
         symbols = atoms.get_chemical_symbols()
         transformer = IndexTransformer(max_occurs, symbols)
         kilist, kjlist, kSlist = neighbor_list('ijS', atoms, rc)
+        if k_max == 1:
+            cols = []
+            for i in range(len(kilist)):
+                if symbols[kilist[i]] == symbols[kjlist[i]]:
+                    cols.append(i)
+            kilist = kilist[cols]
+            kjlist = kjlist[cols]
+            kSlist = kSlist[cols]
         n = len(kilist)
         kilist = _align(kilist, True)
         kjlist = _align(kjlist, True)
