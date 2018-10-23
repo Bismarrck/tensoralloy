@@ -474,6 +474,7 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         return tf.add(gr, ga, name='g'), kbody_terms, kbody_sizes
 
 
+@skip
 def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
@@ -491,6 +492,7 @@ def test_monoatomic_molecule():
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
+@skip
 def test_single_structure():
     """
     Test computing descriptors of a single multi-elements periodic structure.
@@ -532,6 +534,7 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     return nij_max, nijk_max
 
 
+@skip
 def test_batch_one_element():
     """
     Test computing descriptors of a batch of mono-atomic molecules.
@@ -578,7 +581,6 @@ def test_batch_one_element():
     assert_less(np.abs(values - targets).max(), 1e-8)
 
 
-@skip
 def test_manybody_k():
     """
     Test computing descriptors for different `k_max`.
@@ -588,7 +590,7 @@ def test_manybody_k():
     rc = 6.0
     max_occurs = Counter(symbols)
     transformer = behler.IndexTransformer(max_occurs, symbols)
-    positions = transformer.gather(Pd3O2.positions)
+    positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
     clist = np.reshape(Pd3O2.cell, (1, 3, 3))
     ref, ref_terms, ref_sizes = symmetry_function(Pd3O2, rc, 'all')
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
@@ -617,10 +619,11 @@ def test_manybody_k():
         for i, ref_term in enumerate(ref_terms):
             if ref_term in kbody_terms:
                 columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-        print('k_max = {}, diff_max = {:.8f}'.format(
-            k_max, np.abs(ref.numpy()[:, columns] - g.numpy()[0, 1:]).max()))
+        g = transformer.gather(g.numpy()[0], reverse=True)
+        assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8)
 
 
+@skip
 def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.
