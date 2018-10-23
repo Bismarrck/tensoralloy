@@ -199,18 +199,17 @@ class IndexTransformer:
     should be kept. This class is used to transform the local indices of the
     symbols of arbitrary `Atoms` to the global indexing system.
     """
+    _ISTART = 1
 
-    def __init__(self, max_occurs: Counter, symbols: List[str],
-                 virtual_atom=True):
+    def __init__(self, max_occurs: Counter, symbols: List[str]):
         """
         Initialization method.
         """
         self._max_occurs = max_occurs
         self._symbols = symbols
         self._count = sum(max_occurs.values())
-        self._virtual_atom = virtual_atom
 
-        istart = int(virtual_atom)
+        istart = IndexTransformer._ISTART
         elements = sorted(max_occurs.keys())
         offsets = np.cumsum([max_occurs[e] for e in elements])[:-1]
         offsets = np.insert(offsets, 0, 0)
@@ -222,9 +221,8 @@ class IndexTransformer:
             index_map[idx_old] = idx_new
             delta[symbol] += 1
         reverse_map = {v: k for k, v in index_map.items()}
-        if virtual_atom:
-            index_map[0] = 0
-            reverse_map[0] = 0
+        index_map[0] = 0
+        reverse_map[0] = 0
         self.index_map = index_map
         self.reverse_map = reverse_map
 
@@ -257,7 +255,7 @@ class IndexTransformer:
             index_map = self.reverse_map
         else:
             index_map = self.index_map
-        delta = int(ignore_extra) * int(self._virtual_atom)
+        delta = int(ignore_extra)
         if not hasattr(index_or_indices, "__len__"):
             return index_map[index_or_indices] - delta
         else:
@@ -276,24 +274,19 @@ class IndexTransformer:
         """
         params = np.asarray(params)
         rank = np.ndim(params)
-        extra = int(self._virtual_atom)
         if rank == 2:
             params = params[np.newaxis, ...]
-        if self._virtual_atom:
-            if not reverse and params.shape[1] == len(self._symbols):
-                params = np.insert(params, 0, 0, axis=1)
+        if not reverse and params.shape[1] == len(self._symbols):
+            params = np.insert(params, 0, 0, axis=1)
 
         indices = []
+        istart = IndexTransformer._ISTART
         if reverse:
-            for i in range(extra, extra + len(self._symbols)):
+            for i in range(istart, istart + len(self._symbols)):
                 indices.append(self.index_map[i])
         else:
-            for i in range(extra + self._count):
-                if self._virtual_atom:
-                    index = self.reverse_map.get(i, 0)
-                else:
-                    index = self.reverse_map[i]
-                indices.append(index)
+            for i in range(istart + self._count):
+                indices.append(self.reverse_map.get(i, 0))
         params = params[:, indices]
         if rank == 2:
             params = np.squeeze(params, axis=0)

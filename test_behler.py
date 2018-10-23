@@ -56,37 +56,26 @@ class IndexTransformerTest(TestCase):
         symbols = Pd3O2.get_chemical_symbols()
         max_occurs = Counter({'Pd': 4, 'O': 5})
         self.clf = behler.IndexTransformer(max_occurs, symbols)
-        self.clf_no_extra = behler.IndexTransformer(Counter(symbols), symbols,
-                                                    virtual_atom=False)
 
     def test_forward(self):
         assert_equal(len(self.clf.reference_symbols), 9)
 
         array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array).flatten().tolist()
+        results = self.clf.gather(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
 
-        results = self.clf_no_extra.gather(array).flatten().tolist()
-        assert_list_equal(results, [4, 5, 1, 2, 3])
-
         array = np.expand_dims([7, 1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array).flatten().tolist()
+        results = self.clf.gather(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [7, 4, 5, 7, 7, 7, 1, 2, 3, 7])
 
     def test_reverse(self):
         array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
-        results = self.clf.gather(array, True).flatten().tolist()
-        assert_list_equal(results, [1, 2, 3, 4, 5])
-
-        array = np.expand_dims([4, 5, 1, 2, 3], axis=1)
-        results = self.clf_no_extra.gather(array, True).flatten().tolist()
+        results = self.clf.gather(array, reverse=True).flatten().tolist()
         assert_list_equal(results, [1, 2, 3, 4, 5])
 
     def test_call(self):
         assert_equal(self.clf.map(1), 6)
         assert_equal(self.clf.map(1, ignore_extra=True), 5)
-        assert_equal(self.clf_no_extra.map(1), 3)
-        assert_equal(self.clf_no_extra.map(1, ignore_extra=True), 3)
 
 
 def cutoff_fxn(r, rc):
