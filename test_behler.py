@@ -82,6 +82,12 @@ class IndexTransformerTest(TestCase):
         results = self.clf_no_extra.gather(array, True).flatten().tolist()
         assert_list_equal(results, [1, 2, 3, 4, 5])
 
+    def test_call(self):
+        assert_equal(self.clf.map(1), 6)
+        assert_equal(self.clf.map(1, ignore_extra=True), 5)
+        assert_equal(self.clf_no_extra.map(1), 3)
+        assert_equal(self.clf_no_extra.map(1, ignore_extra=True), 3)
+
 
 def cutoff_fxn(r, rc):
     """
@@ -468,7 +474,6 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         return tf.add(gr, ga, name='g'), kbody_terms, kbody_sizes
 
 
-@skip
 def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
@@ -486,7 +491,6 @@ def test_monoatomic_molecule():
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
-@skip
 def test_single_structure():
     """
     Test computing descriptors of a single multi-elements periodic structure.
@@ -528,7 +532,6 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     return nij_max, nijk_max
 
 
-@skip
 def test_batch_one_element():
     """
     Test computing descriptors of a batch of mono-atomic molecules.
@@ -618,7 +621,6 @@ def test_manybody_k():
             k_max, np.abs(ref.numpy()[:, columns] - g.numpy()[0, 1:]).max()))
 
 
-@skip
 def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.

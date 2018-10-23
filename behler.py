@@ -200,7 +200,7 @@ class IndexTransformer:
         """
         return sorted(self._max_occurs.elements())
 
-    def __call__(self, index_or_indices, reverse=False):
+    def map(self, index_or_indices, reverse=False, ignore_extra=False):
         """
         Do the in-place index transformation and return the array.
         """
@@ -208,11 +208,12 @@ class IndexTransformer:
             index_map = self.reverse_map
         else:
             index_map = self.index_map
+        delta = int(ignore_extra) * int(self._virtual_atom)
         if not hasattr(index_or_indices, "__len__"):
-            return index_map[index_or_indices]
+            return index_map[index_or_indices] - delta
         else:
             for i in range(len(index_or_indices)):
-                index_or_indices[i] = index_map[index_or_indices[i]]
+                index_or_indices[i] = index_map[index_or_indices[i]] - delta
             return index_or_indices
 
     def gather(self, params, reverse=False):
@@ -331,15 +332,15 @@ def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
         kilist = _align(kilist, True)
         kjlist = _align(kjlist, True)
         kSlist = _align(kSlist, False)
-        ilist[idx] = transformer(kilist.copy())
-        jlist[idx] = transformer(kjlist.copy())
+        ilist[idx] = transformer.map(kilist.copy())
+        jlist[idx] = transformer.map(kjlist.copy())
         Slist[idx] = kSlist
         tlist.fill(0)
         for i in range(n):
             symboli = symbols[kilist[i] - 1]
             symbolj = symbols[kjlist[i] - 1]
             tlist[i] = kbody_terms.index('{}{}'.format(symboli, symbolj))
-        kilist = transformer(kilist)
+        kilist = transformer.map(kilist)
         for etai in range(n_etas):
             istart = etai * nij_max
             istop = istart + nij_max
@@ -415,16 +416,16 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
         count = 0
         for atomi, nl in nl_indices.items():
             num = len(nl)
-            prefix = '{}'.format(symbols[transformer(atomi, True)])
+            symboli = symbols[transformer.map(atomi, True, True)]
+            prefix = '{}'.format(symboli)
             iSlist = nl_vectors[atomi]
             for j in range(num):
                 atomj = nl[j]
+                symbolj = symbols[transformer.map(atomj, True, True)]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    suffix = ''.join(sorted([
-                        symbols[transformer(atomj, True)],
-                        symbols[transformer(atomk, True)]])
-                    )
+                    symbolk = symbols[transformer.map(atomk, True, True)]
+                    suffix = ''.join(sorted([symbolj, symbolk]))
                     term = '{}{}'.format(prefix, suffix)
                     ij[:, idx, count] = atomi, atomj
                     ik[:, idx, count] = atomi, atomk
