@@ -10,23 +10,72 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, batch_gather_positions
 from itertools import chain
-from collections import namedtuple, Counter
+from collections import Counter
 from sklearn.model_selection import ParameterGrid
 from typing import List
+from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-RadialMap = namedtuple(
-    'RadialMap',
-    ('v2g_map', 'ilist', 'jlist', 'Slist')
-)
+@dataclass(frozen=True)
+class RadialMap:
+    """
+    A `dataclass` contains indexed slices for radial functions.
+    
+    'v2g_map' : array_like
+        A list of (atomi, etai, termi) where atomi is the index of the center
+        atom, etai is the index of the `eta` and termi is the index of the
+        corresponding 2-body term.
+    'ilist' : array_like
+        A list of first atom indices.
+    'jlist' : array_like
+        A list of second atom indices.
+    'Slist' : array_like
+        A list of (i, j) pairs where i is the index of the center atom and j is
+        the index of its neighbor atom.
 
-AngularMap = namedtuple(
-    'AngularMap',
-    ('v2g_map', 'ij', 'ik', 'jk', 'ijSlist', 'ikSlist', 'jkSlist')
-)
+    """
+    v2g_map: np.ndarray
+    ilist: np.ndarray
+    jlist: np.ndarray
+    Slist: np.ndarray
+
+    __slots__ = ["v2g_map", "ilist", "jlist", "Slist"]
+
+
+@dataclass
+class AngularMap:
+    """
+    A `dataclass` contains indexed slices for angular functions.
+
+    'v2g_map' : array_like
+        A list of (atomi, termi) where atomi is the index of the center atom and
+        termi is the index of the corresponding 3-body term.
+    'ij' : array_like
+        A list of (i, j) as the indices for r_{i,j}.
+    'ik' : array_like
+        A list of (i, k) as the indices for r_{i,k}.
+    'jk' : array_like
+        A list of (j, k) as the indices for r_{j,k}.
+    'ijSlist' : array_like
+        The cell boundary shift vectors for all r_{i,j}.
+    'ikSlist' : array_like
+        The cell boundary shift vectors for all r_{i,k}.
+    'jkSlist' : array_like
+        The cell boundary shift vectors for all r_{j,k}.
+
+    """
+    v2g_map: np.ndarray
+    ij: np.ndarray
+    ik: np.ndarray
+    jk: np.ndarray
+    ijSlist: np.ndarray
+    ikSlist: np.ndarray
+    jkSlist: np.ndarray
+
+    __slots__ = ["v2g_map", "ij", "ik", "jk", "ijSlist", "ikSlist", "jkSlist"]
 
 
 def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
@@ -376,21 +425,7 @@ def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialMap, nijk_max,
     amap : AngularMap
         A namedtuple with these properties:
 
-        'v2g_map' : array_like
-            A list of (atomi, termi) where atomi is the index of the center atom
-            and termi is the index of the corresponding 3-body term.
-        'ij' : array_like
-            A list of (i, j) as the indices for r_{i,j}.
-        'ik' : array_like
-            A list of (i, k) as the indices for r_{i,k}.
-        'jk' : array_like
-            A list of (j, k) as the indices for r_{j,k}.
-        'ijSlist' : array_like
-            The cell boundary shift vectors for all r_{i,j}.
-        'ikSlist' : array_like
-            The cell boundary shift vectors for all r_{i,k}.
-        'jkSlist' : array_like
-            The cell boundary shift vectors for all r_{j,k}.
+
 
     """
     batch_size = len(trajectory)

@@ -21,7 +21,6 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import List
 from collections import Counter
-from misc import skip
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -474,7 +473,6 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         return tf.add(gr, ga, name='g'), kbody_terms, kbody_sizes
 
 
-@skip
 def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
@@ -492,7 +490,6 @@ def test_monoatomic_molecule():
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
-@skip
 def test_single_structure():
     """
     Test computing descriptors of a single multi-elements periodic structure.
@@ -534,7 +531,6 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     return nij_max, nijk_max
 
 
-@skip
 def test_batch_one_element():
     """
     Test computing descriptors of a batch of mono-atomic molecules.
@@ -623,7 +619,6 @@ def test_manybody_k():
         assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8)
 
 
-@skip
 def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.
