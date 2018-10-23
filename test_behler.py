@@ -13,6 +13,7 @@ from unittest import TestCase
 from utils import cutoff
 from behler import get_kbody_terms, compute_dimension
 from behler import RadialIndexedSlices, AngularIndexedSlices
+from behler import NeighborIndexBuilder
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
@@ -291,13 +292,16 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialIndexedSlices,
     """
     symbols = atoms.get_chemical_symbols()
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    nl_indices = {}
-    nl_vectors = {}
+    indices = {}
+    vectors = {}
     for i, atomi in enumerate(rmap.ilist):
-        nl_indices[atomi] = nl_indices.get(atomi, []) + [rmap.jlist[i]]
-        nl_vectors[atomi] = nl_vectors.get(atomi, []) + [rmap.Slist[i]]
+        if atomi not in indices:
+            indices[atomi] = []
+            vectors[atomi] = []
+        indices[atomi].append(rmap.jlist[i])
+        vectors[atomi].append(rmap.Slist[i])
     total_dim = 0
-    for atomi, nl in nl_indices.items():
+    for atomi, nl in indices.items():
         n = len(nl)
         total_dim += (n - 1 + 1) * (n - 1) // 2
 
@@ -310,10 +314,10 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialIndexedSlices,
     jkS = np.zeros((total_dim, 3), dtype=np.int32)
 
     row = 0
-    for atomi, nl in nl_indices.items():
+    for atomi, nl in indices.items():
         num = len(nl)
         prefix = '{}'.format(symbols[atomi])
-        iSlist = nl_vectors[atomi]
+        iSlist = vectors[atomi]
         for j in range(num):
             atomj = nl[j]
             for k in range(j + 1, num):
@@ -510,7 +514,9 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
         if k_max == 3:
             nl = {}
             for i, atomi in enumerate(ilist):
-                nl[atomi] = nl.get(atomi, []) + [jlist[i]]
+                if atomi not in nl:
+                    nl[atomi] = []
+                nl[atomi].append(jlist[i])
             ntotal = 0
             for atomi, nlist in nl.items():
                 n = len(nlist)
@@ -543,25 +549,25 @@ def test_batch_one_element():
         clist[i] = atoms.cell
 
     elements = ['B']
-    elements_and_counts = Counter({'B': 28})
+    max_occurs = Counter({'B': 28})
     kbody_terms, mapping, _ = get_kbody_terms(elements, k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
-
-    rmap = behler.build_radial_v2g_map(trajectory, rc, len(eta), nij_max,
-                                       kbody_terms, kbody_sizes,
-                                       elements_and_counts)
-    amap = behler.build_angular_v2g_map(trajectory, rmap, nijk_max, kbody_terms,
-                                        kbody_sizes, elements_and_counts)
+    nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
+                              len(eta), k_max=3, nij_max=nij_max,
+                              nijk_max=nijk_max)
+    rslices, aslices = nl.get_indexed_slices(trajectory)
 
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
-    gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
-                                rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
-    ga = behler.angular_function(positions, rc, amap.v2g_map, clist, grid,
-                                 amap.ij, amap.ik, amap.jk, amap.ijSlist,
-                                 amap.ikSlist, amap.jkSlist, total_dim)
+    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
+                                rslices.ilist, rslices.jlist, rslices.Slist,
+                                total_dim)
+    ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
+                                 aslices.ij, aslices.ik, aslices.jk,
+                                 aslices.ijSlist, aslices.ikSlist,
+                                 aslices.jkSlist, total_dim)
     g = gr + ga
     values = g.numpy()[:, 1:, :]
     assert_less(np.abs(values - targets).max(), 1e-8)
@@ -586,21 +592,20 @@ def test_manybody_k():
         kdim, kbody_sizes = compute_dimension(
             kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
         nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
-        rmap = behler.build_radial_v2g_map([Pd3O2], rc, len(eta), nij_max,
-                                           kbody_terms, kbody_sizes, max_occurs,
-                                           k_max=k_max)
 
-        g = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
-                                   rmap.ilist, rmap.jlist, rmap.Slist, kdim)
+        nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
+                                  len(eta), k_max=k_max, nij_max=nij_max,
+                                  nijk_max=nijk_max)
+        rslices, aslices = nl.get_indexed_slices([Pd3O2])
+
+        g = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
+                                   rslices.ilist, rslices.jlist, rslices.Slist,
+                                   kdim)
         if k_max == 3:
-            amap = behler.build_angular_v2g_map([Pd3O2], rmap, nijk_max,
-                                                kbody_terms, kbody_sizes,
-                                                max_occurs)
-            g += behler.angular_function(positions, rc, amap.v2g_map, clist,
-                                         grid, amap.ij, amap.ik, amap.jk,
-                                         amap.ijSlist, amap.ikSlist,
-                                         amap.jkSlist, kdim)
-
+            g += behler.angular_function(positions, rc, aslices.v2g_map, clist,
+                                         grid, aslices.ij, aslices.ik,
+                                         aslices.jk, aslices.ijSlist,
+                                         aslices.ikSlist, aslices.jkSlist, kdim)
         columns = []
         for i, ref_term in enumerate(ref_terms):
             if ref_term in kbody_terms:
@@ -615,18 +620,19 @@ def test_batch_multi_elements():
     """
     trajectory = read('test_files/qm7m.xyz', index=':', format='xyz')
     rc = 6.0
-    counter = Counter()
+    max_occurs = Counter()
     for atoms in trajectory:
         for element, n in Counter(atoms.get_chemical_symbols()).items():
-            counter[element] = max(counter[element], n)
+            max_occurs[element] = max(max_occurs[element], n)
 
     batch_size = len(trajectory)
-    n_atoms = sum(counter.values())
-    kbody_terms, mapping, elements = get_kbody_terms(list(counter.keys()),
+    n_atoms = sum(max_occurs.values())
+    kbody_terms, mapping, elements = get_kbody_terms(list(max_occurs.keys()),
                                                      k_max=3)
     total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                                len(gamma), len(zeta))
-    element_offsets = np.insert(np.cumsum([counter[e] for e in elements]), 0, 0)
+    element_offsets = np.insert(
+        np.cumsum([max_occurs[e] for e in elements]), 0, 0)
 
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
@@ -655,25 +661,26 @@ def test_batch_multi_elements():
     if nij_max is None:
         nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
 
-    rmap = behler.build_radial_v2g_map(trajectory, rc, len(eta), nij_max,
-                                       kbody_terms, kbody_sizes, counter)
-    amap = behler.build_angular_v2g_map(trajectory, rmap, nijk_max, kbody_terms,
-                                        kbody_sizes, counter)
+    nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
+                              len(eta), k_max=3, nij_max=nij_max,
+                              nijk_max=nijk_max)
+
+    rslices, aslices = nl.get_indexed_slices(trajectory)
 
     positions = np.zeros((batch_size, n_atoms + 1, 3))
     clist = np.zeros((batch_size, 3, 3))
 
     for i, atoms in enumerate(trajectory):
-        symbols = atoms.get_chemical_symbols()
-        transformer = behler.IndexTransformer(counter, symbols)
-        positions[i] = transformer.gather(atoms.positions)
+        positions[i] = nl.get_index_transformer(atoms).gather(atoms.positions)
         clist[i] = atoms.cell
 
-    gr = behler.radial_function(positions, rc, rmap.v2g_map, clist, eta,
-                                rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
-    ga = behler.angular_function(positions, rc, amap.v2g_map, clist, grid,
-                                 amap.ij, amap.ik, amap.jk, amap.ijSlist,
-                                 amap.ikSlist, amap.jkSlist, total_dim)
+    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
+                                rslices.ilist, rslices.jlist, rslices.Slist,
+                                total_dim)
+    ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
+                                 aslices.ij, aslices.ik, aslices.jk,
+                                 aslices.ijSlist, aslices.ikSlist,
+                                 aslices.jkSlist, total_dim)
     g = gr + ga
     values = g.numpy()
     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)

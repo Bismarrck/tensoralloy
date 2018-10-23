@@ -293,164 +293,203 @@ class IndexTransformer:
         return params
 
 
-def build_radial_v2g_map(trajectory: List[Atoms], rc, n_etas, nij_max,
-                         kbody_terms: List[str], kbody_sizes: List[int],
-                         max_occurs: Counter, k_max=3):
+class NeighborIndexBuilder:
     """
-    Build the values-to-features mapping for radial symmetry functions.
+    Construct neighbor indexed slices for radial and angular functions.
+    """
 
-    Parameters
-    ----------
-    trajectory : List[Atoms]
-        A list of `ase.Atoms` objects.
-    rc : float
-        The cutoff radius.
-    n_etas : int
-        The number of `eta` for radial symmetry functions.
-    nij_max : int
-        The maximum size of `ilist`.
-    kbody_terms : List[str]
-        A list of str as all k-body terms.
-    kbody_sizes : List[int]
-        A list of int as the sizes of the k-body terms.
-    max_occurs : Counter
-        The ordered unique elements and their maximum occurances.
-    k_max : int
+    def __init__(self, rc, kbody_terms: List[str], kbody_sizes: List[int],
+                 max_occurs: Counter, n_etas, k_max, nij_max, nijk_max):
+        """
+        Initialization method.
+        """
+        self._rc = rc
+        self._kbody_terms = kbody_terms
+        self._kbody_sizes = kbody_sizes
+        self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
+        self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
+        self._n_etas = n_etas
+        self._max_occurs = max_occurs
+        self._nij_max = nij_max
+        self._nijk_max = nijk_max
+        self._k_max = k_max
+        self._index_transformers = {}
+
+    @property
+    def cutoff(self):
+        """
+        Return the cutoff radius.
+        """
+        return self._rc
+
+    @property
+    def k_max(self):
+        """
         The maximum k for the many-body expansion.
+        """
+        return self._k_max
 
-    Returns
-    -------
-    rmap : RadialIndexedSlices
-        The indexed slices for radial functions.
+    @property
+    def nij_max(self):
+        """
+        Return the maximum allowed length of the flatten neighbor list.
+        """
+        return self._nij_max
 
-    """
+    @property
+    def nijk_max(self):
+        """
+        Return the maximum allowed length of the expanded Angle[i,j,k] list.
+        """
+        return self._nijk_max
 
-    def _align(alist, is_indices=True):
+    def get_index_transformer(self, atoms: Atoms):
+        """
+        Return the corresponding `IndexTransformer`.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            An `Atoms` object.
+
+        Returns
+        -------
+        clf : IndexTransformer
+            The `IndexTransformer` for the given `Atoms` object.
+
+        """
+        stoichiometry = atoms.get_chemical_formula()
+        if stoichiometry not in self._index_transformers:
+            self._index_transformers[stoichiometry] = IndexTransformer(
+                self._max_occurs, atoms.get_chemical_symbols()
+            )
+        return self._index_transformers[stoichiometry]
+
+    def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
+        """
+        A helper function to resize the given array.
+        """
         if np.ndim(alist) == 1:
-            nlist = np.zeros(nij_max, dtype=np.int32)
+            shape = [self._nij_max, ]
         else:
-            nlist = np.zeros([nij_max] + list(alist.shape[1:]), dtype=np.int32)
+            shape = [self._nij_max, ] + list(alist.shape[1:])
+        nlist = np.zeros(shape, dtype=np.int32)
         length = len(alist)
         nlist[:length] = alist
         if is_indices:
             nlist[:length] += 1
         return nlist
 
-    batch_size = len(trajectory)
-    v2g_map = np.zeros((batch_size, nij_max * n_etas, 3), dtype=np.int32)
-    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
-    jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
-    Slist = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
-    tlist = np.zeros(nij_max, dtype=np.int32)
+    def get_radial_indexed_slices(self, trajectory: List[Atoms]):
+        """
+        Return the indexed slices for radial functions.
+        """
+        batch_size = len(trajectory)
+        length = self._nij_max * self._n_etas
+        v2g_map = np.zeros((batch_size, length, 3), dtype=np.int32)
+        ilist = np.zeros((batch_size, self._nij_max), dtype=np.int32)
+        jlist = np.zeros((batch_size, self._nij_max), dtype=np.int32)
+        Slist = np.zeros((batch_size, self._nij_max, 3), dtype=np.int32)
+        tlist = np.zeros(self._nij_max, dtype=np.int32)
 
-    for idx, atoms in enumerate(trajectory):
-        symbols = atoms.get_chemical_symbols()
-        transformer = IndexTransformer(max_occurs, symbols)
-        kilist, kjlist, kSlist = neighbor_list('ijS', atoms, rc)
-        if k_max == 1:
-            cols = []
-            for i in range(len(kilist)):
-                if symbols[kilist[i]] == symbols[kjlist[i]]:
-                    cols.append(i)
-            kilist = kilist[cols]
-            kjlist = kjlist[cols]
-            kSlist = kSlist[cols]
-        n = len(kilist)
-        kilist = _align(kilist, True)
-        kjlist = _align(kjlist, True)
-        kSlist = _align(kSlist, False)
-        ilist[idx] = transformer.map(kilist.copy())
-        jlist[idx] = transformer.map(kjlist.copy())
-        Slist[idx] = kSlist
-        tlist.fill(0)
-        for i in range(n):
-            symboli = symbols[kilist[i] - 1]
-            symbolj = symbols[kjlist[i] - 1]
-            tlist[i] = kbody_terms.index('{}{}'.format(symboli, symbolj))
-        kilist = transformer.map(kilist)
-        for etai in range(n_etas):
-            istart = etai * nij_max
-            istop = istart + nij_max
-            v2g_map[idx, istart: istop, 0] = idx
-            v2g_map[idx, istart: istop, 1] = kilist
-            v2g_map[idx, istart: istop, 2] = offsets[tlist] + etai
-    return RadialIndexedSlices(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
+        for idx, atoms in enumerate(trajectory):
+            symbols = atoms.get_chemical_symbols()
+            transformer = self.get_index_transformer(atoms)
+            kilist, kjlist, kSlist = neighbor_list('ijS', atoms, self._rc)
+            if self._k_max == 1:
+                cols = []
+                for i in range(len(kilist)):
+                    if symbols[kilist[i]] == symbols[kjlist[i]]:
+                        cols.append(i)
+                kilist = kilist[cols]
+                kjlist = kjlist[cols]
+                kSlist = kSlist[cols]
+            n = len(kilist)
+            kilist = self._resize_to_nij_max(kilist, True)
+            kjlist = self._resize_to_nij_max(kjlist, True)
+            kSlist = self._resize_to_nij_max(kSlist, False)
+            ilist[idx] = transformer.map(kilist.copy())
+            jlist[idx] = transformer.map(kjlist.copy())
+            Slist[idx] = kSlist
+            tlist.fill(0)
+            for i in range(n):
+                symboli = symbols[kilist[i] - 1]
+                symbolj = symbols[kjlist[i] - 1]
+                tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+            kilist = transformer.map(kilist)
+            for etai in range(self._n_etas):
+                istart = etai * self._nij_max
+                istop = istart + self._nij_max
+                v2g_map[idx, istart: istop, 0] = idx
+                v2g_map[idx, istart: istop, 1] = kilist
+                v2g_map[idx, istart: istop, 2] = self._offsets[tlist] + etai
+        return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
 
+    def get_angular_indexed_slices(self, trajectory: List[Atoms],
+                                   rslices: RadialIndexedSlices):
+        """
+        Return the indexed slices for angular functions.
+        """
+        if self._k_max < 3:
+            return None
 
-def build_angular_v2g_map(trajectory: List[Atoms], rmap: RadialIndexedSlices,
-                          nijk_max, kbody_terms: List[str],
-                          kbody_sizes: List[int], max_occurs: Counter):
-    """
-    Build the values-to-features mapping for angular symmetry functions.
+        batch_size = len(trajectory)
+        v2g_map = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
+        ij = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
+        ik = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
+        jk = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
+        ijS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
+        ikS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
+        jkS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
 
-    Parameters
-    ----------
-    trajectory : List[Atoms]
-        A list of `ase.Atoms` objects.
-    rmap : RadialIndexedSlices
-        The mapping for radial symmetry functions.
-    nijk_max : int
-        The maximum number of `Angle[i,j,k]` that one `Atoms` object has.
-    kbody_terms : List[str]
-        A list of str as all k-body terms.
-    kbody_sizes : List[int]
-        A list of int as the sizes of the k-body terms.
-    max_occurs : Counter
-        The maximum occurance for each type of element.
+        for idx, atoms in enumerate(trajectory):
+            symbols = atoms.get_chemical_symbols()
+            transformer = self.get_index_transformer(atoms)
+            indices = {}
+            vectors = {}
+            for i, atomi in enumerate(rslices.ilist[idx]):
+                if atomi == 0:
+                    break
+                if atomi not in indices:
+                    indices[atomi] = []
+                    vectors[atomi] = []
+                indices[atomi].append(rslices.jlist[idx, i])
+                vectors[atomi].append(rslices.Slist[idx, i])
+            count = 0
+            for atomi, nl in indices.items():
+                num = len(nl)
+                symboli = symbols[transformer.map(atomi, True, True)]
+                prefix = '{}'.format(symboli)
+                iSlist = vectors[atomi]
+                for j in range(num):
+                    atomj = nl[j]
+                    symbolj = symbols[transformer.map(atomj, True, True)]
+                    for k in range(j + 1, num):
+                        atomk = nl[k]
+                        symbolk = symbols[transformer.map(atomk, True, True)]
+                        suffix = ''.join(sorted([symbolj, symbolk]))
+                        term = '{}{}'.format(prefix, suffix)
+                        ij[:, idx, count] = atomi, atomj
+                        ik[:, idx, count] = atomi, atomk
+                        jk[:, idx, count] = atomj, atomk
+                        ijS[idx, count] = iSlist[j]
+                        ikS[idx, count] = iSlist[k]
+                        jkS[idx, count] = iSlist[k] - iSlist[j]
+                        index = self._kbody_index[term]
+                        v2g_map[idx, count, 0] = idx
+                        v2g_map[idx, count, 1] = atomi
+                        v2g_map[idx, count, 2] = self._offsets[index]
+                        count += 1
+        return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
+                                    ikSlist=ikS, jkSlist=jkS)
 
-    Returns
-    -------
-    slices : AngularIndexedSlices
-        The indexed slices for angular functions.
-
-    """
-    batch_size = len(trajectory)
-    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    v2g_map = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
-    ij = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
-    ik = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
-    jk = np.zeros((2, batch_size, nijk_max), dtype=np.int32)
-    ijS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
-    ikS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
-    jkS = np.zeros((batch_size, nijk_max, 3), dtype=np.int32)
-
-    for idx, atoms in enumerate(trajectory):
-        symbols = atoms.get_chemical_symbols()
-        transformer = IndexTransformer(max_occurs, symbols)
-        nl_indices = {}
-        nl_vectors = {}
-        for i, atomi in enumerate(rmap.ilist[idx]):
-            if atomi == 0:
-                break
-            nl_indices[atomi] = nl_indices.get(atomi, []) + [rmap.jlist[idx, i]]
-            nl_vectors[atomi] = nl_vectors.get(atomi, []) + [rmap.Slist[idx, i]]
-        count = 0
-        for atomi, nl in nl_indices.items():
-            num = len(nl)
-            symboli = symbols[transformer.map(atomi, True, True)]
-            prefix = '{}'.format(symboli)
-            iSlist = nl_vectors[atomi]
-            for j in range(num):
-                atomj = nl[j]
-                symbolj = symbols[transformer.map(atomj, True, True)]
-                for k in range(j + 1, num):
-                    atomk = nl[k]
-                    symbolk = symbols[transformer.map(atomk, True, True)]
-                    suffix = ''.join(sorted([symbolj, symbolk]))
-                    term = '{}{}'.format(prefix, suffix)
-                    ij[:, idx, count] = atomi, atomj
-                    ik[:, idx, count] = atomi, atomk
-                    jk[:, idx, count] = atomj, atomk
-                    ijS[idx, count] = iSlist[j]
-                    ikS[idx, count] = iSlist[k]
-                    jkS[idx, count] = iSlist[k] - iSlist[j]
-                    v2g_map[idx, count, 0] = idx
-                    v2g_map[idx, count, 1] = atomi
-                    v2g_map[idx, count, 2] = offsets[kbody_terms.index(term)]
-                    count += 1
-    return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
-                                ikSlist=ikS, jkSlist=jkS)
+    def get_indexed_slices(self, trajectory):
+        """
+        Return both the radial and angular indexed slices for the trajectory.
+        """
+        rslices = self.get_radial_indexed_slices(trajectory)
+        aslices = self.get_angular_indexed_slices(trajectory, rslices)
+        return rslices, aslices
 
 
 def radial_function(R, rc, v2g_map, clist, etas, ilist, jlist, Slist,
