@@ -47,6 +47,8 @@ class Defaults:
     """
     A dataclass storing default parameters.
     """
+    rc = 6.0
+
     eta = np.array([0.05, 4.0, 20.0, 80.0])
     beta = np.array([0.005, ])
     gamma = np.array([1.0, -1.0])
