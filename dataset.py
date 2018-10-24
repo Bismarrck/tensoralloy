@@ -17,10 +17,11 @@ from behler import get_kbody_terms, compute_dimension
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes
-from misc import RANDOM_STATE, check_path
+from misc import check_path, Defaults
 from sklearn.model_selection import train_test_split
 from collections import namedtuple
 from os.path import join, basename, splitext
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Dict
 
@@ -114,8 +115,9 @@ class RawSerializer:
         positions.set_shape([length])
         positions = tf.reshape(positions, (self.natoms + 1, 3), name='R')
 
-        cell = tf.decode_raw(example['cell'], tf.float64, name='cell')
-        cell.set_shape((3, 3))
+        cell = tf.decode_raw(example['cell'], tf.float64)
+        cell.set_shape([9])
+        cell = tf.reshape(cell, (3, 3), name='cell')
 
         y_true = tf.cast(example['y_true'], tf.float32, name='y_true')
 
@@ -138,13 +140,13 @@ class RawSerializer:
         v2g_map.set_shape(length * 3)
         v2g_map = tf.reshape(v2g_map, (length, 3), name='r_v2g')
 
-        ilist = tf.decode_raw(example['ilist'], tf.int32, name='r_ilist')
+        ilist = tf.decode_raw(example['r_ilist'], tf.int32, name='r_ilist')
         ilist.set_shape([self.nij_max])
 
-        jlist = tf.decode_raw(example['jlist'], tf.int32, name='r_jlist')
+        jlist = tf.decode_raw(example['r_jlist'], tf.int32, name='r_jlist')
         jlist.set_shape([self.nij_max])
 
-        Slist = tf.decode_raw(example['Slist'], tf.int32)
+        Slist = tf.decode_raw(example['r_Slist'], tf.int32)
         Slist.set_shape([self.nij_max * 3])
         Slist = tf.reshape(Slist, (self.nij_max, 3), name='Slist')
 
@@ -245,24 +247,30 @@ class Dataset:
             The name of this dataset.
         rc : float
             The cutoff radius.
-        eta : List[float]
+        eta : array_like
             A list of float as the `eta` for radial functions.
-        beta : List[float]
+        beta : array_like
             A list of float as the `beta` for angular functions.
-        gamma : List[float]
+        gamma : array_like
             A list of float as the `gamma` for angular functions.
-        zeta : List[float]
+        zeta : array_like
             A list of float as the `zeta` for angular functions.
 
         """
+        def _select(a, b):
+            """ A helper function to select `a` if it's valided. """
+            if a is None or len(a) == 0:
+                return b
+            return a
+
         self._database = database
         self._name = name
         self._k_max = k_max
         self._rc = rc
-        self._eta = eta
-        self._beta = beta
-        self._gamma = gamma
-        self._zeta = zeta
+        self._eta = _select(eta, Defaults.eta)
+        self._beta = _select(beta, Defaults.beta)
+        self._gamma = _select(gamma, Defaults.gamma)
+        self._zeta = _select(zeta, Defaults.zeta)
         self._files = {}
         self._file_sizes = {}
         self._read_database()
@@ -323,7 +331,7 @@ class Dataset:
 
         metadata = self._database.metadata
         trainable_properties = [TrainableProperty.energy]
-        if metadata['ext']:
+        if metadata['extxyz']:
             trainable_properties += [TrainableProperty.forces]
         max_occurs = metadata['max_occurs']
         nij_max = metadata['nij_max']
@@ -357,25 +365,28 @@ class Dataset:
         """
         transformer = self._nl.get_index_transformer(atoms)
         positions = transformer.gather(atoms.positions)
-        cell = atoms.cell.reshape((1, 3, 3))
+        cell = atoms.cell
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
         rslices, aslices = self._nl.get_indexed_slices([atoms])
         return self._serializer.encode(positions, cell, y_true, f_true, rslices,
                                        aslices)
 
-    def _write_split(self, filename: str, indices: List[int], verbose=False):
+    def _write_subset(self, mode: ModeKeys, filename: str, indices: List[int],
+                      verbose=False):
         """
-        Write a split of this dataset to the given file.
+        Write a subset of this dataset to the given file.
 
         Parameters
         ----------
+        mode : ModeKeys
+            The purpose of this subset.
         filename : str
             The file to write.
         indices : List[int]
             A list of int as the ids of the `Atoms` to use for this file.
         verbose : bool
-
+            If True, the progress shall be logged.
 
         """
         with tf.python_io.TFRecordWriter(filename) as writer:
@@ -384,6 +395,9 @@ class Dataset:
             num_examples = len(indices)
             logstr = "\rProgress: {:7d} / {:7d} | Speed = {:6.1f}"
 
+            if verbose:
+                sys.stdout.write("Writing {} subset ...\n".format(str(mode)))
+
             for i, atoms_id in enumerate(indices):
                 atoms = self._database.get_atoms(id=atoms_id)
                 example = self.convert_atoms_to_example(atoms)
@@ -391,6 +405,9 @@ class Dataset:
                 if verbose:
                     speed = (i + 1) / (time.time() - tic)
                     sys.stdout.write(logstr.format(i + 1, num_examples, speed))
+
+            if verbose:
+                sys.stdout.write("Done.\n")
 
     def to_records(self, savedir, test_size=0.2, verbose=False):
         """
@@ -404,20 +421,22 @@ class Dataset:
         test_size : float
             The proportion of the dataset to include in the test split.
         verbose : bool
-
+            If True, the progress shall be logged.
 
         """
         test_size = min(max(test_size, 0.0), 1.0)
         train, test = train_test_split(range(1, 1 + len(self)),
-                                       random_state=RANDOM_STATE,
+                                       random_state=Defaults.seed,
                                        test_size=test_size)
-        self._write_split(
+        self._write_subset(
+            ModeKeys.EVAL,
             check_path(join(savedir, '{}-test-{}.tfrecords'.format(
                 self._name, len(test)))),
             test,
             verbose=verbose,
         )
-        self._write_split(
+        self._write_subset(
+            ModeKeys.TRAIN,
             check_path(join(savedir, '{}-train-{}.tfrecords'.format(
                 self._name, len(train)))),
             train,
@@ -506,7 +525,7 @@ class Dataset:
                 size = self._file_sizes[mode]
                 min_queue_examples = int(size * 0.4) + 10 * batch_size
                 dataset = dataset.shuffle(buffer_size=min_queue_examples,
-                                          seed=RANDOM_STATE)
+                                          seed=Defaults.seed)
 
             # Setup the batch
             dataset = dataset.batch(batch_size)
