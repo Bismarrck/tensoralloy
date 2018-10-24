@@ -12,7 +12,7 @@ from utils import cutoff, batch_gather_positions
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
-from typing import List
+from typing import List, Union
 from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
@@ -37,10 +37,10 @@ class RadialIndexedSlices:
         the index of its neighbor atom.
 
     """
-    v2g_map: np.ndarray
-    ilist: np.ndarray
-    jlist: np.ndarray
-    Slist: np.ndarray
+    v2g_map: Union[np.ndarray, tf.Tensor]
+    ilist: Union[np.ndarray, tf.Tensor]
+    jlist: Union[np.ndarray, tf.Tensor]
+    Slist: Union[np.ndarray, tf.Tensor]
 
     __slots__ = ["v2g_map", "ilist", "jlist", "Slist"]
 
@@ -67,13 +67,13 @@ class AngularIndexedSlices:
         The cell boundary shift vectors for all r_{j,k}.
 
     """
-    v2g_map: np.ndarray
-    ij: np.ndarray
-    ik: np.ndarray
-    jk: np.ndarray
-    ijSlist: np.ndarray
-    ikSlist: np.ndarray
-    jkSlist: np.ndarray
+    v2g_map: Union[np.ndarray, tf.Tensor]
+    ij: Union[np.ndarray, tf.Tensor]
+    ik: Union[np.ndarray, tf.Tensor]
+    jk: Union[np.ndarray, tf.Tensor]
+    ijSlist: Union[np.ndarray, tf.Tensor]
+    ikSlist: Union[np.ndarray, tf.Tensor]
+    jkSlist: Union[np.ndarray, tf.Tensor]
 
     __slots__ = ["v2g_map", "ij", "ik", "jk", "ijSlist", "ikSlist", "jkSlist"]
 
@@ -435,9 +435,9 @@ class NeighborIndexBuilder:
 
         batch_size = len(trajectory)
         v2g_map = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
-        ij = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
-        ik = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
-        jk = np.zeros((2, batch_size, self._nijk_max), dtype=np.int32)
+        ij = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
+        ik = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
+        jk = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
         ijS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
         ikS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
         jkS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
@@ -469,9 +469,9 @@ class NeighborIndexBuilder:
                         symbolk = symbols[transformer.map(atomk, True, True)]
                         suffix = ''.join(sorted([symbolj, symbolk]))
                         term = '{}{}'.format(prefix, suffix)
-                        ij[:, idx, count] = atomi, atomj
-                        ik[:, idx, count] = atomi, atomk
-                        jk[:, idx, count] = atomj, atomk
+                        ij[idx, :, count] = atomi, atomj
+                        ik[idx, :, count] = atomi, atomk
+                        jk[idx, :, count] = atomj, atomk
                         ijS[idx, count] = iSlist[j]
                         ikS[idx, count] = iSlist[k]
                         jkS[idx, count] = iSlist[k] - iSlist[j]
@@ -547,22 +547,22 @@ def angular_function(R, rc, v2g_map, clist, grid: ParameterGrid, ij, ik,
             n_atoms = R.shape[1]
 
         with tf.name_scope("Rij"):
-            Ri_ij = batch_gather_positions(R, ij[0])
-            Rj_ij = batch_gather_positions(R, ij[1])
+            Ri_ij = batch_gather_positions(R, ij[:, 0])
+            Rj_ij = batch_gather_positions(R, ij[:, 1])
             ijS = tf.convert_to_tensor(ijS, dtype=tf.float64, name='ijS')
             D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, clist)
             r_ij = tf.norm(D_ij, axis=2)
 
         with tf.name_scope("Rik"):
-            Ri_ik = batch_gather_positions(R, ik[0])
-            Rk_ik = batch_gather_positions(R, ik[1])
+            Ri_ik = batch_gather_positions(R, ik[:, 0])
+            Rk_ik = batch_gather_positions(R, ik[:, 1])
             ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
             D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, clist)
             r_ik = tf.norm(D_ik, axis=2)
 
         with tf.name_scope("Rik"):
-            Rj_jk = batch_gather_positions(R, jk[0])
-            Rk_jk = batch_gather_positions(R, jk[1])
+            Rj_jk = batch_gather_positions(R, jk[:, 0])
+            Rk_jk = batch_gather_positions(R, jk[:, 1])
             jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
             D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, clist)
             r_jk = tf.norm(D_jk, axis=2)
