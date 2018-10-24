@@ -11,9 +11,8 @@ import time
 import glob
 from tensorflow.contrib.learn.python import ModeKeys
 from tensorflow.train import Example, Features
-from behler import NeighborIndexBuilder
+from behler import SymmetryFunction
 from behler import RadialIndexedSlices, AngularIndexedSlices
-from behler import get_kbody_terms, compute_dimension
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes
@@ -331,6 +330,14 @@ class Dataset:
         """
         return self._max_occurs
 
+    @property
+    def descriptor(self):
+        """
+        Return the descriptor instance. Currently only `SymmetryFunction` is
+        implemented.
+        """
+        return self._symmetry_function
+
     def __len__(self) -> int:
         """ Return the number of examples in this dataset. """
         return len(self._database)
@@ -348,24 +355,15 @@ class Dataset:
         max_occurs = metadata['max_occurs']
         nij_max = metadata['nij_max']
         nijk_max = metadata['nijk_max']
-        kbody_terms, mapping, elements = get_kbody_terms(
-            max_occurs.keys(), k_max=self._k_max)
-        total_size, kbody_sizes = compute_dimension(
-            kbody_terms, len(self._eta), len(self._beta), len(self._gamma),
-            len(self._zeta))
         natoms = sum(max_occurs.values())
-        nl = NeighborIndexBuilder(self._rc, kbody_terms, kbody_sizes,
-                                  max_occurs, len(self._eta), self._k_max,
-                                  nij_max, nijk_max)
-        self._nl = nl
+        sf = SymmetryFunction(self._rc, max_occurs, k_max=self._k_max,
+                              nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
+                              beta=self._beta, gamma=self._gamma,
+                              zeta=self._zeta)
+        self._symmetry_function = sf
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
-        self._kbody_terms = kbody_terms
-        self._kbody_sizes = kbody_sizes
-        self._total_size = total_size
-        self._elements = elements
-        self._mapping = mapping
         self._trainable_properties = trainable_properties
         self._serializer = RawSerializer(self._k_max, natoms, nij_max,
                                          len(self._eta), nijk_max,
@@ -375,12 +373,12 @@ class Dataset:
         """
         Convert an `Atoms` object to `tf.train.Example`.
         """
-        transformer = self._nl.get_index_transformer(atoms)
+        transformer = self._symmetry_function.get_index_transformer(atoms)
         positions = transformer.gather(atoms.positions)
         cell = atoms.cell
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
-        rslices, aslices = self._nl.get_indexed_slices([atoms])
+        rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
         return self._serializer.encode(positions, cell, y_true, f_true, rslices,
                                        aslices)
 
