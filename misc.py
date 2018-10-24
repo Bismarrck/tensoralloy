@@ -6,9 +6,8 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 from unittest import SkipTest
-from os.path import dirname, isdir
+from os.path import dirname, isdir, join
 from os import makedirs
-from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -46,8 +45,17 @@ def skip(func):
 
 
 def check_path(path):
-    """ Make sure the given path is accessible. """
+    """
+    Make sure the given path is accessible.
+    """
     dst = dirname(path)
     if not isdir(dst):
         makedirs(dst)
     return path
+
+
+def test_dir():
+    """
+    Return the directory of `test_files`.
+    """
+    return join(dirname(__file__), "test_files")
