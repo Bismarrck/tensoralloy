@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # coding=utf-8
 """
 This module defines data IO functions and classes.
@@ -17,6 +18,7 @@ from collections import Counter
 from os.path import splitext, exists
 from os import remove
 from joblib import Parallel, delayed
+from argparse import ArgumentParser
 
 
 __author__ = 'Xin Chen'
@@ -262,3 +264,21 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
     metadata = database.metadata
     metadata.update({'nij_max': nij_max, 'nijk_max': nijk_max, 'rc': rc})
     database.metadata = metadata
+
+
+if __name__ == "__main__":
+
+    parser = ArgumentParser()
+    parser.add_argument(
+        'filename',
+        type=str,
+        help="Specify the xyz or extxyz file to read.",
+    )
+    parser.add_argument(
+        '-n', '--num-examples',
+        default=None,
+        type=int,
+        help="Set the maximum number of examples to read."
+    )
+    args = parser.parse_args()
+    read(args.filename, num_examples=args.num_examples, verbose=True)
