@@ -78,7 +78,7 @@ class RawSerializer:
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
             'cell': _bytes_feature(cell.tostring()),
-            'y_true': _float_feature(y_true),
+            'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
             'r_v2g': _bytes_feature(rslices.v2g_map.tostring()),
             'r_ilist': _bytes_feature(rslices.ilist.tostring()),
             'r_jlist': _bytes_feature(rslices.jlist.tostring()),
@@ -112,7 +112,9 @@ class RawSerializer:
         cell.set_shape([9])
         cell = tf.reshape(cell, (3, 3), name='cell')
 
-        y_true = tf.cast(example['y_true'], tf.float32, name='y_true')
+        y_true = tf.decode_raw(example['y_true'], tf.float64)
+        y_true.set_shape([1])
+        y_true = tf.squeeze(y_true, name='y_true')
 
         if TrainableProperty.forces in self.trainable_properties:
             f_true = tf.decode_raw(example['f_true'], tf.float64)
@@ -217,7 +219,7 @@ class RawSerializer:
         feature_list = {
             'positions': tf.FixedLenFeature([], tf.string),
             'cell': tf.FixedLenFeature([], tf.string),
-            'y_true': tf.FixedLenFeature([], tf.float32),
+            'y_true': tf.FixedLenFeature([], tf.string),
             'r_v2g': tf.FixedLenFeature([], tf.string),
             'r_ilist': tf.FixedLenFeature([], tf.string),
             'r_jlist': tf.FixedLenFeature([], tf.string),
