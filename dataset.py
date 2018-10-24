@@ -17,22 +17,15 @@ from behler import get_kbody_terms, compute_dimension
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes
-from misc import check_path, Defaults
+from misc import check_path, Defaults, AttributeDict
 from sklearn.model_selection import train_test_split
-from collections import namedtuple
 from os.path import join, basename, splitext
-from dataclasses import dataclass
 from enum import Enum
 from typing import List, Dict
 
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-DataGroup = namedtuple('DecodedExample',
-                       ('positions', 'cell', 'y_true', 'f_true',
-                        "rslices", "aslices"))
 
 
 class TrainableProperty(Enum):
@@ -197,10 +190,26 @@ class RawSerializer:
         positions, cell, y_true, f_true = self._decode_atoms(example)
         rslices = self._decode_rslices(example)
         aslices = self._decode_aslices(example)
-        return DataGroup(positions=positions, cell=cell, y_true=y_true,
-                         f_true=f_true, rslices=rslices, aslices=aslices)
 
-    def decode_protobuf(self, example_proto: tf.Tensor):
+        decoded = AttributeDict(positions=positions, cell=cell, y_true=y_true,
+                                rv2g=rslices.v2g_map, ilist=rslices.ilist,
+                                jlist=rslices.jlist, Slist=rslices.Slist)
+
+        if f_true is not None:
+            decoded.f_true = f_true
+
+        if aslices is not None:
+            decoded.av2g = aslices.v2g_map
+            decoded.ij = aslices.ij
+            decoded.ik = aslices.ik
+            decoded.jk = aslices.jk
+            decoded.ijS = aslices.ijSlist
+            decoded.ikS = aslices.ikSlist
+            decoded.jkS = aslices.jkSlist
+
+        return decoded
+
+    def decode_protobuf(self, example_proto: tf.Tensor) -> AttributeDict:
         """
         Decode the scalar string Tensor, which is a single serialized Example.
         See `_parse_single_example_raw` documentation for more details.
@@ -208,13 +217,14 @@ class RawSerializer:
         feature_list = {
             'positions': tf.FixedLenFeature([], tf.string),
             'cell': tf.FixedLenFeature([], tf.string),
-            'y_true': tf.FixedLenFeature([], tf.string),
-            'f_true': tf.FixedLenFeature([], tf.string),
+            'y_true': tf.FixedLenFeature([], tf.float32),
             'r_v2g': tf.FixedLenFeature([], tf.string),
             'r_ilist': tf.FixedLenFeature([], tf.string),
             'r_jlist': tf.FixedLenFeature([], tf.string),
             'r_Slist': tf.FixedLenFeature([], tf.string),
         }
+        if TrainableProperty.forces in self.trainable_properties:
+            feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
         if self.k_max == 3:
             feature_list.update({
                 'a_v2g': tf.FixedLenFeature([], tf.string),
@@ -234,8 +244,8 @@ class Dataset:
     This class is used to manipulate data examples for this project.
     """
 
-    def __init__(self, database, name, k_max=3, rc=6.5, eta=None, beta=None,
-                 gamma=None, zeta=None):
+    def __init__(self, database, name, k_max=3, rc=Defaults.rc, eta=None,
+                 beta=None, gamma=None, zeta=None):
         """
         Initialization method.
 
