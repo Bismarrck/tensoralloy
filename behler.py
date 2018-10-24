@@ -9,6 +9,7 @@ import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, batch_gather_positions
+from misc import Defaults, safe_select
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
@@ -293,22 +294,32 @@ class IndexTransformer:
         return params
 
 
-class NeighborIndexBuilder:
+class SymmetryFunction:
     """
-    Construct neighbor indexed slices for radial and angular functions.
+    A tensorflow based implementation of Behler-Parinello's Symmetry Function
+    neural network model.
     """
 
     def __init__(self, rc, kbody_terms: List[str], kbody_sizes: List[int],
-                 max_occurs: Counter, n_etas, k_max, nij_max, nijk_max):
+                 max_occurs: Counter, nij_max, nijk_max, eta=None, beta=None,
+                 gamma=None, zeta=None, k_max=3):
         """
         Initialization method.
         """
         self._rc = rc
         self._kbody_terms = kbody_terms
         self._kbody_sizes = kbody_sizes
+        self._ndim = sum(kbody_sizes)
         self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
-        self._n_etas = n_etas
+        self._eta = safe_select(eta, Defaults.eta)
+        self._gamma = safe_select(gamma, Defaults.gamma)
+        self._beta = safe_select(beta, Defaults.beta)
+        self._zeta = safe_select(zeta, Defaults.zeta)
+        self._parameter_grid = ParameterGrid({'beta': self._beta,
+                                              'gamma': self._gamma,
+                                              'zeta': self._zeta})
+        self._n_etas = len(self._eta)
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
@@ -342,6 +353,13 @@ class NeighborIndexBuilder:
         Return the maximum allowed length of the expanded Angle[i,j,k] list.
         """
         return self._nijk_max
+
+    @property
+    def ndim(self):
+        """
+        Return the total dimension of an atom descriptor vector.
+        """
+        return self._ndim
 
     def get_index_transformer(self, atoms: Atoms):
         """
@@ -490,6 +508,121 @@ class NeighborIndexBuilder:
         rslices = self.get_radial_indexed_slices(trajectory)
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
+
+    def infer_radial_function(self, R, cells, v2g_map, ilist, jlist, Slist):
+        """
+        The implementation of Behler's radial symmetry function.
+        """
+        with tf.name_scope("G2"):
+            with tf.name_scope("constants"):
+                rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
+                eta = tf.constant(self._eta, dtype=tf.float64, name='eta')
+                R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
+                Slist = tf.convert_to_tensor(
+                    Slist, dtype=tf.float64, name='Slist')
+                cells = tf.convert_to_tensor(
+                    cells, dtype=tf.float64, name='cells')
+                batch_size = R.shape[0]
+                max_atoms = R.shape[1]
+
+            with tf.name_scope("rij"):
+                Ri = batch_gather_positions(R, ilist, name='Ri')
+                Rj = batch_gather_positions(R, jlist, name='Rj')
+                Dlist = Rj - Ri + tf.einsum('ijk,ikl->ijl', Slist, cells)
+                r = tf.norm(Dlist, axis=2, name='r')
+                r2 = tf.square(r, name='r2')
+                r2c = tf.div(r2, rc2, name='div')
+
+            with tf.name_scope("fc"):
+                fc_r = cutoff(r, rc=self._rc, name='fc_r')
+
+            with tf.name_scope("features"):
+                shape = tf.constant([batch_size, max_atoms, self._ndim],
+                                    dtype=tf.int32, name='shape')
+                v = tf.exp(-tf.einsum('i,jk->jik', eta, r2c))
+                v = tf.einsum('ijk,ik->ijk', v, fc_r)
+                v = tf.reshape(v, [batch_size, -1], name='flatten')
+                return tf.scatter_nd(v2g_map, v, shape, name='g')
+
+    def infer_angular_function(self, R, cells, v2g_map, ij, ik, jk, ijS, ikS,
+                               jkS):
+        """
+        The implementation of Behler's angular symmetry function for a single
+        structure.
+        """
+        with tf.name_scope("G4"):
+            with tf.name_scope("constants"):
+                one = tf.constant(1.0, dtype=tf.float64)
+                two = tf.constant(2.0, dtype=tf.float64)
+                rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
+                cells = tf.convert_to_tensor(
+                    cells, dtype=tf.float64, name='clist')
+                v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
+                batch_size = R.shape[0]
+                max_atoms = R.shape[1]
+
+            with tf.name_scope("Rij"):
+                Ri_ij = batch_gather_positions(R, ij[:, 0])
+                Rj_ij = batch_gather_positions(R, ij[:, 1])
+                ijS = tf.convert_to_tensor(ijS, dtype=tf.float64, name='ijS')
+                D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, cells)
+                r_ij = tf.norm(D_ij, axis=2)
+
+            with tf.name_scope("Rik"):
+                Ri_ik = batch_gather_positions(R, ik[:, 0])
+                Rk_ik = batch_gather_positions(R, ik[:, 1])
+                ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
+                D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
+                r_ik = tf.norm(D_ik, axis=2)
+
+            with tf.name_scope("Rik"):
+                Rj_jk = batch_gather_positions(R, jk[:, 0])
+                Rk_jk = batch_gather_positions(R, jk[:, 1])
+                jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
+                D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, cells)
+                r_jk = tf.norm(D_jk, axis=2)
+
+            # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
+            with tf.name_scope("cosine"):
+                upper = tf.square(r_ij) + tf.square(r_ik) - tf.square(r_jk)
+                lower = two * tf.multiply(r_ij, r_ik, name='bc')
+                theta = tf.div(upper, lower, name='theta')
+
+            # Compute the damping term: f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})
+            with tf.name_scope("fc"):
+                fc_r_ij = cutoff(r_ij, self._rc, name='fc_r_ij')
+                fc_r_ik = cutoff(r_ik, self._rc, name='fc_r_ik')
+                fc_r_jk = cutoff(r_jk, self._rc, name='fc_r_jk')
+                fc_r_ijk = fc_r_ij * fc_r_ik * fc_r_jk
+
+            # Compute $R_{ij}^{2} + R_{ik}^{2} + R_{jk}^{2}$
+            with tf.name_scope("r2"):
+                r2_ij = tf.square(r_ij, name='r2_ij')
+                r2_ik = tf.square(r_ik, name='r2_ik')
+                r2_jk = tf.square(r_jk, name='r2_jk')
+                r2 = r2_ij + r2_ik + r2_jk
+                r2c = tf.div(r2, rc2, name='r2_rc2')
+
+            with tf.name_scope("features"):
+                shape = tf.constant((batch_size, max_atoms, self._ndim),
+                                    dtype=tf.int32, name='shape')
+                g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
+                for row, params in enumerate(self._parameter_grid):
+                    with tf.name_scope("p{}".format(row)):
+                        gamma = tf.constant(
+                            params['gamma'], dtype=tf.float64, name='gamma')
+                        zeta = tf.constant(
+                            params['zeta'], dtype=tf.float64, name='zeta')
+                        beta = tf.constant(
+                            params['beta'], dtype=tf.float64, name='beta')
+                        c = (one + gamma * theta) ** zeta * two ** (1.0 - zeta)
+                        v = c * tf.exp(-beta * r2c) * fc_r_ijk
+                        step = tf.constant(
+                            [0, 0, row], dtype=tf.int32, name='step')
+                        v2g_row = tf.add(v2g_base, step, name='v2g_row')
+                        g = g + tf.scatter_nd(
+                            v2g_row, v, shape, 'g{}'.format(row))
+                return g
 
 
 def radial_function(R, rc, v2g_map, clist, etas, ilist, jlist, Slist,
