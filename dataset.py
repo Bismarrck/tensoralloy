@@ -10,6 +10,7 @@ import sys
 import time
 from tensorflow.train import Example, Features
 from behler import NeighborIndexBuilder
+from behler import RadialIndexedSlices, AngularIndexedSlices
 from behler import get_kbody_terms, compute_dimension
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
@@ -18,6 +19,7 @@ from misc import RANDOM_STATE, check_path
 from sklearn.model_selection import train_test_split
 from collections import namedtuple
 from os.path import join
+from enum import Enum
 from typing import List, Dict
 
 
@@ -26,7 +28,16 @@ __email__ = 'Bismarrck@me.com'
 
 
 DecodedExample = namedtuple('DecodedExample',
-                            (''))
+                            ('positions', 'cell', 'y_true', 'f_true',
+                             "rslices", "aslices"))
+
+
+class TrainableProperty(Enum):
+    """
+    A enumeration list declaring the trainable properties.
+    """
+    energy = 0
+    forces = 1
 
 
 def _bytes_feature(value):
@@ -43,33 +54,44 @@ def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
-class Serializer:
+class RawSerializer:
     """
-    This class is used to serialize training examples.
+    This class is used to serialize training examples in raw format.
     """
 
-    def __init__(self, k_max):
+    def __init__(self, k_max: int, natoms: int, nij_max: int, n_etas: int,
+                 nijk_max: int, trainable_properties: List[TrainableProperty]):
         """
         Initialization method.
         """
         self.k_max = k_max
+        self.natoms = natoms
+        self.nij_max = nij_max
+        self.n_etas = n_etas
+        self.nijk_max = nijk_max
+        if not trainable_properties:
+            trainable_properties = [TrainableProperty.energy, ]
+        self.trainable_properties = trainable_properties
 
-    def encode(self, positions, cell, y_true, f_true, rslices, aslices):
+    def encode(self, positions: np.ndarray, cell: np.ndarray, y_true: float,
+               f_true: np.ndarray, rslices: RadialIndexedSlices,
+               aslices: AngularIndexedSlices):
         """
         Encode the data and return a `tf.train.Example`.
         """
-        feature = {
-            'positions': _bytes_feature(positions),
-            'cell': _bytes_feature(cell),
-            'y_true': _bytes_feature(y_true),
-            'f_true': _bytes_feature(f_true),
+        feature_list = {
+            'positions': _bytes_feature(positions.tostring()),
+            'cell': _bytes_feature(cell.tostring()),
+            'y_true': _float_feature(y_true),
             'r_v2g': _bytes_feature(rslices.v2g_map.tostring()),
             'r_ilist': _bytes_feature(rslices.ilist.tostring()),
             'r_jlist': _bytes_feature(rslices.jlist.tostring()),
             'r_Slist': _bytes_feature(rslices.Slist.tostring()),
         }
+        if TrainableProperty.forces in self.trainable_properties:
+            feature_list.update({'f_true': _bytes_feature(f_true.tostring())})
         if self.k_max == 3:
-            feature.update({
+            feature_list.update({
                 'a_v2g': _bytes_feature(aslices.v2g_map.tostring()),
                 'a_ij': _bytes_feature(aslices.ik.tostring()),
                 'a_ik': _bytes_feature(aslices.ij.tostring()),
@@ -78,20 +100,101 @@ class Serializer:
                 'a_ikSlist': _bytes_feature(aslices.ikSlist.tostring()),
                 'a_jkSlist': _bytes_feature(aslices.jkSlist.tostring()),
             })
-        return Example(features=Features(feature=feature))
+        return Example(features=Features(feature=feature_list))
 
-    def _decode_positions(self, example: Dict[str, tf.Tensor]):
+    def _decode_atoms(self, example: Dict[str, tf.Tensor]):
         """
+        Decode `Atoms` related properties.
         """
+        length = 3 * (self.natoms + 1)
+
         positions = tf.decode_raw(example['positions'], tf.float64)
-        positions.set_shape()
-        return tf.reshape(positions, ())
+        positions.set_shape([length])
+        positions = tf.reshape(positions, (self.natoms + 1, 3), name='R')
+
+        cell = tf.decode_raw(example['cell'], tf.float64, name='cell')
+        cell.set_shape((3, 3))
+
+        y_true = tf.cast(example['y_true'], tf.float32, name='y_true')
+
+        if TrainableProperty.forces in self.trainable_properties:
+            f_true = tf.decode_raw(example['f_true'], tf.float64)
+            f_true.set_shape([length])
+            f_true = tf.reshape(f_true, (self.natoms + 1, 3), name='f_true')
+        else:
+            f_true = None
+
+        return positions, cell, y_true, f_true
+
+    def _decode_rslices(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode v2g_map, ilist, jlist and Slist for radial functions.
+        """
+        length = self.nij_max * self.n_etas
+
+        v2g_map = tf.decode_raw(example['r_v2g'], tf.int32)
+        v2g_map.set_shape(length * 3)
+        v2g_map = tf.reshape(v2g_map, (length, 3), name='r_v2g')
+
+        ilist = tf.decode_raw(example['ilist'], tf.int32, name='r_ilist')
+        ilist.set_shape([self.nij_max])
+
+        jlist = tf.decode_raw(example['jlist'], tf.int32, name='r_jlist')
+        jlist.set_shape([self.nij_max])
+
+        Slist = tf.decode_raw(example['Slist'], tf.int32)
+        Slist.set_shape([self.nij_max * 3])
+        Slist = tf.reshape(Slist, (self.nij_max, 3), name='Slist')
+
+        return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
+
+    def _decode_aslices(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
+        functions.
+        """
+        if TrainableProperty.forces not in self.trainable_properties:
+            return None
+
+        length = self.nijk_max * 3
+
+        v2g_map = tf.decode_raw(example['a_v2g'], tf.int32)
+        v2g_map.set_shape(length)
+        v2g_map = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_v2g')
+
+        ij = tf.decode_raw(example['a_ij'], tf.int32)
+        ij.set_shape([self.nijk_max])
+
+        ik = tf.decode_raw(example['a_ik'], tf.int32)
+        ik.set_shape([self.nijk_max])
+
+        jk = tf.decode_raw(example['a_jk'], tf.int32)
+        jk.set_shape([self.nijk_max])
+
+        ijSlist = tf.decode_raw(example['a_ijSlist'], tf.int32)
+        ijSlist.set_shape([length])
+        ijSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_ijSlist')
+
+        ikSlist = tf.decode_raw(example['a_ikSlist'], tf.int32)
+        ikSlist.set_shape([length])
+        ikSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_ikSlist')
+
+        jkSlist = tf.decode_raw(example['a_jkSlist'], tf.int32)
+        jkSlist.set_shape([length])
+        jkSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_jkSlist')
+
+        return AngularIndexedSlices(v2g_map, ij, ik, jk, ijSlist, ikSlist,
+                                    jkSlist)
 
     def decode_example(self, example: Dict[str, tf.Tensor]):
         """
         Decode the parsed single example.
         """
-        pass
+        positions, cell, y_true, f_true = self._decode_atoms(example)
+        rslices = self._decode_rslices(example)
+        aslices = self._decode_aslices(example)
+        return DecodedExample(positions=positions, cell=cell, y_true=y_true,
+                              f_true=f_true, rslices=rslices, aslices=aslices)
 
     def decode_protobuf(self, example_proto: tf.Tensor):
         """
@@ -175,10 +278,10 @@ class Dataset:
         return self._name
 
     @property
-    def trainable_properties(self) -> List[str]:
+    def trainable_properties(self) -> List[TrainableProperty]:
         """
-        Return a list of str as the trainable properties. Currently only energy
-        and forces are supported.
+        Return a list of `TrainableProperty`. Currently only energy and forces
+        are supported.
         """
         return self._trainable_properties
 
@@ -215,9 +318,9 @@ class Dataset:
         find_neighbor_sizes(self._database, self._rc, k_max=self._k_max)
 
         metadata = self._database.metadata
-        trainable_properties = ['energy']
+        trainable_properties = [TrainableProperty.energy]
         if metadata['ext']:
-            trainable_properties += ['forces']
+            trainable_properties += [TrainableProperty.forces]
         max_occurs = metadata['max_occurs']
         nij_max = metadata['nij_max']
         nijk_max = metadata['nijk_max']
@@ -226,6 +329,7 @@ class Dataset:
         total_size, kbody_sizes = compute_dimension(
             kbody_terms, len(self._eta), len(self._beta), len(self._gamma),
             len(self._zeta))
+        natoms = sum(max_occurs.values())
         nl = NeighborIndexBuilder(self._rc, kbody_terms, kbody_sizes,
                                   max_occurs, len(self._eta), self._k_max,
                                   nij_max, nijk_max)
@@ -239,38 +343,22 @@ class Dataset:
         self._elements = elements
         self._mapping = mapping
         self._trainable_properties = trainable_properties
+        self._serializer = RawSerializer(self._k_max, natoms, nij_max,
+                                         len(self._eta), nijk_max,
+                                         trainable_properties)
 
     def convert_atoms_to_example(self, atoms: Atoms) -> Example:
         """
         Convert an `Atoms` object to `tf.train.Example`.
         """
         transformer = self._nl.get_index_transformer(atoms)
-        positions = transformer.gather(atoms.positions).tostring()
-        cell = atoms.cell.reshape((1, 3, 3)).tostring()
-        y_true = np.atleast_2d(atoms.get_total_energy()).tostring()
-        f_true = transformer.gather(atoms.get_forces()).tostring()
+        positions = transformer.gather(atoms.positions)
+        cell = atoms.cell.reshape((1, 3, 3))
+        y_true = np.atleast_2d(atoms.get_total_energy())
+        f_true = transformer.gather(atoms.get_forces())
         rslices, aslices = self._nl.get_indexed_slices([atoms])
-        feature = {
-            'positions': _bytes_feature(positions),
-            'cell': _bytes_feature(cell),
-            'y_true': _bytes_feature(y_true),
-            'f_true': _bytes_feature(f_true),
-            'r_v2g': _bytes_feature(rslices.v2g_map.tostring()),
-            'r_ilist': _bytes_feature(rslices.ilist.tostring()),
-            'r_jlist': _bytes_feature(rslices.jlist.tostring()),
-            'r_Slist': _bytes_feature(rslices.Slist.tostring()),
-        }
-        if self._k_max == 3:
-            feature.update({
-                'a_v2g': _bytes_feature(aslices.v2g_map.tostring()),
-                'a_ij': _bytes_feature(aslices.ik.tostring()),
-                'a_ik': _bytes_feature(aslices.ij.tostring()),
-                'a_jk': _bytes_feature(aslices.jk.tostring()),
-                'a_ijSlist': _bytes_feature(aslices.ijSlist.tostring()),
-                'a_ikSlist': _bytes_feature(aslices.ikSlist.tostring()),
-                'a_jkSlist': _bytes_feature(aslices.jkSlist.tostring()),
-            })
-        return Example(features=Features(feature=feature))
+        return self._serializer.encode(positions, cell, y_true, f_true, rslices,
+                                       aslices)
 
     def _write_split(self, filename: str, indices: List[int], verbose=False):
         """
@@ -346,26 +434,7 @@ class Dataset:
             A `DecodedExample` from a tfrecords file.
 
         """
-        feature_list = {
-            'positions': tf.FixedLenFeature([], tf.string),
-            'cell': tf.FixedLenFeature([], tf.string),
-            'y_true': tf.FixedLenFeature([], tf.string),
-            'f_true': tf.FixedLenFeature([], tf.string),
-            'r_v2g': tf.FixedLenFeature([], tf.string),
-            'r_ilist': tf.FixedLenFeature([], tf.string),
-            'r_jlist': tf.FixedLenFeature([], tf.string),
-            'r_Slist': tf.FixedLenFeature([], tf.string),
-        }
-        if self._k_max == 3:
-            feature_list.update({
-                'a_v2g': tf.FixedLenFeature([], tf.string),
-                'a_ij': tf.FixedLenFeature([], tf.string),
-                'a_ik': tf.FixedLenFeature([], tf.string),
-                'a_jk': tf.FixedLenFeature([], tf.string),
-                'a_ijSlist': tf.FixedLenFeature([], tf.string),
-                'a_ikSlist': tf.FixedLenFeature([], tf.string),
-                'a_jkSlist': tf.FixedLenFeature([], tf.string),
-            })
-        example = tf.parse_single_example(example_proto, feature_list)
+        return self._serializer.decode_protobuf(example_proto)
 
-
+    def next_batch(self):
+        pass
