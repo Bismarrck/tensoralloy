@@ -23,6 +23,7 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import List
 from collections import Counter
+from misc import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -38,11 +39,8 @@ Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
                                   [5.835, 1.37532269, 8.5],
                                   [5.835, 7.12596807, 8.]]))
 
-eta = np.array([0.05, 4.0, 20.0, 80.0])
-beta = np.array([0.005, ])
-gamma = np.array([1.0, -1.0])
-zeta = np.array([1.0, 4.0])
-grid = ParameterGrid({'beta': beta, 'gamma': gamma, 'zeta': zeta})
+grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
+                      'zeta': Defaults.zeta})
 
 
 class IndexTransformerTest(TestCase):
@@ -448,19 +446,22 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     """
     symbols = atoms.get_chemical_symbols()
     kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
-    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
-                                               len(gamma), len(zeta))
+    total_dim, kbody_sizes = compute_dimension(kbody_terms,
+                                               Defaults.n_etas,
+                                               Defaults.n_betas,
+                                               Defaults.n_gammas,
+                                               Defaults.n_zetas)
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
     with tf.name_scope(name_scope):
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell, tf.float64, name='cell')
-        rmap = build_radial_v2g_map(atoms, rc, len(eta), kbody_terms,
+        rmap = build_radial_v2g_map(atoms, rc, Defaults.n_etas, kbody_terms,
                                     kbody_sizes)
         amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
-        gr = radial_function(R, rc, rmap.v2g_map, cell, eta, rmap.ilist,
-                             rmap.jlist, rmap.Slist, total_dim)
+        gr = radial_function(R, rc, rmap.v2g_map, cell, Defaults.eta,
+                             rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
         ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
                               amap.jk, amap.ijSlist, amap.ikSlist, amap.jkSlist,
                               total_dim)
@@ -477,8 +478,9 @@ def test_monoatomic_molecule():
     coords = atoms.get_positions()
     rr = pairwise_distances(coords)
     rc = 6.0
-    zr = get_radial_fingerprints_v1(coords, rr, rc, eta)
-    za = get_augular_fingerprints_v1(coords, rr, rc, beta, gamma, zeta)
+    zr = get_radial_fingerprints_v1(coords, rr, rc, Defaults.eta)
+    za = get_augular_fingerprints_v1(coords, rr, rc, Defaults.beta,
+                                     Defaults.gamma, Defaults.zeta)
     z = np.hstack((zr, za))
     g, _, _ = symmetry_function(atoms, rc=rc, name_scope='B28')
     assert_less(np.abs(z - g).max(), 1e-8)
@@ -551,19 +553,22 @@ def test_batch_one_element():
     elements = ['B']
     max_occurs = Counter({'B': 28})
     kbody_terms, mapping, _ = get_kbody_terms(elements, k_max=3)
-    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
-                                               len(gamma), len(zeta))
+    total_dim, kbody_sizes = compute_dimension(kbody_terms,
+                                               Defaults.n_etas,
+                                               Defaults.n_betas,
+                                               Defaults.n_gammas,
+                                               Defaults.n_zetas)
     nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                              len(eta), k_max=3, nij_max=nij_max,
+                              Defaults.n_etas, k_max=3, nij_max=nij_max,
                               nijk_max=nijk_max)
     rslices, aslices = nl.get_indexed_slices(trajectory)
 
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
-    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
-                                rslices.ilist, rslices.jlist, rslices.Slist,
-                                total_dim)
+    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist,
+                                Defaults.eta, rslices.ilist, rslices.jlist,
+                                rslices.Slist, total_dim)
     ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
                                  aslices.ij, aslices.ik, aslices.jk,
                                  aslices.ijSlist, aslices.ikSlist,
@@ -590,17 +595,18 @@ def test_manybody_k():
     for k_max in (1, 2, 3):
         kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
         kdim, kbody_sizes = compute_dimension(
-            kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
+            kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
+            Defaults.n_zetas)
         nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
 
         nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                                  len(eta), k_max=k_max, nij_max=nij_max,
+                                  Defaults.n_etas, k_max=k_max, nij_max=nij_max,
                                   nijk_max=nijk_max)
         rslices, aslices = nl.get_indexed_slices([Pd3O2])
 
-        g = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
-                                   rslices.ilist, rslices.jlist, rslices.Slist,
-                                   kdim)
+        g = behler.radial_function(positions, rc, rslices.v2g_map, clist,
+                                   Defaults.eta, rslices.ilist, rslices.jlist,
+                                   rslices.Slist, kdim)
         if k_max == 3:
             g += behler.angular_function(positions, rc, aslices.v2g_map, clist,
                                          grid, aslices.ij, aslices.ik,
@@ -629,8 +635,11 @@ def test_batch_multi_elements():
     n_atoms = sum(max_occurs.values())
     kbody_terms, mapping, elements = get_kbody_terms(list(max_occurs.keys()),
                                                      k_max=3)
-    total_dim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
-                                               len(gamma), len(zeta))
+    total_dim, kbody_sizes = compute_dimension(kbody_terms,
+                                               Defaults.n_etas,
+                                               Defaults.n_betas,
+                                               Defaults.n_gammas,
+                                               Defaults.n_zetas)
     element_offsets = np.insert(
         np.cumsum([max_occurs[e] for e in elements]), 0, 0)
 
@@ -662,7 +671,7 @@ def test_batch_multi_elements():
         nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
 
     nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                              len(eta), k_max=3, nij_max=nij_max,
+                              Defaults.n_etas, k_max=3, nij_max=nij_max,
                               nijk_max=nijk_max)
 
     rslices, aslices = nl.get_indexed_slices(trajectory)
@@ -674,9 +683,9 @@ def test_batch_multi_elements():
         positions[i] = nl.get_index_transformer(atoms).gather(atoms.positions)
         clist[i] = atoms.cell
 
-    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist, eta,
-                                rslices.ilist, rslices.jlist, rslices.Slist,
-                                total_dim)
+    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist,
+                                Defaults.eta, rslices.ilist, rslices.jlist,
+                                rslices.Slist, total_dim)
     ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
                                  aslices.ij, aslices.ik, aslices.jk,
                                  aslices.ijSlist, aslices.ikSlist,
