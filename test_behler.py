@@ -624,7 +624,7 @@ def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.
     """
-    trajectory = read('test_files/qm7m.xyz', index=':', format='xyz')
+    trajectory = read('test_files/qm7m/qm7m.xyz', index=':', format='xyz')
     rc = 6.0
     max_occurs = Counter()
     for atoms in trajectory:
