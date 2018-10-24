@@ -8,12 +8,11 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
-import behler
 from unittest import TestCase
 from utils import cutoff
 from behler import get_kbody_terms, compute_dimension
 from behler import RadialIndexedSlices, AngularIndexedSlices
-from behler import NeighborIndexBuilder
+from behler import SymmetryFunction, IndexTransformer
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
@@ -54,7 +53,7 @@ class IndexTransformerTest(TestCase):
         """
         symbols = Pd3O2.get_chemical_symbols()
         max_occurs = Counter({'Pd': 4, 'O': 5})
-        self.clf = behler.IndexTransformer(max_occurs, symbols)
+        self.clf = IndexTransformer(max_occurs, symbols)
 
     def test_forward(self):
         assert_equal(len(self.clf.reference_symbols), 9)
@@ -536,7 +535,7 @@ def test_batch_one_element():
     trajectory = read('test_files/B28.xyz', index='0:2', format='xyz')
     targets = np.zeros((2, 28, 8), dtype=np.float64)
     positions = np.zeros((2, 29, 3), dtype=np.float64)
-    clist = np.zeros((2, 3, 3), dtype=np.float64)
+    cells = np.zeros((2, 3, 3), dtype=np.float64)
     rc = 6.0
     nij_max = 756
     nijk_max = 9828
@@ -548,31 +547,22 @@ def test_batch_one_element():
         atoms.set_pbc([False, False, False])
         targets[i] = symmetry_function(atoms, rc, name_scope='B28')[0]
         positions[i, 1:] = atoms.positions
-        clist[i] = atoms.cell
+        cells[i] = atoms.cell
 
-    elements = ['B']
     max_occurs = Counter({'B': 28})
-    kbody_terms, mapping, _ = get_kbody_terms(elements, k_max=3)
-    total_dim, kbody_sizes = compute_dimension(kbody_terms,
-                                               Defaults.n_etas,
-                                               Defaults.n_betas,
-                                               Defaults.n_gammas,
-                                               Defaults.n_zetas)
-    nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                              Defaults.n_etas, k_max=3, nij_max=nij_max,
-                              nijk_max=nijk_max)
-    rslices, aslices = nl.get_indexed_slices(trajectory)
+    sf = SymmetryFunction(rc, max_occurs, nij_max=nij_max, nijk_max=nijk_max,
+                          k_max=3)
+    rslices, aslices = sf.get_indexed_slices(trajectory)
 
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
-    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist,
-                                Defaults.eta, rslices.ilist, rslices.jlist,
-                                rslices.Slist, total_dim)
-    ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
-                                 aslices.ij, aslices.ik, aslices.jk,
-                                 aslices.ijSlist, aslices.ikSlist,
-                                 aslices.jkSlist, total_dim)
+    gr = sf.infer_radial_function(positions, cells, rslices.v2g_map,
+                                  rslices.ilist, rslices.jlist, rslices.Slist)
+    ga = sf.infer_angular_function(positions, cells, aslices.v2g_map,
+                                   aslices.ij, aslices.ik, aslices.jk,
+                                   aslices.ijSlist, aslices.ikSlist,
+                                   aslices.jkSlist)
     g = gr + ga
     values = g.numpy()[:, 1:, :]
     assert_less(np.abs(values - targets).max(), 1e-8)
@@ -583,38 +573,32 @@ def test_manybody_k():
     Test computing descriptors for different `k_max`.
     """
     symbols = Pd3O2.get_chemical_symbols()
-    elements = list(set(symbols))
     rc = 6.0
     max_occurs = Counter(symbols)
-    transformer = behler.IndexTransformer(max_occurs, symbols)
+    transformer = IndexTransformer(max_occurs, symbols)
     positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
-    clist = np.reshape(Pd3O2.cell, (1, 3, 3))
+    cells = np.reshape(Pd3O2.cell, (1, 3, 3))
     ref, ref_terms, ref_sizes = symmetry_function(Pd3O2, rc, 'all')
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
     for k_max in (1, 2, 3):
-        kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
-        kdim, kbody_sizes = compute_dimension(
-            kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
-            Defaults.n_zetas)
+
         nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
+        sf = SymmetryFunction(rc, max_occurs, k_max=k_max, nij_max=nij_max,
+                              nijk_max=nijk_max)
+        rslices, aslices = sf.get_indexed_slices([Pd3O2])
 
-        nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                                  Defaults.n_etas, k_max=k_max, nij_max=nij_max,
-                                  nijk_max=nijk_max)
-        rslices, aslices = nl.get_indexed_slices([Pd3O2])
-
-        g = behler.radial_function(positions, rc, rslices.v2g_map, clist,
-                                   Defaults.eta, rslices.ilist, rslices.jlist,
-                                   rslices.Slist, kdim)
+        g = sf.infer_radial_function(positions, cells, rslices.v2g_map,
+                                     rslices.ilist, rslices.jlist,
+                                     rslices.Slist)
         if k_max == 3:
-            g += behler.angular_function(positions, rc, aslices.v2g_map, clist,
-                                         grid, aslices.ij, aslices.ik,
-                                         aslices.jk, aslices.ijSlist,
-                                         aslices.ikSlist, aslices.jkSlist, kdim)
+            g += sf.infer_angular_function(positions, cells, aslices.v2g_map,
+                                           aslices.ij, aslices.ik, aslices.jk,
+                                           aslices.ijSlist, aslices.ikSlist,
+                                           aslices.jkSlist)
         columns = []
         for i, ref_term in enumerate(ref_terms):
-            if ref_term in kbody_terms:
+            if ref_term in sf.kbody_terms:
                 columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
         g = transformer.gather(g.numpy()[0], reverse=True)
         assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8)
@@ -670,26 +654,24 @@ def test_batch_multi_elements():
     if nij_max is None:
         nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
 
-    nl = NeighborIndexBuilder(rc, kbody_terms, kbody_sizes, max_occurs,
-                              Defaults.n_etas, k_max=3, nij_max=nij_max,
-                              nijk_max=nijk_max)
+    sf = SymmetryFunction(rc, max_occurs, k_max=3, nij_max=nij_max,
+                          nijk_max=nijk_max)
 
-    rslices, aslices = nl.get_indexed_slices(trajectory)
+    rslices, aslices = sf.get_indexed_slices(trajectory)
 
     positions = np.zeros((batch_size, n_atoms + 1, 3))
-    clist = np.zeros((batch_size, 3, 3))
+    cells = np.zeros((batch_size, 3, 3))
 
     for i, atoms in enumerate(trajectory):
-        positions[i] = nl.get_index_transformer(atoms).gather(atoms.positions)
-        clist[i] = atoms.cell
+        positions[i] = sf.get_index_transformer(atoms).gather(atoms.positions)
+        cells[i] = atoms.cell
 
-    gr = behler.radial_function(positions, rc, rslices.v2g_map, clist,
-                                Defaults.eta, rslices.ilist, rslices.jlist,
-                                rslices.Slist, total_dim)
-    ga = behler.angular_function(positions, rc, aslices.v2g_map, clist, grid,
-                                 aslices.ij, aslices.ik, aslices.jk,
-                                 aslices.ijSlist, aslices.ikSlist,
-                                 aslices.jkSlist, total_dim)
+    gr = sf.infer_radial_function(positions, cells, rslices.v2g_map,
+                                  rslices.ilist, rslices.jlist, rslices.Slist)
+    ga = sf.infer_angular_function(positions, cells, aslices.v2g_map,
+                                   aslices.ij, aslices.ik, aslices.jk,
+                                   aslices.ijSlist, aslices.ikSlist,
+                                   aslices.jkSlist)
     g = gr + ga
     values = g.numpy()
     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
