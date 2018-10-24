@@ -8,6 +8,8 @@ import tensorflow as tf
 import numpy as np
 import sys
 import time
+import glob
+from tensorflow.contrib.learn.python import ModeKeys
 from tensorflow.train import Example, Features
 from behler import NeighborIndexBuilder
 from behler import RadialIndexedSlices, AngularIndexedSlices
@@ -18,7 +20,7 @@ from file_io import find_neighbor_sizes
 from misc import RANDOM_STATE, check_path
 from sklearn.model_selection import train_test_split
 from collections import namedtuple
-from os.path import join
+from os.path import join, basename, splitext
 from enum import Enum
 from typing import List, Dict
 
@@ -27,9 +29,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-DecodedExample = namedtuple('DecodedExample',
-                            ('positions', 'cell', 'y_true', 'f_true',
-                             "rslices", "aslices"))
+DataGroup = namedtuple('DecodedExample',
+                       ('positions', 'cell', 'y_true', 'f_true',
+                        "rslices", "aslices"))
 
 
 class TrainableProperty(Enum):
@@ -193,8 +195,8 @@ class RawSerializer:
         positions, cell, y_true, f_true = self._decode_atoms(example)
         rslices = self._decode_rslices(example)
         aslices = self._decode_aslices(example)
-        return DecodedExample(positions=positions, cell=cell, y_true=y_true,
-                              f_true=f_true, rslices=rslices, aslices=aslices)
+        return DataGroup(positions=positions, cell=cell, y_true=y_true,
+                         f_true=f_true, rslices=rslices, aslices=aslices)
 
     def decode_protobuf(self, example_proto: tf.Tensor):
         """
@@ -261,6 +263,8 @@ class Dataset:
         self._beta = beta
         self._gamma = gamma
         self._zeta = zeta
+        self._files = {}
+        self._file_sizes = {}
         self._read_database()
 
     @property
@@ -408,12 +412,14 @@ class Dataset:
                                        random_state=RANDOM_STATE,
                                        test_size=test_size)
         self._write_split(
-            check_path(join(savedir, '{}-test.tfrecords'.format(self._name))),
-            train,
+            check_path(join(savedir, '{}-test-{}.tfrecords'.format(
+                self._name, len(test)))),
+            test,
             verbose=verbose,
         )
         self._write_split(
-            check_path(join(savedir, '{}-train.tfrecords'.format(self._name))),
+            check_path(join(savedir, '{}-train-{}.tfrecords'.format(
+                self._name, len(train)))),
             train,
             verbose=verbose,
         )
@@ -436,5 +442,74 @@ class Dataset:
         """
         return self._serializer.decode_protobuf(example_proto)
 
-    def next_batch(self):
-        pass
+    def load_tfrecords(self, savedir, idx=0) -> Dict[ModeKeys, str]:
+        """
+        Load converted tfrecords files for this dataset.
+        """
+
+        def _get_file_size(filename):
+            return int(splitext(basename(filename))[0].split('-')[2])
+
+        def _load(key):
+            files = list(glob.glob(
+                '{}/{}-{}-?.tfrecords'.format(savedir, self._name, key)))
+            if len(files) >= 1:
+                return files[idx], _get_file_size(files[idx])
+            else:
+                return None, 0
+
+        test_file, test_size = _load('test')
+        train_file, train_size = _load('train')
+
+        self._files = {ModeKeys.TRAIN: train_file, ModeKeys.EVAL: test_file}
+        self._file_sizes = {
+            ModeKeys.TRAIN: train_size, ModeKeys.EVAL: test_size}
+
+        return self._files
+
+    def next_batch(self, mode=ModeKeys.TRAIN, batch_size=25, num_epochs=None,
+                   shuffle=False):
+        """
+        Return batch inputs of this dataset.
+
+        Parameters
+        ----------
+        mode : ModeKeys
+            A `ModeKeys` selecting between the training and validation data.
+        batch_size : int
+            A `int` as the number of examples per batch.
+        num_epochs : int
+            A `int` as the maximum number of epochs to run.
+        shuffle : bool
+            A `bool` indicating whether the batches shall be shuffled or not.
+
+        Returns
+        -------
+        next_batch : DataGroup
+            A tuple of Tensors.
+
+        """
+        with tf.device('/cpu:0'):
+
+            # Get the tfrecords file
+            tfrecords_file = self._files[mode]
+
+            # Initialize a basic dataset
+            dataset = tf.data.TFRecordDataset([tfrecords_file])
+            dataset = dataset.map(self.decode_protobuf)
+
+            # Repeat the dataset
+            dataset = dataset.repeat(count=num_epochs)
+
+            # Shuffle it if needed
+            if shuffle:
+                size = self._file_sizes[mode]
+                min_queue_examples = int(size * 0.4) + 10 * batch_size
+                dataset = dataset.shuffle(buffer_size=min_queue_examples,
+                                          seed=RANDOM_STATE)
+
+            # Setup the batch
+            dataset = dataset.batch(batch_size)
+
+            # Return the iterator
+            return dataset.make_one_shot_iterator().get_next()
