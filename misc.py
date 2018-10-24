@@ -62,6 +62,15 @@ class Defaults:
     seed = RANDOM_STATE
 
 
+def safe_select(a, b):
+    """
+    A helper function to return `a` if it is neither None nor empty.
+    """
+    if a is None or len(a) == 0:
+        return b
+    return a
+
+
 def skip(func):
     """
     A decorator for skipping tests.
