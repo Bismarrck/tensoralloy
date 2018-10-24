@@ -113,3 +113,5 @@ test.py
 
 # Ignore sqlite database files
 test_files/*.db
+test_files/qm7m/*.tfrecords
+test_files/ethanol/*.tfrecords
