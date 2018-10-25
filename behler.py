@@ -536,7 +536,8 @@ class SymmetryFunction:
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
 
-    def infer_radial_function(self, R, cells, v2g_map, ilist, jlist, Slist):
+    def infer_radial_function(self, R, cells, v2g_map, ilist, jlist, Slist,
+                              batch_size=None):
         """
         The implementation of Behler's radial symmetry function.
         """
@@ -545,16 +546,17 @@ class SymmetryFunction:
                 rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
                 eta = tf.constant(self._eta, dtype=tf.float64, name='eta')
                 R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
-                Slist = tf.convert_to_tensor(
-                    Slist, dtype=tf.float64, name='Slist')
+                Slist = tf.cast(Slist, dtype=tf.float64, name='Slist')
                 cells = tf.convert_to_tensor(
                     cells, dtype=tf.float64, name='cells')
-                batch_size = R.shape[0]
+                batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
 
             with tf.name_scope("rij"):
-                Ri = batch_gather_positions(R, ilist, name='Ri')
-                Rj = batch_gather_positions(R, jlist, name='Rj')
+                Ri = batch_gather_positions(
+                    R, ilist, batch_size=batch_size, name='Ri')
+                Rj = batch_gather_positions(
+                    R, jlist, batch_size=batch_size, name='Rj')
                 Dlist = Rj - Ri + tf.einsum('ijk,ikl->ijl', Slist, cells)
                 r = tf.norm(Dlist, axis=2, name='r')
                 r2 = tf.square(r, name='r2')
@@ -572,7 +574,7 @@ class SymmetryFunction:
                 return tf.scatter_nd(v2g_map, v, shape, name='g')
 
     def infer_angular_function(self, R, cells, v2g_map, ij, ik, jk, ijS, ikS,
-                               jkS):
+                               jkS, batch_size):
         """
         The implementation of Behler's angular symmetry function for a single
         structure.
@@ -585,26 +587,26 @@ class SymmetryFunction:
                 cells = tf.convert_to_tensor(
                     cells, dtype=tf.float64, name='clist')
                 v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
-                batch_size = R.shape[0]
+                batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
 
             with tf.name_scope("Rij"):
-                Ri_ij = batch_gather_positions(R, ij[:, 0])
-                Rj_ij = batch_gather_positions(R, ij[:, 1])
-                ijS = tf.convert_to_tensor(ijS, dtype=tf.float64, name='ijS')
+                Ri_ij = batch_gather_positions(R, ij[:, 0], batch_size, 'Ri')
+                Rj_ij = batch_gather_positions(R, ij[:, 1], batch_size, 'Rj')
+                ijS = tf.cast(ijS, dtype=tf.float64, name='ijS')
                 D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, cells)
                 r_ij = tf.norm(D_ij, axis=2)
 
             with tf.name_scope("Rik"):
-                Ri_ik = batch_gather_positions(R, ik[:, 0])
-                Rk_ik = batch_gather_positions(R, ik[:, 1])
+                Ri_ik = batch_gather_positions(R, ik[:, 0], batch_size, 'Ri')
+                Rk_ik = batch_gather_positions(R, ik[:, 1], batch_size, 'Rk')
                 ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
                 D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
                 r_ik = tf.norm(D_ik, axis=2)
 
             with tf.name_scope("Rik"):
-                Rj_jk = batch_gather_positions(R, jk[:, 0])
-                Rk_jk = batch_gather_positions(R, jk[:, 1])
+                Rj_jk = batch_gather_positions(R, jk[:, 0], batch_size, 'Rj')
+                Rk_jk = batch_gather_positions(R, jk[:, 1], batch_size, 'Rk')
                 jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
                 D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, cells)
                 r_jk = tf.norm(D_jk, axis=2)
