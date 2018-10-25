@@ -37,8 +37,13 @@ def test_read_extxyz():
 def test_find_neighbors():
     xyzfile = 'test_files/examples.extxyz'
     database = read(xyzfile, verbose=False)
-    find_neighbor_sizes(database, rc=6.0, n_jobs=1)
-    assert_equal(database.metadata['nij_max'], 358)
+
+    find_neighbor_sizes(database, rc=6.0, k_max=3, n_jobs=1, verbose=False)
+    find_neighbor_sizes(database, rc=6.5, k_max=2, n_jobs=1, verbose=False)
+
+    metadata = database.metadata
+    assert_equal(len(metadata['neighbors']), 2)
+    assert_equal(metadata['neighbors'][3][6.0]['nij_max'], 358)
 
 
 if __name__ == "__main__":

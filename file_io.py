@@ -214,7 +214,7 @@ def read(filename, num_examples=None, verbose=True):
 
 
 def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
-                        n_jobs=-1):
+                        n_jobs=-1, verbose=True):
     """
     Find `nij_max` and `nijk_max` of all `Atoms` objects in the database.
 
@@ -231,6 +231,8 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
         used. If 1 is given, no parallel computing code is used at all, which is
         useful for debugging. For n_jobs below -1, (n_cpus + 1 + n_jobs) are
         used. Thus for n_jobs = -2, all CPUs but one are used.
+    verbose : bool
+        If True, the progress shall be logged.
 
     """
     def _pipeline(aid):
@@ -258,13 +260,27 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
             nijk = 0
         return nij, nijk
 
-    results = Parallel(n_jobs=n_jobs, verbose=5)(
+    if verbose:
+        print('Start finding neighbors. This may take some time.')
+
+    results = Parallel(n_jobs=n_jobs, verbose=5 if verbose else 0)(
         delayed(_pipeline)(jid) for jid in range(1, len(database) + 1)
     )
+
     nij_max, nijk_max = np.asarray(results, dtype=int).max(axis=0).tolist()
+    rc = round(rc, 4)
+    details = {k_max: {rc: {'nij_max': nij_max, 'nijk_max': nijk_max}}}
     metadata = database.metadata
-    metadata.update({'nij_max': nij_max, 'nijk_max': nijk_max, 'rc': rc})
+    if 'neighbors' not in metadata:
+        metadata['neighbors'] = details
+    elif k_max not in metadata['neighbors']:
+        metadata['neighbors'][k_max] = details[k_max]
+    else:
+        metadata['neighbors'][k_max][rc] = details[k_max][rc]
     database.metadata = metadata
+
+    if verbose:
+        print('All {} jobs are done.'.format(len(database)))
 
 
 if __name__ == "__main__":
