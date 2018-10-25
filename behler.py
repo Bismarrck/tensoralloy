@@ -9,7 +9,7 @@ import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, batch_gather_positions
-from misc import Defaults, safe_select
+from misc import Defaults, safe_select, AttributeDict
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
@@ -102,6 +102,7 @@ def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
     total_dim : int
         The total dimension of the feature vector.
     kbody_sizes : List[int]
+        The size of each k-body term.
 
     """
     total_dim = 0
@@ -229,7 +230,9 @@ class IndexTransformer:
 
     @property
     def max_occurs(self) -> Counter:
-        """ Return the maximum occurance for each type of element. """
+        """
+        Return the maximum occurance for each type of element.
+        """
         return self._max_occurs
 
     @property
@@ -536,8 +539,8 @@ class SymmetryFunction:
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
 
-    def infer_radial_function(self, R, cells, v2g_map, ilist, jlist, Slist,
-                              batch_size=None):
+    def get_radial_function_graph(self, R, cells, v2g_map, ilist, jlist, Slist,
+                                  batch_size=None):
         """
         The implementation of Behler's radial symmetry function.
         """
@@ -573,11 +576,10 @@ class SymmetryFunction:
                 v = tf.reshape(v, [batch_size, -1], name='flatten')
                 return tf.scatter_nd(v2g_map, v, shape, name='g')
 
-    def infer_angular_function(self, R, cells, v2g_map, ij, ik, jk, ijS, ikS,
-                               jkS, batch_size):
+    def get_angular_function_graph(self, R, cells, v2g_map, ij, ik, jk, ijS,
+                                   ikS, jkS, batch_size=None):
         """
-        The implementation of Behler's angular symmetry function for a single
-        structure.
+        The implementation of Behler's angular symmetry function.
         """
         with tf.name_scope("G4"):
             with tf.name_scope("constants"):
@@ -652,3 +654,38 @@ class SymmetryFunction:
                         g = g + tf.scatter_nd(
                             v2g_row, v, shape, 'g{}'.format(row))
                 return g
+
+    def get_computation_graph_from_batch(self, examples: AttributeDict,
+                                         batch_size=None):
+        """
+        Build the computation graph for computing symmetry function descriptors
+        from an input batch.
+
+        Parameters
+        ----------
+        examples : AttributeDict
+            A dict returned by `Dataset.next_batch` as the inputs to the graph.
+        batch_size : int
+            The size of one batch.
+
+        Returns
+        -------
+        splits : List[tf.Tensor]
+            A list of tensors. `splits[i]` represents the descriptors of element
+            type `self.elements[i]`.
+
+        """
+        with tf.name_scope("Descriptors"):
+            g = self.get_radial_function_graph(
+                examples.positions, examples.cell, examples.rv2g,
+                examples.ilist, examples.jlist, examples.Slist, batch_size)
+
+            if self._k_max == 3:
+                g += self.get_angular_function_graph(
+                    examples.positions, examples.cell, examples.av2g,
+                    examples.ij, examples.ik, examples.jk,
+                    examples.ijS, examples.ikS, examples.jkS, batch_size)
+
+        with tf.name_scope("Split"):
+            size_splits = [1, ] + [self._max_occurs[e] for e in self._elements]
+            return tf.split(g, size_splits, axis=1, name='splits')[1:]

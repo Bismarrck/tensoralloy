@@ -557,12 +557,13 @@ def test_batch_one_element():
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
-    gr = sf.infer_radial_function(positions, cells, rslices.v2g_map,
-                                  rslices.ilist, rslices.jlist, rslices.Slist)
-    ga = sf.infer_angular_function(positions, cells, aslices.v2g_map,
-                                   aslices.ij, aslices.ik, aslices.jk,
-                                   aslices.ijSlist, aslices.ikSlist,
-                                   aslices.jkSlist)
+    gr = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
+                                      rslices.ilist, rslices.jlist,
+                                      rslices.Slist)
+    ga = sf.get_angular_function_graph(positions, cells, aslices.v2g_map,
+                                       aslices.ij, aslices.ik, aslices.jk,
+                                       aslices.ijSlist, aslices.ikSlist,
+                                       aslices.jkSlist)
     g = gr + ga
     values = g.numpy()[:, 1:, :]
     assert_less(np.abs(values - targets).max(), 1e-8)
@@ -588,14 +589,15 @@ def test_manybody_k():
                               nijk_max=nijk_max)
         rslices, aslices = sf.get_indexed_slices([Pd3O2])
 
-        g = sf.infer_radial_function(positions, cells, rslices.v2g_map,
-                                     rslices.ilist, rslices.jlist,
-                                     rslices.Slist)
+        g = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
+                                         rslices.ilist, rslices.jlist,
+                                         rslices.Slist)
         if k_max == 3:
-            g += sf.infer_angular_function(positions, cells, aslices.v2g_map,
-                                           aslices.ij, aslices.ik, aslices.jk,
-                                           aslices.ijSlist, aslices.ikSlist,
-                                           aslices.jkSlist)
+            g += sf.get_angular_function_graph(positions, cells,
+                                               aslices.v2g_map, aslices.ij,
+                                               aslices.ik, aslices.jk,
+                                               aslices.ijSlist, aslices.ikSlist,
+                                               aslices.jkSlist)
         columns = []
         for i, ref_term in enumerate(ref_terms):
             if ref_term in sf.kbody_terms:
@@ -666,12 +668,12 @@ def test_batch_multi_elements():
         positions[i] = sf.get_index_transformer(atoms).gather(atoms.positions)
         cells[i] = atoms.cell
 
-    gr = sf.infer_radial_function(positions, cells, rslices.v2g_map,
-                                  rslices.ilist, rslices.jlist, rslices.Slist)
-    ga = sf.infer_angular_function(positions, cells, aslices.v2g_map,
-                                   aslices.ij, aslices.ik, aslices.jk,
-                                   aslices.ijSlist, aslices.ikSlist,
-                                   aslices.jkSlist)
+    gr = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
+                                      rslices.ilist, rslices.jlist, rslices.Slist)
+    ga = sf.get_angular_function_graph(positions, cells, aslices.v2g_map,
+                                       aslices.ij, aslices.ik, aslices.jk,
+                                       aslices.ijSlist, aslices.ikSlist,
+                                       aslices.jkSlist)
     g = gr + ga
     values = g.numpy()
     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
