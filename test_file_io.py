@@ -43,7 +43,7 @@ def test_find_neighbors():
 
     metadata = database.metadata
     assert_equal(len(metadata['neighbors']), 2)
-    assert_equal(metadata['neighbors'][3][6.0]['nij_max'], 358)
+    assert_equal(metadata['neighbors']['3']['6.00']['nij_max'], 358)
 
 
 if __name__ == "__main__":

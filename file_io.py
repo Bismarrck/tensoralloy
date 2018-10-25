@@ -213,6 +213,16 @@ def read(filename, num_examples=None, verbose=True):
         raise ValueError("Unknown file type: {}".format(file_type))
 
 
+def convert_k_max_to_key(k_max):
+    """ Convert `k_max` to a valid key.  """
+    return "{}".format(k_max)
+
+
+def convert_rc_to_key(rc):
+    """ Convert `rc` to a valid key. """
+    return "{:.2f}".format(round(rc, 4))
+
+
 def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
                         n_jobs=-1, verbose=True):
     """
@@ -261,16 +271,18 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
         return nij, nijk
 
     if verbose:
-        print('Start finding neighbors. This may take some time.')
+        print('Start finding neighbors for rc = {} and k_max = {}. This may '
+              'take a very long time.'.format(rc, k_max))
 
     results = Parallel(n_jobs=n_jobs, verbose=5 if verbose else 0)(
         delayed(_pipeline)(jid) for jid in range(1, len(database) + 1)
     )
 
     nij_max, nijk_max = np.asarray(results, dtype=int).max(axis=0).tolist()
-    rc = round(rc, 4)
+    rc = convert_rc_to_key(rc)
+    k_max = convert_k_max_to_key(k_max)
     details = {k_max: {rc: {'nij_max': nij_max, 'nijk_max': nijk_max}}}
-    metadata = database.metadata
+    metadata = dict(database.metadata)
     if 'neighbors' not in metadata:
         metadata['neighbors'] = details
     elif k_max not in metadata['neighbors']:
@@ -280,7 +292,8 @@ def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
     database.metadata = metadata
 
     if verbose:
-        print('All {} jobs are done.'.format(len(database)))
+        print('All {} jobs are done. nij_max = {}, nijk_max = {}'.format(
+            len(database), nij_max, nijk_max))
 
 
 if __name__ == "__main__":
