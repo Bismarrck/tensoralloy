@@ -15,7 +15,7 @@ from behler import SymmetryFunction
 from behler import RadialIndexedSlices, AngularIndexedSlices
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
-from file_io import find_neighbor_sizes
+from file_io import find_neighbor_sizes, convert_k_max_to_key, convert_rc_to_key
 from misc import check_path, Defaults, AttributeDict
 from sklearn.model_selection import train_test_split
 from os.path import join, basename, splitext
@@ -339,23 +339,49 @@ class Dataset:
         return self._symmetry_function
 
     def __len__(self) -> int:
-        """ Return the number of examples in this dataset. """
+        """
+        Return the number of examples in this dataset.
+        """
         return len(self._database)
+
+    def _should_find_neighbor_sizes(self):
+        """
+        A helper function. Return True if `nij_max` and `nijk_max` for `k_max`
+        and `rc` cannot be accessed.
+        """
+        k_max = convert_k_max_to_key(self._k_max)
+        rc = convert_rc_to_key(self._rc)
+        neighbors = self._database.metadata.get('neighbors', {})
+        if k_max not in neighbors:
+            return True
+        elif rc not in neighbors[k_max]:
+            return True
+        else:
+            return False
+
+    def _get_nij_and_nijk(self):
+        """
+        A helper function to get `nij_max` and `nijk_max` from metadata of the
+        database.
+        """
+        k_max = convert_k_max_to_key(self._k_max)
+        rc = convert_rc_to_key(self._rc)
+        details = self._database.metadata['neighbors'][k_max][rc]
+        return details['nij_max'], details['nijk_max']
 
     def _read_database(self):
         """
         Read the metadata of the database and finalize the initialization.
         """
-        find_neighbor_sizes(self._database, self._rc, k_max=self._k_max)
+        if self._should_find_neighbor_sizes():
+            find_neighbor_sizes(self._database, self._rc, k_max=self._k_max)
 
-        metadata = self._database.metadata
         trainable_properties = [TrainableProperty.energy]
-        if metadata['extxyz']:
+        if self._database.metadata['extxyz']:
             trainable_properties += [TrainableProperty.forces]
-        max_occurs = metadata['max_occurs']
-        nij_max = metadata['nij_max']
-        nijk_max = metadata['nijk_max']
+        max_occurs = self._database.metadata['max_occurs']
         natoms = sum(max_occurs.values())
+        nij_max, nijk_max = self._get_nij_and_nijk()
         sf = SymmetryFunction(self._rc, max_occurs, k_max=self._k_max,
                               nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
                               beta=self._beta, gamma=self._gamma,
@@ -406,7 +432,8 @@ class Dataset:
             logstr = "\rProgress: {:7d} / {:7d} | Speed = {:6.1f}"
 
             if verbose:
-                sys.stdout.write("Writing {} subset ...\n".format(str(mode)))
+                sys.stdout.write(
+                    "Start writing {} subset ...\n".format(str(mode)))
 
             for i, atoms_id in enumerate(indices):
                 atoms = self._database.get_atoms(id=atoms_id)
@@ -428,13 +455,13 @@ class Dataset:
         ----------
         savedir : str
             The directory to save the converted tfrecords files.
-        test_size : float
-            The proportion of the dataset to include in the test split.
+        test_size : float or int
+            The proportion (float) or size (int) of the dataset to include in
+            the test split.
         verbose : bool
             If True, the progress shall be logged.
 
         """
-        test_size = min(max(test_size, 0.0), 1.0)
         train, test = train_test_split(range(1, 1 + len(self)),
                                        random_state=Defaults.seed,
                                        test_size=test_size)
@@ -452,6 +479,8 @@ class Dataset:
             train,
             verbose=verbose,
         )
+
+        self.load_tfrecords(savedir)
 
     def decode_protobuf(self, example_proto):
         """
@@ -471,7 +500,7 @@ class Dataset:
         """
         return self._serializer.decode_protobuf(example_proto)
 
-    def load_tfrecords(self, savedir, idx=0) -> Dict[ModeKeys, str]:
+    def load_tfrecords(self, savedir, idx=0) -> bool:
         """
         Load converted tfrecords files for this dataset.
         """
@@ -480,8 +509,11 @@ class Dataset:
             return int(splitext(basename(filename))[0].split('-')[2])
 
         def _load(key):
-            files = list(glob.glob(
-                '{}/{}-{}-?.tfrecords'.format(savedir, self._name, key)))
+            try:
+                files = list(glob.glob(
+                    '{}/{}-{}-*.tfrecords'.format(savedir, self._name, key)))
+            except Exception:
+                return None, 0
             if len(files) >= 1:
                 return files[idx], _get_file_size(files[idx])
             else:
@@ -489,12 +521,13 @@ class Dataset:
 
         test_file, test_size = _load('test')
         train_file, train_size = _load('train')
+        success = test_file and train_file
 
         self._files = {ModeKeys.TRAIN: train_file, ModeKeys.EVAL: test_file}
         self._file_sizes = {
             ModeKeys.TRAIN: train_size, ModeKeys.EVAL: test_size}
 
-        return self._files
+        return success
 
     def next_batch(self, mode=ModeKeys.TRAIN, batch_size=25, num_epochs=None,
                    shuffle=False):
