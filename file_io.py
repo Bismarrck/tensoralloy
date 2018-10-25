@@ -163,13 +163,14 @@ def _read_extxyz(filename, ext=True, num_examples=None, verbose=True):
                         ai = 0
                         stage = 0
                         count += 1
-                        if verbose and count % 1000 == 0:
+                        if verbose and count % 100 == 0:
                             speed = count / (time.time() - tic)
-                            sys.stdout.write(logstr.format(
-                                count, num_examples, speed))
+                            total = num_examples or -1
+                            sys.stdout.write(logstr.format(count, total, speed))
         if verbose:
             print("")
-            print("Total time: %.3f s\n" % (time.time() - tic))
+            print("Total {} structures, time: {:.3f} sec".format(
+                count, time.time() - tic))
     database.metadata = {'max_occurs': max_occurs, 'extxyz': ext}
     return database
 
