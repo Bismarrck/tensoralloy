@@ -13,7 +13,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def batch_gather_positions(R, indices, name=None):
+def batch_gather_positions(R, indices, batch_size=None, name=None):
     """
     A special batched implementation for `tf.gather` for gathering positions.
 
@@ -25,6 +25,9 @@ def batch_gather_positions(R, indices, name=None):
     indices : array_like or tf.Tensor
         An array of shape `[batch_size, nij_max]`. `indices[i]` denotes the
         slicing indices for structure `i`.
+    batch_size : int or None
+        The batch size. If None, batch size will be infered from R. However in
+        some cases the inference may not work.
     name : str
         The name of this op.
 
@@ -37,7 +40,7 @@ def batch_gather_positions(R, indices, name=None):
     with ops.name_scope(name, "gather_r", [R, indices]) as name:
         R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
         indices = tf.convert_to_tensor(indices, dtype=tf.int32, name='indices')
-        batch_size = R.shape[0]
+        batch_size = batch_size or R.shape[0]
         step = R.shape[1]
         delta = tf.range(0, batch_size * step, step, dtype=tf.int32)
         delta = tf.reshape(delta, (-1, 1), name='delta')
