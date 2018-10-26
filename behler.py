@@ -551,7 +551,7 @@ class SymmetryFunction:
                     cells, dtype=tf.float64, name='cells')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
-                v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
+                v2g_map.set_shape([batch_size, self._nij_max, 3])
 
             with tf.name_scope("rij"):
                 Ri = batch_gather_positions(
@@ -570,13 +570,14 @@ class SymmetryFunction:
                 shape = tf.constant([batch_size, max_atoms, self._ndim],
                                     dtype=tf.int32, name='shape')
                 g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-                for i in range(eta.shape[0]):
+                for i in range(self._n_etas):
                     with tf.name_scope("eta{}".format(i)):
                         vi = tf.exp(-eta[i] * r2c) * fc_r
                         delta = tf.constant(
                             [0, 0, i], dtype=tf.int32, name='delta')
-                        v2g_i = tf.add(v2g_base, delta, name='v2g_i')
-                        g += tf.scatter_nd(v2g_i, vi, shape, 'g{}'.format(i))
+                        v2g_map_i = tf.add(v2g_map, delta, name='v2g_map_i')
+                        g += tf.scatter_nd(
+                            v2g_map_i, vi, shape, 'g{}'.format(i))
                 return g
 
     def get_angular_function_graph(self, R, cells, v2g_map, ij, ik, jk, ijS,
@@ -600,9 +601,9 @@ class SymmetryFunction:
                 rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
                 cells = tf.convert_to_tensor(
                     cells, dtype=tf.float64, name='clist')
-                v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
+                v2g_map.set_shape([batch_size, self._nijk_max, 3])
 
             with tf.name_scope("Rij"):
                 Ri_ij = batch_gather_positions(R, ij[:, :, 0], batch_size, 'Ri')
@@ -657,8 +658,9 @@ class SymmetryFunction:
                         vi = c * tf.exp(-beta * r2c) * fc_r_ijk
                         delta = tf.constant(
                             [0, 0, i], dtype=tf.int32, name='delta')
-                        v2g_i = tf.add(v2g_base, delta, name='v2g_i')
-                        g += tf.scatter_nd(v2g_i, vi, shape, 'g{}'.format(i))
+                        v2g_map_i = tf.add(v2g_map, delta, name='v2g_map_i')
+                        g += tf.scatter_nd(
+                            v2g_map_i, vi, shape, 'g{}'.format(i))
                 return g
 
     def get_computation_graph_from_batch(self, examples: AttributeDict,
