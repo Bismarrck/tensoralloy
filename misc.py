@@ -61,6 +61,8 @@ class Defaults:
 
     seed = RANDOM_STATE
 
+    variable_moving_average_decay = 0.999
+
 
 def safe_select(a, b):
     """
