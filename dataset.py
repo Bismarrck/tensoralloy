@@ -54,19 +54,49 @@ class RawSerializer:
     This class is used to serialize training examples in raw format.
     """
 
-    def __init__(self, k_max: int, natoms: int, nij_max: int, n_etas: int,
-                 nijk_max: int, trainable_properties: List[TrainableProperty]):
+    def __init__(self, k_max: int, natoms: int, nij_max: int, nijk_max: int,
+                 trainable_properties: List[TrainableProperty]):
         """
         Initialization method.
         """
         self.k_max = k_max
         self.natoms = natoms
         self.nij_max = nij_max
-        self.n_etas = n_etas
         self.nijk_max = nijk_max
         if not trainable_properties:
             trainable_properties = [TrainableProperty.energy, ]
         self.trainable_properties = trainable_properties
+
+    @staticmethod
+    def _merge_and_encode_rslices(rslices: RadialIndexedSlices):
+        """
+        Merge `v2g_map`, `ilist`, `jlist` and `Slist` of radial functions into a
+        single array and encode this array.
+        """
+        merged = np.concatenate((
+            rslices.v2g_map,
+            rslices.Slist,
+            rslices.ilist[..., np.newaxis],
+            rslices.jlist[..., np.newaxis],
+        ), axis=2)
+        return _bytes_feature(merged.tostring())
+
+    @staticmethod
+    def _merge_and_encode_aslices(aslices: AngularIndexedSlices):
+        """
+        Merge `v2g_map`, `ij`, `ik`, `jk`, `ijSlist`, `ikSlist` and `jkSlist` of
+        angular functions into a single array and encode this array.
+        """
+        merged = np.concatenate((
+            aslices.v2g_map,
+            aslices.ijSlist,
+            aslices.ikSlist,
+            aslices.jkSlist,
+            aslices.ij,
+            aslices.ik,
+            aslices.jk,
+        ), axis=2)
+        return _bytes_feature(merged.tostring())
 
     def encode(self, positions: np.ndarray, cell: np.ndarray, y_true: float,
                f_true: np.ndarray, rslices: RadialIndexedSlices,
@@ -78,23 +108,13 @@ class RawSerializer:
             'positions': _bytes_feature(positions.tostring()),
             'cell': _bytes_feature(cell.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
-            'r_v2g': _bytes_feature(rslices.v2g_map.tostring()),
-            'r_ilist': _bytes_feature(rslices.ilist.tostring()),
-            'r_jlist': _bytes_feature(rslices.jlist.tostring()),
-            'r_Slist': _bytes_feature(rslices.Slist.tostring()),
+            'rslices': self._merge_and_encode_rslices(rslices),
         }
         if TrainableProperty.forces in self.trainable_properties:
             feature_list.update({'f_true': _bytes_feature(f_true.tostring())})
         if self.k_max == 3:
-            feature_list.update({
-                'a_v2g': _bytes_feature(aslices.v2g_map.tostring()),
-                'a_ij': _bytes_feature(aslices.ik.tostring()),
-                'a_ik': _bytes_feature(aslices.ij.tostring()),
-                'a_jk': _bytes_feature(aslices.jk.tostring()),
-                'a_ijSlist': _bytes_feature(aslices.ijSlist.tostring()),
-                'a_ikSlist': _bytes_feature(aslices.ikSlist.tostring()),
-                'a_jkSlist': _bytes_feature(aslices.jkSlist.tostring()),
-            })
+            feature_list.update(
+                {'aslices': self._merge_and_encode_aslices(aslices)})
         return Example(features=Features(feature=feature_list))
 
     def _decode_atoms(self, example: Dict[str, tf.Tensor]):
@@ -128,23 +148,15 @@ class RawSerializer:
         """
         Decode v2g_map, ilist, jlist and Slist for radial functions.
         """
-        length = self.nij_max * self.n_etas
-
-        v2g_map = tf.decode_raw(example['r_v2g'], tf.int32)
-        v2g_map.set_shape(length * 3)
-        v2g_map = tf.reshape(v2g_map, (length, 3), name='r_v2g')
-
-        ilist = tf.decode_raw(example['r_ilist'], tf.int32, name='r_ilist')
-        ilist.set_shape([self.nij_max])
-
-        jlist = tf.decode_raw(example['r_jlist'], tf.int32, name='r_jlist')
-        jlist.set_shape([self.nij_max])
-
-        Slist = tf.decode_raw(example['r_Slist'], tf.int32)
-        Slist.set_shape([self.nij_max * 3])
-        Slist = tf.reshape(Slist, (self.nij_max, 3), name='Slist')
-
-        return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
+        with tf.name_scope("rslices"):
+            rslices = tf.decode_raw(example['rslices'], tf.int32, name='merged')
+            rslices.set_shape([self.nij_max * 8])
+            rslices = tf.reshape(rslices, [self.nij_max, 8], name='rslices')
+            v2g_map, Slist, ilist, jlist = \
+                tf.split(rslices, [3, 3, 1, 1], axis=1, name='splits')
+            ilist = tf.squeeze(ilist, axis=1, name='ilist')
+            jlist = tf.squeeze(jlist, axis=1, name='jlist')
+            return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
 
     def _decode_aslices(self, example: Dict[str, tf.Tensor]):
         """
@@ -153,36 +165,14 @@ class RawSerializer:
         """
         if TrainableProperty.forces not in self.trainable_properties:
             return None
-
-        length = self.nijk_max * 3
-
-        v2g_map = tf.decode_raw(example['a_v2g'], tf.int32)
-        v2g_map.set_shape(length)
-        v2g_map = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_v2g')
-
-        ij = tf.decode_raw(example['a_ij'], tf.int32)
-        ij.set_shape([self.nijk_max])
-
-        ik = tf.decode_raw(example['a_ik'], tf.int32)
-        ik.set_shape([self.nijk_max])
-
-        jk = tf.decode_raw(example['a_jk'], tf.int32)
-        jk.set_shape([self.nijk_max])
-
-        ijSlist = tf.decode_raw(example['a_ijSlist'], tf.int32)
-        ijSlist.set_shape([length])
-        ijSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_ijSlist')
-
-        ikSlist = tf.decode_raw(example['a_ikSlist'], tf.int32)
-        ikSlist.set_shape([length])
-        ikSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_ikSlist')
-
-        jkSlist = tf.decode_raw(example['a_jkSlist'], tf.int32)
-        jkSlist.set_shape([length])
-        jkSlist = tf.reshape(v2g_map, (self.nijk_max, 3), name='a_jkSlist')
-
-        return AngularIndexedSlices(v2g_map, ij, ik, jk, ijSlist, ikSlist,
-                                    jkSlist)
+        with tf.name_scope("aslices"):
+            aslices = tf.decode_raw(example['aslices'], tf.int32, name='merged')
+            aslices.set_shape([self.nijk_max * 18])
+            aslices = tf.reshape(aslices, [self.nijk_max, 18], name='rslices')
+            v2g_map, ijSlist, ikSlist, jkSlist, ij, ik, jk = \
+                tf.split(aslices, [3, 3, 3, 3, 2, 2, 2], axis=1, name='splits')
+            return AngularIndexedSlices(v2g_map, ij, ik, jk, ijSlist, ikSlist,
+                                        jkSlist)
 
     def decode_example(self, example: Dict[str, tf.Tensor]):
         """
@@ -215,29 +205,20 @@ class RawSerializer:
         Decode the scalar string Tensor, which is a single serialized Example.
         See `_parse_single_example_raw` documentation for more details.
         """
-        feature_list = {
-            'positions': tf.FixedLenFeature([], tf.string),
-            'cell': tf.FixedLenFeature([], tf.string),
-            'y_true': tf.FixedLenFeature([], tf.string),
-            'r_v2g': tf.FixedLenFeature([], tf.string),
-            'r_ilist': tf.FixedLenFeature([], tf.string),
-            'r_jlist': tf.FixedLenFeature([], tf.string),
-            'r_Slist': tf.FixedLenFeature([], tf.string),
-        }
-        if TrainableProperty.forces in self.trainable_properties:
-            feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
-        if self.k_max == 3:
-            feature_list.update({
-                'a_v2g': tf.FixedLenFeature([], tf.string),
-                'a_ij': tf.FixedLenFeature([], tf.string),
-                'a_ik': tf.FixedLenFeature([], tf.string),
-                'a_jk': tf.FixedLenFeature([], tf.string),
-                'a_ijSlist': tf.FixedLenFeature([], tf.string),
-                'a_ikSlist': tf.FixedLenFeature([], tf.string),
-                'a_jkSlist': tf.FixedLenFeature([], tf.string),
-            })
-        example = tf.parse_single_example(example_proto, feature_list)
-        return self.decode_example(example)
+        with tf.name_scope("decoding"):
+            feature_list = {
+                'positions': tf.FixedLenFeature([], tf.string),
+                'cell': tf.FixedLenFeature([], tf.string),
+                'y_true': tf.FixedLenFeature([], tf.string),
+                'rslices': tf.FixedLenFeature([], tf.string),
+            }
+            if TrainableProperty.forces in self.trainable_properties:
+                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+            if self.k_max == 3:
+                feature_list.update({
+                    'aslices': tf.FixedLenFeature([], tf.string)})
+            example = tf.parse_single_example(example_proto, feature_list)
+            return self.decode_example(example)
 
 
 class Dataset:
@@ -391,8 +372,7 @@ class Dataset:
         self._nij_max = nij_max
         self._nijk_max = nijk_max
         self._trainable_properties = trainable_properties
-        self._serializer = RawSerializer(self._k_max, natoms, nij_max,
-                                         len(self._eta), nijk_max,
+        self._serializer = RawSerializer(self._k_max, natoms, nij_max, nijk_max,
                                          trainable_properties)
 
     def convert_atoms_to_example(self, atoms: Atoms) -> Example:
@@ -404,6 +384,7 @@ class Dataset:
         cell = atoms.cell
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
+        # TODO: the performance bottleneck is `neighbor_list`. How to speed up?
         rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
         return self._serializer.encode(positions, cell, y_true, f_true, rslices,
                                        aslices)
