@@ -564,7 +564,8 @@ class Dataset:
 
             # Initialize a basic dataset
             dataset = tf.data.TFRecordDataset([tfrecords_file])
-            dataset = dataset.map(self.decode_protobuf)
+            dataset = dataset.map(self.decode_protobuf,
+                                  num_parallel_calls=cpu_count() * 4)
 
             # Repeat the dataset
             dataset = dataset.repeat(count=num_epochs)
