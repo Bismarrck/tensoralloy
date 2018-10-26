@@ -433,12 +433,12 @@ class SymmetryFunction:
         Return the indexed slices for radial functions.
         """
         batch_size = len(trajectory)
-        length = self._nij_max * self._n_etas
-        v2g_map = np.zeros((batch_size, length, 3), dtype=np.int32)
-        ilist = np.zeros((batch_size, self._nij_max), dtype=np.int32)
-        jlist = np.zeros((batch_size, self._nij_max), dtype=np.int32)
-        Slist = np.zeros((batch_size, self._nij_max, 3), dtype=np.int32)
-        tlist = np.zeros(self._nij_max, dtype=np.int32)
+        nij_max = self._nij_max
+        v2g_map = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
+        ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
+        jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
+        Slist = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
+        tlist = np.zeros(nij_max, dtype=np.int32)
 
         for idx, atoms in enumerate(trajectory):
             symbols = atoms.get_chemical_symbols()
@@ -465,12 +465,9 @@ class SymmetryFunction:
                 symbolj = symbols[kjlist[i] - 1]
                 tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
             kilist = transformer.map(kilist)
-            for etai in range(self._n_etas):
-                istart = etai * self._nij_max
-                istop = istart + self._nij_max
-                v2g_map[idx, istart: istop, 0] = idx
-                v2g_map[idx, istart: istop, 1] = kilist
-                v2g_map[idx, istart: istop, 2] = self._offsets[tlist] + etai
+            v2g_map[idx, :nij_max, 0] = idx
+            v2g_map[idx, :nij_max, 1] = kilist
+            v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
         return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
 
     def get_angular_indexed_slices(self, trajectory: List[Atoms],
@@ -554,6 +551,7 @@ class SymmetryFunction:
                     cells, dtype=tf.float64, name='cells')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
+                v2g_base = tf.constant(v2g_map, dtype=tf.int32, name='v2g_base')
 
             with tf.name_scope("rij"):
                 Ri = batch_gather_positions(
@@ -571,17 +569,31 @@ class SymmetryFunction:
             with tf.name_scope("features"):
                 shape = tf.constant([batch_size, max_atoms, self._ndim],
                                     dtype=tf.int32, name='shape')
-                v = tf.exp(-tf.einsum('i,jk->jik', eta, r2c))
-                v = tf.einsum('ijk,ik->ijk', v, fc_r)
-                v = tf.reshape(v, [batch_size, -1], name='flatten')
-                return tf.scatter_nd(v2g_map, v, shape, name='g')
+                g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
+                for i in range(eta.shape[0]):
+                    with tf.name_scope("eta{}".format(i)):
+                        vi = tf.exp(-eta[i] * r2c) * fc_r
+                        delta = tf.constant(
+                            [0, 0, i], dtype=tf.int32, name='delta')
+                        v2g_i = tf.add(v2g_base, delta, name='v2g_i')
+                        g += tf.scatter_nd(v2g_i, vi, shape, 'g{}'.format(i))
+                return g
 
     def get_angular_function_graph(self, R, cells, v2g_map, ij, ik, jk, ijS,
                                    ikS, jkS, batch_size=None):
         """
         The implementation of Behler's angular symmetry function.
         """
+
+        def _extract(_params):
+            """
+            A helper function to get `beta`, `gamma` and `zeta`.
+            """
+            return [tf.constant(_params[key], dtype=tf.float64, name=key)
+                    for key in ('beta', 'gamma', 'zeta')]
+
         with tf.name_scope("G4"):
+
             with tf.name_scope("constants"):
                 one = tf.constant(1.0, dtype=tf.float64)
                 two = tf.constant(2.0, dtype=tf.float64)
@@ -602,14 +614,14 @@ class SymmetryFunction:
             with tf.name_scope("Rik"):
                 Ri_ik = batch_gather_positions(R, ik[:, 0], batch_size, 'Ri')
                 Rk_ik = batch_gather_positions(R, ik[:, 1], batch_size, 'Rk')
-                ikS = tf.convert_to_tensor(ikS, dtype=tf.float64, name='ijS')
+                ikS = tf.cast(ikS, dtype=tf.float64, name='ikS')
                 D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
                 r_ik = tf.norm(D_ik, axis=2)
 
             with tf.name_scope("Rik"):
                 Rj_jk = batch_gather_positions(R, jk[:, 0], batch_size, 'Rj')
                 Rk_jk = batch_gather_positions(R, jk[:, 1], batch_size, 'Rk')
-                jkS = tf.convert_to_tensor(jkS, dtype=tf.float64, name='ijS')
+                jkS = tf.cast(jkS, dtype=tf.float64, name='jkS')
                 D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, cells)
                 r_jk = tf.norm(D_jk, axis=2)
 
@@ -638,21 +650,15 @@ class SymmetryFunction:
                 shape = tf.constant((batch_size, max_atoms, self._ndim),
                                     dtype=tf.int32, name='shape')
                 g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-                for row, params in enumerate(self._parameter_grid):
-                    with tf.name_scope("p{}".format(row)):
-                        gamma = tf.constant(
-                            params['gamma'], dtype=tf.float64, name='gamma')
-                        zeta = tf.constant(
-                            params['zeta'], dtype=tf.float64, name='zeta')
-                        beta = tf.constant(
-                            params['beta'], dtype=tf.float64, name='beta')
+                for i, params in enumerate(self._parameter_grid):
+                    with tf.name_scope("p_{}".format(i)):
+                        beta, gamma, zeta = _extract(params)
                         c = (one + gamma * theta) ** zeta * two ** (1.0 - zeta)
-                        v = c * tf.exp(-beta * r2c) * fc_r_ijk
-                        step = tf.constant(
-                            [0, 0, row], dtype=tf.int32, name='step')
-                        v2g_row = tf.add(v2g_base, step, name='v2g_row')
-                        g = g + tf.scatter_nd(
-                            v2g_row, v, shape, 'g{}'.format(row))
+                        vi = c * tf.exp(-beta * r2c) * fc_r_ijk
+                        delta = tf.constant(
+                            [0, 0, i], dtype=tf.int32, name='delta')
+                        v2g_i = tf.add(v2g_base, delta, name='v2g_i')
+                        g += tf.scatter_nd(v2g_i, vi, shape, 'g{}'.format(i))
                 return g
 
     def get_computation_graph_from_batch(self, examples: AttributeDict,
@@ -687,5 +693,6 @@ class SymmetryFunction:
                     examples.ijS, examples.ikS, examples.jkS, batch_size)
 
         with tf.name_scope("Split"):
+            # Atom 0 is a virtual atom.
             size_splits = [1, ] + [self._max_occurs[e] for e in self._elements]
             return tf.split(g, size_splits, axis=1, name='splits')[1:]
