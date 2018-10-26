@@ -18,6 +18,8 @@ from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes, convert_k_max_to_key, convert_rc_to_key
 from misc import check_path, Defaults, AttributeDict
 from sklearn.model_selection import train_test_split
+from joblib import Parallel, delayed
+from multiprocessing import cpu_count
 from os.path import join, basename, splitext
 from enum import Enum
 from typing import List, Dict
@@ -25,6 +27,26 @@ from typing import List, Dict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def brange(start, stop, batchsize):
+    """
+    Range from `start` to `stop` given a batch size and return the start and
+    stop of each batch.
+
+    Parameters
+    ----------
+
+      start: int, the start number of a sequence.
+      stop: int, the end number of a sequence.
+      batchsize: int, the size of each batch.
+
+    """
+    istart = start
+    while istart < stop:
+        istop = min(istart + batchsize, stop)
+        yield istart, istop
+        istart = istop
 
 
 class TrainableProperty(Enum):
@@ -384,13 +406,12 @@ class Dataset:
         cell = atoms.cell
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
-        # TODO: the performance bottleneck is `neighbor_list`. How to speed up?
         rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
         return self._serializer.encode(positions, cell, y_true, f_true, rslices,
                                        aslices)
 
     def _write_subset(self, mode: ModeKeys, filename: str, indices: List[int],
-                      verbose=False):
+                      parallel=True, verbose=False):
         """
         Write a subset of this dataset to the given file.
 
@@ -402,32 +423,52 @@ class Dataset:
             The file to write.
         indices : List[int]
             A list of int as the ids of the `Atoms` to use for this file.
+        parallel : bool
+            If True, a joblib based parallel scheme shall be used.
         verbose : bool
             If True, the progress shall be logged.
 
         """
         with tf.python_io.TFRecordWriter(filename) as writer:
 
-            tic = time.time()
             num_examples = len(indices)
+
+            if parallel:
+                batch_size = cpu_count() * 50
+                n_cpus = cpu_count()
+            else:
+                batch_size = 1
+                n_cpus = 1
+
+            batch_size = min(num_examples, batch_size)
+            n_cpus = min(num_examples, n_cpus)
+
             logstr = "\rProgress: {:7d} / {:7d} | Speed = {:6.1f}"
 
             if verbose:
-                sys.stdout.write(
-                    "Start writing {} subset ...\n".format(str(mode)))
+                print("Start writing {} subset ...\n".format(str(mode)))
 
-            for i, atoms_id in enumerate(indices):
-                atoms = self._database.get_atoms(id=atoms_id)
-                example = self.convert_atoms_to_example(atoms)
-                writer.write(example.SerializeToString())
-                if verbose:
-                    speed = (i + 1) / (time.time() - tic)
-                    sys.stdout.write(logstr.format(i + 1, num_examples, speed))
+            tic = time.time()
+
+            for istart, istop in brange(0, num_examples, batch_size):
+                trajectory = []
+                for atoms_id in indices[istart: istop]:
+                    trajectory.append(self._database.get_atoms(id=atoms_id))
+                examples = Parallel(n_jobs=n_cpus)(
+                    delayed(self.convert_atoms_to_example)(atoms)
+                    for atoms in trajectory
+                )
+                for example in examples:
+                    writer.write(example.SerializeToString())
+                    if verbose:
+                        speed = istop / (time.time() - tic)
+                        sys.stdout.write(
+                            logstr.format(istop, num_examples, speed))
 
             if verbose:
-                sys.stdout.write("Done.\n")
+                print("Done.\n")
 
-    def to_records(self, savedir, test_size=0.2, verbose=False):
+    def to_records(self, savedir, test_size=0.2, parallel=True, verbose=False):
         """
         Split the dataset into a training set and a testing set and write these
         subsets to tfrecords files.
@@ -439,6 +480,8 @@ class Dataset:
         test_size : float or int
             The proportion (float) or size (int) of the dataset to include in
             the test split.
+        parallel : bool
+            If True, a joblib based parallel scheme shall be used.
         verbose : bool
             If True, the progress shall be logged.
 
@@ -451,6 +494,7 @@ class Dataset:
             check_path(join(savedir, '{}-test-{}.tfrecords'.format(
                 self._name, len(test)))),
             test,
+            parallel=parallel,
             verbose=verbose,
         )
         self._write_subset(
@@ -458,6 +502,7 @@ class Dataset:
             check_path(join(savedir, '{}-train-{}.tfrecords'.format(
                 self._name, len(train)))),
             train,
+            parallel=parallel,
             verbose=verbose,
         )
 
