@@ -480,9 +480,9 @@ class SymmetryFunction:
 
         batch_size = len(trajectory)
         v2g_map = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
-        ij = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
-        ik = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
-        jk = np.zeros((batch_size, 2, self._nijk_max), dtype=np.int32)
+        ij = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
+        ik = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
+        jk = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
         ijS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
         ikS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
         jkS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
@@ -514,9 +514,9 @@ class SymmetryFunction:
                         symbolk = symbols[transformer.map(atomk, True, True)]
                         suffix = ''.join(sorted([symbolj, symbolk]))
                         term = '{}{}'.format(prefix, suffix)
-                        ij[idx, :, count] = atomi, atomj
-                        ik[idx, :, count] = atomi, atomk
-                        jk[idx, :, count] = atomj, atomk
+                        ij[idx, count] = atomi, atomj
+                        ik[idx, count] = atomi, atomk
+                        jk[idx, count] = atomj, atomk
                         ijS[idx, count] = iSlist[j]
                         ikS[idx, count] = iSlist[k]
                         jkS[idx, count] = iSlist[k] - iSlist[j]
@@ -605,22 +605,22 @@ class SymmetryFunction:
                 max_atoms = R.shape[1]
 
             with tf.name_scope("Rij"):
-                Ri_ij = batch_gather_positions(R, ij[:, 0], batch_size, 'Ri')
-                Rj_ij = batch_gather_positions(R, ij[:, 1], batch_size, 'Rj')
+                Ri_ij = batch_gather_positions(R, ij[:, :, 0], batch_size, 'Ri')
+                Rj_ij = batch_gather_positions(R, ij[:, :, 1], batch_size, 'Rj')
                 ijS = tf.cast(ijS, dtype=tf.float64, name='ijS')
                 D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, cells)
                 r_ij = tf.norm(D_ij, axis=2)
 
             with tf.name_scope("Rik"):
-                Ri_ik = batch_gather_positions(R, ik[:, 0], batch_size, 'Ri')
-                Rk_ik = batch_gather_positions(R, ik[:, 1], batch_size, 'Rk')
+                Ri_ik = batch_gather_positions(R, ik[:, :, 0], batch_size, 'Ri')
+                Rk_ik = batch_gather_positions(R, ik[:, :, 1], batch_size, 'Rk')
                 ikS = tf.cast(ikS, dtype=tf.float64, name='ikS')
                 D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
                 r_ik = tf.norm(D_ik, axis=2)
 
             with tf.name_scope("Rik"):
-                Rj_jk = batch_gather_positions(R, jk[:, 0], batch_size, 'Rj')
-                Rk_jk = batch_gather_positions(R, jk[:, 1], batch_size, 'Rk')
+                Rj_jk = batch_gather_positions(R, jk[:, :, 0], batch_size, 'Rj')
+                Rk_jk = batch_gather_positions(R, jk[:, :, 1], batch_size, 'Rk')
                 jkS = tf.cast(jkS, dtype=tf.float64, name='jkS')
                 D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, cells)
                 r_jk = tf.norm(D_jk, axis=2)
