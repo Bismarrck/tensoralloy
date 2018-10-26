@@ -9,7 +9,8 @@ import time
 from os.path import join
 from tensorflow.contrib.layers import xavier_initializer
 from dataset import Dataset
-from misc import Defaults, check_path
+from misc import Defaults, check_path, AttributeDict
+from multiprocessing import cpu_count
 from ase.db import connect
 
 __author__ = 'Xin Chen'
@@ -20,7 +21,7 @@ dataset = Dataset(connect('datasets/qm7.db'), name='qm7', k_max=2)
 if not dataset.load_tfrecords('datasets/qm7'):
     dataset.to_records('datasets/qm7', test_size=1165, verbose=True)
 
-batch_size = 60
+batch_size = 300
 hidden_sizes = [64, 32]
 learning_rate = 0.001
 graph = tf.Graph()
@@ -40,7 +41,7 @@ with graph.as_default():
         seed=Defaults.seed, dtype=tf.float64)
     bias_initializer = tf.zeros_initializer(dtype=tf.float64)
 
-    with tf.name_scope("ANN"):
+    with tf.variable_scope("ANN"):
         outputs = []
         for i, element in enumerate(dataset.descriptor.elements):
             with tf.variable_scope(element):
@@ -82,22 +83,44 @@ with graph.as_default():
 
     with tf.name_scope("Optimization"):
         global_step = tf.train.get_or_create_global_step(graph=graph)
-        train_op = tf.train.AdamOptimizer(
+        minimize_op = tf.train.AdamOptimizer(
             learning_rate).minimize(loss, global_step)
+
+    with tf.name_scope("Average"):
+        variable_averages = tf.train.ExponentialMovingAverage(
+            Defaults.variable_moving_average_decay, global_step)
+        variables_averages_op = variable_averages.apply(
+            tf.trainable_variables())
+
+    train_op = tf.group(minimize_op, variables_averages_op)
+
+    with tf.name_scope("Summary"):
+        summary = []
+        for var in tf.trainable_variables():
+            summary.append(tf.summary.histogram(var.op.name, var))
+        summary_op = tf.summary.merge(summary)
 
     train_dir = check_path('datasets/qm7/train')
     saver = tf.train.Saver()
 
-    with tf.Session() as sess:
+    with tf.Session(
+            config=tf.ConfigProto(device_count={'cpu': cpu_count()})) as sess:
 
         tf.global_variables_initializer().run()
+        summary_writer = tf.summary.FileWriter(train_dir, sess.graph)
 
         tic = time.time()
-        for step in range(10000):
-            _, step_loss, step_mae = sess.run([train_op, loss, mae])
+        for _ in range(1000):
+            step, step_result = sess.run([global_step,
+                                          AttributeDict(train_op=train_op,
+                                                        loss=loss,
+                                                        mae=mae,
+                                                        summary=summary_op)])
             if step and step % 100 == 0:
                 speed = (step + 1) / (time.time() - tic)
-                print('step: {:5d}, loss: {:8.5f}, mae: {:8.5f} speed: {:.1f}'.format(
-                    step, step_loss, step_mae, speed))
+                print('step: {:5d}, loss: {:8.5f}, mae: {:8.5f}, '
+                      'speed: {:.1f}'.format(step, step_result.loss,
+                                             step_result.mae, speed))
+                summary_writer.add_summary(step_result.summary, step)
             if step and step % 1000 == 0:
                 saver.save(sess, join(train_dir, dataset.name), global_step)
