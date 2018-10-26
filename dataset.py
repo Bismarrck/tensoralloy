@@ -16,7 +16,7 @@ from behler import RadialIndexedSlices, AngularIndexedSlices
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes, convert_k_max_to_key, convert_rc_to_key
-from misc import check_path, Defaults, AttributeDict
+from misc import check_path, Defaults, AttributeDict, brange
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
 from multiprocessing import cpu_count
@@ -27,26 +27,6 @@ from typing import List, Dict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def brange(start, stop, batchsize):
-    """
-    Range from `start` to `stop` given a batch size and return the start and
-    stop of each batch.
-
-    Parameters
-    ----------
-
-      start: int, the start number of a sequence.
-      stop: int, the end number of a sequence.
-      batchsize: int, the size of each batch.
-
-    """
-    istart = start
-    while istart < stop:
-        istop = min(istart + batchsize, stop)
-        yield istart, istop
-        istart = istop
 
 
 class TrainableProperty(Enum):
