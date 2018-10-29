@@ -15,7 +15,7 @@ from behler import RadialIndexedSlices, AngularIndexedSlices
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from file_io import find_neighbor_sizes, convert_k_max_to_key, convert_rc_to_key
-from misc import check_path, Defaults, AttributeDict, brange
+from misc import check_path, Defaults, AttributeDict, brange, safe_select
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
 from multiprocessing import cpu_count
@@ -250,20 +250,14 @@ class Dataset:
             A list of float as the `zeta` for angular functions.
 
         """
-        def _select(a, b):
-            """ A helper function to select `a` if it's valided. """
-            if a is None or len(a) == 0:
-                return b
-            return a
-
         self._database = database
         self._name = name
         self._k_max = k_max
         self._rc = rc
-        self._eta = _select(eta, Defaults.eta)
-        self._beta = _select(beta, Defaults.beta)
-        self._gamma = _select(gamma, Defaults.gamma)
-        self._zeta = _select(zeta, Defaults.zeta)
+        self._eta = safe_select(eta, Defaults.eta)
+        self._beta = safe_select(beta, Defaults.beta)
+        self._gamma = safe_select(gamma, Defaults.gamma)
+        self._zeta = safe_select(zeta, Defaults.zeta)
         self._files = {}
         self._file_sizes = {}
         self._read_database()
