@@ -663,10 +663,10 @@ class SymmetryFunction:
                             v2g_map_i, vi, shape, 'g{}'.format(i))
                 return g
 
-    def get_computation_graph_from_batch(self, examples: AttributeDict,
-                                         batch_size=None):
+    def get_descriptors_graph(self, examples: AttributeDict,
+                              batch_size=None):
         """
-        Build the computation graph for computing symmetry function descriptors
+        Build the tensorflow graph for computing symmetry function descriptors
         from an input batch.
 
         Parameters
@@ -678,7 +678,7 @@ class SymmetryFunction:
 
         Returns
         -------
-        splits : List[tf.Tensor]
+        splits : Dict[str, tf.Tensor]
             A list of tensors. `splits[i]` represents the descriptors of element
             type `self.elements[i]`.
 
@@ -697,4 +697,5 @@ class SymmetryFunction:
         with tf.name_scope("Split"):
             # Atom 0 is a virtual atom.
             size_splits = [1, ] + [self._max_occurs[e] for e in self._elements]
-            return tf.split(g, size_splits, axis=1, name='splits')[1:]
+            splits = tf.split(g, size_splits, axis=1, name='splits')[1:]
+            return dict(zip(self._elements, splits))
