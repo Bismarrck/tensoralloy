@@ -4,8 +4,10 @@ This module defines miscellaneous functions.
 """
 from __future__ import print_function, absolute_import
 
+import tensorflow as tf
 import numpy as np
 from unittest import SkipTest
+from functools import partial
 from os.path import dirname, isdir, join
 from os import makedirs
 
@@ -62,6 +64,9 @@ class Defaults:
     seed = RANDOM_STATE
 
     variable_moving_average_decay = 0.999
+
+    activation_fn = partial(tf.nn.leaky_relu, alpha=0.02)
+    hidden_sizes = [64, 32]
 
 
 def safe_select(a, b):
