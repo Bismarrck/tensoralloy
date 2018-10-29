@@ -545,11 +545,12 @@ class Dataset:
                     mode, batch_size=batch_size, num_epochs=num_epochs,
                     shuffle=shuffle)
             splits = self.descriptor.get_descriptors_graph(batch, batch_size)
-            inputs = AttributeDict(features=splits, positions=batch.positions)
+            features = AttributeDict(descriptors=splits,
+                                     positions=batch.positions)
             labels = AttributeDict(y=batch.y_true)
             if TrainableProperty.forces in self.trainable_properties:
                 labels.update({'f': batch.f_true})
-            return inputs, labels
+            return features, labels
 
         return _input_fn
 
