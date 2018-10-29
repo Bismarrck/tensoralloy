@@ -9,10 +9,11 @@ from ase.db import connect
 from os.path import splitext, basename
 from argparse import ArgumentParser
 from configparser import ConfigParser
-from typing import Callable, List
+from typing import Callable
 
-from dataset import Dataset
-from misc import safe_select
+from dataset import Dataset, TrainableProperty
+from nn import AtomicNN, get_activation_fn
+from misc import Defaults
 
 
 __author__ = 'Xin Chen'
@@ -24,9 +25,9 @@ def _parse_list(dtype: Callable, list_str: str):
     A helper function returning a list of `dtype` objects from a comma-seprated
     string.
     """
-    if list_str is None:
+    if list_str is None or list_str.strip() == '':
         return None
-    return [dtype(e.strip()) for e in list_str.split(',')]
+    return [dtype(e.strip()) for e in list_str.strip().split(',')]
 
 
 def get_dataset_from_config(config: ConfigParser) -> Dataset:
@@ -65,10 +66,40 @@ def get_dataset_from_config(config: ConfigParser) -> Dataset:
     return dataset
 
 
+def build_nn(dataset: Dataset, config: ConfigParser) -> AtomicNN:
+    """
+    Build an `AtomicNN` with the given config and dataset.
+    """
+    section = 'nn'
+
+    l2_weight = config.getfloat(section, 'l2_weight', fallback=0.0)
+    fn_name = config.get(section, 'activation_fn', fallback='leaky_relu')
+    activation_fn = get_activation_fn(fn_name)
+    forces = TrainableProperty.forces in dataset.trainable_properties
+
+    elements = dataset.descriptor.elements
+    hidden_sizes = {}
+    for element in elements:
+        if element in config.options(section):
+            hidden_sizes[element] = _parse_list(int,
+                                                config.get(section, element))
+        else:
+            hidden_sizes[element] = Defaults.hidden_sizes
+
+    nn = AtomicNN(elements=dataset.descriptor.elements,
+                  hidden_sizes=hidden_sizes,
+                  activation_fn=activation_fn,
+                  l2_weight=l2_weight,
+                  forces=forces)
+    return nn
+
+
 def train_and_evaluate(config: ConfigParser):
+    """
 
+    """
     dataset = get_dataset_from_config(config)
-
+    nn = build_nn(dataset, config)
 
 
 def main(cfgfile):
