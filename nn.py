@@ -13,13 +13,34 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def get_activation_fn(fn_name: str):
+    """
+    Return the corresponding activation function.
+    """
+    if fn_name.lower() == 'leaky_relu':
+        return Defaults.activation_fn
+    elif fn_name.lower() == 'relu':
+        return tf.nn.relu
+    elif fn_name.lower() == 'tanh':
+        return tf.nn.tanh
+    elif fn_name.lower() == 'sigmoid':
+        return tf.nn.sigmoid
+    elif fn_name.lower() == 'softplus':
+        return tf.nn.softplus
+    elif fn_name.lower() == 'softsign':
+        return tf.nn.softsign
+    elif fn_name.lower() == 'softmax':
+        return tf.nn.softmax
+    raise ValueError("The function '{}' cannot be recognized!".format(fn_name))
+
+
 class AtomicNN:
     """
     This class represents a general atomic neural network.
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation_fn=None, l2_loss=False, forces=False):
+                 activation_fn=None, l2_weight=0.0, forces=False):
         """
         Initialization method.
 
@@ -34,8 +55,8 @@ class AtomicNN:
             The activation function to use.
         forces : bool
             If True, atomic forces will be derived.
-        l2_loss : bool
-            If True, a L2 regularization term will be added to total loss.
+        l2_weight : float
+            The weight of the L2 regularization. If zero, L2 will be disabled.
 
         """
         self._elements = elements
@@ -43,7 +64,7 @@ class AtomicNN:
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation_fn = safe_select(activation_fn, Defaults.activation_fn)
         self._forces = forces
-        self._l2_loss = l2_loss
+        self._l2_weight = max(l2_weight, 0.0)
 
     @property
     def elements(self):
@@ -65,6 +86,13 @@ class AtomicNN:
         Return True if forces are derived.
         """
         return self._forces
+
+    @property
+    def l2_weight(self):
+        """
+        Return the weight of the L2 loss.
+        """
+        return self._l2_weight
 
     def _convert_to_dict(self, hidden_sizes):
         """
@@ -128,15 +156,9 @@ class AtomicNN:
             else:
                 return AttributeDict(y=y)
 
-    @staticmethod
-    def add_l2_penalty(weight=0.001):
+    def add_l2_penalty(self):
         """
         Build a L2 penalty term.
-
-        Parameters
-        ----------
-        weight : float or tf.Tensor
-            A float as the weight of the L2 term.
 
         Returns
         -------
@@ -153,7 +175,7 @@ class AtomicNN:
                 tf.add_to_collection('l2_losses', l2)
             l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
             weight = tf.convert_to_tensor(
-                weight, dtype=tf.float64, name='alpha')
+                self._l2_weight, dtype=tf.float64, name='weight')
             return tf.multiply(l2_loss, weight, name='l2')
 
     def get_total_loss(self, predictions, labels):
@@ -190,7 +212,7 @@ class AtomicNN:
                     f_loss = tf.sqrt(mse, name='f_rmse')
                     losses.append(f_loss)
 
-            if self._l2_loss:
+            if self._l2_weight > 0.0:
                 losses.append(self.add_l2_penalty())
 
             return tf.add_n(losses, name='loss')
