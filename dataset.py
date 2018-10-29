@@ -9,7 +9,6 @@ import numpy as np
 import sys
 import time
 import glob
-from tensorflow.contrib.learn.python import ModeKeys
 from tensorflow.train import Example, Features
 from behler import SymmetryFunction
 from behler import RadialIndexedSlices, AngularIndexedSlices
@@ -390,14 +389,14 @@ class Dataset:
         return self._serializer.encode(positions, cell, y_true, f_true, rslices,
                                        aslices)
 
-    def _write_subset(self, mode: ModeKeys, filename: str, indices: List[int],
-                      parallel=True, verbose=False):
+    def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
+                      indices: List[int], parallel=True, verbose=False):
         """
         Write a subset of this dataset to the given file.
 
         Parameters
         ----------
-        mode : ModeKeys
+        mode : tf.estimator.ModeKeys
             The purpose of this subset.
         filename : str
             The file to write.
@@ -470,7 +469,7 @@ class Dataset:
                                        random_state=Defaults.seed,
                                        test_size=test_size)
         self._write_subset(
-            ModeKeys.EVAL,
+            tf.estimator.ModeKeys.EVAL,
             check_path(join(savedir, '{}-test-{}.tfrecords'.format(
                 self._name, len(test)))),
             test,
@@ -478,7 +477,7 @@ class Dataset:
             verbose=verbose,
         )
         self._write_subset(
-            ModeKeys.TRAIN,
+            tf.estimator.ModeKeys.TRAIN,
             check_path(join(savedir, '{}-train-{}.tfrecords'.format(
                 self._name, len(train)))),
             train,
@@ -529,14 +528,33 @@ class Dataset:
         train_file, train_size = _load('train')
         success = test_file and train_file
 
-        self._files = {ModeKeys.TRAIN: train_file, ModeKeys.EVAL: test_file}
-        self._file_sizes = {
-            ModeKeys.TRAIN: train_size, ModeKeys.EVAL: test_size}
+        self._files = {tf.estimator.ModeKeys.TRAIN: train_file,
+                       tf.estimator.ModeKeys.EVAL: test_file}
+        self._file_sizes = {tf.estimator.ModeKeys.TRAIN: train_size,
+                            tf.estimator.ModeKeys.EVAL: test_size}
 
         return success
 
-    def next_batch(self, mode=ModeKeys.TRAIN, batch_size=25, num_epochs=None,
-                   shuffle=False):
+    def input_fn(self, batch_size=25, num_epochs=None, shuffle=False):
+        """
+        Return a Callable input function for `tf.estimator.Estimator`.
+        """
+        def _input_fn(mode: tf.estimator.ModeKeys):
+            with tf.name_scope("Dataset"):
+                batch = self.next_batch(
+                    mode, batch_size=batch_size, num_epochs=num_epochs,
+                    shuffle=shuffle)
+            splits = self.descriptor.get_descriptors_graph(batch, batch_size)
+            inputs = AttributeDict(features=splits, positions=batch.positions)
+            labels = AttributeDict(y=batch.y_true)
+            if TrainableProperty.forces in self.trainable_properties:
+                labels.update({'f': batch.f_true})
+            return inputs, labels
+
+        return _input_fn
+
+    def next_batch(self, mode=tf.estimator.ModeKeys.TRAIN, batch_size=25,
+                   num_epochs=None, shuffle=False):
         """
         Return batch inputs of this dataset.
 
