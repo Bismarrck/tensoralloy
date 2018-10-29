@@ -14,7 +14,7 @@ from behler import SymmetryFunction
 from misc import test_dir, Defaults, AttributeDict
 from nose import main
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
-from nose.tools import assert_less, assert_in
+from nose.tools import assert_less, assert_in, assert_true
 from os.path import join
 from collections import Counter
 
@@ -65,7 +65,7 @@ def test_qm7m():
     assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
 
     dataset.to_records(savedir, test_size=0.33)
-    dataset.load_tfrecords(savedir)
+    assert_true(dataset.load_tfrecords(savedir))
 
     # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
     next_batch = dataset.next_batch(mode=ModeKeys.EVAL, batch_size=1,
@@ -99,7 +99,7 @@ def test_ethanol():
     assert_in(TrainableProperty.forces, dataset.trainable_properties)
 
     dataset.to_records(savedir, test_size=0.5)
-    dataset.load_tfrecords(savedir)
+    assert_true(dataset.load_tfrecords(savedir))
 
     # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
     next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=5,

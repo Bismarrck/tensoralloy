@@ -441,6 +441,12 @@ class Dataset:
             if verbose:
                 print("Done.\n")
 
+    def _get_signature(self) -> str:
+        """
+        Return a str as the signature of this dataset.
+        """
+        return "k{:d}-rc{:.2f}".format(self._k_max, self._rc)
+
     def to_records(self, savedir, test_size=0.2, parallel=True, verbose=False):
         """
         Split the dataset into a training set and a testing set and write these
@@ -459,21 +465,22 @@ class Dataset:
             If True, the progress shall be logged.
 
         """
+        signature = self._get_signature()
         train, test = train_test_split(range(1, 1 + len(self)),
                                        random_state=Defaults.seed,
                                        test_size=test_size)
         self._write_subset(
             tf.estimator.ModeKeys.EVAL,
-            check_path(join(savedir, '{}-test-{}.tfrecords'.format(
-                self._name, len(test)))),
+            check_path(join(savedir, '{}-test-{}-{}.tfrecords'.format(
+                self._name, signature, len(test)))),
             test,
             parallel=parallel,
             verbose=verbose,
         )
         self._write_subset(
             tf.estimator.ModeKeys.TRAIN,
-            check_path(join(savedir, '{}-train-{}.tfrecords'.format(
-                self._name, len(train)))),
+            check_path(join(savedir, '{}-train-{}-{}.tfrecords'.format(
+                self._name, signature, len(train)))),
             train,
             parallel=parallel,
             verbose=verbose,
@@ -503,14 +510,16 @@ class Dataset:
         """
         Load converted tfrecords files for this dataset.
         """
+        signature = self._get_signature()
 
         def _get_file_size(filename):
-            return int(splitext(basename(filename))[0].split('-')[2])
+            return int(splitext(basename(filename))[0].split('-')[4])
 
         def _load(key):
             try:
                 files = list(glob.glob(
-                    '{}/{}-{}-*.tfrecords'.format(savedir, self._name, key)))
+                    '{}/{}-{}-{}-*.tfrecords'.format(
+                        savedir, self._name, key, signature)))
             except Exception:
                 return None, 0
             if len(files) >= 1:
