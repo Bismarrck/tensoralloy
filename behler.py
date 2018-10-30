@@ -13,7 +13,7 @@ from misc import Defaults, safe_select, AttributeDict
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
-from typing import List, Union
+from typing import List, Union, Dict
 from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
@@ -315,6 +315,7 @@ class SymmetryFunction:
             Defaults.n_zetas)
 
         self._rc = rc
+        self._mapping = mapping
         self._kbody_terms = kbody_terms
         self._kbody_sizes = kbody_sizes
         self._elements = elements
@@ -663,6 +664,17 @@ class SymmetryFunction:
                             v2g_map_i, vi, shape, 'g{}'.format(i))
                 return g
 
+    def get_split_sizes(self) -> (List[int], Dict):
+        """
+        Return the row-wise and column-wise split sizes.
+        """
+        row_splits = [1, ]
+        column_splits = {}
+        for i, element in enumerate(self._elements):
+            row_splits.append(self._max_occurs[element])
+            column_splits[element] = [len(self._elements), i]
+        return row_splits, column_splits
+
     def get_descriptors_graph(self, examples: AttributeDict,
                               batch_size=None):
         """
@@ -696,6 +708,14 @@ class SymmetryFunction:
 
         with tf.name_scope("Split"):
             # Atom 0 is a virtual atom.
-            size_splits = [1, ] + [self._max_occurs[e] for e in self._elements]
-            splits = tf.split(g, size_splits, axis=1, name='splits')[1:]
-            return dict(zip(self._elements, splits))
+            row_splits, column_splits = self.get_split_sizes()
+            splits = tf.split(g, row_splits, axis=1, name='row_splits')[1:]
+            blocks = []
+            # Further split the element arrays to remove redundant zeros
+            for i in range(len(splits)):
+                element = self._elements[i]
+                size_splits, idx = column_splits[element]
+                block = tf.split(splits[i], size_splits, axis=2,
+                                 name='{}_block'.format(element))[idx]
+                blocks.append(block)
+            return dict(zip(self._elements, blocks))
