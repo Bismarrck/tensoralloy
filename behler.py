@@ -217,16 +217,19 @@ class IndexTransformer:
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
+        mask = np.zeros(self._count + istart, dtype=bool)
         for i, symbol in enumerate(symbols):
             idx_old = i + istart
             idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
             index_map[idx_old] = idx_new
             delta[symbol] += 1
+            mask[idx_new] = True
         reverse_map = {v: k for k, v in index_map.items()}
         index_map[0] = 0
         reverse_map[0] = 0
-        self.index_map = index_map
-        self.reverse_map = reverse_map
+        self._mask = mask
+        self._index_map = index_map
+        self._reverse_map = reverse_map
 
     @property
     def max_occurs(self) -> Counter:
@@ -251,14 +254,21 @@ class IndexTransformer:
         """
         return sorted(self._max_occurs.elements())
 
+    @property
+    def mask(self) -> np.ndarray:
+        """
+        Return a `bool` array.
+        """
+        return self._mask
+
     def map(self, index_or_indices, reverse=False, ignore_extra=False):
         """
         Do the in-place index transformation and return the array.
         """
         if reverse:
-            index_map = self.reverse_map
+            index_map = self._reverse_map
         else:
-            index_map = self.index_map
+            index_map = self._index_map
         delta = int(ignore_extra)
         if not hasattr(index_or_indices, "__len__"):
             return index_map[index_or_indices] - delta
@@ -287,10 +297,10 @@ class IndexTransformer:
         istart = IndexTransformer._ISTART
         if reverse:
             for i in range(istart, istart + len(self._symbols)):
-                indices.append(self.index_map[i])
+                indices.append(self._index_map[i])
         else:
             for i in range(istart + self._count):
-                indices.append(self.reverse_map.get(i, 0))
+                indices.append(self._reverse_map.get(i, 0))
         params = params[:, indices]
         if rank == 2:
             params = np.squeeze(params, axis=0)

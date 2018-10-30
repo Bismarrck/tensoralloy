@@ -75,6 +75,10 @@ class IndexTransformerTest(TestCase):
         assert_equal(self.clf.map(1), 6)
         assert_equal(self.clf.map(1, ignore_extra=True), 5)
 
+    def test_mask(self):
+        assert_list_equal(self.clf.mask.tolist(),
+                          [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
+
 
 def cutoff_fxn(r, rc):
     """
