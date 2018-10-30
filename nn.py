@@ -217,7 +217,11 @@ class AtomicNN:
         with tf.name_scope("Output"):
             with tf.name_scope("Energy"):
                 y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-                y = tf.reduce_sum(y_atomic, axis=1, keepdims=False, name='y')
+                with tf.name_scope("mask"):
+                    mask = tf.split(
+                        features.mask, [1, -1], axis=1, name='split')
+                    y_mask = tf.multiply(y_atomic, mask, name='mask')
+                y = tf.reduce_sum(y_mask, axis=1, keepdims=False, name='y')
             if self._forces:
                 with tf.name_scope("Forces"):
                     f = tf.gradients(y, features.positions, name='f')[0]
@@ -347,9 +351,10 @@ class AtomicNN:
             Parameters
             ----------
             features : AttributeDict
-                A dict of input tensors with at least two keys:
+                A dict of input tensors with three keys:
                     * 'descriptors' of shape `[batch_size, N, D]`
                     * 'positions' of `[batch_size, N, 3]`.
+                    * 'mask' of shape `[batch_size, N]`.
             labels : AttributeDict
                 A dict of reference tensors.
                     * 'y' of shape `[batch_size, ]` is required.

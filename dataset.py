@@ -556,7 +556,8 @@ class Dataset:
                     shuffle=shuffle)
             splits = self.descriptor.get_descriptors_graph(batch, batch_size)
             features = AttributeDict(descriptors=splits,
-                                     positions=batch.positions)
+                                     positions=batch.positions,
+                                     mask=batch.mask)
             labels = AttributeDict(y=batch.y_true)
             if TrainableProperty.forces in self.trainable_properties:
                 labels.update({'f': batch.f_true})
