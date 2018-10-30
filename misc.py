@@ -67,6 +67,7 @@ class Defaults:
 
     activation_fn = partial(tf.nn.leaky_relu, alpha=0.02)
     hidden_sizes = [64, 32]
+    learning_rate = 0.01
 
 
 def safe_select(a, b):
