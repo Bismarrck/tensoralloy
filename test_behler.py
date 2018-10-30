@@ -679,5 +679,39 @@ def test_batch_multi_elements():
     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
 
 
+def test_splits():
+    """
+    Test splitting descriptors into blocks.
+    """
+    symbols = Pd3O2.get_chemical_symbols()
+    rc = 6.0
+    k_max = 3
+    max_occurs = Counter(symbols)
+    transformer = IndexTransformer(max_occurs, symbols)
+    positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
+    cells = np.reshape(Pd3O2.cell, (1, 3, 3))
+    ref, _, _ = symmetry_function(Pd3O2, rc, 'all')
+
+    nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
+    sf = SymmetryFunction(rc, max_occurs, k_max=k_max, nij_max=nij_max,
+                          nijk_max=nijk_max)
+    rslices, aslices = sf.get_indexed_slices([Pd3O2])
+
+    g = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
+                                     rslices.ilist, rslices.jlist,
+                                     rslices.Slist)
+    g += sf.get_angular_function_graph(positions, cells,
+                                       aslices.v2g_map, aslices.ij,
+                                       aslices.ik, aslices.jk,
+                                       aslices.ijSlist, aslices.ikSlist,
+                                       aslices.jkSlist)
+
+    inputs = sf.split_descriptors(g)
+    assert_less(
+        np.abs(inputs['O'].numpy()[0] - ref.numpy()[3:, :20]).max(), 1e-8)
+    assert_less(
+        np.abs(inputs['Pd'].numpy()[0] - ref.numpy()[:3, 20:]).max(), 1e-8)
+
+
 if __name__ == "__main__":
     nose.run()

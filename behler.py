@@ -679,6 +679,27 @@ class SymmetryFunction:
             column_splits[element] = [len(self._elements), i]
         return row_splits, column_splits
 
+    def split_descriptors(self, g) -> Dict[str, tf.Tensor]:
+        """
+        Split the descriptors into `N_element` subsets.
+        """
+        with tf.name_scope("Split"):
+            # Atom 0 is a virtual atom.
+            row_splits, column_splits = self.get_split_sizes()
+            splits = tf.split(g, row_splits, axis=1, name='row_splits')[1:]
+            if len(self._elements) > 1:
+                # Further split the element arrays to remove redundant zeros
+                blocks = []
+                for i in range(len(splits)):
+                    element = self._elements[i]
+                    size_splits, idx = column_splits[element]
+                    block = tf.split(splits[i], size_splits, axis=2,
+                                     name='{}_block'.format(element))[idx]
+                    blocks.append(block)
+            else:
+                blocks = splits
+            return dict(zip(self._elements, blocks))
+
     def get_descriptors_graph(self, examples: AttributeDict,
                               batch_size=None):
         """
@@ -700,6 +721,7 @@ class SymmetryFunction:
 
         """
         with tf.name_scope("Descriptors"):
+
             g = self.get_radial_function_graph(
                 examples.positions, examples.cell, examples.rv2g,
                 examples.ilist, examples.jlist, examples.Slist, batch_size)
@@ -710,16 +732,4 @@ class SymmetryFunction:
                     examples.ij, examples.ik, examples.jk,
                     examples.ijS, examples.ikS, examples.jkS, batch_size)
 
-        with tf.name_scope("Split"):
-            # Atom 0 is a virtual atom.
-            row_splits, column_splits = self.get_split_sizes()
-            splits = tf.split(g, row_splits, axis=1, name='row_splits')[1:]
-            blocks = []
-            # Further split the element arrays to remove redundant zeros
-            for i in range(len(splits)):
-                element = self._elements[i]
-                size_splits, idx = column_splits[element]
-                block = tf.split(splits[i], size_splits, axis=2,
-                                 name='{}_block'.format(element))[idx]
-                blocks.append(block)
-            return dict(zip(self._elements, blocks))
+            return self.split_descriptors(g)
