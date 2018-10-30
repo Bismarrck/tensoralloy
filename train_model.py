@@ -10,9 +10,10 @@ from os.path import splitext, basename
 from argparse import ArgumentParser
 from configparser import ConfigParser
 from typing import Callable
+from functools import partial
 
 from dataset import Dataset, TrainableProperty
-from nn import AtomicNN, get_activation_fn
+from nn import AtomicNN, get_activation_fn, get_optimizer, get_learning_rate
 from misc import Defaults
 
 
@@ -94,20 +95,73 @@ def build_nn(dataset: Dataset, config: ConfigParser) -> AtomicNN:
     return nn
 
 
+def get_model_fn(nn: AtomicNN, config: ConfigParser) -> Callable:
+    """
+    Construct an optimizer initializer function and return the model function.
+    """
+    section = 'optimizer'
+
+    method = config.get(section, 'optimizer', fallback='adam')
+    learning_rate = config.getfloat(section, 'learning_rate',
+                                    fallback=Defaults.learning_rate)
+    decay_function = config.get(section, 'decay_function', fallback=None)
+    if decay_function is None or decay_function == '':
+        learning_rate = get_learning_rate(None, learning_rate)
+        optimizer_initializer = lambda _: get_optimizer(
+            learning_rate, method=method)
+
+    else:
+        decay_rate = config.getfloat(section, 'decay_rate', fallback=None)
+        decay_steps = config.getint(section, 'decay_steps', fallback=None)
+        staircase = config.getboolean(section, 'staircase', fallback=False)
+        learning_rate_fn = partial(get_learning_rate,
+                                   learning_rate=learning_rate,
+                                   decay_function=decay_function,
+                                   decay_steps=decay_steps,
+                                   decay_rate=decay_rate,
+                                   staircase=staircase)
+        optimizer_initializer = lambda global_step: get_optimizer(
+            learning_rate_fn(global_step), method=method)
+
+    return nn.model_fn(optimizer_initializer=optimizer_initializer)
+
+
 def train_and_evaluate(config: ConfigParser):
     """
+    Train and evaluate with the given configuration.
+
+    This method is built upon `tr.estimator.train_and_evalutate`.
 
     """
     dataset = get_dataset_from_config(config)
     nn = build_nn(dataset, config)
+    model_fn = get_model_fn(nn, config)
+
+    section = 'train'
+    model_dir = config.get(section, 'model_dir')
+    batch_size = config.getint(section, 'batch_size', fallback=50)
+    train_steps = config.getint(section, 'train_steps', fallback=10000)
+    eval_steps = config.getint(section, 'eval_steps', fallback=1000)
+
+    estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir)
+
+    train_spec = tf.estimator.TrainSpec(
+        input_fn=dataset.input_fn(batch_size=batch_size, shuffle=True),
+        max_steps=train_steps)
+
+    eval_spec = tf.estimator.EvalSpec(
+        input_fn=dataset.input_fn(batch_size=batch_size, shuffle=False),
+        steps=eval_steps,
+    )
+    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
 
-def main(cfgfile):
+def main(filename):
     """
     The main function.
     """
     config = ConfigParser()
-    config.read(cfgfile)
+    config.read(filename)
     train_and_evaluate(config)
 
 
