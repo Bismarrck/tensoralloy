@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -287,14 +287,16 @@ class AtomicNN:
             return tf.add_n(losses, name='loss')
 
     @staticmethod
-    def get_train_op(total_loss, optimizer: tf.train.Optimizer = None):
+    def get_train_op(total_loss, optimizer_initializer: Callable = None):
         """
         Return the Op for a training step.
         """
         with tf.name_scope("Optimize"):
             global_step = tf.train.get_or_create_global_step()
-            if optimizer is None:
+            if optimizer_initializer is None:
                 optimizer = get_optimizer(Defaults.learning_rate)
+            else:
+                optimizer = optimizer_initializer(global_step)
             minimize_op = optimizer.minimize(total_loss, global_step)
 
         with tf.name_scope("Average"):
@@ -324,9 +326,17 @@ class AtomicNN:
             })
         return metrics
 
-    def model_fn(self,  optimizer: tf.train.Optimizer):
+    def model_fn(self,  optimizer_initializer: Callable[[tf.Tensor],
+                                                        tf.train.Optimizer]):
         """
         Initialize a model function for `tf.estimator.Estimator`.
+
+        Parameters
+        ----------
+        optimizer_initializer : Callable
+            A `Callable` with prototype `optimizer_initializer(global_step)` and
+            returns a `tf.train.Optimizer`.
+
         """
 
         def _model_fn(features: AttributeDict, labels: AttributeDict,
@@ -364,7 +374,8 @@ class AtomicNN:
                                                   predictions=predictions)
 
             total_loss = self.get_total_loss(predictions, labels)
-            train_op = self.get_train_op(total_loss, optimizer=optimizer)
+            train_op = self.get_train_op(
+                total_loss, optimizer_initializer=optimizer_initializer)
 
             if mode == tf.estimator.ModeKeys.TRAIN:
                 return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
