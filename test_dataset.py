@@ -76,7 +76,7 @@ def test_qm7m():
         result = sess.run(next_batch)
         eps = 1e-8
 
-        assert_equal(len(result.keys()), 7)
+        assert_equal(len(result.keys()), 8)
         assert_less(np.abs(result.positions[0] - ref.positions[0]).max(), eps)
         assert_less(np.abs(result.cell[0] - ref.clist[0]).max(), eps)
         assert_less(np.abs(result.rv2g[0] - ref.rslices.v2g_map[0]).max(), eps)

@@ -99,9 +99,9 @@ class RawSerializer:
         ), axis=2)
         return _bytes_feature(merged.tostring())
 
-    def encode(self, positions: np.ndarray, cell: np.ndarray, y_true: float,
-               f_true: np.ndarray, rslices: RadialIndexedSlices,
-               aslices: AngularIndexedSlices):
+    def encode(self, positions: np.ndarray, cell: np.ndarray,
+               y_true: float, f_true: np.ndarray, mask: np.ndarray,
+               rslices: RadialIndexedSlices, aslices: AngularIndexedSlices):
         """
         Encode the data and return a `tf.train.Example`.
         """
@@ -110,6 +110,7 @@ class RawSerializer:
             'cell': _bytes_feature(cell.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
             'rslices': self._merge_and_encode_rslices(rslices),
+            'mask': _bytes_feature(mask.tostring()),
         }
         if TrainableProperty.forces in self.trainable_properties:
             feature_list.update({'f_true': _bytes_feature(f_true.tostring())})
@@ -136,6 +137,9 @@ class RawSerializer:
         y_true.set_shape([1])
         y_true = tf.squeeze(y_true, name='y_true')
 
+        mask = tf.decode_raw(example['mask'], tf.float64)
+        mask.set_shape([self.natoms + 1, ])
+
         if TrainableProperty.forces in self.trainable_properties:
             f_true = tf.decode_raw(example['f_true'], tf.float64)
             f_true.set_shape([length])
@@ -143,7 +147,7 @@ class RawSerializer:
         else:
             f_true = None
 
-        return positions, cell, y_true, f_true
+        return positions, cell, y_true, f_true, mask
 
     def _decode_rslices(self, example: Dict[str, tf.Tensor]):
         """
@@ -179,13 +183,14 @@ class RawSerializer:
         """
         Decode the parsed single example.
         """
-        positions, cell, y_true, f_true = self._decode_atoms(example)
+        positions, cell, y_true, f_true, mask = self._decode_atoms(example)
         rslices = self._decode_rslices(example)
         aslices = self._decode_aslices(example)
 
         decoded = AttributeDict(positions=positions, cell=cell, y_true=y_true,
-                                rv2g=rslices.v2g_map, ilist=rslices.ilist,
-                                jlist=rslices.jlist, Slist=rslices.Slist)
+                                mask=mask, rv2g=rslices.v2g_map,
+                                ilist=rslices.ilist, jlist=rslices.jlist,
+                                Slist=rslices.Slist)
 
         if f_true is not None:
             decoded.f_true = f_true
@@ -212,6 +217,7 @@ class RawSerializer:
                 'cell': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'rslices': tf.FixedLenFeature([], tf.string),
+                'mask': tf.FixedLenFeature([], tf.string)
             }
             if TrainableProperty.forces in self.trainable_properties:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
@@ -377,11 +383,12 @@ class Dataset:
         transformer = self._symmetry_function.get_index_transformer(atoms)
         positions = transformer.gather(atoms.positions)
         cell = atoms.cell
+        mask = transformer.mask.astype(np.float64)
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
         rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
-        return self._serializer.encode(positions, cell, y_true, f_true, rslices,
-                                       aslices)
+        return self._serializer.encode(positions, cell, y_true, f_true, mask,
+                                       rslices, aslices)
 
     def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
                       indices: List[int], parallel=True, verbose=False):
