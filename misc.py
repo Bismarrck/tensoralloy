@@ -74,8 +74,14 @@ def safe_select(a, b):
     """
     A helper function to return `a` if it is neither None nor empty.
     """
-    if a is None or len(a) == 0:
+    if a is None:
         return b
+    elif hasattr(a, '__len__'):
+        if len(a) == 0:
+            return b
+    elif isinstance(a, str):
+        if a == '':
+            return b
     return a
 
 
