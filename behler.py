@@ -552,6 +552,8 @@ class SymmetryFunction:
                     cells, dtype=tf.float64, name='cells')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
+                v2g_map = tf.convert_to_tensor(
+                    v2g_map, dtype=tf.int32, name='v2g_map')
                 v2g_map.set_shape([batch_size, self._nij_max, 3])
 
             with tf.name_scope("rij"):
@@ -604,6 +606,8 @@ class SymmetryFunction:
                     cells, dtype=tf.float64, name='clist')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
+                v2g_map = tf.convert_to_tensor(
+                    v2g_map, dtype=tf.int32, name='v2g_map')
                 v2g_map.set_shape([batch_size, self._nijk_max, 3])
 
             with tf.name_scope("Rij"):
