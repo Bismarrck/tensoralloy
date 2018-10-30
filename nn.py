@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from tensorflow.contrib.layers import xavier_initializer
+from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
 from typing import List, Dict
 
@@ -32,6 +33,74 @@ def get_activation_fn(fn_name: str):
     elif fn_name.lower() == 'softmax':
         return tf.nn.softmax
     raise ValueError("The function '{}' cannot be recognized!".format(fn_name))
+
+
+def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
+                      decay_rate=0.99, decay_steps=1000, staircase=False):
+    """
+    Return a `float64` tensor as the learning rate.
+    """
+    with tf.name_scope("learning_rate"):
+        if decay_function is None:
+            learning_rate = tf.constant(
+                learning_rate, dtype=tf.float64, name="learning_rate")
+        else:
+            if decay_function == 'exponential':
+                decay_fn = tf.train.exponential_decay
+            elif decay_function == 'inverse_time':
+                decay_fn = tf.train.inverse_time_decay
+            elif decay_function == 'natural_exp':
+                decay_fn = tf.train.natural_exp_decay
+            else:
+                raise ValueError(
+                    "'{}' is not supported!".format(decay_function))
+            learning_rate = decay_fn(learning_rate,
+                                     global_step=global_step,
+                                     decay_rate=decay_rate,
+                                     decay_steps=decay_steps,
+                                     staircase=staircase,
+                                     name="learning_rate")
+        tf.summary.scalar('learning_rate_at_step', learning_rate)
+        return learning_rate
+
+
+def get_optimizer(learning_rate, method='adam', **kwargs):
+    """
+    Return a `tf.train.Optimizer`.
+
+    Parameters
+    ----------
+    learning_rate : tf.Tensor or float
+        A float tensor as the learning rate.
+    method : str
+        A str as the name of the optimizer. Supported are: 'adam', 'adadelta',
+        'rmsprop' and 'nadam'.
+    kwargs : dict
+        Additional arguments for the optimizer.
+
+    Returns
+    -------
+    optimizer : tf.train.Optimizer
+        An optimizer.
+
+    """
+    with tf.name_scope("SGD"):
+        if method.lower() == 'adam':
+            return tf.train.AdamOptimizer(
+                learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
+        elif method.lower() == 'nadam':
+            return NadamOptimizer(
+                learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
+        elif method.lower() == 'adadelta':
+            return tf.train.AdadeltaOptimizer(
+                learning_rate=learning_rate, rho=kwargs.get('rho', 0.95))
+        elif method.lower() == 'rmsprop':
+            return tf.train.RMSPropOptimizer(
+                learning_rate=learning_rate, decay=kwargs.get('decay', 0.9),
+                momentum=kwargs.get('momentum', 0.0))
+        else:
+            raise ValueError(
+                "Supported SGD optimizers: adam, nadam, adadelta, rmsprop.")
 
 
 class AtomicNN:
@@ -218,14 +287,15 @@ class AtomicNN:
             return tf.add_n(losses, name='loss')
 
     @staticmethod
-    def get_train_op(total_loss):
+    def get_train_op(total_loss, optimizer: tf.train.Optimizer = None):
         """
         Return the Op for a training step.
         """
-        with tf.name_scope("Optimization"):
+        with tf.name_scope("Optimize"):
             global_step = tf.train.get_or_create_global_step()
-            minimize_op = tf.train.AdamOptimizer(0.001).minimize(
-                total_loss, global_step)
+            if optimizer is None:
+                optimizer = get_optimizer(Defaults.learning_rate)
+            minimize_op = optimizer.minimize(total_loss, global_step)
 
         with tf.name_scope("Average"):
             variable_averages = tf.train.ExponentialMovingAverage(
@@ -254,44 +324,54 @@ class AtomicNN:
             })
         return metrics
 
-    def model_fn(self, features: AttributeDict, labels: AttributeDict,
-                 mode: tf.estimator.ModeKeys):
+    def model_fn(self,  optimizer: tf.train.Optimizer):
         """
         Initialize a model function for `tf.estimator.Estimator`.
-
-        Parameters
-        ----------
-        features : AttributeDict
-            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
-            and 'positions' of `[batch_size, N, 3]` are required.
-        labels : AttributeDict
-            A dict of reference tensors. 'y' of length `batch_size` is required.
-            If `self.forces`, 'f' of shape `[batch_size, N, 3]` are required.
-        mode : tf.estimator.ModeKeys
-            A `ModeKeys`. Specifies if this is training, evaluation or
-            prediction.
-
-        Returns
-        -------
-        spec : tf.estimator.EstimatorSpec
-            Ops and objects returned from a `model_fn` and passed to an
-            `Estimator`. `EstimatorSpec` fully defines the model to be run by an
-            `Estimator`.
-
         """
-        predictions = self.build(features)
 
-        if mode == tf.estimator.ModeKeys.PREDICT:
+        def _model_fn(features: AttributeDict, labels: AttributeDict,
+                      mode: tf.estimator.ModeKeys):
+            """
+            Initialize a model function for `tf.estimator.Estimator`.
+
+            Parameters
+            ----------
+            features : AttributeDict
+                A dict of input tensors with at least two keys:
+                    * 'descriptors' of shape `[batch_size, N, D]`
+                    * 'positions' of `[batch_size, N, 3]`.
+            labels : AttributeDict
+                A dict of reference tensors.
+                    * 'y' of shape `[batch_size, ]` is required.
+                    * 'f' of shape `[batch_size, N, 3]` is also required if
+                      `self.forces == True`.
+            mode : tf.estimator.ModeKeys
+                A `ModeKeys`. Specifies if this is training, evaluation or
+                prediction.
+
+            Returns
+            -------
+            spec : tf.estimator.EstimatorSpec
+                Ops and objects returned from a `model_fn` and passed to an
+                `Estimator`. `EstimatorSpec` fully defines the model to be run
+                by an `Estimator`.
+
+            """
+            predictions = self.build(features)
+
+            if mode == tf.estimator.ModeKeys.PREDICT:
+                return tf.estimator.EstimatorSpec(mode=mode,
+                                                  predictions=predictions)
+
+            total_loss = self.get_total_loss(predictions, labels)
+            train_op = self.get_train_op(total_loss, optimizer=optimizer)
+
+            if mode == tf.estimator.ModeKeys.TRAIN:
+                return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
+                                                  train_op=train_op)
+
+            eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
             return tf.estimator.EstimatorSpec(mode=mode,
-                                              predictions=predictions)
+                                              eval_metric_ops=eval_metrics_ops)
 
-        total_loss = self.get_total_loss(predictions, labels)
-        train_op = self.get_train_op(total_loss)
-
-        if mode == tf.estimator.ModeKeys.TRAIN:
-            return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
-                                              train_op=train_op)
-
-        eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
-        return tf.estimator.EstimatorSpec(mode=mode,
-                                          eval_metric_ops=eval_metrics_ops)
+        return _model_fn
