@@ -219,7 +219,7 @@ class AtomicNN:
                 y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
                 with tf.name_scope("mask"):
                     mask = tf.split(
-                        features.mask, [1, -1], axis=1, name='split')
+                        features.mask, [1, -1], axis=1, name='split')[1]
                     y_mask = tf.multiply(y_atomic, mask, name='mask')
                 y = tf.reduce_sum(y_mask, axis=1, keepdims=False, name='y')
             if self._forces:
