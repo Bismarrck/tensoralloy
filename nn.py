@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
-from typing import List, Dict, Callable
+from typing import List, Dict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -19,7 +19,7 @@ def get_activation_fn(fn_name: str):
     Return the corresponding activation function.
     """
     if fn_name.lower() == 'leaky_relu':
-        return Defaults.activation_fn
+        return tf.nn.leaky_relu
     elif fn_name.lower() == 'relu':
         return tf.nn.relu
     elif fn_name.lower() == 'tanh':
@@ -109,7 +109,7 @@ class AtomicNN:
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation_fn=None, l2_weight=0.0, forces=False):
+                 activation=None, l2_weight=0.0, forces=False):
         """
         Initialization method.
 
@@ -120,8 +120,8 @@ class AtomicNN:
         hidden_sizes : List[int] or Dict[str, List[int]]
             A list of int or a dict of (str, list of int) as the sizes of the
             hidden layers.
-        activation_fn : Callable
-            The activation function to use.
+        activation : str
+            The name of the activation function to use.
         forces : bool
             If True, atomic forces will be derived.
         l2_weight : float
@@ -131,7 +131,7 @@ class AtomicNN:
         self._elements = elements
         self._hidden_sizes = self._convert_to_dict(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
-        self._activation_fn = safe_select(activation_fn, Defaults.activation_fn)
+        self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
         self._l2_weight = max(l2_weight, 0.0)
 
@@ -190,6 +190,7 @@ class AtomicNN:
         kernel_initializer = xavier_initializer(
             seed=Defaults.seed, dtype=tf.float64)
         bias_initializer = tf.zeros_initializer(dtype=tf.float64)
+        activation_fn = get_activation_fn(self._activation)
 
         with tf.variable_scope("ANN"):
             outputs = []
@@ -202,14 +203,16 @@ class AtomicNN:
                             x = tf.layers.conv1d(
                                 inputs=x, filters=hidden_sizes[j],
                                 kernel_size=1, strides=1,
-                                activation=self._activation_fn,
+                                activation=activation_fn,
                                 use_bias=True,
+                                reuse=tf.AUTO_REUSE,
                                 kernel_initializer=kernel_initializer,
                                 bias_initializer=bias_initializer,
                                 name='1x1Conv{}'.format(i + 1))
                     yi = tf.layers.conv1d(inputs=x, filters=1, kernel_size=1,
                                           strides=1, use_bias=False,
                                           kernel_initializer=kernel_initializer,
+                                          reuse=tf.AUTO_REUSE,
                                           name='Output')
                     yi = tf.squeeze(yi, axis=2, name='ae')
                     outputs.append(yi)
@@ -291,16 +294,21 @@ class AtomicNN:
             return tf.add_n(losses, name='loss')
 
     @staticmethod
-    def get_train_op(total_loss, optimizer_initializer: Callable = None):
+    def get_train_op(total_loss, hparams: AttributeDict):
         """
         Return the Op for a training step.
         """
         with tf.name_scope("Optimize"):
             global_step = tf.train.get_or_create_global_step()
-            if optimizer_initializer is None:
-                optimizer = get_optimizer(Defaults.learning_rate)
-            else:
-                optimizer = optimizer_initializer(global_step)
+            learning_rate = get_learning_rate(
+                global_step,
+                learning_rate=hparams.learning_rate,
+                decay_function=hparams.decay_function,
+                decay_rate=hparams.decay_rate,
+                decay_steps=hparams.decay_steps,
+                staircase=hparams.staircase
+            )
+            optimizer = get_optimizer(learning_rate, hparams.method)
             minimize_op = optimizer.minimize(total_loss, global_step)
 
         with tf.name_scope("Average"):
@@ -330,64 +338,50 @@ class AtomicNN:
             })
         return metrics
 
-    def model_fn(self,  optimizer_initializer: Callable[[tf.Tensor],
-                                                        tf.train.Optimizer]):
+    def model_fn(self, features: AttributeDict, labels: AttributeDict,
+                 mode: tf.estimator.ModeKeys, params: AttributeDict):
         """
         Initialize a model function for `tf.estimator.Estimator`.
 
         Parameters
         ----------
-        optimizer_initializer : Callable
-            A `Callable` with prototype `optimizer_initializer(global_step)` and
-            returns a `tf.train.Optimizer`.
+        features : AttributeDict
+            A dict of input tensors with three keys:
+                * 'descriptors' of shape `[batch_size, N, D]`
+                * 'positions' of `[batch_size, N, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+        labels : AttributeDict
+            A dict of reference tensors.
+                * 'y' of shape `[batch_size, ]` is required.
+                * 'f' of shape `[batch_size, N, 3]` is also required if
+                  `self.forces == True`.
+        mode : tf.estimator.ModeKeys
+            A `ModeKeys`. Specifies if this is training, evaluation or
+            prediction.
+        params : AttributeDict
+            Hyperparameters for building models.
+
+        Returns
+        -------
+        spec : tf.estimator.EstimatorSpec
+            Ops and objects returned from a `model_fn` and passed to an
+            `Estimator`. `EstimatorSpec` fully defines the model to be run
+            by an `Estimator`.
 
         """
+        predictions = self.build(features)
 
-        def _model_fn(features: AttributeDict, labels: AttributeDict,
-                      mode: tf.estimator.ModeKeys):
-            """
-            Initialize a model function for `tf.estimator.Estimator`.
-
-            Parameters
-            ----------
-            features : AttributeDict
-                A dict of input tensors with three keys:
-                    * 'descriptors' of shape `[batch_size, N, D]`
-                    * 'positions' of `[batch_size, N, 3]`.
-                    * 'mask' of shape `[batch_size, N]`.
-            labels : AttributeDict
-                A dict of reference tensors.
-                    * 'y' of shape `[batch_size, ]` is required.
-                    * 'f' of shape `[batch_size, N, 3]` is also required if
-                      `self.forces == True`.
-            mode : tf.estimator.ModeKeys
-                A `ModeKeys`. Specifies if this is training, evaluation or
-                prediction.
-
-            Returns
-            -------
-            spec : tf.estimator.EstimatorSpec
-                Ops and objects returned from a `model_fn` and passed to an
-                `Estimator`. `EstimatorSpec` fully defines the model to be run
-                by an `Estimator`.
-
-            """
-            predictions = self.build(features)
-
-            if mode == tf.estimator.ModeKeys.PREDICT:
-                return tf.estimator.EstimatorSpec(mode=mode,
-                                                  predictions=predictions)
-
-            total_loss = self.get_total_loss(predictions, labels)
-            train_op = self.get_train_op(
-                total_loss, optimizer_initializer=optimizer_initializer)
-
-            if mode == tf.estimator.ModeKeys.TRAIN:
-                return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
-                                                  train_op=train_op)
-
-            eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
+        if mode == tf.estimator.ModeKeys.PREDICT:
             return tf.estimator.EstimatorSpec(mode=mode,
-                                              eval_metric_ops=eval_metrics_ops)
+                                              predictions=predictions)
 
-        return _model_fn
+        total_loss = self.get_total_loss(predictions, labels)
+        train_op = self.get_train_op(total_loss, hparams=params)
+
+        if mode == tf.estimator.ModeKeys.TRAIN:
+            return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
+                                              train_op=train_op)
+
+        eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
+        return tf.estimator.EstimatorSpec(mode=mode,
+                                          eval_metric_ops=eval_metrics_ops)

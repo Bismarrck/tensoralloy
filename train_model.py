@@ -10,11 +10,10 @@ from os.path import splitext, basename
 from argparse import ArgumentParser
 from configparser import ConfigParser
 from typing import Callable
-from functools import partial
 
 from dataset import Dataset, TrainableProperty
-from nn import AtomicNN, get_activation_fn, get_optimizer, get_learning_rate
-from misc import Defaults
+from nn import AtomicNN
+from misc import Defaults, AttributeDict
 
 
 __author__ = 'Xin Chen'
@@ -74,8 +73,7 @@ def build_nn(dataset: Dataset, config: ConfigParser) -> AtomicNN:
     section = 'nn'
 
     l2_weight = config.getfloat(section, 'l2_weight', fallback=0.0)
-    fn_name = config.get(section, 'activation_fn', fallback='leaky_relu')
-    activation_fn = get_activation_fn(fn_name)
+    activation = config.get(section, 'activation', fallback='leaky_relu')
     forces = TrainableProperty.forces in dataset.trainable_properties
 
     elements = dataset.descriptor.elements
@@ -89,15 +87,15 @@ def build_nn(dataset: Dataset, config: ConfigParser) -> AtomicNN:
 
     nn = AtomicNN(elements=dataset.descriptor.elements,
                   hidden_sizes=hidden_sizes,
-                  activation_fn=activation_fn,
+                  activation=activation,
                   l2_weight=l2_weight,
                   forces=forces)
     return nn
 
 
-def get_model_fn(nn: AtomicNN, config: ConfigParser) -> Callable:
+def get_model_hyperparams(config: ConfigParser) -> AttributeDict:
     """
-    Construct an optimizer initializer function and return the model function.
+    Parse the hyper parameters.
     """
     section = 'optimizer'
 
@@ -105,25 +103,18 @@ def get_model_fn(nn: AtomicNN, config: ConfigParser) -> Callable:
     learning_rate = config.getfloat(section, 'learning_rate',
                                     fallback=Defaults.learning_rate)
     decay_function = config.get(section, 'decay_function', fallback=None)
-    if decay_function is None or decay_function == '':
-        learning_rate = get_learning_rate(None, learning_rate)
-        optimizer_initializer = lambda _: get_optimizer(
-            learning_rate, method=method)
+    decay_rate = config.getfloat(section, 'decay_rate', fallback=None)
+    decay_steps = config.getint(section, 'decay_steps', fallback=None)
+    staircase = config.getboolean(section, 'staircase', fallback=False)
 
-    else:
-        decay_rate = config.getfloat(section, 'decay_rate', fallback=None)
-        decay_steps = config.getint(section, 'decay_steps', fallback=None)
-        staircase = config.getboolean(section, 'staircase', fallback=False)
-        learning_rate_fn = partial(get_learning_rate,
-                                   learning_rate=learning_rate,
-                                   decay_function=decay_function,
-                                   decay_steps=decay_steps,
-                                   decay_rate=decay_rate,
-                                   staircase=staircase)
-        optimizer_initializer = lambda global_step: get_optimizer(
-            learning_rate_fn(global_step), method=method)
+    hparams = AttributeDict(method=method,
+                            learning_rate=learning_rate,
+                            decay_function=decay_function,
+                            decay_steps=decay_steps,
+                            decay_rate=decay_rate,
+                            staircase=staircase)
 
-    return nn.model_fn(optimizer_initializer=optimizer_initializer)
+    return hparams
 
 
 def train_and_evaluate(config: ConfigParser):
@@ -134,26 +125,31 @@ def train_and_evaluate(config: ConfigParser):
 
     """
     dataset = get_dataset_from_config(config)
-    nn = build_nn(dataset, config)
-    model_fn = get_model_fn(nn, config)
+    graph = tf.Graph()
 
-    section = 'train'
-    model_dir = config.get(section, 'model_dir')
-    batch_size = config.getint(section, 'batch_size', fallback=50)
-    train_steps = config.getint(section, 'train_steps', fallback=10000)
-    eval_steps = config.getint(section, 'eval_steps', fallback=1000)
+    with graph.as_default():
 
-    estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=model_dir)
+        nn = build_nn(dataset, config)
+        hparams = get_model_hyperparams(config)
 
-    train_spec = tf.estimator.TrainSpec(
-        input_fn=dataset.input_fn(batch_size=batch_size, shuffle=True),
-        max_steps=train_steps)
+        section = 'train'
+        model_dir = config.get(section, 'model_dir')
+        batch_size = config.getint(section, 'batch_size', fallback=50)
+        train_steps = config.getint(section, 'train_steps', fallback=10000)
+        eval_steps = config.getint(section, 'eval_steps', fallback=1000)
 
-    eval_spec = tf.estimator.EvalSpec(
-        input_fn=dataset.input_fn(batch_size=batch_size, shuffle=False),
-        steps=eval_steps,
-    )
-    tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+        estimator = tf.estimator.Estimator(
+            model_fn=nn.model_fn, model_dir=model_dir, params=hparams)
+
+        train_spec = tf.estimator.TrainSpec(
+            input_fn=dataset.input_fn(batch_size=batch_size, shuffle=True),
+            max_steps=train_steps)
+
+        eval_spec = tf.estimator.EvalSpec(
+            input_fn=dataset.input_fn(batch_size=batch_size, shuffle=False),
+            steps=eval_steps,
+        )
+        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
 
 def main(filename):
