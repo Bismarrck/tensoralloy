@@ -48,6 +48,7 @@ class Defaults:
     A dataclass storing default parameters.
     """
     rc = 6.0
+    k_max = 2
 
     eta = np.array([0.05, 4.0, 20.0, 80.0])
     beta = np.array([0.005, ])
