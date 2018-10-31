@@ -9,7 +9,7 @@ import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 from utils import cutoff, batch_gather_positions
-from misc import Defaults, safe_select, AttributeDict
+from misc import Defaults, AttributeDict
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
@@ -313,16 +313,16 @@ class SymmetryFunction:
     neural network model.
     """
 
-    def __init__(self, rc, max_occurs: Counter, nij_max, nijk_max, eta=None,
-                 beta=None, gamma=None, zeta=None, k_max=3):
+    def __init__(self, rc, max_occurs: Counter, nij_max, nijk_max,
+                 eta=Defaults.eta, beta=Defaults.beta, gamma=Defaults.gamma,
+                 zeta=Defaults.zeta, k_max=3):
         """
         Initialization method.
         """
         elements = sorted(max_occurs.keys())
         kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
-        ndim, kbody_sizes = compute_dimension(
-            kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
-            Defaults.n_zetas)
+        ndim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
+                                              len(gamma), len(zeta))
 
         self._rc = rc
         self._mapping = mapping
@@ -332,14 +332,13 @@ class SymmetryFunction:
         self._ndim = ndim
         self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
-        self._eta = safe_select(eta, Defaults.eta)
-        self._gamma = safe_select(gamma, Defaults.gamma)
-        self._beta = safe_select(beta, Defaults.beta)
-        self._zeta = safe_select(zeta, Defaults.zeta)
+        self._eta = eta
+        self._gamma = gamma
+        self._beta = beta
+        self._zeta = zeta
         self._parameter_grid = ParameterGrid({'beta': self._beta,
                                               'gamma': self._gamma,
                                               'zeta': self._zeta})
-        self._n_etas = len(self._eta)
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
@@ -583,7 +582,7 @@ class SymmetryFunction:
                 shape = tf.constant([batch_size, max_atoms, self._ndim],
                                     dtype=tf.int32, name='shape')
                 g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-                for i in range(self._n_etas):
+                for i in range(len(self._eta)):
                     with tf.name_scope("eta{}".format(i)):
                         vi = tf.exp(-eta[i] * r2c) * fc_r
                         delta = tf.constant(
