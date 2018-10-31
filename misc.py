@@ -4,10 +4,8 @@ This module defines miscellaneous functions.
 """
 from __future__ import print_function, absolute_import
 
-import tensorflow as tf
 import numpy as np
 from unittest import SkipTest
-from functools import partial
 from os.path import dirname, isdir, join
 from os import makedirs
 
@@ -65,7 +63,7 @@ class Defaults:
 
     variable_moving_average_decay = 0.999
 
-    activation_fn = partial(tf.nn.leaky_relu, alpha=0.02)
+    activation = 'leaky_relu'
     hidden_sizes = [64, 32]
     learning_rate = 0.01
 
