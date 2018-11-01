@@ -7,7 +7,9 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 from argparse import ArgumentParser
 from config import ConfigParser
-
+from utils import set_logging_configs
+from os.path import join
+from misc import check_path
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,22 +30,25 @@ def train_and_evaluate(config: ConfigParser):
         nn = config.nn
         hparams = config.hyper_params
 
-        section = 'train'
-        model_dir = config.get(section, 'model_dir')
-        batch_size = config.getint(section, 'batch_size', fallback=50)
-        train_steps = config.getint(section, 'train_steps', fallback=10000)
-        eval_steps = config.getint(section, 'eval_steps', fallback=1000)
+        set_logging_configs(
+            logfile=check_path(join(hparams.train.model_dir, 'logfile')))
 
         estimator = tf.estimator.Estimator(
-            model_fn=nn.model_fn, model_dir=model_dir, params=hparams)
+            model_fn=nn.model_fn,
+            model_dir=hparams.train.model_dir,
+            params=hparams)
 
         train_spec = tf.estimator.TrainSpec(
-            input_fn=dataset.input_fn(batch_size=batch_size, shuffle=True),
-            max_steps=train_steps)
+            input_fn=dataset.input_fn(
+                batch_size=hparams.train.batch_size,
+                shuffle=True),
+            max_steps=hparams.train.train_steps)
 
         eval_spec = tf.estimator.EvalSpec(
-            input_fn=dataset.input_fn(batch_size=batch_size, shuffle=False),
-            steps=eval_steps,
+            input_fn=dataset.input_fn(
+                batch_size=hparams.train.batch_size,
+                shuffle=False),
+            steps=hparams.train.eval_steps,
         )
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
