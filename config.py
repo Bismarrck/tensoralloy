@@ -159,7 +159,6 @@ class ConfigParser(configparser.ConfigParser):
         eval_dir = self[section].get('eval_dir', join(model_dir, 'eval'))
         summary_steps = self[section].getint('summary_steps', 100)
         log_steps = self[section].getint('log_steps', 100)
-        checkpoint_steps = self[section].getint('checkpoint_steps', 2000)
         max_checkpoints_to_keep = self[section].getint(
             'max_checkpoints_to_keep', 10)
 
@@ -170,7 +169,6 @@ class ConfigParser(configparser.ConfigParser):
                               eval_dir=eval_dir,
                               summary_steps=summary_steps,
                               log_steps=log_steps,
-                              checkpoint_steps=checkpoint_steps,
                               max_checkpoints_to_keep=max_checkpoints_to_keep)
 
         return AttributeDict(opt=opt, train=train)

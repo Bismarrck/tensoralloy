@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from config import ConfigParser
 from utils import set_logging_configs
 from os.path import join
-from misc import check_path
+from misc import check_path, Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -37,7 +37,9 @@ def train_and_evaluate(config: ConfigParser):
             model_fn=nn.model_fn,
             model_dir=hparams.train.model_dir,
             config=tf.estimator.RunConfig(
-                save_checkpoints_steps=hparams.train.checkpoint_steps,
+                save_checkpoints_steps=hparams.train.eval_steps,
+                tf_random_seed=Defaults.seed,
+                log_step_count_steps=None,
                 keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
                 session_config=tf.ConfigProto(allow_soft_placement=True)),
             params=hparams)
