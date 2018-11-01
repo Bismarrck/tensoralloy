@@ -39,7 +39,7 @@ def train_and_evaluate(config: ConfigParser):
             config=tf.estimator.RunConfig(
                 save_checkpoints_steps=hparams.train.eval_steps,
                 tf_random_seed=Defaults.seed,
-                log_step_count_steps=None,
+                log_step_count_steps=hparams.train.log_steps,
                 keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
                 session_config=tf.ConfigProto(allow_soft_placement=True)),
             params=hparams)
