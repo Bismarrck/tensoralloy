@@ -176,32 +176,21 @@ def set_logging_configs(logfile="logfile"):
     LOGGING_CONFIG = {
         "version": 1,
         "formatters": {
-            # For normal logs
             'file': {
                 'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
             },
-            # For the console
-            'console': {
-                'format': '[%(levelname)s] %(message)s'
-            },
         },
         "handlers": {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'level': logging.INFO,
-                'formatter': 'console',
-            },
-            # Redirect all logs to the file `logfile`.
             'file': {
                 'class': 'logging.FileHandler',
                 'level': logging.INFO,
-                'formatter': 'detailed',
+                'formatter': 'file',
                 'filename': logfile,
                 'mode': 'a',
             },
         },
         "root": {
-            'handlers': ['console', 'file'],
+            'handlers': ['file'],
             'level': logging.INFO,
         },
         "disable_existing_loggers": False
