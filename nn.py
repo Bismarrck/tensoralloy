@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
+from hooks import ExamplesPerSecondHook
 from typing import List, Dict
 
 __author__ = 'Xin Chen'
@@ -109,7 +110,7 @@ def log_tensor(tensor: tf.Tensor):
     """
     dimensions = ",".join(["{:6d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
-    print("{:<36s} : [{}]".format(tensor.op.name, dimensions))
+    tf.logging.info("{:<36s} : [{}]".format(tensor.op.name, dimensions))
 
 
 class AtomicNN:
@@ -343,13 +344,13 @@ class AtomicNN:
             global_step = tf.train.get_or_create_global_step()
             learning_rate = get_learning_rate(
                 global_step,
-                learning_rate=hparams.learning_rate,
-                decay_function=hparams.decay_function,
-                decay_rate=hparams.decay_rate,
-                decay_steps=hparams.decay_steps,
-                staircase=hparams.staircase
+                learning_rate=hparams.opt.learning_rate,
+                decay_function=hparams.opt.decay_function,
+                decay_rate=hparams.opt.decay_rate,
+                decay_steps=hparams.opt.decay_steps,
+                staircase=hparams.opt.staircase
             )
-            optimizer = get_optimizer(learning_rate, hparams.method)
+            optimizer = get_optimizer(learning_rate, hparams.opt.method)
             grads_and_vars = optimizer.compute_gradients(total_loss)
             apply_gradients_op = optimizer.apply_gradients(
                 grads_and_vars, global_step)
@@ -363,6 +364,32 @@ class AtomicNN:
                 tf.trainable_variables())
 
         return tf.group(apply_gradients_op, variables_averages_op)
+
+    @staticmethod
+    def get_training_hooks(hparams) -> List[tf.train.SessionRunHook]:
+        """
+        Return a list of `tf.train.SessionRunHook` objects for training.
+
+        Parameters
+        ----------
+        hparams : AttributeDict
+            Hyper parameters for this function.
+
+        """
+        with tf.name_scope("Hooks"):
+            with tf.name_scope("Summary"):
+                summary_saver_hook = tf.train.SummarySaverHook(
+                    save_steps=hparams.train.summary_steps,
+                    output_dir=hparams.train.model_dir,
+                    summary_op=tf.summary.merge_all(name='merge'))
+
+            with tf.name_scope("Speed"):
+                examples_per_sec_hook = ExamplesPerSecondHook(
+                    batch_size=hparams.train.batch_size,
+                    every_n_steps=hparams.train.log_steps)
+
+        hooks = [summary_saver_hook, examples_per_sec_hook]
+        return hooks
 
     def get_eval_metrics_ops(self, predictions, labels):
         """
@@ -424,8 +451,10 @@ class AtomicNN:
         train_op = self.get_train_op(total_loss, hparams=params)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
+            training_hooks = self.get_training_hooks(hparams=params)
             return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
-                                              train_op=train_op)
+                                              train_op=train_op,
+                                              training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
         return tf.estimator.EstimatorSpec(mode=mode,
