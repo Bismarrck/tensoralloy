@@ -143,10 +143,27 @@ class ConfigParser(configparser.ConfigParser):
         decay_steps = self[section].getint('decay_steps', None)
         staircase = self[section].getboolean('staircase', False)
 
-        hparams = AttributeDict(method=method,
-                                learning_rate=learning_rate,
-                                decay_function=decay_function,
-                                decay_steps=decay_steps,
-                                decay_rate=decay_rate,
-                                staircase=staircase)
-        return hparams
+        opt = AttributeDict(method=method,
+                            learning_rate=learning_rate,
+                            decay_function=decay_function,
+                            decay_steps=decay_steps,
+                            decay_rate=decay_rate,
+                            staircase=staircase)
+
+        section = 'train'
+
+        model_dir = self[section].get('model_dir')
+        batch_size = self[section].getint('batch_size', 50)
+        train_steps = self[section].getint('train_steps', 10000)
+        eval_steps = self[section].getint('eval_steps', 1000)
+        summary_steps = self[section].getint('summary_steps', 100)
+        log_steps = self[section].getint('log_steps', 100)
+
+        train = AttributeDict(model_dir=model_dir,
+                              batch_size=batch_size,
+                              train_steps=train_steps,
+                              eval_steps=eval_steps,
+                              summary_steps=summary_steps,
+                              log_steps=log_steps)
+
+        return AttributeDict(opt=opt, train=train)
