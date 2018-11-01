@@ -46,13 +46,16 @@ def train_and_evaluate(config: ConfigParser):
 
         train_spec = tf.estimator.TrainSpec(
             input_fn=dataset.input_fn(
+                mode=tf.estimator.ModeKeys.TRAIN,
                 batch_size=hparams.train.batch_size,
                 shuffle=True),
             max_steps=hparams.train.train_steps)
 
         eval_spec = tf.estimator.EvalSpec(
             input_fn=dataset.input_fn(
+                mode=tf.estimator.ModeKeys.EVAL,
                 batch_size=hparams.train.batch_size,
+                num_epochs=1,
                 shuffle=False),
             steps=hparams.train.eval_steps,
             # Explicitly set these thresholds to lower values so that every

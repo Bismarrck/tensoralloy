@@ -545,11 +545,12 @@ class Dataset:
 
         return success
 
-    def input_fn(self, batch_size=25, num_epochs=None, shuffle=False):
+    def input_fn(self, mode: tf.estimator.ModeKeys, batch_size=25,
+                 num_epochs=None, shuffle=False):
         """
         Return a Callable input function for `tf.estimator.Estimator`.
         """
-        def _input_fn(mode: tf.estimator.ModeKeys):
+        def _input_fn():
             with tf.name_scope("Dataset"):
                 batch = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
