@@ -15,6 +15,14 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+class SummaryKeys:
+    """
+    Standard names for summary collections.
+    """
+    TRAIN = 'train_summary'
+    EVAL = 'eval_summary'
+
+
 def get_activation_fn(fn_name: str):
     """
     Return the corresponding activation function.
@@ -61,7 +69,8 @@ def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
                                      decay_steps=decay_steps,
                                      staircase=staircase,
                                      name="learning_rate")
-        tf.summary.scalar('learning_rate_at_step', learning_rate)
+        tf.summary.scalar('learning_rate_at_step', learning_rate,
+                          collections=[SummaryKeys.TRAIN, ])
         return learning_rate
 
 
@@ -117,6 +126,8 @@ class AtomicNN:
     """
     This class represents a general atomic neural network.
     """
+
+    EVAL_METRICS = 'eval_metrics'
 
     def __init__(self, elements: List[str], hidden_sizes=None,
                  activation=None, l2_weight=0.0, forces=False):
@@ -269,7 +280,8 @@ class AtomicNN:
             weight = tf.convert_to_tensor(
                 self._l2_weight, dtype=tf.float64, name='weight')
             l2 = tf.multiply(l2_loss, weight, name='l2')
-            tf.summary.scalar(l2.op.name + '/summary', l2)
+            tf.summary.scalar(l2.op.name + '/summary', l2,
+                              collections=[SummaryKeys.TRAIN, ])
             return l2
 
     def get_total_loss(self, predictions, labels):
@@ -296,7 +308,8 @@ class AtomicNN:
                 mse = tf.reduce_mean(
                     tf.squared_difference(labels.y, predictions.y), name='mse')
                 y_loss = tf.sqrt(mse, name='y_rmse')
-                tf.summary.scalar(y_loss.op.name + '/summary', y_loss)
+                tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
+                                  collections=[SummaryKeys.TRAIN, ])
                 losses.append(y_loss)
 
             if self._forces:
@@ -305,7 +318,8 @@ class AtomicNN:
                         tf.squared_difference(labels.f, predictions.f),
                         name='mse')
                     f_loss = tf.sqrt(mse, name='f_rmse')
-                    tf.summary.scalar(f_loss.op.name + '/summary', f_loss)
+                    tf.summary.scalar(f_loss.op.name + '/summary', f_loss,
+                                      collections=[SummaryKeys.TRAIN, ])
                     losses.append(f_loss)
 
             if self._l2_weight > 0.0:
@@ -314,27 +328,22 @@ class AtomicNN:
             return tf.add_n(losses, name='loss')
 
     @staticmethod
-    def add_grads_summary(grads_and_vars, collection: str):
+    def add_grads_summary(grads_and_vars):
         """
         Add summary of the gradients.
         """
         list_of_ops = []
-
         for grad, var in grads_and_vars:
             if grad is not None:
                 norm = tf.norm(grad, name=var.op.name + "/norm")
-                tf.add_to_collection(collection, norm)
-                with tf.name_scope("gradients/{}/".format(collection)):
-                    list_of_ops.append(
-                        tf.summary.histogram(var.op.name + "/hist", grad))
-                with tf.name_scope("gradients/{}/".format(collection)):
-                    list_of_ops.append(
-                        tf.summary.scalar(var.op.name + "/norm", norm))
-
+                list_of_ops.append(norm)
+                with tf.name_scope("gradients/"):
+                    tf.summary.scalar(var.op.name + "/norm", norm,
+                                      collections=[SummaryKeys.TRAIN, ])
         with tf.name_scope("total_norm/"):
-            total_norm = tf.add_n(tf.get_collection(collection))
-            list_of_ops.append(tf.summary.scalar(collection, total_norm))
-        return list_of_ops
+            total_norm = tf.add_n(list_of_ops, name='sum')
+            tf.summary.scalar('total', total_norm,
+                              collections=[SummaryKeys.TRAIN, ])
 
     def get_train_op(self, total_loss, hparams: AttributeDict):
         """
@@ -355,7 +364,7 @@ class AtomicNN:
             apply_gradients_op = optimizer.apply_gradients(
                 grads_and_vars, global_step)
 
-            self.add_grads_summary(grads_and_vars, 'joint')
+            self.add_grads_summary(grads_and_vars)
 
         with tf.name_scope("Average"):
             variable_averages = tf.train.ExponentialMovingAverage(
@@ -381,7 +390,8 @@ class AtomicNN:
                 summary_saver_hook = tf.train.SummarySaverHook(
                     save_steps=hparams.train.summary_steps,
                     output_dir=hparams.train.model_dir,
-                    summary_op=tf.summary.merge_all(name='merge'))
+                    summary_op=tf.summary.merge_all(key=SummaryKeys.TRAIN,
+                                                    name='merge'))
 
             with tf.name_scope("Speed"):
                 examples_per_sec_hook = ExamplesPerSecondHook(
@@ -389,6 +399,27 @@ class AtomicNN:
                     every_n_steps=hparams.train.log_steps)
 
         hooks = [summary_saver_hook, examples_per_sec_hook]
+        return hooks
+
+    @staticmethod
+    def get_evaluation_hooks(hparams):
+        """
+        Return a list of `tf.train.SessionRunHook` objects for evaluation.
+        """
+        with tf.name_scope("Hooks"):
+            with tf.name_scope("Summary"):
+                summary_saver_hook = tf.train.SummarySaverHook(
+                    save_steps=hparams.train.eval_steps,
+                    output_dir=hparams.train.eval_dir,
+                    summary_op=tf.summary.merge_all(key=SummaryKeys.EVAL,
+                                                    name='merge'))
+            with tf.name_scope("Accuracy"):
+                logging_tensor_hook = tf.train.LoggingTensorHook(
+                    tensors=tf.get_collection(AtomicNN.EVAL_METRICS),
+                    every_n_iter=hparams.train.eval_steps,
+                    at_end=True)
+
+        hooks = [summary_saver_hook, logging_tensor_hook]
         return hooks
 
     def get_eval_metrics_ops(self, predictions, labels):
@@ -408,6 +439,12 @@ class AtomicNN:
                 'f_mae': tf.metrics.mean_absolute_error(
                     labels.f, predictions.f, name='f_mae')
             })
+
+        for _, (metric, update_op) in metrics.items():
+            tf.summary.scalar(metric.op.name + '/summary', metric,
+                              collections=[SummaryKeys.EVAL, ])
+            tf.add_to_collection(metric, AtomicNN.EVAL_METRICS)
+
         return metrics
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
@@ -441,7 +478,8 @@ class AtomicNN:
             by an `Estimator`.
 
         """
-        predictions = self.build(features)
+        predictions = self.build(features,
+                                 verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             return tf.estimator.EstimatorSpec(mode=mode,
@@ -457,5 +495,8 @@ class AtomicNN:
                                               training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
+        evaluation_hooks = self.get_evaluation_hooks(hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
-                                          eval_metric_ops=eval_metrics_ops)
+                                          loss=total_loss,
+                                          eval_metric_ops=eval_metrics_ops,
+                                          evaluation_hooks=evaluation_hooks)
