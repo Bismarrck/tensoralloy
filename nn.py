@@ -103,6 +103,15 @@ def get_optimizer(learning_rate, method='adam', **kwargs):
                 "Supported SGD optimizers: adam, nadam, adadelta, rmsprop.")
 
 
+def log_tensor(tensor: tf.Tensor):
+    """
+    Print the name and shape of the input Tensor.
+    """
+    dimensions = ",".join(["{:6d}".format(dim if dim is not None else -1)
+                           for dim in tensor.get_shape().as_list()])
+    print("{:<36s} : [{}]".format(tensor.op.name, dimensions))
+
+
 class AtomicNN:
     """
     This class represents a general atomic neural network.
@@ -171,7 +180,7 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
-    def build(self, features: AttributeDict):
+    def build(self, features: AttributeDict, verbose=True):
         """
         Build the atomic neural network.
 
@@ -180,6 +189,8 @@ class AtomicNN:
         features : AttributeDict
             A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
             and 'positions' of `[batch_size, N, 3]` are required.
+        verbose : bool
+            If True, the
 
         Returns
         -------
@@ -209,12 +220,16 @@ class AtomicNN:
                                 kernel_initializer=kernel_initializer,
                                 bias_initializer=bias_initializer,
                                 name='1x1Conv{}'.format(i + 1))
+                            if verbose:
+                                log_tensor(x)
                     yi = tf.layers.conv1d(inputs=x, filters=1, kernel_size=1,
                                           strides=1, use_bias=False,
                                           kernel_initializer=kernel_initializer,
                                           reuse=tf.AUTO_REUSE,
                                           name='Output')
-                    yi = tf.squeeze(yi, axis=2, name='ae')
+                    yi = tf.squeeze(yi, axis=2, name='y_atomic')
+                    if verbose:
+                        log_tensor(yi)
                     outputs.append(yi)
 
         with tf.name_scope("Output"):
@@ -252,7 +267,9 @@ class AtomicNN:
             l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
             weight = tf.convert_to_tensor(
                 self._l2_weight, dtype=tf.float64, name='weight')
-            return tf.multiply(l2_loss, weight, name='l2')
+            l2 = tf.multiply(l2_loss, weight, name='l2')
+            tf.summary.scalar(l2.op.name + '/summary', l2)
+            return l2
 
     def get_total_loss(self, predictions, labels):
         """
@@ -278,6 +295,7 @@ class AtomicNN:
                 mse = tf.reduce_mean(
                     tf.squared_difference(labels.y, predictions.y), name='mse')
                 y_loss = tf.sqrt(mse, name='y_rmse')
+                tf.summary.scalar(y_loss.op.name + '/summary', y_loss)
                 losses.append(y_loss)
 
             if self._forces:
@@ -286,6 +304,7 @@ class AtomicNN:
                         tf.squared_difference(labels.f, predictions.f),
                         name='mse')
                     f_loss = tf.sqrt(mse, name='f_rmse')
+                    tf.summary.scalar(f_loss.op.name + '/summary', f_loss)
                     losses.append(f_loss)
 
             if self._l2_weight > 0.0:
@@ -294,7 +313,29 @@ class AtomicNN:
             return tf.add_n(losses, name='loss')
 
     @staticmethod
-    def get_train_op(total_loss, hparams: AttributeDict):
+    def add_grads_summary(grads_and_vars, collection: str):
+        """
+        Add summary of the gradients.
+        """
+        list_of_ops = []
+
+        for grad, var in grads_and_vars:
+            if grad is not None:
+                norm = tf.norm(grad, name=var.op.name + "/norm")
+                tf.add_to_collection(collection, norm)
+                with tf.name_scope("gradients/{}/".format(collection)):
+                    list_of_ops.append(
+                        tf.summary.histogram(var.op.name + "/hist", grad))
+                with tf.name_scope("gradients/{}/".format(collection)):
+                    list_of_ops.append(
+                        tf.summary.scalar(var.op.name + "/norm", norm))
+
+        with tf.name_scope("total_norm/"):
+            total_norm = tf.add_n(tf.get_collection(collection))
+            list_of_ops.append(tf.summary.scalar(collection, total_norm))
+        return list_of_ops
+
+    def get_train_op(self, total_loss, hparams: AttributeDict):
         """
         Return the Op for a training step.
         """
@@ -309,7 +350,11 @@ class AtomicNN:
                 staircase=hparams.staircase
             )
             optimizer = get_optimizer(learning_rate, hparams.method)
-            minimize_op = optimizer.minimize(total_loss, global_step)
+            grads_and_vars = optimizer.compute_gradients(total_loss)
+            apply_gradients_op = optimizer.apply_gradients(
+                grads_and_vars, global_step)
+
+            self.add_grads_summary(grads_and_vars, 'joint')
 
         with tf.name_scope("Average"):
             variable_averages = tf.train.ExponentialMovingAverage(
@@ -317,7 +362,7 @@ class AtomicNN:
             variables_averages_op = variable_averages.apply(
                 tf.trainable_variables())
 
-        return tf.group(minimize_op, variables_averages_op)
+        return tf.group(apply_gradients_op, variables_averages_op)
 
     def get_eval_metrics_ops(self, predictions, labels):
         """
