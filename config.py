@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import configparser
 from ase.db import connect
-from os.path import splitext, basename
+from os.path import splitext, basename, join
 from typing import Callable
 
 from misc import Defaults, AttributeDict
@@ -156,14 +156,21 @@ class ConfigParser(configparser.ConfigParser):
         batch_size = self[section].getint('batch_size', 50)
         train_steps = self[section].getint('train_steps', 10000)
         eval_steps = self[section].getint('eval_steps', 1000)
+        eval_dir = self[section].get('eval_dir', join(model_dir, 'eval'))
         summary_steps = self[section].getint('summary_steps', 100)
         log_steps = self[section].getint('log_steps', 100)
+        checkpoint_steps = self[section].getint('checkpoint_steps', 2000)
+        max_checkpoints_to_keep = self[section].getint(
+            'max_checkpoints_to_keep', 10)
 
         train = AttributeDict(model_dir=model_dir,
                               batch_size=batch_size,
                               train_steps=train_steps,
                               eval_steps=eval_steps,
+                              eval_dir=eval_dir,
                               summary_steps=summary_steps,
-                              log_steps=log_steps)
+                              log_steps=log_steps,
+                              checkpoint_steps=checkpoint_steps,
+                              max_checkpoints_to_keep=max_checkpoints_to_keep)
 
         return AttributeDict(opt=opt, train=train)
