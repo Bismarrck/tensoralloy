@@ -17,6 +17,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+_UNSET = object()
+
+
 def _parse_list(dtype: Callable, x: str):
     """
     A helper function returning a list of `dtype` objects from a comma-seprated
@@ -72,6 +75,19 @@ class ConfigParser(configparser.ConfigParser):
         Return a dict of hyper parameters.
         """
         return self._hparams
+
+    def _get_conv(self, section, option, conv, *, raw=False, vars=None,
+                  fallback=_UNSET, **kwargs):
+        """
+        Always return `fallback` if provided.
+        """
+        try:
+            return self._get(section, conv, option, raw=raw, vars=vars,
+                             **kwargs)
+        except Exception as excp:
+            if fallback is _UNSET:
+                raise excp
+            return fallback
 
     def _read_dataset(self):
         """
@@ -161,6 +177,7 @@ class ConfigParser(configparser.ConfigParser):
         log_steps = self[section].getint('log_steps', 100)
         max_checkpoints_to_keep = self[section].getint(
             'max_checkpoints_to_keep', 10)
+        profile_steps = self[section].getint('profile_steps', 0)
 
         train = AttributeDict(model_dir=model_dir,
                               batch_size=batch_size,
@@ -169,6 +186,7 @@ class ConfigParser(configparser.ConfigParser):
                               eval_dir=eval_dir,
                               summary_steps=summary_steps,
                               log_steps=log_steps,
-                              max_checkpoints_to_keep=max_checkpoints_to_keep)
+                              max_checkpoints_to_keep=max_checkpoints_to_keep,
+                              profile_steps=profile_steps)
 
         return AttributeDict(opt=opt, train=train)

@@ -10,6 +10,7 @@ from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
 from hooks import ExamplesPerSecondHook
 from typing import List, Dict
+from os.path import join
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -340,7 +341,7 @@ class AtomicNN:
                 with tf.name_scope("gradients/"):
                     tf.summary.scalar(var.op.name + "/norm", norm,
                                       collections=[SummaryKeys.TRAIN, ])
-        with tf.name_scope("total_norm/"):
+        with tf.name_scope("gradients/"):
             total_norm = tf.add_n(list_of_ops, name='sum')
             tf.summary.scalar('total', total_norm,
                               collections=[SummaryKeys.TRAIN, ])
@@ -386,6 +387,7 @@ class AtomicNN:
 
         """
         with tf.name_scope("Hooks"):
+
             with tf.name_scope("Summary"):
                 summary_saver_hook = tf.train.SummarySaverHook(
                     save_steps=hparams.train.summary_steps,
@@ -398,7 +400,16 @@ class AtomicNN:
                     batch_size=hparams.train.batch_size,
                     every_n_steps=hparams.train.log_steps)
 
-        hooks = [summary_saver_hook, examples_per_sec_hook]
+            hooks = [summary_saver_hook, examples_per_sec_hook]
+
+            if hparams.train.profile_steps:
+                with tf.name_scope("Profile"):
+                    profiler_hook = tf.train.ProfilerHook(
+                        save_steps=hparams.train.profile_steps,
+                        output_dir=join(hparams.train.model_dir, 'profile'),
+                        show_memory=True)
+                hooks.append(profiler_hook)
+
         return hooks
 
     @staticmethod
@@ -407,45 +418,38 @@ class AtomicNN:
         Return a list of `tf.train.SessionRunHook` objects for evaluation.
         """
         with tf.name_scope("Hooks"):
-            with tf.name_scope("Summary"):
-                summary_saver_hook = tf.train.SummarySaverHook(
-                    save_steps=hparams.train.eval_steps,
-                    output_dir=hparams.train.eval_dir,
-                    summary_op=tf.summary.merge_all(key=SummaryKeys.EVAL,
-                                                    name='merge'))
             with tf.name_scope("Accuracy"):
                 logging_tensor_hook = tf.train.LoggingTensorHook(
                     tensors=tf.get_collection(AtomicNN.EVAL_METRICS),
                     every_n_iter=hparams.train.eval_steps,
                     at_end=True)
 
-        hooks = [summary_saver_hook, logging_tensor_hook]
+        hooks = [logging_tensor_hook, ]
         return hooks
 
     def get_eval_metrics_ops(self, predictions, labels):
         """
         Return a dict of Ops as the evaluation metrics.
         """
-        metrics = {
-            'y_rmse': tf.metrics.root_mean_squared_error(
-                labels.y, predictions.y, name='y_rmse'),
-            'y_mae': tf.metrics.mean_absolute_error(
-                labels.y, predictions.y, name='y_mae'),
-        }
-        if self._forces:
-            metrics.update({
-                'f_rmse': tf.metrics.root_mean_squared_error(
-                    labels.f, predictions.f, name='f_rmse'),
-                'f_mae': tf.metrics.mean_absolute_error(
-                    labels.f, predictions.f, name='f_mae')
-            })
+        with tf.name_scope("Metrics"):
+            metrics = {
+                'y_rmse': tf.metrics.root_mean_squared_error(
+                    labels.y, predictions.y, name='y_rmse'),
+                'y_mae': tf.metrics.mean_absolute_error(
+                    labels.y, predictions.y, name='y_mae'),
+            }
+            if self._forces:
+                metrics.update({
+                    'f_rmse': tf.metrics.root_mean_squared_error(
+                        labels.f, predictions.f, name='f_rmse'),
+                    'f_mae': tf.metrics.mean_absolute_error(
+                        labels.f, predictions.f, name='f_mae')
+                })
 
-        for _, (metric, update_op) in metrics.items():
-            tf.summary.scalar(metric.op.name + '/summary', metric,
-                              collections=[SummaryKeys.EVAL, ])
-            tf.add_to_collection(metric, AtomicNN.EVAL_METRICS)
+            for _, (metric, update_op) in metrics.items():
+                tf.add_to_collection(metric, AtomicNN.EVAL_METRICS)
 
-        return metrics
+            return metrics
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
                  mode: tf.estimator.ModeKeys, params: AttributeDict):
