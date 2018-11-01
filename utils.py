@@ -4,8 +4,10 @@ This module defines tensorflow-based functions.
 """
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
+import logging
+from logging.config import dictConfig
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import math_ops
 
@@ -165,3 +167,43 @@ def pairwise_dist(xx, yy=None, name=None):
         # return pairwise euclidead difference matrix
         zz = tf.maximum(na - tf.multiply(two, xy, name='2xy') + nb, zero)
         return tf.sqrt(zz, name=name)
+
+
+def set_logging_configs(logfile="logfile"):
+    """
+    Setup the logging module.
+    """
+    LOGGING_CONFIG = {
+        "version": 1,
+        "formatters": {
+            # For normal logs
+            'file': {
+                'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+            },
+            # For the console
+            'console': {
+                'format': '[%(levelname)s] %(message)s'
+            },
+        },
+        "handlers": {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'level': logging.INFO,
+                'formatter': 'console',
+            },
+            # Redirect all logs to the file `logfile`.
+            'file': {
+                'class': 'logging.FileHandler',
+                'level': logging.INFO,
+                'formatter': 'detailed',
+                'filename': logfile,
+                'mode': 'a',
+            },
+        },
+        "root": {
+            'handlers': ['console', 'file'],
+            'level': logging.INFO,
+        },
+        "disable_existing_loggers": False
+    }
+    dictConfig(LOGGING_CONFIG)
