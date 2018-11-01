@@ -36,6 +36,10 @@ def train_and_evaluate(config: ConfigParser):
         estimator = tf.estimator.Estimator(
             model_fn=nn.model_fn,
             model_dir=hparams.train.model_dir,
+            config=tf.estimator.RunConfig(
+                save_checkpoints_steps=hparams.train.checkpoint_steps,
+                keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
+                session_config=tf.ConfigProto(allow_soft_placement=True)),
             params=hparams)
 
         train_spec = tf.estimator.TrainSpec(
@@ -49,6 +53,10 @@ def train_and_evaluate(config: ConfigParser):
                 batch_size=hparams.train.batch_size,
                 shuffle=False),
             steps=hparams.train.eval_steps,
+            # Explicitly set these thresholds to lower values so that every
+            # checkpoint can be evaluated.
+            start_delay_secs=30,
+            throttle_secs=60,
         )
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
