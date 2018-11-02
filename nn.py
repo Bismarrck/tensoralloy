@@ -211,12 +211,11 @@ class AtomicNN:
             A dict of output tensors.
 
         """
-        kernel_initializer = xavier_initializer(
-            seed=Defaults.seed, dtype=tf.float64)
-        bias_initializer = tf.zeros_initializer(dtype=tf.float64)
-        activation_fn = get_activation_fn(self._activation)
-
         with tf.variable_scope("ANN"):
+            kernel_initializer = xavier_initializer(
+                seed=Defaults.seed, dtype=tf.float64)
+            bias_initializer = tf.zeros_initializer(dtype=tf.float64)
+            activation_fn = get_activation_fn(self._activation)
             outputs = []
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
