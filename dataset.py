@@ -483,8 +483,8 @@ class Dataset:
                         speed = istop / (time.time() - tic)
                         sys.stdout.write(
                             logstr.format(istop, num_examples, speed))
-
             if verbose:
+                print("")
                 print("Done.\n")
 
     def _get_signature(self) -> str:
