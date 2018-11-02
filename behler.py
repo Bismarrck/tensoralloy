@@ -40,9 +40,9 @@ class RadialIndexedSlices:
     v2g_map: Union[np.ndarray, tf.Tensor]
     ilist: Union[np.ndarray, tf.Tensor]
     jlist: Union[np.ndarray, tf.Tensor]
-    ij_shift: Union[np.ndarray, tf.Tensor]
+    shift: Union[np.ndarray, tf.Tensor]
 
-    __slots__ = ["v2g_map", "ilist", "jlist", "ij_shift"]
+    __slots__ = ["v2g_map", "ilist", "jlist", "shift"]
 
 
 @dataclass
@@ -479,7 +479,7 @@ class SymmetryFunction:
             v2g_map[idx, :nij_max, 1] = kilist
             v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
         return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                                   ij_shift=ij_shift)
+                                   shift=ij_shift)
 
     def get_angular_indexed_slices(self, trajectory: List[Atoms],
                                    rslices: RadialIndexedSlices):
@@ -510,7 +510,7 @@ class SymmetryFunction:
                     indices[atomi] = []
                     vectors[atomi] = []
                 indices[atomi].append(rslices.jlist[idx, i])
-                vectors[atomi].append(rslices.ij_shift[idx, i])
+                vectors[atomi].append(rslices.shift[idx, i])
             count = 0
             for atomi, nl in indices.items():
                 num = len(nl)

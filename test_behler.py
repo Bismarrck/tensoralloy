@@ -631,7 +631,7 @@ def test_batch_one_element():
     tf.enable_eager_execution()
 
     gr = sf.get_radial_function_graph(positions, rslices.v2g_map, rslices.ilist,
-                                      rslices.jlist, rslices.ij_shift)
+                                      rslices.jlist, rslices.shift)
     ga = sf.get_angular_function_graph(positions, aslices.v2g_map, aslices.ij,
                                        aslices.ik, aslices.jk, aslices.ij_shift,
                                        aslices.ik_shift, aslices.jk_shift)
@@ -663,7 +663,7 @@ def test_manybody_k():
                                          v2g_map=rslices.v2g_map,
                                          ilist=rslices.ilist,
                                          jlist=rslices.jlist,
-                                         shift=rslices.ij_shift)
+                                         shift=rslices.shift)
         if k_max == 3:
             g += sf.get_angular_function_graph(positions,
                                                v2g_map=aslices.v2g_map,
@@ -745,7 +745,7 @@ def test_batch_multi_elements():
                                       v2g_map=rslices.v2g_map,
                                       ilist=rslices.ilist,
                                       jlist=rslices.jlist,
-                                      shift=rslices.ij_shift)
+                                      shift=rslices.shift)
     ga = sf.get_angular_function_graph(positions,
                                        v2g_map=aslices.v2g_map,
                                        ij=aslices.ij,
@@ -780,7 +780,7 @@ def test_splits():
                                      v2g_map=rslices.v2g_map,
                                      ilist=rslices.ilist,
                                      jlist=rslices.jlist,
-                                     shift=rslices.ij_shift)
+                                     shift=rslices.shift)
     g += sf.get_angular_function_graph(positions,
                                        v2g_map=aslices.v2g_map,
                                        ij=aslices.ij,
