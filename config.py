@@ -52,9 +52,9 @@ class ConfigParser(configparser.ConfigParser):
             interpolation=configparser.ExtendedInterpolation())
         with open(filename) as fp:
             self._read(fp, filename)
-        self._hparams = self._read_hyperparams()
         self._dataset = self._read_dataset()
         self._nn = self._build_nn()
+        self._hparams = self._read_hyperparams()
 
     @property
     def dataset(self):
@@ -172,6 +172,15 @@ class ConfigParser(configparser.ConfigParser):
 
         model_dir = self[section].get('model_dir')
         batch_size = self[section].getint('batch_size', 50)
+
+        if self._dataset.test_size % batch_size != 0:
+            eval_batch_size = next(x for x in range(batch_size, 0, -1)
+                                   if self._dataset.test_size % x == 0)
+            print("Warning: batch_size is reduced to {:d} for eval".format(
+                eval_batch_size, self._dataset.test_size, batch_size))
+        else:
+            eval_batch_size = batch_size
+
         train_steps = self[section].getint('train_steps', 10000)
         eval_steps = self[section].getint('eval_steps', 1000)
         eval_dir = self[section].get('eval_dir', join(model_dir, 'eval'))
@@ -186,6 +195,7 @@ class ConfigParser(configparser.ConfigParser):
                               train_steps=train_steps,
                               eval_steps=eval_steps,
                               eval_dir=eval_dir,
+                              eval_batch_size=eval_batch_size,
                               summary_steps=summary_steps,
                               log_steps=log_steps,
                               max_checkpoints_to_keep=max_checkpoints_to_keep,

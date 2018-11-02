@@ -322,6 +322,20 @@ class Dataset:
         """
         return self._symmetry_function
 
+    @property
+    def train_size(self):
+        """
+        Return the size of the training dataset.
+        """
+        return self._file_sizes.get(tf.estimator.ModeKeys.TRAIN, 0)
+
+    @property
+    def test_size(self):
+        """
+        Return the size of the evaluation dataset.
+        """
+        return self._file_sizes.get(tf.estimator.ModeKeys.EVAL, 0)
+
     def __len__(self) -> int:
         """
         Return the number of examples in this dataset.
