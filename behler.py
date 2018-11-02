@@ -447,7 +447,7 @@ class SymmetryFunction:
         v2g_map = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
         ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
         jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
-        ij_shift = np.zeros((batch_size, nij_max, 3), dtype=np.float64)
+        shift = np.zeros((batch_size, nij_max, 3), dtype=np.float64)
         tlist = np.zeros(nij_max, dtype=np.int32)
 
         for idx, atoms in enumerate(trajectory):
@@ -468,7 +468,7 @@ class SymmetryFunction:
             kSlist = self._resize_to_nij_max(kSlist, False)
             ilist[idx] = transformer.map(kilist.copy())
             jlist[idx] = transformer.map(kjlist.copy())
-            ij_shift[idx] = kSlist @ atoms.cell
+            shift[idx] = kSlist @ atoms.cell
             tlist.fill(0)
             for i in range(n):
                 symboli = symbols[kilist[i] - 1]
@@ -479,7 +479,7 @@ class SymmetryFunction:
             v2g_map[idx, :nij_max, 1] = kilist
             v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
         return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                                   shift=ij_shift)
+                                   shift=shift)
 
     def get_angular_indexed_slices(self, trajectory: List[Atoms],
                                    rslices: RadialIndexedSlices):
