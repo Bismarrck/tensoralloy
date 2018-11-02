@@ -122,7 +122,8 @@ class ConfigParser(configparser.ConfigParser):
         parallel = self[section].getboolean('build_in_parallel', True)
         if not dataset.load_tfrecords(tfrecords_dir):
             dataset.to_records(
-                tfrecords_dir, test_size=test_size, parallel=parallel)
+                tfrecords_dir, test_size=test_size, parallel=parallel,
+                verbose=True)
         return dataset
 
     def _build_nn(self) -> AtomicNN:
