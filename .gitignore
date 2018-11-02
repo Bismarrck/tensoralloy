@@ -116,4 +116,6 @@ test_files/*.db
 test_files/qm7m/*.tfrecords
 test_files/ethanol/*.tfrecords
 datasets/*.xyz
-datasets/qm7/
+
+# Ignore all experiments
+experiments/*
