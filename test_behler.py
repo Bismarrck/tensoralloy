@@ -11,7 +11,6 @@ import nose
 from unittest import TestCase
 from utils import cutoff
 from behler import get_kbody_terms, compute_dimension
-from behler import RadialIndexedSlices, AngularIndexedSlices
 from behler import SymmetryFunction, IndexTransformer
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
@@ -20,9 +19,10 @@ from ase.neighborlist import neighbor_list
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
 from itertools import product
-from typing import List
+from typing import List, Union
 from collections import Counter
 from misc import Defaults
+from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -40,6 +40,74 @@ Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
 
 grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
                       'zeta': Defaults.zeta})
+
+
+@dataclass(frozen=True)
+class LegacyRadialIndexedSlices:
+    """
+    A `dataclass` contains indexed slices for radial functions.
+
+    'v2g_map' : array_like
+        A list of (atomi, etai, termi) where atomi is the index of the center
+        atom, etai is the index of the `eta` and termi is the index of the
+        corresponding 2-body term.
+    'ilist' : array_like
+        A list of first atom indices.
+    'jlist' : array_like
+        A list of second atom indices.
+    'Slist' : array_like
+        A list of (i, j) pairs where i is the index of the center atom and j is
+        the index of its neighbor atom.
+
+    Notes
+    -----
+    This is the legacy version, for testing only.
+
+    """
+    v2g_map: Union[np.ndarray, tf.Tensor]
+    ilist: Union[np.ndarray, tf.Tensor]
+    jlist: Union[np.ndarray, tf.Tensor]
+    Slist: Union[np.ndarray, tf.Tensor]
+
+    __slots__ = ["v2g_map", "ilist", "jlist", "Slist"]
+
+
+@dataclass
+class LegacyAngularIndexedSlices:
+    """
+    A `dataclass` contains indexed slices for angular functions.
+
+    'v2g_map' : array_like
+        A list of (atomi, termi) where atomi is the index of the center atom and
+        termi is the index of the corresponding 3-body term.
+    'ij' : array_like
+        A list of (i, j) as the indices for r_{i,j}.
+    'ik' : array_like
+        A list of (i, k) as the indices for r_{i,k}.
+    'jk' : array_like
+        A list of (j, k) as the indices for r_{j,k}.
+    'ijSlist' : array_like
+        The cell boundary shift vectors for all r_{i,j}.
+    'ikSlist' : array_like
+        The cell boundary shift vectors for all r_{i,k}.
+    'jkSlist' : array_like
+        The cell boundary shift vectors for all r_{j,k}.
+
+    Notes
+    -----
+    This is the legacy version, for testing only.
+
+    """
+    v2g_map: Union[np.ndarray, tf.Tensor]
+    ij: Union[np.ndarray, tf.Tensor]
+    ik: Union[np.ndarray, tf.Tensor]
+    jk: Union[np.ndarray, tf.Tensor]
+    ijSlist: Union[np.ndarray, tf.Tensor]
+    ikSlist: Union[np.ndarray, tf.Tensor]
+    jkSlist: Union[np.ndarray, tf.Tensor]
+
+    __slots__ = ["v2g_map", "ij", "ik", "jk", "ijSlist", "ikSlist", "jkSlist"]
+
 
 
 class IndexTransformerTest(TestCase):
@@ -195,8 +263,8 @@ def get_augular_fingerprints_v1(coords, r, rc, etas, gammas, zetas):
     return x / 2.0
 
 
-def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
-                         kbody_sizes: List[int]):
+def legacy_build_radial_v2g_map(atoms: Atoms, rc, n_etas,
+                                kbody_terms: List[str], kbody_sizes: List[int]):
     """
     Build the values-to-features mapping for radial symmetry functions.
 
@@ -250,11 +318,13 @@ def build_radial_v2g_map(atoms: Atoms, rc, n_etas, kbody_terms: List[str],
         istop = istart + n
         v2g_map[istart: istop, 0] = ilist
         v2g_map[istart: istop, 1] = offsets[tlist] + etai
-    return RadialIndexedSlices(v2g_map, ilist=ilist, jlist=jlist, Slist=Slist)
+    return LegacyRadialIndexedSlices(v2g_map, ilist=ilist, jlist=jlist,
+                                     Slist=Slist)
 
 
-def build_angular_v2g_map(atoms: Atoms, rmap: RadialIndexedSlices,
-                          kbody_terms: List[str], kbody_sizes: List[int]):
+def legacy_build_angular_v2g_map(atoms: Atoms, rmap: LegacyRadialIndexedSlices,
+                                 kbody_terms: List[str],
+                                 kbody_sizes: List[int]):
     """
     Build the values-to-features mapping for angular symmetry functions.
 
@@ -334,8 +404,8 @@ def build_angular_v2g_map(atoms: Atoms, rmap: RadialIndexedSlices,
                 v2g_map[row] = atomi, offsets[kbody_terms.index(term)]
                 row += 1
 
-    return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
-                                ikSlist=ikS, jkSlist=jkS)
+    return LegacyAngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
+                                      ikSlist=ikS, jkSlist=jkS)
 
 
 def radial_function(R, rc, v2g_map, cell, etas, ilist, jlist, Slist, total_dim):
@@ -443,7 +513,7 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
             return g
 
 
-def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
+def legacy_symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     """
     Compute the symmetry function descriptors for unit tests.
     """
@@ -460,9 +530,10 @@ def symmetry_function(atoms: Atoms, rc: float, name_scope: str):
     with tf.name_scope(name_scope):
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell, tf.float64, name='cell')
-        rmap = build_radial_v2g_map(atoms, rc, Defaults.n_etas, kbody_terms,
-                                    kbody_sizes)
-        amap = build_angular_v2g_map(atoms, rmap, kbody_terms, kbody_sizes)
+        rmap = legacy_build_radial_v2g_map(atoms, rc, Defaults.n_etas,
+                                           kbody_terms, kbody_sizes)
+        amap = legacy_build_angular_v2g_map(atoms, rmap, kbody_terms,
+                                            kbody_sizes)
         gr = radial_function(R, rc, rmap.v2g_map, cell, Defaults.eta,
                              rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
         ga = angular_function(R, rc, amap.v2g_map, cell, grid, amap.ij, amap.ik,
@@ -485,7 +556,7 @@ def test_monoatomic_molecule():
     za = get_augular_fingerprints_v1(coords, rr, rc, Defaults.beta,
                                      Defaults.gamma, Defaults.zeta)
     z = np.hstack((zr, za))
-    g, _, _ = symmetry_function(atoms, rc=rc, name_scope='B28')
+    g, _, _ = legacy_symmetry_function(atoms, rc=rc, name_scope='B28')
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
@@ -494,7 +565,7 @@ def test_single_structure():
     Test computing descriptors of a single multi-elements periodic structure.
     """
     amp = np.load('test_files/amp_Pd3O2.npz')['g']
-    g, _, _ = symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
+    g, _, _ = legacy_symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
     assert_less(np.abs(amp - g).max(), 1e-8)
 
 
@@ -539,7 +610,6 @@ def test_batch_one_element():
     trajectory = read('test_files/B28.xyz', index='0:2', format='xyz')
     targets = np.zeros((2, 28, 8), dtype=np.float64)
     positions = np.zeros((2, 29, 3), dtype=np.float64)
-    cells = np.zeros((2, 3, 3), dtype=np.float64)
     rc = 6.0
     nij_max = 756
     nijk_max = 9828
@@ -549,9 +619,8 @@ def test_batch_one_element():
     for i, atoms in enumerate(trajectory):
         atoms.set_cell([20.0, 20.0, 20.0])
         atoms.set_pbc([False, False, False])
-        targets[i] = symmetry_function(atoms, rc, name_scope='B28')[0]
+        targets[i] = legacy_symmetry_function(atoms, rc, name_scope='B28')[0]
         positions[i, 1:] = atoms.positions
-        cells[i] = atoms.cell
 
     max_occurs = Counter({'B': 28})
     sf = SymmetryFunction(rc, max_occurs, nij_max=nij_max, nijk_max=nijk_max,
@@ -561,13 +630,11 @@ def test_batch_one_element():
     tf.reset_default_graph()
     tf.enable_eager_execution()
 
-    gr = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
-                                      rslices.ilist, rslices.jlist,
-                                      rslices.Slist)
-    ga = sf.get_angular_function_graph(positions, cells, aslices.v2g_map,
-                                       aslices.ij, aslices.ik, aslices.jk,
-                                       aslices.ijSlist, aslices.ikSlist,
-                                       aslices.jkSlist)
+    gr = sf.get_radial_function_graph(positions, rslices.v2g_map, rslices.ilist,
+                                      rslices.jlist, rslices.ij_shift)
+    ga = sf.get_angular_function_graph(positions, aslices.v2g_map, aslices.ij,
+                                       aslices.ik, aslices.jk, aslices.ij_shift,
+                                       aslices.ik_shift, aslices.jk_shift)
     g = gr + ga
     values = g.numpy()[:, 1:, :]
     assert_less(np.abs(values - targets).max(), 1e-8)
@@ -582,8 +649,7 @@ def test_manybody_k():
     max_occurs = Counter(symbols)
     transformer = IndexTransformer(max_occurs, symbols)
     positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
-    cells = np.reshape(Pd3O2.cell, (1, 3, 3))
-    ref, ref_terms, ref_sizes = symmetry_function(Pd3O2, rc, 'all')
+    ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc, 'all')
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
     for k_max in (1, 2, 3):
@@ -593,21 +659,27 @@ def test_manybody_k():
                               nijk_max=nijk_max)
         rslices, aslices = sf.get_indexed_slices([Pd3O2])
 
-        g = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
-                                         rslices.ilist, rslices.jlist,
-                                         rslices.Slist)
+        g = sf.get_radial_function_graph(positions,
+                                         v2g_map=rslices.v2g_map,
+                                         ilist=rslices.ilist,
+                                         jlist=rslices.jlist,
+                                         ij_shift=rslices.ij_shift)
         if k_max == 3:
-            g += sf.get_angular_function_graph(positions, cells,
-                                               aslices.v2g_map, aslices.ij,
-                                               aslices.ik, aslices.jk,
-                                               aslices.ijSlist, aslices.ikSlist,
-                                               aslices.jkSlist)
+            g += sf.get_angular_function_graph(positions,
+                                               v2g_map=aslices.v2g_map,
+                                               ij=aslices.ij,
+                                               ik=aslices.ik,
+                                               jk=aslices.jk,
+                                               ij_shift=aslices.ij_shift,
+                                               ik_shift=aslices.ik_shift,
+                                               jk_shift=aslices.jk_shift)
         columns = []
         for i, ref_term in enumerate(ref_terms):
             if ref_term in sf.kbody_terms:
                 columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
         g = transformer.gather(g.numpy()[0], reverse=True)
-        assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8)
+        assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8,
+                    msg="Test case at k_max = {} is failed".format(str(k_max)))
 
 
 def test_batch_multi_elements():
@@ -636,7 +708,7 @@ def test_batch_multi_elements():
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
     for i, atoms in enumerate(trajectory):
-        g, local_terms, local_sizes = symmetry_function(
+        g, local_terms, local_sizes = legacy_symmetry_function(
             atoms, rc, atoms.get_chemical_formula())
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
         row = Counter()
@@ -666,18 +738,22 @@ def test_batch_multi_elements():
     rslices, aslices = sf.get_indexed_slices(trajectory)
 
     positions = np.zeros((batch_size, n_atoms + 1, 3))
-    cells = np.zeros((batch_size, 3, 3))
-
     for i, atoms in enumerate(trajectory):
         positions[i] = sf.get_index_transformer(atoms).gather(atoms.positions)
-        cells[i] = atoms.cell
 
-    gr = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
-                                      rslices.ilist, rslices.jlist, rslices.Slist)
-    ga = sf.get_angular_function_graph(positions, cells, aslices.v2g_map,
-                                       aslices.ij, aslices.ik, aslices.jk,
-                                       aslices.ijSlist, aslices.ikSlist,
-                                       aslices.jkSlist)
+    gr = sf.get_radial_function_graph(positions,
+                                      v2g_map=rslices.v2g_map,
+                                      ilist=rslices.ilist,
+                                      jlist=rslices.jlist,
+                                      ij_shift=rslices.ij_shift)
+    ga = sf.get_angular_function_graph(positions,
+                                       v2g_map=aslices.v2g_map,
+                                       ij=aslices.ij,
+                                       ik=aslices.ik,
+                                       jk=aslices.jk,
+                                       ij_shift=aslices.ij_shift,
+                                       ik_shift=aslices.ik_shift,
+                                       jk_shift=aslices.jk_shift)
     g = gr + ga
     values = g.numpy()
     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
@@ -693,22 +769,26 @@ def test_splits():
     max_occurs = Counter(symbols)
     transformer = IndexTransformer(max_occurs, symbols)
     positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
-    cells = np.reshape(Pd3O2.cell, (1, 3, 3))
-    ref, _, _ = symmetry_function(Pd3O2, rc, 'all')
+    ref, _, _ = legacy_symmetry_function(Pd3O2, rc, 'all')
 
     nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
     sf = SymmetryFunction(rc, max_occurs, k_max=k_max, nij_max=nij_max,
                           nijk_max=nijk_max)
     rslices, aslices = sf.get_indexed_slices([Pd3O2])
 
-    g = sf.get_radial_function_graph(positions, cells, rslices.v2g_map,
-                                     rslices.ilist, rslices.jlist,
-                                     rslices.Slist)
-    g += sf.get_angular_function_graph(positions, cells,
-                                       aslices.v2g_map, aslices.ij,
-                                       aslices.ik, aslices.jk,
-                                       aslices.ijSlist, aslices.ikSlist,
-                                       aslices.jkSlist)
+    g = sf.get_radial_function_graph(positions,
+                                     v2g_map=rslices.v2g_map,
+                                     ilist=rslices.ilist,
+                                     jlist=rslices.jlist,
+                                     ij_shift=rslices.ij_shift)
+    g += sf.get_angular_function_graph(positions,
+                                       v2g_map=aslices.v2g_map,
+                                       ij=aslices.ij,
+                                       ik=aslices.ik,
+                                       jk=aslices.jk,
+                                       ij_shift=aslices.ij_shift,
+                                       ik_shift=aslices.ik_shift,
+                                       jk_shift=aslices.jk_shift)
 
     inputs = sf.split_descriptors(g)
     assert_less(

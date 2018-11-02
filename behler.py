@@ -33,17 +33,16 @@ class RadialIndexedSlices:
         A list of first atom indices.
     'jlist' : array_like
         A list of second atom indices.
-    'Slist' : array_like
-        A list of (i, j) pairs where i is the index of the center atom and j is
-        the index of its neighbor atom.
+    'ij_shift' : array_like
+        The cell boundary shift vectors, `shift[k] = Slist[k] @ cell`.
 
     """
     v2g_map: Union[np.ndarray, tf.Tensor]
     ilist: Union[np.ndarray, tf.Tensor]
     jlist: Union[np.ndarray, tf.Tensor]
-    Slist: Union[np.ndarray, tf.Tensor]
+    ij_shift: Union[np.ndarray, tf.Tensor]
 
-    __slots__ = ["v2g_map", "ilist", "jlist", "Slist"]
+    __slots__ = ["v2g_map", "ilist", "jlist", "ij_shift"]
 
 
 @dataclass
@@ -60,11 +59,11 @@ class AngularIndexedSlices:
         A list of (i, k) as the indices for r_{i,k}.
     'jk' : array_like
         A list of (j, k) as the indices for r_{j,k}.
-    'ijSlist' : array_like
+    'ij_shift' : array_like
         The cell boundary shift vectors for all r_{i,j}.
-    'ikSlist' : array_like
+    'ik_shift' : array_like
         The cell boundary shift vectors for all r_{i,k}.
-    'jkSlist' : array_like
+    'jk_shift' : array_like
         The cell boundary shift vectors for all r_{j,k}.
 
     """
@@ -72,11 +71,12 @@ class AngularIndexedSlices:
     ij: Union[np.ndarray, tf.Tensor]
     ik: Union[np.ndarray, tf.Tensor]
     jk: Union[np.ndarray, tf.Tensor]
-    ijSlist: Union[np.ndarray, tf.Tensor]
-    ikSlist: Union[np.ndarray, tf.Tensor]
-    jkSlist: Union[np.ndarray, tf.Tensor]
+    ij_shift: Union[np.ndarray, tf.Tensor]
+    ik_shift: Union[np.ndarray, tf.Tensor]
+    jk_shift: Union[np.ndarray, tf.Tensor]
 
-    __slots__ = ["v2g_map", "ij", "ik", "jk", "ijSlist", "ikSlist", "jkSlist"]
+    __slots__ = ["v2g_map", "ij", "ik", "jk",
+                 "ij_shift", "ik_shift", "jk_shift"]
 
 
 def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
@@ -447,7 +447,7 @@ class SymmetryFunction:
         v2g_map = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
         ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
         jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
-        Slist = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
+        ij_shift = np.zeros((batch_size, nij_max, 3), dtype=np.float64)
         tlist = np.zeros(nij_max, dtype=np.int32)
 
         for idx, atoms in enumerate(trajectory):
@@ -468,7 +468,7 @@ class SymmetryFunction:
             kSlist = self._resize_to_nij_max(kSlist, False)
             ilist[idx] = transformer.map(kilist.copy())
             jlist[idx] = transformer.map(kjlist.copy())
-            Slist[idx] = kSlist
+            ij_shift[idx] = kSlist @ atoms.cell
             tlist.fill(0)
             for i in range(n):
                 symboli = symbols[kilist[i] - 1]
@@ -478,7 +478,8 @@ class SymmetryFunction:
             v2g_map[idx, :nij_max, 0] = idx
             v2g_map[idx, :nij_max, 1] = kilist
             v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
-        return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
+        return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                                   ij_shift=ij_shift)
 
     def get_angular_indexed_slices(self, trajectory: List[Atoms],
                                    rslices: RadialIndexedSlices):
@@ -493,9 +494,9 @@ class SymmetryFunction:
         ij = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
         ik = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
         jk = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
-        ijS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
-        ikS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
-        jkS = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
+        ij_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
+        ik_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
+        jk_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
 
         for idx, atoms in enumerate(trajectory):
             symbols = atoms.get_chemical_symbols()
@@ -509,13 +510,12 @@ class SymmetryFunction:
                     indices[atomi] = []
                     vectors[atomi] = []
                 indices[atomi].append(rslices.jlist[idx, i])
-                vectors[atomi].append(rslices.Slist[idx, i])
+                vectors[atomi].append(rslices.ij_shift[idx, i])
             count = 0
             for atomi, nl in indices.items():
                 num = len(nl)
                 symboli = symbols[transformer.map(atomi, True, True)]
                 prefix = '{}'.format(symboli)
-                iSlist = vectors[atomi]
                 for j in range(num):
                     atomj = nl[j]
                     symbolj = symbols[transformer.map(atomj, True, True)]
@@ -527,16 +527,18 @@ class SymmetryFunction:
                         ij[idx, count] = atomi, atomj
                         ik[idx, count] = atomi, atomk
                         jk[idx, count] = atomj, atomk
-                        ijS[idx, count] = iSlist[j]
-                        ikS[idx, count] = iSlist[k]
-                        jkS[idx, count] = iSlist[k] - iSlist[j]
+                        ij_shift[idx, count] = vectors[atomi][j]
+                        ik_shift[idx, count] = vectors[atomi][k]
+                        jk_shift[idx, count] = \
+                            vectors[atomi][k] - vectors[atomi][j]
                         index = self._kbody_index[term]
                         v2g_map[idx, count, 0] = idx
                         v2g_map[idx, count, 1] = atomi
                         v2g_map[idx, count, 2] = self._offsets[index]
                         count += 1
-        return AngularIndexedSlices(v2g_map, ij=ij, ik=ik, jk=jk, ijSlist=ijS,
-                                    ikSlist=ikS, jkSlist=jkS)
+        return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+                                    ij_shift=ij_shift, ik_shift=ik_shift,
+                                    jk_shift=jk_shift)
 
     def get_indexed_slices(self, trajectory):
         """
@@ -546,7 +548,7 @@ class SymmetryFunction:
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
 
-    def get_radial_function_graph(self, R, cells, v2g_map, ilist, jlist, Slist,
+    def get_radial_function_graph(self, R, v2g_map, ilist, jlist, ij_shift,
                                   batch_size=None):
         """
         The implementation of Behler's radial symmetry function.
@@ -556,9 +558,6 @@ class SymmetryFunction:
                 rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
                 eta = tf.constant(self._eta, dtype=tf.float64, name='eta')
                 R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
-                Slist = tf.cast(Slist, dtype=tf.float64, name='Slist')
-                cells = tf.convert_to_tensor(
-                    cells, dtype=tf.float64, name='cells')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
                 v2g_map = tf.convert_to_tensor(
@@ -566,12 +565,11 @@ class SymmetryFunction:
                 v2g_map.set_shape([batch_size, self._nij_max, 3])
 
             with tf.name_scope("rij"):
-                Ri = batch_gather_positions(
-                    R, ilist, batch_size=batch_size, name='Ri')
-                Rj = batch_gather_positions(
-                    R, jlist, batch_size=batch_size, name='Rj')
-                Dlist = Rj - Ri + tf.einsum('ijk,ikl->ijl', Slist, cells)
-                r = tf.norm(Dlist, axis=2, name='r')
+                Ri = batch_gather_positions(R, ilist, batch_size, name='Ri')
+                Rj = batch_gather_positions(R, jlist, batch_size, name='Rj')
+                D_ij = tf.subtract(Rj, Ri, name='Dij')
+                D_ij = tf.add(D_ij, ij_shift, name='pbc')
+                r = tf.norm(D_ij, axis=2, name='r')
                 r2 = tf.square(r, name='r2')
                 r2c = tf.div(r2, rc2, name='div')
 
@@ -592,8 +590,8 @@ class SymmetryFunction:
                             v2g_map_i, vi, shape, 'g{}'.format(i))
                 return g
 
-    def get_angular_function_graph(self, R, cells, v2g_map, ij, ik, jk, ijS,
-                                   ikS, jkS, batch_size=None):
+    def get_angular_function_graph(self, R, v2g_map, ij, ik, jk, ij_shift,
+                                   ik_shift, jk_shift, batch_size=None):
         """
         The implementation of Behler's angular symmetry function.
         """
@@ -611,8 +609,6 @@ class SymmetryFunction:
                 one = tf.constant(1.0, dtype=tf.float64)
                 two = tf.constant(2.0, dtype=tf.float64)
                 rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
-                cells = tf.convert_to_tensor(
-                    cells, dtype=tf.float64, name='clist')
                 batch_size = batch_size or R.shape[0]
                 max_atoms = R.shape[1]
                 v2g_map = tf.convert_to_tensor(
@@ -622,22 +618,22 @@ class SymmetryFunction:
             with tf.name_scope("Rij"):
                 Ri_ij = batch_gather_positions(R, ij[:, :, 0], batch_size, 'Ri')
                 Rj_ij = batch_gather_positions(R, ij[:, :, 1], batch_size, 'Rj')
-                ijS = tf.cast(ijS, dtype=tf.float64, name='ijS')
-                D_ij = Rj_ij - Ri_ij + tf.einsum('ijk,ikl->ijl', ijS, cells)
+                D_ij = tf.subtract(Rj_ij, Ri_ij, name='Dij')
+                D_ij = tf.add(D_ij, ij_shift, name='pbc')
                 r_ij = tf.norm(D_ij, axis=2)
 
             with tf.name_scope("Rik"):
                 Ri_ik = batch_gather_positions(R, ik[:, :, 0], batch_size, 'Ri')
                 Rk_ik = batch_gather_positions(R, ik[:, :, 1], batch_size, 'Rk')
-                ikS = tf.cast(ikS, dtype=tf.float64, name='ikS')
-                D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
+                D_ik = tf.subtract(Rk_ik, Ri_ik, name='Dik')
+                D_ik = tf.add(D_ik, ik_shift, name='pbc')
                 r_ik = tf.norm(D_ik, axis=2)
 
             with tf.name_scope("Rjk"):
                 Rj_jk = batch_gather_positions(R, jk[:, :, 0], batch_size, 'Rj')
                 Rk_jk = batch_gather_positions(R, jk[:, :, 1], batch_size, 'Rk')
-                jkS = tf.cast(jkS, dtype=tf.float64, name='jkS')
-                D_jk = Rk_jk - Rj_jk + tf.einsum('ijk,ikl->ijl', jkS, cells)
+                D_jk = tf.subtract(Rk_jk, Rj_jk, name='Djk')
+                D_jk = tf.add(D_jk, jk_shift, name='pbc')
                 r_jk = tf.norm(D_jk, axis=2)
 
             # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
@@ -732,13 +728,15 @@ class SymmetryFunction:
         with tf.name_scope("Descriptors"):
 
             g = self.get_radial_function_graph(
-                examples.positions, examples.cell, examples.rv2g,
-                examples.ilist, examples.jlist, examples.Slist, batch_size)
+                examples.positions, v2g_map=examples.rv2g,
+                ilist=examples.ilist, jlist=examples.jlist,
+                ij_shift=examples.ij_shift, batch_size=batch_size)
 
             if self._k_max == 3:
                 g += self.get_angular_function_graph(
-                    examples.positions, examples.cell, examples.av2g,
-                    examples.ij, examples.ik, examples.jk,
-                    examples.ijS, examples.ikS, examples.jkS, batch_size)
+                    examples.positions, v2g_map=examples.av2g,
+                    ij=examples.ij, ik=examples.ik, jk=examples.jk,
+                    ij_shift=examples.ij_shift, ik_shift=examples.ik_shift,
+                    jk_shift=examples.jk_shift, batch_size=batch_size)
 
             return self.split_descriptors(g)
