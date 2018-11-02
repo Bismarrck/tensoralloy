@@ -16,12 +16,13 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class SummaryKeys:
+class GraphKeys:
     """
-    Standard names for summary collections.
+    Standard names for variable collections.
     """
-    TRAIN = 'train_summary'
-    EVAL = 'eval_summary'
+    TRAIN_SUMMARY = 'train_summary'
+    EVAL_SUMMARY = 'eval_summary'
+    NORMALIZE_VARIABLES = 'normalize_vars'
 
 
 def get_activation_fn(fn_name: str):
@@ -71,7 +72,7 @@ def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
                                      staircase=staircase,
                                      name="learning_rate")
         tf.summary.scalar('learning_rate_at_step', learning_rate,
-                          collections=[SummaryKeys.TRAIN, ])
+                          collections=[GraphKeys.TRAIN_SUMMARY, ])
         return learning_rate
 
 
@@ -193,6 +194,28 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
+    @staticmethod
+    def arctan_normalization(x):
+        """
+        A dynamic normalization layer using the arctan function.
+        """
+        with tf.variable_scope("Normalize"):
+            alpha = tf.get_variable(
+                name='alpha',
+                shape=x.shape[2],
+                dtype=x.dtype,
+                initializer=tf.ones_initializer(dtype=x.dtype),
+                collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
+                             tf.GraphKeys.GLOBAL_VARIABLES,
+                             GraphKeys.NORMALIZE_VARIABLES],
+                trainable=True)
+            tf.summary.histogram(
+                name=alpha.op.name + '/summary',
+                values=alpha,
+                collections=[GraphKeys.TRAIN_SUMMARY])
+            x = tf.multiply(x, alpha, name='ax')
+            return tf.atan(x, name='x')
+
     def build(self, features: AttributeDict, verbose=True):
         """
         Build the atomic neural network.
@@ -219,7 +242,8 @@ class AtomicNN:
             outputs = []
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
-                    x = tf.identity(features.descriptors[element], name='x')
+                    x = tf.identity(features.descriptors[element], name='x_raw')
+                    x = self.arctan_normalization(x)
                     hidden_sizes = self._hidden_sizes[element]
                     for j in range(len(hidden_sizes)):
                         with tf.variable_scope('Hidden{}'.format(j + 1)):
@@ -281,7 +305,7 @@ class AtomicNN:
                 self._l2_weight, dtype=tf.float64, name='weight')
             l2 = tf.multiply(l2_loss, weight, name='l2')
             tf.summary.scalar(l2.op.name + '/summary', l2,
-                              collections=[SummaryKeys.TRAIN, ])
+                              collections=[GraphKeys.TRAIN_SUMMARY, ])
             return l2
 
     def get_total_loss(self, predictions, labels):
@@ -309,7 +333,7 @@ class AtomicNN:
                     tf.squared_difference(labels.y, predictions.y), name='mse')
                 y_loss = tf.sqrt(mse, name='y_rmse')
                 tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
-                                  collections=[SummaryKeys.TRAIN, ])
+                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
                 losses.append(y_loss)
 
             if self._forces:
@@ -319,7 +343,7 @@ class AtomicNN:
                         name='mse')
                     f_loss = tf.sqrt(mse, name='f_rmse')
                     tf.summary.scalar(f_loss.op.name + '/summary', f_loss,
-                                      collections=[SummaryKeys.TRAIN, ])
+                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
                     losses.append(f_loss)
 
             if self._l2_weight > 0.0:
@@ -339,11 +363,11 @@ class AtomicNN:
                 list_of_ops.append(norm)
                 with tf.name_scope("gradients/"):
                     tf.summary.scalar(var.op.name + "/norm", norm,
-                                      collections=[SummaryKeys.TRAIN, ])
+                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
         with tf.name_scope("gradients/"):
             total_norm = tf.add_n(list_of_ops, name='sum')
             tf.summary.scalar('total', total_norm,
-                              collections=[SummaryKeys.TRAIN, ])
+                              collections=[GraphKeys.TRAIN_SUMMARY, ])
 
     def get_train_op(self, total_loss, hparams: AttributeDict):
         """
@@ -391,7 +415,7 @@ class AtomicNN:
                 summary_saver_hook = tf.train.SummarySaverHook(
                     save_steps=hparams.train.summary_steps,
                     output_dir=hparams.train.model_dir,
-                    summary_op=tf.summary.merge_all(key=SummaryKeys.TRAIN,
+                    summary_op=tf.summary.merge_all(key=GraphKeys.TRAIN_SUMMARY,
                                                     name='merge'))
 
             with tf.name_scope("Speed"):
