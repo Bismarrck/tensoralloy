@@ -169,8 +169,9 @@ class RawSerializer:
         Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
         functions.
         """
-        if TrainableProperty.forces not in self.trainable_properties:
+        if self.k_max < 3:
             return None
+
         with tf.name_scope("aslices"):
             aslices = tf.decode_raw(example['aslices'], tf.int32, name='merged')
             aslices.set_shape([self.nijk_max * 18])
