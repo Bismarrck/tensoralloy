@@ -38,13 +38,11 @@ def qm7m_compute():
                           nijk_max=0)
     rslices, _ = sf.get_indexed_slices(trajectory)
     positions = np.zeros((batch_size, max_atoms + 1, 3))
-    clist = np.zeros((batch_size, 3, 3))
     for i, atoms in enumerate(trajectory):
         positions[i] = sf.get_index_transformer(atoms).gather(
             atoms.positions)
-        clist[i] = atoms.cell
 
-    return AttributeDict(positions=positions, clist=clist, rslices=rslices)
+    return AttributeDict(positions=positions, rslices=rslices)
 
 
 def test_qm7m():
@@ -76,12 +74,11 @@ def test_qm7m():
         result = sess.run(next_batch)
         eps = 1e-8
 
-        assert_equal(len(result.keys()), 8)
+        assert_equal(len(result.keys()), 7)
         assert_less(np.abs(result.positions[0] - ref.positions[0]).max(), eps)
-        assert_less(np.abs(result.cell[0] - ref.clist[0]).max(), eps)
         assert_less(np.abs(result.rv2g[0] - ref.rslices.v2g_map[0]).max(), eps)
         assert_less(np.abs(result.ilist[0] - ref.rslices.ilist[0]).max(), eps)
-        assert_less(np.abs(result.Slist[0] - ref.rslices.Slist[0]).max(), eps)
+        assert_less(np.abs(result.shift[0] - ref.rslices.shift[0]).max(), eps)
 
 
 def test_ethanol():

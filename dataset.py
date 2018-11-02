@@ -72,52 +72,60 @@ class RawSerializer:
     @staticmethod
     def _merge_and_encode_rslices(rslices: RadialIndexedSlices):
         """
-        Merge `v2g_map`, `ilist`, `jlist` and `Slist` of radial functions into a
-        single array and encode this array.
+        Encode `rslices`:
+            * `v2g_map`, `ilist` and `jlist` are merged into a single array
+              with key 'r_indices'.
+            * `shift` will be encoded separately with key 'r_shifts'.
+
         """
         merged = np.concatenate((
             rslices.v2g_map,
-            rslices.Slist,
             rslices.ilist[..., np.newaxis],
             rslices.jlist[..., np.newaxis],
-        ), axis=2)
-        return _bytes_feature(merged.tostring())
+        ), axis=2).tostring()
+        return {'r_indices': _bytes_feature(merged),
+                'r_shifts': _bytes_feature(rslices.shift.tostring())}
 
     @staticmethod
     def _merge_and_encode_aslices(aslices: AngularIndexedSlices):
         """
-        Merge `v2g_map`, `ij`, `ik`, `jk`, `ijSlist`, `ikSlist` and `jkSlist` of
-        angular functions into a single array and encode this array.
+        Encode `aslices`:
+            * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
+              with key 'a_indices'.
+            * `ij_shift`, `ik_shift` and `jk_shift` are merged into another
+              array with key 'a_shifts'.
+
         """
         merged = np.concatenate((
             aslices.v2g_map,
-            aslices.ijSlist,
-            aslices.ikSlist,
-            aslices.jkSlist,
             aslices.ij,
             aslices.ik,
             aslices.jk,
-        ), axis=2)
-        return _bytes_feature(merged.tostring())
+        ), axis=2).tostring()
+        shifts = np.concatenate((
+            aslices.ij_shift,
+            aslices.ik_shift,
+            aslices.jk_shift,
+        ), axis=2).tostring()
+        return {'a_indices': _bytes_feature(merged),
+                'a_shifts': _bytes_feature(shifts)}
 
-    def encode(self, positions: np.ndarray, cell: np.ndarray,
-               y_true: float, f_true: np.ndarray, mask: np.ndarray,
-               rslices: RadialIndexedSlices, aslices: AngularIndexedSlices):
+    def encode(self, positions: np.ndarray, y_true: float, f_true: np.ndarray,
+               mask: np.ndarray, rslices: RadialIndexedSlices,
+               aslices: AngularIndexedSlices):
         """
         Encode the data and return a `tf.train.Example`.
         """
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
-            'cell': _bytes_feature(cell.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
-            'rslices': self._merge_and_encode_rslices(rslices),
             'mask': _bytes_feature(mask.tostring()),
         }
+        feature_list.update(self._merge_and_encode_rslices(rslices))
         if TrainableProperty.forces in self.trainable_properties:
             feature_list.update({'f_true': _bytes_feature(f_true.tostring())})
         if self.k_max == 3:
-            feature_list.update(
-                {'aslices': self._merge_and_encode_aslices(aslices)})
+            feature_list.update(self._merge_and_encode_aslices(aslices))
         return Example(features=Features(feature=feature_list))
 
     def _decode_atoms(self, example: Dict[str, tf.Tensor]):
@@ -129,10 +137,6 @@ class RawSerializer:
         positions = tf.decode_raw(example['positions'], tf.float64)
         positions.set_shape([length])
         positions = tf.reshape(positions, (self.natoms + 1, 3), name='R')
-
-        cell = tf.decode_raw(example['cell'], tf.float64)
-        cell.set_shape([9])
-        cell = tf.reshape(cell, (3, 3), name='cell')
 
         y_true = tf.decode_raw(example['y_true'], tf.float64)
         y_true.set_shape([1])
@@ -148,21 +152,28 @@ class RawSerializer:
         else:
             f_true = None
 
-        return positions, cell, y_true, f_true, mask
+        return positions, y_true, f_true, mask
 
     def _decode_rslices(self, example: Dict[str, tf.Tensor]):
         """
         Decode v2g_map, ilist, jlist and Slist for radial functions.
         """
-        with tf.name_scope("rslices"):
-            rslices = tf.decode_raw(example['rslices'], tf.int32, name='merged')
-            rslices.set_shape([self.nij_max * 8])
-            rslices = tf.reshape(rslices, [self.nij_max, 8], name='rslices')
-            v2g_map, Slist, ilist, jlist = \
-                tf.split(rslices, [3, 3, 1, 1], axis=1, name='splits')
+        with tf.name_scope("Radial"):
+
+            r_indices = tf.decode_raw(example['r_indices'], tf.int32)
+            r_indices.set_shape([self.nij_max * 5])
+            r_indices = tf.reshape(
+                r_indices, [self.nij_max, 5], name='r_indices')
+            v2g_map, ilist, jlist = tf.split(
+                r_indices, [3, 1, 1], axis=1, name='splits')
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
-            return RadialIndexedSlices(v2g_map, ilist, jlist, Slist)
+
+            shift = tf.decode_raw(example['r_shifts'], tf.float64)
+            shift.set_shape([self.nij_max * 3])
+            shift = tf.reshape(shift, [self.nij_max, 3], name='shift')
+
+            return RadialIndexedSlices(v2g_map, ilist, jlist, shift)
 
     def _decode_aslices(self, example: Dict[str, tf.Tensor]):
         """
@@ -172,27 +183,38 @@ class RawSerializer:
         if self.k_max < 3:
             return None
 
-        with tf.name_scope("aslices"):
-            aslices = tf.decode_raw(example['aslices'], tf.int32, name='merged')
-            aslices.set_shape([self.nijk_max * 18])
-            aslices = tf.reshape(aslices, [self.nijk_max, 18], name='rslices')
-            v2g_map, ijSlist, ikSlist, jkSlist, ij, ik, jk = \
-                tf.split(aslices, [3, 3, 3, 3, 2, 2, 2], axis=1, name='splits')
-            return AngularIndexedSlices(v2g_map, ij, ik, jk, ijSlist, ikSlist,
-                                        jkSlist)
+        with tf.name_scope("Angular"):
+
+            with tf.name_scope("indices"):
+                a_indices = tf.decode_raw(example['a_indices'], tf.int32)
+                a_indices.set_shape([self.nijk_max * 9])
+                a_indices = tf.reshape(
+                    a_indices, [self.nijk_max, 9], name='a_indices')
+                v2g_map, ij, ik, jk = \
+                    tf.split(a_indices, [3, 2, 2, 2], axis=1, name='splits')
+
+            with tf.name_scope("shifts"):
+                a_shifts = tf.decode_raw(example['a_shifts'], tf.float64)
+                a_shifts.set_shape([self.nijk_max * 9])
+                a_shifts = tf.reshape(
+                    a_shifts, [self.nijk_max, 9], name='a_shifts')
+                ij_shift, ik_shift, jk_shift = \
+                    tf.split(a_shifts, [3, 3, 3], axis=1, name='splits')
+
+            return AngularIndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
+                                        jk_shift)
 
     def decode_example(self, example: Dict[str, tf.Tensor]):
         """
         Decode the parsed single example.
         """
-        positions, cell, y_true, f_true, mask = self._decode_atoms(example)
+        positions, y_true, f_true, mask = self._decode_atoms(example)
         rslices = self._decode_rslices(example)
         aslices = self._decode_aslices(example)
 
-        decoded = AttributeDict(positions=positions, cell=cell, y_true=y_true,
-                                mask=mask, rv2g=rslices.v2g_map,
-                                ilist=rslices.ilist, jlist=rslices.jlist,
-                                Slist=rslices.Slist)
+        decoded = AttributeDict(positions=positions, y_true=y_true, mask=mask,
+                                rv2g=rslices.v2g_map, ilist=rslices.ilist,
+                                jlist=rslices.jlist, shift=rslices.shift)
 
         if f_true is not None:
             decoded.f_true = f_true
@@ -202,9 +224,9 @@ class RawSerializer:
             decoded.ij = aslices.ij
             decoded.ik = aslices.ik
             decoded.jk = aslices.jk
-            decoded.ijS = aslices.ijSlist
-            decoded.ikS = aslices.ikSlist
-            decoded.jkS = aslices.jkSlist
+            decoded.ij_shift = aslices.ij_shift
+            decoded.ik_shift = aslices.ik_shift
+            decoded.jk_shift = aslices.jk_shift
 
         return decoded
 
@@ -216,16 +238,18 @@ class RawSerializer:
         with tf.name_scope("decoding"):
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
-                'cell': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
-                'rslices': tf.FixedLenFeature([], tf.string),
+                'r_indices': tf.FixedLenFeature([], tf.string),
+                'r_shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string)
             }
             if TrainableProperty.forces in self.trainable_properties:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
             if self.k_max == 3:
                 feature_list.update({
-                    'aslices': tf.FixedLenFeature([], tf.string)})
+                    'a_indices': tf.FixedLenFeature([], tf.string),
+                    'a_shifts': tf.FixedLenFeature([], tf.string),
+                })
             example = tf.parse_single_example(example_proto, feature_list)
             return self.decode_example(example)
 
@@ -398,12 +422,11 @@ class Dataset:
         """
         transformer = self._symmetry_function.get_index_transformer(atoms)
         positions = transformer.gather(atoms.positions)
-        cell = atoms.cell
         mask = transformer.mask.astype(np.float64)
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
         rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
-        return self._serializer.encode(positions, cell, y_true, f_true, mask,
+        return self._serializer.encode(positions, y_true, f_true, mask,
                                        rslices, aslices)
 
     def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
