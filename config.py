@@ -48,7 +48,8 @@ class ConfigParser(configparser.ConfigParser):
         super(ConfigParser, self).__init__(
             converters={
                 'floats': lambda x: _parse_list(float, x),
-                'ints': lambda x: _parse_list(int, x)})
+                'ints': lambda x: _parse_list(int, x)},
+            interpolation=configparser.ExtendedInterpolation())
         with open(filename) as fp:
             self._read(fp, filename)
         self._hparams = self._read_hyperparams()
