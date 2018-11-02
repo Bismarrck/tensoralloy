@@ -10,6 +10,7 @@ import sys
 import time
 import glob
 from tensorflow.train import Example, Features
+from tensorflow.contrib.data import shuffle_and_repeat
 from behler import SymmetryFunction
 from behler import RadialIndexedSlices, AngularIndexedSlices
 from ase import Atoms
@@ -596,20 +597,22 @@ class Dataset:
             # Initialize a basic dataset
             dataset = tf.data.TFRecordDataset([tfrecords_file])
             dataset = dataset.map(self.decode_protobuf,
-                                  num_parallel_calls=cpu_count() * 4)
-
-            # Repeat the dataset
-            dataset = dataset.repeat(count=num_epochs)
+                                  num_parallel_calls=cpu_count())
 
             # Shuffle it if needed
             if shuffle:
                 size = self._file_sizes[mode]
                 min_queue_examples = int(size * 0.4) + 10 * batch_size
-                dataset = dataset.shuffle(buffer_size=min_queue_examples,
-                                          seed=Defaults.seed)
+                dataset = dataset.apply(
+                    shuffle_and_repeat(min_queue_examples, count=num_epochs,
+                                       seed=Defaults.seed))
+            else:
+                # Repeat the dataset
+                dataset = dataset.repeat(count=num_epochs)
 
             # Setup the batch
             dataset = dataset.batch(batch_size)
+            dataset = dataset.prefetch(buffer_size=batch_size)
 
             # Return the iterator
             return dataset.make_one_shot_iterator().get_next()
