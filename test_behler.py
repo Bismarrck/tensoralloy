@@ -663,7 +663,7 @@ def test_manybody_k():
                                          v2g_map=rslices.v2g_map,
                                          ilist=rslices.ilist,
                                          jlist=rslices.jlist,
-                                         ij_shift=rslices.ij_shift)
+                                         shift=rslices.ij_shift)
         if k_max == 3:
             g += sf.get_angular_function_graph(positions,
                                                v2g_map=aslices.v2g_map,
@@ -745,7 +745,7 @@ def test_batch_multi_elements():
                                       v2g_map=rslices.v2g_map,
                                       ilist=rslices.ilist,
                                       jlist=rslices.jlist,
-                                      ij_shift=rslices.ij_shift)
+                                      shift=rslices.ij_shift)
     ga = sf.get_angular_function_graph(positions,
                                        v2g_map=aslices.v2g_map,
                                        ij=aslices.ij,
@@ -780,7 +780,7 @@ def test_splits():
                                      v2g_map=rslices.v2g_map,
                                      ilist=rslices.ilist,
                                      jlist=rslices.jlist,
-                                     ij_shift=rslices.ij_shift)
+                                     shift=rslices.ij_shift)
     g += sf.get_angular_function_graph(positions,
                                        v2g_map=aslices.v2g_map,
                                        ij=aslices.ij,

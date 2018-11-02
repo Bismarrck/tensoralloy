@@ -548,7 +548,7 @@ class SymmetryFunction:
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
 
-    def get_radial_function_graph(self, R, v2g_map, ilist, jlist, ij_shift,
+    def get_radial_function_graph(self, R, v2g_map, ilist, jlist, shift,
                                   batch_size=None):
         """
         The implementation of Behler's radial symmetry function.
@@ -568,7 +568,7 @@ class SymmetryFunction:
                 Ri = batch_gather_positions(R, ilist, batch_size, name='Ri')
                 Rj = batch_gather_positions(R, jlist, batch_size, name='Rj')
                 D_ij = tf.subtract(Rj, Ri, name='Dij')
-                D_ij = tf.add(D_ij, ij_shift, name='pbc')
+                D_ij = tf.add(D_ij, shift, name='pbc')
                 r = tf.norm(D_ij, axis=2, name='r')
                 r2 = tf.square(r, name='r2')
                 r2c = tf.div(r2, rc2, name='div')
@@ -728,15 +728,24 @@ class SymmetryFunction:
         with tf.name_scope("Descriptors"):
 
             g = self.get_radial_function_graph(
-                examples.positions, v2g_map=examples.rv2g,
-                ilist=examples.ilist, jlist=examples.jlist,
-                ij_shift=examples.ij_shift, batch_size=batch_size)
+                examples.positions,
+                v2g_map=examples.rv2g,
+                ilist=examples.ilist,
+                jlist=examples.jlist,
+                shift=examples.shift,
+                batch_size=batch_size
+            )
 
             if self._k_max == 3:
                 g += self.get_angular_function_graph(
-                    examples.positions, v2g_map=examples.av2g,
-                    ij=examples.ij, ik=examples.ik, jk=examples.jk,
-                    ij_shift=examples.ij_shift, ik_shift=examples.ik_shift,
-                    jk_shift=examples.jk_shift, batch_size=batch_size)
+                    examples.positions,
+                    v2g_map=examples.av2g,
+                    ij=examples.ij,
+                    ik=examples.ik,
+                    jk=examples.jk,
+                    ij_shift=examples.ij_shift,
+                    ik_shift=examples.ik_shift,
+                    jk_shift=examples.jk_shift,
+                    batch_size=batch_size)
 
             return self.split_descriptors(g)
