@@ -633,7 +633,7 @@ class SymmetryFunction:
                 D_ik = Rk_ik - Ri_ik + tf.einsum('ijk,ikl->ijl', ikS, cells)
                 r_ik = tf.norm(D_ik, axis=2)
 
-            with tf.name_scope("Rik"):
+            with tf.name_scope("Rjk"):
                 Rj_jk = batch_gather_positions(R, jk[:, :, 0], batch_size, 'Rj')
                 Rk_jk = batch_gather_positions(R, jk[:, :, 1], batch_size, 'Rk')
                 jkS = tf.cast(jkS, dtype=tf.float64, name='jkS')
