@@ -332,10 +332,10 @@ class SymmetryFunction:
         self._ndim = ndim
         self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
-        self._eta = eta
-        self._gamma = gamma
-        self._beta = beta
-        self._zeta = zeta
+        self._eta = np.asarray(eta)
+        self._gamma = np.asarray(gamma)
+        self._beta = np.asarray(beta)
+        self._zeta = np.asarray(zeta)
         self._parameter_grid = ParameterGrid({'beta': self._beta,
                                               'gamma': self._gamma,
                                               'zeta': self._zeta})
@@ -400,6 +400,23 @@ class SymmetryFunction:
         Return a list of int as the sizes of the k-body terms.
         """
         return self._kbody_sizes
+
+    def get_initial_weights_for_normalizers(self) -> Dict[str, np.ndarray]:
+        """
+        Return the initial weights for the `arctan` input normalizers.
+        """
+        weights = {}
+        for element in self._elements:
+            kbody_terms = self._mapping[element]
+            values = []
+            for kbody_term in kbody_terms:
+                if len(get_elements_from_kbody_term(kbody_term)) == 2:
+                    values.extend(self._eta.tolist())
+                else:
+                    for p in self._parameter_grid:
+                        values.append(p['beta'])
+            weights[element] = np.exp(-np.asarray(values) / 20.0)
+        return weights
 
     def get_index_transformer(self, atoms: Atoms):
         """

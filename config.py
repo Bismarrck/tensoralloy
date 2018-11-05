@@ -136,14 +136,17 @@ class ConfigParser(configparser.ConfigParser):
         activation = self[section].get('activation', 'leaky_relu')
         forces = TrainableProperty.forces in self._dataset.trainable_properties
 
-        elements = self._dataset.descriptor.elements
+        descriptor = self._dataset.descriptor
+        elements = descriptor.elements
         hidden_sizes = {}
         for element in elements:
             hidden_sizes[element] = self[section].getints(
                 element, Defaults.hidden_sizes)
 
+        weights = descriptor.get_initial_weights_for_normalizers()
         nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
-                      activation=activation, l2_weight=l2_weight, forces=forces)
+                      activation=activation, l2_weight=l2_weight, forces=forces,
+                      initial_normalizer_weights=weights)
         return nn
 
     def _read_hyperparams(self):

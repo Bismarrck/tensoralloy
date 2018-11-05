@@ -5,6 +5,7 @@ This module defines a general atomic neural network framework.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
@@ -132,7 +133,8 @@ class AtomicNN:
     EVAL_METRICS = 'eval_metrics'
 
     def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation=None, l2_weight=0.0, forces=False):
+                 activation=None, l2_weight=0.0, forces=False,
+                 initial_normalizer_weights=None):
         """
         Initialization method.
 
@@ -149,6 +151,9 @@ class AtomicNN:
             If True, atomic forces will be derived.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
+        initial_normalizer_weights : Dict[str, array_like]
+            The initialer weights for arctan normalization layers for each type
+            of element.
 
         """
         self._elements = elements
@@ -157,6 +162,7 @@ class AtomicNN:
         self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
         self._l2_weight = max(l2_weight, 0.0)
+        self._initial_normalizer_weights = initial_normalizer_weights
 
     @property
     def elements(self):
@@ -194,17 +200,25 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
-    @staticmethod
-    def arctan_normalization(x):
+    def arctan_normalization(self, x, element: str):
         """
         A dynamic normalization layer using the arctan function.
         """
-        with tf.variable_scope("Normalize"):
+        if x.dtype == tf.float64:
+            dtype = np.float64
+        else:
+            dtype = np.float32
+        if self._initial_normalizer_weights is None:
+            values = np.ones(x.shape[2], dtype=dtype)
+        else:
+            values = np.asarray(
+                self._initial_normalizer_weights[element], dtype=dtype)
+        with tf.variable_scope("Normalization"):
             alpha = tf.get_variable(
                 name='alpha',
                 shape=x.shape[2],
                 dtype=x.dtype,
-                initializer=tf.ones_initializer(dtype=x.dtype),
+                initializer=tf.constant_initializer(values, dtype=x.dtype),
                 collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
                              tf.GraphKeys.GLOBAL_VARIABLES,
                              GraphKeys.NORMALIZE_VARIABLES],
@@ -243,7 +257,7 @@ class AtomicNN:
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
                     x = tf.identity(features.descriptors[element], name='x_raw')
-                    x = self.arctan_normalization(x)
+                    x = self.arctan_normalization(x, element)
                     hidden_sizes = self._hidden_sizes[element]
                     for j in range(len(hidden_sizes)):
                         with tf.variable_scope('Hidden{}'.format(j + 1)):
