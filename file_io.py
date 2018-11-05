@@ -141,6 +141,8 @@ def _read_extxyz(filename, ext=True, num_examples=None, verbose=True):
                     else:
                         energy = float(m.group(1))
                         atoms.set_pbc([False, False, False])
+                        side_length = 20.0 + (divmod(natoms, 50)[0] * 5.0)
+                        atoms.set_cell(np.eye(3) * side_length)
                     atoms.info[VirtualCalculator.ENERGY_KEY] = energy
                     stage += 1
             elif stage == 2:
