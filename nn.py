@@ -259,23 +259,9 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
-    def build(self, features: AttributeDict, verbose=True):
+    def _build_atomic_nn(self, features: AttributeDict, verbose=False):
         """
-        Build the atomic neural network.
-
-        Parameters
-        ----------
-        features : AttributeDict
-            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
-            and 'positions' of `[batch_size, N, 3]` are required.
-        verbose : bool
-            If True, the
-
-        Returns
-        -------
-        predictions : AttributeDict
-            A dict of output tensors.
-
+        Build 1x1 Convolution1D based atomic neural networks for all elements.
         """
         with tf.variable_scope("ANN"):
             kernel_initializer = xavier_initializer(
@@ -311,6 +297,27 @@ class AtomicNN:
                     if verbose:
                         log_tensor(yi)
                     outputs.append(yi)
+            return outputs
+
+    def build(self, features: AttributeDict, verbose=True):
+        """
+        Build the atomic neural network.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
+            and 'positions' of `[batch_size, N, 3]` are required.
+        verbose : bool
+            If True, the
+
+        Returns
+        -------
+        predictions : AttributeDict
+            A dict of output tensors.
+
+        """
+        outputs = self._build_atomic_nn(features, verbose)
 
         with tf.name_scope("Output"):
             with tf.name_scope("Energy"):
@@ -571,3 +578,70 @@ class AtomicNN:
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,
                                           evaluation_hooks=evaluation_hooks)
+
+
+class AtomicResNN(AtomicNN):
+    """
+    A general atomic residual neural network. The ANNs are used to fit residual
+    energies.
+
+    The total energy, `y_total`, is expressed as:
+        y_total = y_static + y_res
+    where `y_static` depends only on chemical compositions.
+
+    """
+
+    def __init__(self, elements: List[str], hidden_sizes=None,
+                 activation=None, l2_weight=0.0, forces=False,
+                 normalizer='linear', initial_normalizer_weights=None,
+                 initial_y_static_weights=None):
+        """
+        Initialization method.
+        """
+        super(AtomicResNN, self).__init__(elements, hidden_sizes, activation,
+                                          l2_weight, forces, normalizer,
+                                          initial_normalizer_weights)
+        self._initial_y_static_weights = initial_y_static_weights
+
+    def build(self, features: AttributeDict, verbose=True):
+        """
+        Build the atomic residual network.
+        """
+        outputs = self._build_atomic_nn(features, verbose)
+
+        with tf.variable_scope("Static"):
+            if self._initial_y_static_weights is None:
+                values = np.ones(len(self._elements), dtype=np.float64)
+            else:
+                values = self._initial_y_static_weights
+            x = tf.identity(features.compositions, name='input')
+            y = tf.layers.conv1d(
+                inputs=x, filters=1, kernel_size=1, strides=1, activation=None,
+                use_bias=False, reuse=tf.AUTO_REUSE, trainable=True,
+                kernel_initializer=tf.constant_initializer(
+                    values, dtype=tf.float64),
+                name='1x1StaticConv'
+            )
+            if verbose:
+                log_tensor(y)
+            y_static = tf.squeeze(y, name='y_static')
+
+        with tf.name_scope("Output"):
+            with tf.name_scope("Energy"):
+                with tf.name_scope("Residual"):
+                    y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+                    with tf.name_scope("mask"):
+                        mask = tf.split(
+                            features.mask, [1, -1], axis=1, name='split')[1]
+                        y_mask = tf.multiply(y_atomic, mask, name='mask')
+                    y_res = tf.reduce_sum(y_mask, axis=1, keepdims=False,
+                                          name='y')
+                with tf.name_scope("Static"):
+                    y_static = tf.identity(y_static, 'y')
+                y = tf.add(y_static, y_res, name='y')
+            if self._forces:
+                with tf.name_scope("Forces"):
+                    f = tf.gradients(y, features.positions, name='f')[0]
+                return AttributeDict(y=y, f=f)
+            else:
+                return AttributeDict(y=y)
