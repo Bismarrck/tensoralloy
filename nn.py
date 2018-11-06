@@ -389,6 +389,9 @@ class AtomicNN:
                 tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
                 losses.append(y_loss)
+                y_mae = tf.reduce_mean(
+                    tf.abs(labels.y - predictions.y, name='abs'), name='mae')
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_mae)
 
             if self._forces:
                 with tf.name_scope("forces"):
