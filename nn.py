@@ -453,7 +453,16 @@ class AtomicNN:
         return tf.group(apply_gradients_op, variables_averages_op)
 
     @staticmethod
-    def get_training_hooks(hparams) -> List[tf.train.SessionRunHook]:
+    def get_logging_tensors(key) -> Dict[str, tf.Tensor]:
+        """
+        Return a dict of logging tensors.
+        """
+        tensors = {}
+        for tensor in tf.get_collection(key):
+            tensors[tensor.op.name] = tensor
+        return tensors
+
+    def get_training_hooks(self, hparams) -> List[tf.train.SessionRunHook]:
         """
         Return a list of `tf.train.SessionRunHook` objects for training.
 
@@ -481,7 +490,7 @@ class AtomicNN:
 
             if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
                 logging_tensor_hook = tf.train.LoggingTensorHook(
-                    tensors=tf.get_collection(GraphKeys.TRAIN_METRICS),
+                    tensors=self.get_logging_tensors(GraphKeys.TRAIN_METRICS),
                     every_n_iter=hparams.train.log_steps,
                     at_end=True,
                 )
@@ -497,15 +506,14 @@ class AtomicNN:
 
         return hooks
 
-    @staticmethod
-    def get_evaluation_hooks(hparams):
+    def get_evaluation_hooks(self, hparams):
         """
         Return a list of `tf.train.SessionRunHook` objects for evaluation.
         """
         with tf.name_scope("Hooks"):
             with tf.name_scope("Accuracy"):
                 logging_tensor_hook = tf.train.LoggingTensorHook(
-                    tensors=tf.get_collection(GraphKeys.EVAL_METRICS),
+                    tensors=self.get_logging_tensors(GraphKeys.EVAL_METRICS),
                     every_n_iter=hparams.train.eval_steps,
                     at_end=True)
 
