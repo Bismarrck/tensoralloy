@@ -38,6 +38,18 @@ Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
                                   [5.835, 1.37532269, 8.5],
                                   [5.835, 7.12596807, 8.]]))
 
+# A permutation of Pd3O2
+Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
+                pbc=np.array([True, True, False], dtype=bool),
+                cell=np.array([[7.78, 0., 0.],
+                               [0., 5.50129076, 0.],
+                               [0., 0., 15.37532269]]),
+                positions=np.array([[3.89, 0., 8.37532269],
+                                    [0., 2.75064538, 8.37532269],
+                                    [5.835, 1.37532269, 8.5],
+                                    [5.835, 7.12596807, 8.],
+                                    [3.89, 2.75064538, 8.37532269]]))
+
 grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
                       'zeta': Defaults.zeta})
 
@@ -120,8 +132,8 @@ class IndexTransformerTest(TestCase):
         Setup the tests.
         """
         symbols = Pd3O2.get_chemical_symbols()
-        max_occurs = Counter({'Pd': 4, 'O': 5})
-        self.clf = IndexTransformer(max_occurs, symbols)
+        self.max_occurs = Counter({'Pd': 4, 'O': 5})
+        self.clf = IndexTransformer(self.max_occurs, symbols)
 
     def test_forward(self):
         assert_equal(len(self.clf.reference_symbols), 9)
@@ -146,6 +158,14 @@ class IndexTransformerTest(TestCase):
     def test_mask(self):
         assert_list_equal(self.clf.mask.tolist(),
                           [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
+
+    def test_permutation(self):
+        symbols = Pd2O2Pd.get_chemical_symbols()
+        clf = IndexTransformer(self.max_occurs, symbols)
+        assert_list_equal(clf.mask.tolist(),
+                          [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
+        assert_less(np.abs(clf.gather(Pd2O2Pd.positions) -
+                           self.clf.gather(Pd3O2.positions)).max(), 1e-8)
 
 
 def cutoff_fxn(r, rc):

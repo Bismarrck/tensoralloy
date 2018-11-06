@@ -315,7 +315,7 @@ class SymmetryFunction:
 
     def __init__(self, rc, max_occurs: Counter, nij_max, nijk_max,
                  eta=Defaults.eta, beta=Defaults.beta, gamma=Defaults.gamma,
-                 zeta=Defaults.zeta, k_max=3):
+                 zeta=Defaults.zeta, k_max=3, periodic=True):
         """
         Initialization method.
         """
@@ -324,6 +324,7 @@ class SymmetryFunction:
         ndim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                               len(gamma), len(zeta))
 
+        self._periodic = periodic
         self._rc = rc
         self._mapping = mapping
         self._kbody_terms = kbody_terms
@@ -344,6 +345,14 @@ class SymmetryFunction:
         self._nijk_max = nijk_max
         self._k_max = k_max
         self._index_transformers = {}
+
+    @property
+    def periodic(self):
+        """
+        Return True if this can be applied to periodic structures.
+        For non-periodic molecules some Ops can be ignored.
+        """
+        return self._periodic
 
     @property
     def cutoff(self):
@@ -433,12 +442,14 @@ class SymmetryFunction:
             The `IndexTransformer` for the given `Atoms` object.
 
         """
-        stoichiometry = atoms.get_chemical_formula()
-        if stoichiometry not in self._index_transformers:
-            self._index_transformers[stoichiometry] = IndexTransformer(
+        # The mode 'reduce' is important here because chemical symbol lists of
+        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
+        formula = atoms.get_chemical_formula(mode='reduce')
+        if formula not in self._index_transformers:
+            self._index_transformers[formula] = IndexTransformer(
                 self._max_occurs, atoms.get_chemical_symbols()
             )
-        return self._index_transformers[stoichiometry]
+        return self._index_transformers[formula]
 
     def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
         """
@@ -585,7 +596,8 @@ class SymmetryFunction:
                 Ri = batch_gather_positions(R, ilist, batch_size, name='Ri')
                 Rj = batch_gather_positions(R, jlist, batch_size, name='Rj')
                 D_ij = tf.subtract(Rj, Ri, name='Dij')
-                D_ij = tf.add(D_ij, shift, name='pbc')
+                if self._periodic:
+                    D_ij = tf.add(D_ij, shift, name='pbc')
                 r = tf.norm(D_ij, axis=2, name='r')
                 r2 = tf.square(r, name='r2')
                 r2c = tf.div(r2, rc2, name='div')
@@ -636,21 +648,24 @@ class SymmetryFunction:
                 Ri_ij = batch_gather_positions(R, ij[:, :, 0], batch_size, 'Ri')
                 Rj_ij = batch_gather_positions(R, ij[:, :, 1], batch_size, 'Rj')
                 D_ij = tf.subtract(Rj_ij, Ri_ij, name='Dij')
-                D_ij = tf.add(D_ij, ij_shift, name='pbc')
+                if self._periodic:
+                    D_ij = tf.add(D_ij, ij_shift, name='pbc')
                 r_ij = tf.norm(D_ij, axis=2)
 
             with tf.name_scope("Rik"):
                 Ri_ik = batch_gather_positions(R, ik[:, :, 0], batch_size, 'Ri')
                 Rk_ik = batch_gather_positions(R, ik[:, :, 1], batch_size, 'Rk')
                 D_ik = tf.subtract(Rk_ik, Ri_ik, name='Dik')
-                D_ik = tf.add(D_ik, ik_shift, name='pbc')
+                if self._periodic:
+                    D_ik = tf.add(D_ik, ik_shift, name='pbc')
                 r_ik = tf.norm(D_ik, axis=2)
 
             with tf.name_scope("Rjk"):
                 Rj_jk = batch_gather_positions(R, jk[:, :, 0], batch_size, 'Rj')
                 Rk_jk = batch_gather_positions(R, jk[:, :, 1], batch_size, 'Rk')
                 D_jk = tf.subtract(Rk_jk, Rj_jk, name='Djk')
-                D_jk = tf.add(D_jk, jk_shift, name='pbc')
+                if self._periodic:
+                    D_jk = tf.add(D_jk, jk_shift, name='pbc')
                 r_jk = tf.norm(D_jk, axis=2)
 
             # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
