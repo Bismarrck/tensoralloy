@@ -332,9 +332,10 @@ def compute_elemental_static_energies(database: SQLite3Database,
 
     """
     n = len(database)
+    n_elements = len(elements)
     id_first = 1
     col_map = {element: elements.index(element) for element in elements}
-    A = np.zeros((n, len(elements)), dtype=np.float64)
+    A = np.zeros((n, n_elements), dtype=np.float64)
     b = np.zeros(n, dtype=np.float64)
 
     if verbose:
@@ -348,10 +349,10 @@ def compute_elemental_static_energies(database: SQLite3Database,
         b[row] = atoms.get_total_energy()
 
     rank = np.linalg.matrix_rank(A)
-    if rank == len(elements):
+    if rank == n_elements:
         x = np.dot(np.linalg.pinv(A), b)
     elif rank == 1:
-        x = np.mean(b / A.sum(axis=1))
+        x = np.tile(np.mean(b / A.sum(axis=1)), n_elements)
     else:
         raise ValueError(f"The matrix has an invalid rank of {rank}")
 

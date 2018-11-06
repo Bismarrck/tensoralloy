@@ -52,33 +52,35 @@ def test_qm7m():
     """
     ref = qm7m_compute()
 
-    tf.reset_default_graph()
+    graph = tf.Graph()
 
-    savedir = join(test_dir(), 'qm7m')
-    database = connect(join(savedir, 'qm7m.db'))
-    dataset = Dataset(database, 'qm7m', k_max=2)
+    with graph.as_default():
 
-    assert_equal(len(dataset), 3)
-    assert_list_equal(dataset.trainable_properties, [TrainableProperty.energy])
-    assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
+        savedir = join(test_dir(), 'qm7m')
+        database = connect(join(savedir, 'qm7m.db'))
+        dataset = Dataset(database, 'qm7m', k_max=2)
 
-    dataset.to_records(savedir, test_size=0.33)
-    assert_true(dataset.load_tfrecords(savedir))
+        assert_equal(len(dataset), 3)
+        assert_list_equal(dataset.trainable_properties, [TrainableProperty.energy])
+        assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
 
-    # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
-    next_batch = dataset.next_batch(mode=ModeKeys.EVAL, batch_size=1,
-                                    num_epochs=1, shuffle=False)
+        dataset.to_records(savedir, test_size=0.33)
+        assert_true(dataset.load_tfrecords(savedir))
 
-    with tf.Session() as sess:
+        # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
+        next_batch = dataset.next_batch(mode=ModeKeys.EVAL, batch_size=1,
+                                        num_epochs=1, shuffle=False)
 
-        result = sess.run(next_batch)
-        eps = 1e-8
+        with tf.Session() as sess:
 
-        assert_equal(len(result.keys()), 7)
-        assert_less(np.abs(result.positions[0] - ref.positions[0]).max(), eps)
-        assert_less(np.abs(result.rv2g[0] - ref.rslices.v2g_map[0]).max(), eps)
-        assert_less(np.abs(result.ilist[0] - ref.rslices.ilist[0]).max(), eps)
-        assert_less(np.abs(result.shift[0] - ref.rslices.shift[0]).max(), eps)
+            res = sess.run(next_batch)
+            eps = 1e-8
+
+            assert_equal(len(res.keys()), 8)
+            assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
+            assert_less(np.abs(res.rv2g[0] - ref.rslices.v2g_map[0]).max(), eps)
+            assert_less(np.abs(res.ilist[0] - ref.rslices.ilist[0]).max(), eps)
+            assert_less(np.abs(res.shift[0] - ref.rslices.shift[0]).max(), eps)
 
 
 def test_ethanol():
@@ -88,34 +90,38 @@ def test_ethanol():
     """
     tf.reset_default_graph()
 
-    savedir = join(test_dir(), 'ethanol')
-    database = connect(join(savedir, 'ethanol.db'))
-    dataset = Dataset(database, 'ethanol', k_max=3)
+    graph = tf.Graph()
 
-    assert_equal(len(dataset), 10)
-    assert_in(TrainableProperty.forces, dataset.trainable_properties)
+    with graph.as_default():
 
-    dataset.to_records(savedir, test_size=0.5)
-    assert_true(dataset.load_tfrecords(savedir))
+        savedir = join(test_dir(), 'ethanol')
+        database = connect(join(savedir, 'ethanol.db'))
+        dataset = Dataset(database, 'ethanol', k_max=3)
 
-    # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
-    next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=5,
-                                    num_epochs=1, shuffle=False)
+        assert_equal(len(dataset), 10)
+        assert_in(TrainableProperty.forces, dataset.trainable_properties)
 
-    atoms = database.get_atoms(id=2)
-    clf = dataset.descriptor.get_index_transformer(atoms)
-    positions = clf.gather(atoms.positions)
-    energy = atoms.get_total_energy()
-    forces = clf.gather(atoms.get_forces())
+        dataset.to_records(savedir, test_size=0.5)
+        assert_true(dataset.load_tfrecords(savedir))
 
-    with tf.Session() as sess:
+        # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
+        next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=5,
+                                        num_epochs=1, shuffle=False)
 
-        result = sess.run(next_batch)
-        eps = 1e-8
+        atoms = database.get_atoms(id=2)
+        clf = dataset.descriptor.get_index_transformer(atoms)
+        positions = clf.gather(atoms.positions)
+        energy = atoms.get_total_energy()
+        forces = clf.gather(atoms.get_forces())
 
-        assert_less(np.abs(result.positions[1] - positions).max(), eps)
-        assert_less(np.abs(result.f_true[1] - forces).max(), eps)
-        assert_less(float(result.y_true[1] - energy), eps)
+        with tf.Session() as sess:
+
+            result = sess.run(next_batch)
+            eps = 1e-8
+
+            assert_less(np.abs(result.positions[1] - positions).max(), eps)
+            assert_less(np.abs(result.f_true[1] - forces).max(), eps)
+            assert_less(float(result.y_true[1] - energy), eps)
 
 
 if __name__ == "__main__":
