@@ -15,7 +15,8 @@ from behler import SymmetryFunction
 from behler import RadialIndexedSlices, AngularIndexedSlices
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
-from file_io import find_neighbor_sizes, convert_k_max_to_key, convert_rc_to_key
+from file_io import find_neighbor_size_limits, compute_elemental_static_energies
+from file_io import convert_rc_to_key, convert_k_max_to_key
 from misc import check_path, Defaults, AttributeDict, brange, safe_select
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
@@ -23,6 +24,7 @@ from multiprocessing import cpu_count
 from os.path import join, basename, splitext
 from enum import Enum
 from typing import List, Dict
+from collections import Counter
 
 
 __author__ = 'Xin Chen'
@@ -56,13 +58,14 @@ class RawSerializer:
     This class is used to serialize training examples in raw format.
     """
 
-    def __init__(self, k_max: int, natoms: int, nij_max: int, nijk_max: int,
-                 trainable_properties: List[TrainableProperty]):
+    def __init__(self, n_elements: int, k_max: int, n_atoms: int, nij_max: int,
+                 nijk_max: int, trainable_properties: List[TrainableProperty]):
         """
         Initialization method.
         """
+        self.n_elements = n_elements
         self.k_max = k_max
-        self.natoms = natoms
+        self.natoms = n_atoms
         self.nij_max = nij_max
         self.nijk_max = nijk_max
         if not trainable_properties:
@@ -111,8 +114,8 @@ class RawSerializer:
                 'a_shifts': _bytes_feature(shifts)}
 
     def encode(self, positions: np.ndarray, y_true: float, f_true: np.ndarray,
-               mask: np.ndarray, rslices: RadialIndexedSlices,
-               aslices: AngularIndexedSlices):
+               mask: np.ndarray, composition: np.ndarray,
+               rslices: RadialIndexedSlices, aslices: AngularIndexedSlices):
         """
         Encode the data and return a `tf.train.Example`.
         """
@@ -120,6 +123,7 @@ class RawSerializer:
             'positions': _bytes_feature(positions.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
             'mask': _bytes_feature(mask.tostring()),
+            'composition': _bytes_feature(composition.tostring()),
         }
         feature_list.update(self._merge_and_encode_rslices(rslices))
         if TrainableProperty.forces in self.trainable_properties:
@@ -145,6 +149,9 @@ class RawSerializer:
         mask = tf.decode_raw(example['mask'], tf.float64)
         mask.set_shape([self.natoms + 1, ])
 
+        composition = tf.decode_raw(example['composition'], tf.float64)
+        composition.set_shape([self.n_elements, ])
+
         if TrainableProperty.forces in self.trainable_properties:
             f_true = tf.decode_raw(example['f_true'], tf.float64)
             f_true.set_shape([length])
@@ -152,7 +159,7 @@ class RawSerializer:
         else:
             f_true = None
 
-        return positions, y_true, f_true, mask
+        return positions, y_true, f_true, mask, composition
 
     def _decode_rslices(self, example: Dict[str, tf.Tensor]):
         """
@@ -208,13 +215,15 @@ class RawSerializer:
         """
         Decode the parsed single example.
         """
-        positions, y_true, f_true, mask = self._decode_atoms(example)
+        positions, y_true, f_true, mask, composition = \
+            self._decode_atoms(example)
         rslices = self._decode_rslices(example)
         aslices = self._decode_aslices(example)
 
         decoded = AttributeDict(positions=positions, y_true=y_true, mask=mask,
-                                rv2g=rslices.v2g_map, ilist=rslices.ilist,
-                                jlist=rslices.jlist, shift=rslices.shift)
+                                composition=composition, rv2g=rslices.v2g_map,
+                                ilist=rslices.ilist, jlist=rslices.jlist,
+                                shift=rslices.shift)
 
         if f_true is not None:
             decoded.f_true = f_true
@@ -241,7 +250,8 @@ class RawSerializer:
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'r_indices': tf.FixedLenFeature([], tf.string),
                 'r_shifts': tf.FixedLenFeature([], tf.string),
-                'mask': tf.FixedLenFeature([], tf.string)
+                'mask': tf.FixedLenFeature([], tf.string),
+                'composition': tf.FixedLenFeature([], tf.string),
             }
             if TrainableProperty.forces in self.trainable_properties:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
@@ -344,7 +354,7 @@ class Dataset:
         Return the descriptor instance. Currently only `SymmetryFunction` is
         implemented.
         """
-        return self._symmetry_function
+        return self._descriptor
 
     @property
     def train_size(self):
@@ -360,11 +370,24 @@ class Dataset:
         """
         return self._file_sizes.get(tf.estimator.ModeKeys.EVAL, 0)
 
+    @property
+    def elemental_static_energies(self) -> List[float]:
+        """
+        Return a list of `float` as the static energy for each type of element.
+        """
+        return self._y_static
+
     def __len__(self) -> int:
         """
         Return the number of examples in this dataset.
         """
         return len(self._database)
+
+    def _should_compute_static_energies(self):
+        """
+        A helper function. Return True if `y_static` cannot be accessed.
+        """
+        return len(self._database.metadata.get('y_static', [])) == 0
 
     def _should_find_neighbor_sizes(self):
         """
@@ -396,38 +419,58 @@ class Dataset:
         Read the metadata of the database and finalize the initialization.
         """
         if self._should_find_neighbor_sizes():
-            find_neighbor_sizes(self._database, self._rc, k_max=self._k_max)
-
+            find_neighbor_size_limits(self._database, self._rc,
+                                      k_max=self._k_max, verbose=True)
         trainable_properties = [TrainableProperty.energy]
         if self._database.metadata['extxyz']:
             trainable_properties += [TrainableProperty.forces]
         max_occurs = self._database.metadata['max_occurs']
-        natoms = sum(max_occurs.values())
+        n_atoms = sum(max_occurs.values())
         nij_max, nijk_max = self._get_nij_and_nijk()
         sf = SymmetryFunction(self._rc, max_occurs, k_max=self._k_max,
                               nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
                               beta=self._beta, gamma=self._gamma,
                               zeta=self._zeta)
-        self._symmetry_function = sf
+
+        if self._should_compute_static_energies():
+            compute_elemental_static_energies(self._database, sf.elements,
+                                              verbose=True)
+        y_static = self._database.metadata['y_static']
+
+        self._descriptor = sf
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
         self._trainable_properties = trainable_properties
-        self._serializer = RawSerializer(self._k_max, natoms, nij_max, nijk_max,
-                                         trainable_properties)
+        self._y_static = y_static
+        self._serializer = RawSerializer(
+            n_elements=len(max_occurs), k_max=self._k_max, n_atoms=n_atoms,
+            nij_max=nij_max, nijk_max=nijk_max,
+            trainable_properties=trainable_properties)
+
+    def _get_composition(self, atoms: Atoms) -> np.ndarray:
+        """
+        Return the composition of the `Atoms`.
+        """
+        elements = self._descriptor.elements
+        composition = np.zeros(len(elements), dtype=np.float64)
+        for element, count in Counter(atoms.get_chemical_symbols()).items():
+            composition[elements.index(element)] = float(count)
+        return composition
 
     def convert_atoms_to_example(self, atoms: Atoms) -> Example:
         """
         Convert an `Atoms` object to `tf.train.Example`.
         """
-        transformer = self._symmetry_function.get_index_transformer(atoms)
+        transformer = self._descriptor.get_index_transformer(atoms)
         positions = transformer.gather(atoms.positions)
         mask = transformer.mask.astype(np.float64)
+        composition = self._get_composition(atoms)
         y_true = np.atleast_2d(atoms.get_total_energy())
         f_true = transformer.gather(atoms.get_forces())
-        rslices, aslices = self._symmetry_function.get_indexed_slices([atoms])
+        rslices, aslices = self._descriptor.get_indexed_slices([atoms])
         return self._serializer.encode(positions, y_true, f_true, mask,
-                                       rslices, aslices)
+                                       composition, rslices, aslices)
 
     def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
                       indices: List[int], parallel=True, verbose=False):
@@ -465,7 +508,7 @@ class Dataset:
             logstr = "\rProgress: {:7d} / {:7d} | Speed = {:6.1f}"
 
             if verbose:
-                print("Start writing {} subset ...\n".format(str(mode)))
+                print("Start writing {} subset ...".format(str(mode)))
 
             tic = time.time()
 
@@ -485,7 +528,8 @@ class Dataset:
                             logstr.format(istop, num_examples, speed))
             if verbose:
                 print("")
-                print("Done.\n")
+                print("Done.")
+                print("")
 
     def _get_signature(self) -> str:
         """
@@ -597,6 +641,7 @@ class Dataset:
             splits = self.descriptor.get_descriptors_graph(batch, batch_size)
             features = AttributeDict(descriptors=splits,
                                      positions=batch.positions,
+                                     composition=batch.composition,
                                      mask=batch.mask)
             labels = AttributeDict(y=batch.y_true)
             if TrainableProperty.forces in self.trainable_properties:
