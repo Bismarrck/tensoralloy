@@ -6,8 +6,9 @@ from __future__ import print_function, absolute_import
 
 import configparser
 from ase.db import connect
-from os.path import splitext, basename, join
+from os.path import splitext, basename, join, exists
 from typing import Callable
+from shutil import rmtree
 
 from misc import Defaults, AttributeDict
 from dataset import Dataset, TrainableProperty
@@ -187,7 +188,6 @@ class ConfigParser(configparser.ConfigParser):
                             staircase=staircase)
 
         section = 'train'
-
         model_dir = self[section].get('model_dir')
         batch_size = self[section].getint('batch_size', 50)
 
@@ -201,12 +201,19 @@ class ConfigParser(configparser.ConfigParser):
 
         train_steps = self[section].getint('train_steps', 10000)
         eval_steps = self[section].getint('eval_steps', 1000)
-        eval_dir = self[section].get('eval_dir', join(model_dir, 'eval'))
+        eval_dir = join(model_dir, 'eval')
         summary_steps = self[section].getint('summary_steps', 100)
         log_steps = self[section].getint('log_steps', 100)
         max_checkpoints_to_keep = self[section].getint(
             'max_checkpoints_to_keep', 10)
         profile_steps = self[section].getint('profile_steps', 0)
+
+        restart = self[section].getboolen('restart', True)
+        if not restart:
+            if exists(model_dir):
+                rmtree(model_dir)
+            if exists(eval_dir):
+                rmtree(eval_dir)
 
         train = AttributeDict(model_dir=model_dir,
                               batch_size=batch_size,
