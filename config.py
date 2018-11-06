@@ -208,7 +208,7 @@ class ConfigParser(configparser.ConfigParser):
             'max_checkpoints_to_keep', 10)
         profile_steps = self[section].getint('profile_steps', 0)
 
-        restart = self[section].getboolen('restart', True)
+        restart = self[section].getboolean('restart', True)
         if not restart:
             if exists(model_dir):
                 rmtree(model_dir)
