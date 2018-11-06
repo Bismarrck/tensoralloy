@@ -11,7 +11,7 @@ from typing import Callable
 
 from misc import Defaults, AttributeDict
 from dataset import Dataset, TrainableProperty
-from nn import AtomicNN
+from nn import AtomicNN, AtomicResNN
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -143,11 +143,25 @@ class ConfigParser(configparser.ConfigParser):
             hidden_sizes[element] = self[section].getints(
                 element, Defaults.hidden_sizes)
 
-        weights = descriptor.get_initial_weights_for_normalizers()
+        normalizer_weights = descriptor.get_initial_weights_for_normalizers()
         normalizer = self[section].get('input_normalizer', 'none')
-        nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
-                      activation=activation, l2_weight=l2_weight, forces=forces,
-                      normalizer=normalizer, initial_normalizer_weights=weights)
+        arch = self[section].get('arch', 'AtomicNN')
+
+        if arch == 'AtomicNN':
+            nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
+                          activation=activation, l2_weight=l2_weight,
+                          forces=forces, normalizer=normalizer,
+                          initial_normalizer_weights=normalizer_weights)
+        elif arch == 'AtomicResNN':
+            y_static_weights = self._dataset.elemental_static_energies
+            nn = AtomicResNN(elements=elements, hidden_sizes=hidden_sizes,
+                             activation=activation, l2_weight=l2_weight,
+                             forces=forces, normalizer=normalizer,
+                             initial_normalizer_weights=normalizer_weights,
+                             initial_y_static_weights=y_static_weights)
+        else:
+            raise ValueError(f"The arch {arch} is not supported. Please use: "
+                             f"AtomicNN or AtomicResNN.")
         return nn
 
     def _read_hyperparams(self):
