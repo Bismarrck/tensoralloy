@@ -19,7 +19,7 @@ from os.path import splitext, exists
 from os import remove
 from joblib import Parallel, delayed
 from argparse import ArgumentParser
-from typing import Dict
+from typing import Dict, List
 from misc import safe_select
 
 
@@ -312,6 +312,58 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
     if verbose:
         print('All {} jobs are done. nij_max = {}, nijk_max = {}'.format(
             len(database), nij_max, nijk_max))
+
+
+def compute_elemental_static_energies(database: SQLite3Database,
+                                      elements: List[str],
+                                      verbose=True):
+    """
+    Compute the static energy for each type of element and add the results to
+    the metadata.
+
+    Parameters
+    ----------
+    database : SQLite3Database
+        The database to update. This db must be created by the function `read`.
+    elements : List[str]
+        A list of str as the ordered elements.
+    verbose : bool
+        If True, the progress shall be logged.
+
+    """
+    n = len(database)
+    id_first = 1
+    col_map = {element: elements.index(element) for element in elements}
+    A = np.zeros((n, len(elements)), dtype=np.float64)
+    b = np.zeros(n, dtype=np.float64)
+
+    if verbose:
+        print("Start computing elemental static energies ...")
+
+    for aid in range(id_first, id_first + n):
+        atoms = database.get_atoms(id=aid)
+        row = aid - 1
+        for element, count in Counter(atoms.get_chemical_symbols()).items():
+            A[row, col_map[element]] = float(count)
+        b[row] = atoms.get_total_energy()
+
+    rank = np.linalg.matrix_rank(A)
+    if rank == len(elements):
+        x = np.dot(np.linalg.pinv(A), b)
+    elif rank == 1:
+        x = np.mean(b / A.sum(axis=1))
+    else:
+        raise ValueError(f"The matrix has an invalid rank of {rank}")
+
+    if verbose:
+        print("Done.")
+        for i in range(len(elements)):
+            print("  * y_static of {:2s} = {: 12.6f}".format(elements[i], x[i]))
+        print("")
+
+    metadata = dict(database.metadata)
+    metadata["y_static"] = x.tolist()
+    database.metadata = metadata
 
 
 if __name__ == "__main__":
