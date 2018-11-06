@@ -26,10 +26,12 @@ class GraphKeys:
     TRAIN_SUMMARY = 'train_summary'
     EVAL_SUMMARY = 'eval_summary'
 
-    # Variable key
+    # Variable keys
     NORMALIZE_VARIABLES = 'normalize_vars'
+    Y_STATIC_VARIABLES = 'y_static_vars'
 
-    # Metrics Key
+    # Metrics Keys
+    TRAIN_METRICS = 'train_metrics'
     EVAL_METRICS = 'eval_metrics'
 
 
@@ -152,7 +154,7 @@ class _InputNormalizer:
         if self.method == 'none':
             return x
 
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             if values is None:
                 values = np.ones(x.shape[2], dtype=np.float64)
             alpha = tf.get_variable(
@@ -355,6 +357,7 @@ class AtomicNN:
             weight = tf.convert_to_tensor(
                 self._l2_weight, dtype=tf.float64, name='weight')
             l2 = tf.multiply(l2_loss, weight, name='l2')
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
             tf.summary.scalar(l2.op.name + '/summary', l2,
                               collections=[GraphKeys.TRAIN_SUMMARY, ])
             return l2
@@ -476,6 +479,14 @@ class AtomicNN:
 
             hooks = [summary_saver_hook, examples_per_sec_hook]
 
+            if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
+                logging_tensor_hook = tf.train.LoggingTensorHook(
+                    tensors=tf.get_collection(GraphKeys.TRAIN_METRICS),
+                    every_n_iter=hparams.train.log_steps,
+                    at_end=True,
+                )
+                hooks.append(logging_tensor_hook)
+
             if hparams.train.profile_steps:
                 with tf.name_scope("Profile"):
                     profiler_hook = tf.train.ProfilerHook(
@@ -521,7 +532,7 @@ class AtomicNN:
                 })
 
             for _, (metric, update_op) in metrics.items():
-                tf.add_to_collection(metric, GraphKeys.EVAL_METRICS)
+                tf.add_to_collection(GraphKeys.EVAL_METRICS, metric)
 
             return metrics
 
@@ -609,22 +620,25 @@ class AtomicResNN(AtomicNN):
         """
         outputs = self._build_atomic_nn(features, verbose)
 
-        with tf.variable_scope("Static"):
+        with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
             if self._initial_y_static_weights is None:
                 values = np.ones(len(self._elements), dtype=np.float64)
             else:
                 values = self._initial_y_static_weights
-            x = tf.identity(features.compositions, name='input')
-            y = tf.layers.conv1d(
-                inputs=x, filters=1, kernel_size=1, strides=1, activation=None,
-                use_bias=False, reuse=tf.AUTO_REUSE, trainable=True,
-                kernel_initializer=tf.constant_initializer(
-                    values, dtype=tf.float64),
-                name='1x1StaticConv'
-            )
+            initializer = tf.constant_initializer(values, dtype=tf.float64)
+            x = tf.identity(features.composition, name='input')
+            z = tf.get_variable("weights", shape=(len(self._elements)),
+                                dtype=tf.float64, trainable=True,
+                                collections=[GraphKeys.Y_STATIC_VARIABLES,
+                                             tf.GraphKeys.TRAINABLE_VARIABLES,
+                                             tf.GraphKeys.GLOBAL_VARIABLES,
+                                             GraphKeys.TRAIN_METRICS],
+                                initializer=initializer)
+            xz = tf.multiply(x, z, name='xz')
+            y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
+                                     name='y_static')
             if verbose:
-                log_tensor(y)
-            y_static = tf.squeeze(y, name='y_static')
+                log_tensor(y_static)
 
         with tf.name_scope("Output"):
             with tf.name_scope("Energy"):
@@ -639,6 +653,12 @@ class AtomicResNN(AtomicNN):
                 with tf.name_scope("Static"):
                     y_static = tf.identity(y_static, 'y')
                 y = tf.add(y_static, y_res, name='y')
+                with tf.name_scope("Ratio"):
+                    ratio = tf.reduce_mean(tf.div(y_static, y, name='ratio'),
+                                           name='avg')
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
+                    tf.summary.scalar(ratio.op.name + '/summary', ratio,
+                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
             if self._forces:
                 with tf.name_scope("Forces"):
                     f = tf.gradients(y, features.positions, name='f')[0]
