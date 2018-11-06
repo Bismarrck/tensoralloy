@@ -10,6 +10,7 @@ __email__ = 'Bismarrck@me.com'
 from nose import main
 from nose.tools import assert_almost_equal, assert_equal, assert_dict_equal
 from file_io import read, find_neighbor_sizes
+from ase.units import kcal, mol, eV
 
 
 def test_read_xyz():
@@ -44,6 +45,17 @@ def test_find_neighbors():
     metadata = database.metadata
     assert_equal(len(metadata['neighbors']), 2)
     assert_equal(metadata['neighbors']['3']['6.00']['nij_max'], 358)
+
+
+def test_unit_conversion():
+    xyzfile = 'test_files/examples.extxyz'
+    database = read(xyzfile, verbose=False,
+                    unit_conversion={'energy': kcal / mol / eV})
+    atoms = database.get_atoms(id=2)
+    thres = 1e-6
+    unit = kcal / mol / eV
+    assert_almost_equal(atoms.get_total_energy(), -17637.613286 * unit,
+                        delta=thres)
 
 
 if __name__ == "__main__":
