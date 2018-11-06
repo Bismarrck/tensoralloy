@@ -141,7 +141,7 @@ class _InputNormalizer:
         """
         Initialization method.
         """
-        assert method in ('linear', 'arctan')
+        assert method in ('linear', 'arctan', 'none')
         self.method = method
         self.scope = '{}Norm'.format(method.capitalize())
 
@@ -149,6 +149,9 @@ class _InputNormalizer:
         """
         Apply the normalization.
         """
+        if self.method == 'none':
+            return x
+
         with tf.variable_scope(self.scope):
             if values is None:
                 values = np.ones(x.shape[2], dtype=np.float64)

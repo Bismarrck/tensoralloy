@@ -144,7 +144,7 @@ class ConfigParser(configparser.ConfigParser):
                 element, Defaults.hidden_sizes)
 
         weights = descriptor.get_initial_weights_for_normalizers()
-        normalizer = self[section].get('normalizer', 'linear')
+        normalizer = self[section].get('input_normalizer', 'none')
         nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
                       activation=activation, l2_weight=l2_weight, forces=forces,
                       normalizer=normalizer, initial_normalizer_weights=weights)
