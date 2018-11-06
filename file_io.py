@@ -183,7 +183,11 @@ def _read_extxyz(filename, ext=True, unit_convertion=None, num_examples=None,
             print("")
             print("Total {} structures, time: {:.3f} sec".format(
                 count, time.time() - tic))
-    database.metadata = {'max_occurs': max_occurs, 'extxyz': ext}
+    database.metadata = {'max_occurs': max_occurs, 'extxyz': ext,
+                         'unit_conversion': {
+                             'energy': energy_unit,
+                             'forces': forces_unit}
+                         }
     return database
 
 
