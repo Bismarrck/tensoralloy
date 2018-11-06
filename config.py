@@ -10,7 +10,7 @@ from os.path import splitext, basename, join, exists
 from typing import Callable
 from shutil import rmtree
 
-from misc import Defaults, AttributeDict
+from misc import Defaults, AttributeDict, safe_select
 from dataset import Dataset, TrainableProperty
 from nn import AtomicNN, AtomicResNN
 
@@ -176,6 +176,8 @@ class ConfigParser(configparser.ConfigParser):
             'learning_rate', Defaults.learning_rate)
 
         decay_function = self[section].get('decay_function', None)
+        decay_function = safe_select(decay_function, None)
+
         decay_rate = self[section].getfloat('decay_rate', None)
         decay_steps = self[section].getint('decay_steps', None)
         staircase = self[section].getboolean('staircase', False)

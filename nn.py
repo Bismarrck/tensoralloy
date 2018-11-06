@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
+from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
 from hooks import ExamplesPerSecondHook
@@ -132,6 +133,18 @@ def log_tensor(tensor: tf.Tensor):
     dimensions = ",".join(["{:6d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
     tf.logging.info("{:<36s} : [{}]".format(tensor.op.name, dimensions))
+
+
+def msra_initializer(dtype=tf.float64, seed=Defaults.seed):
+    """
+    Return the so-called `MSRA` initializer.
+
+    See Also
+    --------
+    [Delving Deep into Rectifiers](http://arxiv.org/pdf/1502.01852v1.pdf)
+
+    """
+    return variance_scaling_initializer(dtype=dtype, seed=seed)
 
 
 class _InputNormalizer:
