@@ -9,7 +9,7 @@ __email__ = 'Bismarrck@me.com'
 
 from nose import main
 from nose.tools import assert_almost_equal, assert_equal, assert_dict_equal
-from file_io import read, find_neighbor_sizes
+from file_io import read, find_neighbor_size_limits
 from ase.units import kcal, mol, eV
 
 
@@ -39,8 +39,10 @@ def test_find_neighbors():
     xyzfile = 'test_files/examples.extxyz'
     database = read(xyzfile, verbose=False)
 
-    find_neighbor_sizes(database, rc=6.0, k_max=3, n_jobs=1, verbose=False)
-    find_neighbor_sizes(database, rc=6.5, k_max=2, n_jobs=1, verbose=False)
+    find_neighbor_size_limits(database, rc=6.0, k_max=3, n_jobs=1,
+                              verbose=False)
+    find_neighbor_size_limits(database, rc=6.5, k_max=2, n_jobs=1,
+                              verbose=False)
 
     metadata = database.metadata
     assert_equal(len(metadata['neighbors']), 2)

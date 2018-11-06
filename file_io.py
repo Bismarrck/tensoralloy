@@ -241,8 +241,8 @@ def convert_rc_to_key(rc):
     return "{:.2f}".format(round(rc, 4))
 
 
-def find_neighbor_sizes(database: SQLite3Database, rc: float, k_max: int=3,
-                        n_jobs=-1, verbose=True):
+def find_neighbor_size_limits(database: SQLite3Database, rc: float,
+                              k_max: int=3, n_jobs=-1, verbose=True):
     """
     Find `nij_max` and `nijk_max` of all `Atoms` objects in the database.
 
