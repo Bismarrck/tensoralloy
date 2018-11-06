@@ -21,9 +21,16 @@ class GraphKeys:
     """
     Standard names for variable collections.
     """
+
+    # Summary keys
     TRAIN_SUMMARY = 'train_summary'
     EVAL_SUMMARY = 'eval_summary'
+
+    # Variable key
     NORMALIZE_VARIABLES = 'normalize_vars'
+
+    # Metrics Key
+    EVAL_METRICS = 'eval_metrics'
 
 
 def get_activation_fn(fn_name: str):
@@ -125,16 +132,62 @@ def log_tensor(tensor: tf.Tensor):
     tf.logging.info("{:<36s} : [{}]".format(tensor.op.name, dimensions))
 
 
+class _InputNormalizer:
+    """
+    A collection of funcitons for normalizing input descriptors to [0, 1].
+    """
+
+    def __init__(self, method='linear'):
+        """
+        Initialization method.
+        """
+        assert method in ('linear', 'arctan')
+        self.method = method
+        self.scope = '{}Norm'.format(method.capitalize())
+
+    def __call__(self, x: tf.Tensor, values=None):
+        """
+        Apply the normalization.
+        """
+        with tf.variable_scope(self.scope):
+            if values is None:
+                values = np.ones(x.shape[2], dtype=np.float64)
+            alpha = tf.get_variable(
+                name='alpha',
+                shape=x.shape[2],
+                dtype=x.dtype,
+                initializer=tf.constant_initializer(values, dtype=x.dtype),
+                collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
+                             tf.GraphKeys.GLOBAL_VARIABLES,
+                             GraphKeys.NORMALIZE_VARIABLES],
+                trainable=True)
+            tf.summary.histogram(
+                name=alpha.op.name + '/summary',
+                values=alpha,
+                collections=[GraphKeys.TRAIN_SUMMARY])
+            x = tf.multiply(x, alpha, name='ax')
+            if self.method == 'linear':
+                x = tf.identity(x, name='x')
+            elif self.method == 'arctan':
+                x = tf.atan(x, name='x')
+            else:
+                raise ValueError(
+                    f"Unsupported normalization method: {self.method}")
+            tf.summary.histogram(
+                name=x.op.name + '/summary',
+                values=x,
+                collections=[GraphKeys.TRAIN_SUMMARY])
+            return x
+
+
 class AtomicNN:
     """
     This class represents a general atomic neural network.
     """
 
-    EVAL_METRICS = 'eval_metrics'
-
     def __init__(self, elements: List[str], hidden_sizes=None,
                  activation=None, l2_weight=0.0, forces=False,
-                 initial_normalizer_weights=None):
+                 normalizer='linear', initial_normalizer_weights=None):
         """
         Initialization method.
 
@@ -151,6 +204,8 @@ class AtomicNN:
             If True, atomic forces will be derived.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
+        normalizer : str
+            The normalization method. Defaults to 'linear'.
         initial_normalizer_weights : Dict[str, array_like]
             The initialer weights for arctan normalization layers for each type
             of element.
@@ -163,6 +218,7 @@ class AtomicNN:
         self._forces = forces
         self._l2_weight = max(l2_weight, 0.0)
         self._initial_normalizer_weights = initial_normalizer_weights
+        self._normalizer = _InputNormalizer(method=normalizer)
 
     @property
     def elements(self):
@@ -200,36 +256,6 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
-    def arctan_normalization(self, x, element: str):
-        """
-        A dynamic normalization layer using the arctan function.
-        """
-        if x.dtype == tf.float64:
-            dtype = np.float64
-        else:
-            dtype = np.float32
-        if self._initial_normalizer_weights is None:
-            values = np.ones(x.shape[2], dtype=dtype)
-        else:
-            values = np.asarray(
-                self._initial_normalizer_weights[element], dtype=dtype)
-        with tf.variable_scope("Normalization"):
-            alpha = tf.get_variable(
-                name='alpha',
-                shape=x.shape[2],
-                dtype=x.dtype,
-                initializer=tf.constant_initializer(values, dtype=x.dtype),
-                collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
-                             tf.GraphKeys.GLOBAL_VARIABLES,
-                             GraphKeys.NORMALIZE_VARIABLES],
-                trainable=True)
-            tf.summary.histogram(
-                name=alpha.op.name + '/summary',
-                values=alpha,
-                collections=[GraphKeys.TRAIN_SUMMARY])
-            x = tf.multiply(x, alpha, name='ax')
-            return tf.atan(x, name='x')
-
     def build(self, features: AttributeDict, verbose=True):
         """
         Build the atomic neural network.
@@ -256,8 +282,9 @@ class AtomicNN:
             outputs = []
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
-                    x = tf.identity(features.descriptors[element], name='x_raw')
-                    x = self.arctan_normalization(x, element)
+                    x = tf.identity(features.descriptors[element], name='input')
+                    x = self._normalizer(
+                        x, self._initial_normalizer_weights[element])
                     hidden_sizes = self._hidden_sizes[element]
                     for j in range(len(hidden_sizes)):
                         with tf.variable_scope('Hidden{}'.format(j + 1)):
@@ -457,7 +484,7 @@ class AtomicNN:
         with tf.name_scope("Hooks"):
             with tf.name_scope("Accuracy"):
                 logging_tensor_hook = tf.train.LoggingTensorHook(
-                    tensors=tf.get_collection(AtomicNN.EVAL_METRICS),
+                    tensors=tf.get_collection(GraphKeys.EVAL_METRICS),
                     every_n_iter=hparams.train.eval_steps,
                     at_end=True)
 
@@ -484,7 +511,7 @@ class AtomicNN:
                 })
 
             for _, (metric, update_op) in metrics.items():
-                tf.add_to_collection(metric, AtomicNN.EVAL_METRICS)
+                tf.add_to_collection(metric, GraphKeys.EVAL_METRICS)
 
             return metrics
 

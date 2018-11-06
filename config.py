@@ -144,9 +144,10 @@ class ConfigParser(configparser.ConfigParser):
                 element, Defaults.hidden_sizes)
 
         weights = descriptor.get_initial_weights_for_normalizers()
+        normalizer = self[section].get('normalizer', 'linear')
         nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
                       activation=activation, l2_weight=l2_weight, forces=forces,
-                      initial_normalizer_weights=weights)
+                      normalizer=normalizer, initial_normalizer_weights=weights)
         return nn
 
     def _read_hyperparams(self):
