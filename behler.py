@@ -331,6 +331,7 @@ class SymmetryFunction:
         self._kbody_sizes = kbody_sizes
         self._elements = elements
         self._ndim = ndim
+        self._max_n_atoms = sum(max_occurs.values()) + 1
         self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
         self._eta = np.asarray(eta)
@@ -576,6 +577,17 @@ class SymmetryFunction:
         aslices = self.get_angular_indexed_slices(trajectory, rslices)
         return rslices, aslices
 
+    @staticmethod
+    def _get_v2g_map_batch_indexing_matrix(batch_size, ndim):
+        """
+        Return an `int32` matrix of shape `[batch_size, ndim, 3]` to rebuild the
+        batch indexing of a `v2g_map`.
+        """
+        inc = np.zeros((batch_size, ndim, 3), dtype=np.int32)
+        for i in range(batch_size):
+            inc[i] += [i, 0, 0]
+        return inc
+
     def get_radial_function_graph(self, R, v2g_map, ilist, jlist, shift,
                                   batch_size=None):
         """
@@ -587,10 +599,16 @@ class SymmetryFunction:
                 eta = tf.constant(self._eta, dtype=tf.float64, name='eta')
                 R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
                 batch_size = batch_size or R.shape[0]
-                max_atoms = R.shape[1]
-                v2g_map = tf.convert_to_tensor(
-                    v2g_map, dtype=tf.int32, name='v2g_map')
-                v2g_map.set_shape([batch_size, self._nij_max, 3])
+
+                with tf.name_scope("v2g_map"):
+                    batch_indexing = self._get_v2g_map_batch_indexing_matrix(
+                        batch_size, self._nij_max)
+                    batch_indexing = tf.convert_to_tensor(
+                        batch_indexing, dtype=tf.int32, name='batch_indexing')
+                    v2g_map = tf.convert_to_tensor(
+                        v2g_map, dtype=tf.int32, name='v2g_map_raw')
+                    v2g_map = tf.add(v2g_map, batch_indexing, name='v2g_map')
+                    v2g_map.set_shape([batch_size, self._nij_max, 3])
 
             with tf.name_scope("rij"):
                 Ri = batch_gather_positions(R, ilist, batch_size, name='Ri')
@@ -606,7 +624,7 @@ class SymmetryFunction:
                 fc_r = cutoff(r, rc=self._rc, name='fc_r')
 
             with tf.name_scope("features"):
-                shape = tf.constant([batch_size, max_atoms, self._ndim],
+                shape = tf.constant((batch_size, self._max_n_atoms, self._ndim),
                                     dtype=tf.int32, name='shape')
                 g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
                 for i in range(len(self._eta)):
@@ -639,7 +657,6 @@ class SymmetryFunction:
                 two = tf.constant(2.0, dtype=tf.float64)
                 rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
                 batch_size = batch_size or R.shape[0]
-                max_atoms = R.shape[1]
                 v2g_map = tf.convert_to_tensor(
                     v2g_map, dtype=tf.int32, name='v2g_map')
                 v2g_map.set_shape([batch_size, self._nijk_max, 3])
@@ -690,7 +707,7 @@ class SymmetryFunction:
                 r2c = tf.div(r2, rc2, name='r2_rc2')
 
             with tf.name_scope("features"):
-                shape = tf.constant((batch_size, max_atoms, self._ndim),
+                shape = tf.constant((batch_size, self._max_n_atoms, self._ndim),
                                     dtype=tf.int32, name='shape')
                 g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
                 for i, params in enumerate(self._parameter_grid):

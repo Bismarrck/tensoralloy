@@ -21,7 +21,7 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import List, Union
 from collections import Counter
-from misc import Defaults
+from misc import Defaults, AttributeDict
 from dataclasses import dataclass
 
 __author__ = 'Xin Chen'
@@ -49,6 +49,13 @@ Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
                                     [5.835, 1.37532269, 8.5],
                                     [5.835, 7.12596807, 8.],
                                     [3.89, 2.75064538, 8.37532269]]))
+
+qm7m = AttributeDict(
+    max_occurs=Counter({'H': 8, 'C': 5, 'O': 2}),
+    nij_max=198,
+    nijk_max=1217,
+    trajectory=read('test_files/qm7m/qm7m.xyz', index=':', format='xyz'),
+)
 
 grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
                       'zeta': Defaults.zeta})
@@ -706,28 +713,23 @@ def test_batch_multi_elements():
     """
     Test computing descriptors of a batch of multi-elements molecules.
     """
-    trajectory = read('test_files/qm7m/qm7m.xyz', index=':', format='xyz')
     rc = 6.0
-    max_occurs = Counter()
-    for atoms in trajectory:
-        for element, n in Counter(atoms.get_chemical_symbols()).items():
-            max_occurs[element] = max(max_occurs[element], n)
-
-    batch_size = len(trajectory)
-    n_atoms = sum(max_occurs.values())
-    kbody_terms, mapping, elements = get_kbody_terms(list(max_occurs.keys()),
-                                                     k_max=3)
+    batch_size = len(qm7m.trajectory)
+    n_atoms = sum(qm7m.max_occurs.values())
+    kbody_terms, mapping, elements = get_kbody_terms(
+        list(qm7m.max_occurs.keys()), k_max=3
+    )
     total_dim, kbody_sizes = compute_dimension(kbody_terms,
                                                Defaults.n_etas,
                                                Defaults.n_betas,
                                                Defaults.n_gammas,
                                                Defaults.n_zetas)
     element_offsets = np.insert(
-        np.cumsum([max_occurs[e] for e in elements]), 0, 0)
+        np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
 
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
-    for i, atoms in enumerate(trajectory):
+    for i, atoms in enumerate(qm7m.trajectory):
         g, local_terms, local_sizes = legacy_symmetry_function(
             atoms, rc, atoms.get_chemical_formula())
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
@@ -750,15 +752,15 @@ def test_batch_multi_elements():
     nij_max = 198
     nijk_max = 1217
     if nij_max is None:
-        nij_max, nijk_max = get_ij_ijk_max(trajectory, rc)
+        nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
 
-    sf = SymmetryFunction(rc, max_occurs, k_max=3, nij_max=nij_max,
+    sf = SymmetryFunction(rc, qm7m.max_occurs, k_max=3, nij_max=nij_max,
                           nijk_max=nijk_max)
 
-    rslices, aslices = sf.get_indexed_slices(trajectory)
+    rslices, aslices = sf.get_indexed_slices(qm7m.trajectory)
 
     positions = np.zeros((batch_size, n_atoms + 1, 3))
-    for i, atoms in enumerate(trajectory):
+    for i, atoms in enumerate(qm7m.trajectory):
         positions[i] = sf.get_index_transformer(atoms).gather(atoms.positions)
 
     gr = sf.get_radial_function_graph(positions,
