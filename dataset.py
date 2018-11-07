@@ -422,7 +422,8 @@ class Dataset:
             find_neighbor_size_limits(self._database, self._rc,
                                       k_max=self._k_max, verbose=True)
         trainable_properties = [TrainableProperty.energy]
-        if self._database.metadata['extxyz']:
+        extxyz = self._database.metadata['extxyz']
+        if extxyz:
             trainable_properties += [TrainableProperty.forces]
         max_occurs = self._database.metadata['max_occurs']
         n_atoms = sum(max_occurs.values())
@@ -430,7 +431,7 @@ class Dataset:
         sf = SymmetryFunction(self._rc, max_occurs, k_max=self._k_max,
                               nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
                               beta=self._beta, gamma=self._gamma,
-                              zeta=self._zeta)
+                              zeta=self._zeta, periodic=extxyz)
 
         if self._should_compute_static_energies():
             compute_elemental_static_energies(self._database, sf.elements,

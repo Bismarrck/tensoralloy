@@ -290,6 +290,8 @@ class AtomicNN:
                     x = self._normalizer(
                         x, self._initial_normalizer_weights[element])
                     hidden_sizes = self._hidden_sizes[element]
+                    if verbose:
+                        log_tensor(x)
                     for j in range(len(hidden_sizes)):
                         with tf.variable_scope('Hidden{}'.format(j + 1)):
                             x = tf.layers.conv1d(
