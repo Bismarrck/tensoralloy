@@ -8,13 +8,14 @@ import tensorflow as tf
 import numpy as np
 from ase import Atoms
 from ase.neighborlist import neighbor_list
-from utils import cutoff, batch_gather_positions
-from misc import Defaults, AttributeDict
 from itertools import chain
 from collections import Counter
 from sklearn.model_selection import ParameterGrid
 from typing import List, Union, Dict
 from dataclasses import dataclass
+
+from utils import cutoff, batch_gather_positions
+from misc import Defaults, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -306,32 +307,76 @@ class IndexTransformer:
             params = np.squeeze(params, axis=0)
         return params
 
+"""
+        with tf.name_scope("Placeholders"):
+            R = tf.placeholder(tf.float64, shape=(None, 3), name='R'),
+            n_atoms = tf.placeholder(tf.int32, shape=(), name='n_atoms')
+            g2 = AttributeDict(
+                ij=tf.placeholder(tf.int32, (2, None), 'g2.ij'),
+                shift=tf.placeholder(tf.float64, (None, 3), 'g2.shift'),
+                v2g_map=tf.placeholder(tf.int32, (None, 2), 'g2.v2g_map'),
+            ),
+            g4 = AttributeDict(
+                v2g_map=tf.placeholder(tf.int32, (None, 2), 'g4.v2g_map'),
+                ij=tf.placeholder(tf.int32, (None, 2), 'g4.ij'),
+                ik=tf.placeholder(tf.int32, (None, 2), 'g4.ik'),
+                jk=tf.placeholder(tf.int32, (None, 2), 'g4.jk'),
+                shift=AttributeDict(
+                    ij=tf.placeholder(tf.float64, (None, 3), 'g4.shift.ij'),
+                    ik=tf.placeholder(tf.float64, (None, 3), 'g4.shift.ik'),
+                    jk=tf.placeholder(tf.float64, (None, 3), 'g4.shift.jk'),
+                ),
+            )
+            self._placeholders = AttributeDict(
+                R=R, n_atoms=n_atoms, g2=g2, g4=g4
+            )
+"""
 
 class SymmetryFunction:
     """
-    A tensorflow based implementation of Behler-Parinello's Symmetry Function
-    neural network model.
+    A tensorflow based implementation of Behler-Parinello's SymmetryFunction
+    descriptor.
     """
 
-    def __init__(self, rc, max_occurs: Counter, nij_max, nijk_max,
-                 eta=Defaults.eta, beta=Defaults.beta, gamma=Defaults.gamma,
-                 zeta=Defaults.zeta, k_max=3, periodic=True):
+    def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 periodic=True):
         """
         Initialization method.
+
+        Parameters
+        ----------
+        rc : float
+            The cutoff radius.
+        elements : List[str]
+            A list of str as the ordered elements.
+        eta : array_like
+            The `eta` for radial functions.
+        beta : array_like
+            The `beta` for angular functions.
+        gamma : array_like
+            The `beta` for angular functions.
+        zeta : array_like
+            The `beta` for angular functions.
+        k_max : int
+            The maximum k for the many-body expansion.
+        periodic : bool
+            If False, some Ops of the computation graph will be ignored and this
+            can only proceed non-periodic molecules.
+
         """
-        elements = sorted(max_occurs.keys())
         kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
         ndim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                               len(gamma), len(zeta))
 
-        self._periodic = periodic
         self._rc = rc
+        self._k_max = k_max
+        self._elements = elements
+        self._periodic = periodic
         self._mapping = mapping
         self._kbody_terms = kbody_terms
         self._kbody_sizes = kbody_sizes
-        self._elements = elements
         self._ndim = ndim
-        self._max_n_atoms = sum(max_occurs.values()) + 1
         self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
         self._eta = np.asarray(eta)
@@ -341,19 +386,7 @@ class SymmetryFunction:
         self._parameter_grid = ParameterGrid({'beta': self._beta,
                                               'gamma': self._gamma,
                                               'zeta': self._zeta})
-        self._max_occurs = max_occurs
-        self._nij_max = nij_max
-        self._nijk_max = nijk_max
-        self._k_max = k_max
         self._index_transformers = {}
-
-    @property
-    def periodic(self):
-        """
-        Return True if this can be applied to periodic structures.
-        For non-periodic molecules some Ops can be ignored.
-        """
-        return self._periodic
 
     @property
     def cutoff(self):
@@ -365,9 +398,290 @@ class SymmetryFunction:
     @property
     def k_max(self):
         """
-        The maximum k for the many-body expansion.
+        Return the maximum k for the many-body expansion scheme.
         """
         return self._k_max
+
+    @property
+    def elements(self):
+        """
+        Return a list of str as the sorted unique elements.
+        """
+        return self._elements
+
+    @property
+    def periodic(self):
+        """
+        Return True if this can be applied to periodic structures.
+        For non-periodic molecules some Ops can be ignored.
+        """
+        return self._periodic
+
+    @property
+    def ndim(self):
+        """
+        Return the total dimension of an atom descriptor vector.
+        """
+        return self._ndim
+
+    @property
+    def kbody_terms(self) -> List[str]:
+        """
+        A list of str as the ordered k-body terms.
+        """
+        return self._kbody_terms
+
+    @property
+    def kbody_sizes(self) -> List[int]:
+        """
+        Return a list of int as the sizes of the k-body terms.
+        """
+        return self._kbody_sizes
+
+    def _gather(self, R, ilist, name):
+        """
+        A wrapper of the gather function.
+        """
+        return tf.gather(R, ilist, name=name)
+
+    def _get_rij(self, R, ilist, jlist, shift, name):
+        """
+        Return the subgraph to compute `rij`.
+        """
+        with tf.name_scope(name):
+            Ri = self._gather(R, ilist, 'Ri')
+            Rj = self._gather(R, jlist, 'Rj')
+            Dij = tf.subtract(Rj, Ri, name='Dij')
+            if self._periodic:
+                Dij = tf.add(Dij, shift, name='pbc')
+            return tf.norm(Dij, axis=-1, name='r')
+
+    def _get_g2_graph_for_eta(self, index, shape, r2c, fc_r,
+                              v2g_map):
+        """
+        Return the subgraph to compute G2 with the given `eta`.
+
+        Parameters
+        ----------
+        index : int
+            The index of the `eta` to use.
+        shape : Sized
+            The shape of the descriptor.
+        r2c : tf.Tensor
+            The `float64` tensor of `r**2 / rc**2`.
+        fc_r : tf.Tensor
+            The `float64` tensor of `cutoff(r)`.
+        v2g_map : tf.Tensor
+            The `int32` tensor as the mapping from 'v' to 'g'.
+
+        Returns
+        -------
+        g : tf.Tensor
+            A `float64` tensor with the input `shape` as the fingerprints
+            contributed by the radial function G2 with the given `eta`.
+
+        """
+        with tf.name_scope(f"eta{index}"):
+            eta = tf.constant(self._eta[index], dtype=tf.float64, name='eta')
+            delta = tf.constant([0, 0, index], dtype=tf.int32, name='delta')
+            v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
+            v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
+            return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
+
+    def _get_g_shape(self, placeholders):
+        """
+        Return the shape of the descriptor matrix.
+        """
+        return [placeholders.n_atoms, self._ndim]
+
+    def _get_v2g_map(self, placeholders, fn_name: str):
+        assert fn_name in ('g2', 'g4')
+        return tf.identity(placeholders[fn_name].v2g_map, name='v2g_map')
+
+    def _get_g2_graph(self, placeholders: AttributeDict):
+        """
+        The implementation of Behler's G2 symmetry function.
+        """
+        with tf.name_scope("G2"):
+
+            r = self._get_rij(placeholders.R,
+                              placeholders.g2.ilist,
+                              placeholders.g2.jlist,
+                              placeholders.g2.shift,
+                              name='rij')
+            r2 = tf.square(r, name='r2')
+            rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
+            r2c = tf.div(r2, rc2, name='div')
+            fc_r = cutoff(r, rc=self._rc, name='fc_r')
+
+            with tf.name_scope("v2g_map"):
+                v2g_map = self._get_v2g_map(placeholders, 'g2')
+
+            with tf.name_scope("features"):
+                shape = self._get_g_shape(placeholders)
+                # TODO: maybe `tf.while` can be used here
+                blocks = []
+                for index in range(len(self._eta)):
+                    blocks = self._get_g2_graph_for_eta(
+                        index, shape, r2c, fc_r, v2g_map)
+                return tf.add_n(blocks, name='g')
+
+    @staticmethod
+    def _extract(_params):
+        """
+        A helper function to get `beta`, `gamma` and `zeta`.
+        """
+        return [tf.constant(_params[key], dtype=tf.float64, name=key)
+                for key in ('beta', 'gamma', 'zeta')]
+
+    def _get_g4_graph_for_params(self, index, shape, theta, r2c, fc_r, v2g_map):
+        """
+        Return the subgraph to compute angular descriptors with the given
+        parameters set.
+
+        Parameters
+        ----------
+        index : int
+            The index of the `eta` to use.
+        shape : Sized
+            The shape of the descriptor.
+        theta : tf.Tensor
+            The `float64` tensor of `cos(theta)`.
+        r2c : tf.Tensor
+            The `float64` tensor of `r**2 / rc**2`.
+        fc_r : tf.Tensor
+            The `float64` tensor of `cutoff(r)`.
+        v2g_map : tf.Tensor
+            The `int32` tensor as the mapping from 'v' to 'g'.
+
+        Returns
+        -------
+        g : tf.Tensor
+            A `float64` tensor with the input `shape` as the fingerprints
+            contributed by the angular function G4 with the given parameters.
+
+        """
+        with tf.name_scope(f"grid{index}"):
+            beta, gamma, zeta = self._extract(self._parameter_grid[index])
+            delta = tf.constant([0, 0, index], dtype=tf.int32, name='delta')
+            c = (1.0 + gamma * theta) ** zeta * 2.0 ** (1.0 - zeta)
+            v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
+            v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
+            return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
+
+    def _get_g4_graph(self, placeholders):
+        """
+        The implementation of Behler's angular symmetry function.
+        """
+        with tf.name_scope("G4"):
+
+            rij = self._get_rij(placeholders.R,
+                                placeholders.g4.ij.ilist,
+                                placeholders.g4.ij.jlist,
+                                placeholders.g4.ij.shift,
+                                name='rij')
+            rik = self._get_rij(placeholders.R,
+                                placeholders.g4.ik.ilist,
+                                placeholders.g4.ik.klist,
+                                placeholders.g4.ik.shift,
+                                name='rik')
+            rjk = self._get_rij(placeholders.R,
+                                placeholders.g4.jk.jlist,
+                                placeholders.g4.jk.klist,
+                                placeholders.g4.jk.shift,
+                                name='rjk')
+
+            rij2 = tf.square(rij, name='rij2')
+            rik2 = tf.square(rik, name='rik2')
+            rjk2 = tf.square(rjk, name='rjk2')
+            rc2 = tf.constant(self._rc ** 2, dtype=tf.float64, name='rc2')
+            r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
+            r2c = tf.div(r2, rc2, name='r2_rc2')
+
+            with tf.name_scope("cosine"):
+                upper = tf.subtract(rij2 + rik2, rjk2, name='upper')
+                lower = tf.multiply(2 * rij, rik, name='lower')
+                theta = tf.div(upper, lower, name='theta')
+
+            with tf.name_scope("fc"):
+                fc_rij = cutoff(rij, self._rc, name='fc_rij')
+                fc_rik = cutoff(rik, self._rc, name='fc_rik')
+                fc_rjk = cutoff(rjk, self._rc, name='fc_rjk')
+                fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
+
+            with tf.name_scope("v2g_map"):
+                v2g_map = self._get_v2g_map(placeholders, 'g4')
+
+            with tf.name_scope("features"):
+                shape = self._get_g_shape(placeholders)
+                blocks = []
+                for index in range(len(self._parameter_grid)):
+                    blocks.append(self._get_g4_graph_for_params(
+                        index, shape, theta, r2c, fc_r, v2g_map))
+                return tf.add_n(blocks, name='g')
+
+    def _get_row_split_sizes(self, placeholders):
+        return placeholders.row_splits
+
+    def _get_column_split_sizes(self):
+        column_splits = {}
+        for i, element in enumerate(self._elements):
+            column_splits[element] = [len(self._elements), i]
+        return column_splits
+
+    def _split_descriptors(self, g, placeholders) -> Dict[str, tf.Tensor]:
+        """
+        Split the descriptors into `N_element` subsets.
+        """
+        with tf.name_scope("Split"):
+            row_split_sizes = self._get_row_split_sizes(placeholders)
+            column_split_sizes = self._get_column_split_sizes()
+            splits = tf.split(g, row_split_sizes, axis=1, name='rows')[1:]
+            if len(self._elements) > 1:
+                # Further split the element arrays to remove redundant zeros
+                blocks = []
+                for i in range(len(splits)):
+                    element = self._elements[i]
+                    size_splits, idx = column_split_sizes[element]
+                    block = tf.split(splits[i], size_splits, axis=2,
+                                     name='{}_block'.format(element))[idx]
+                    blocks.append(block)
+            else:
+                blocks = splits
+            return dict(zip(self._elements, blocks))
+
+    def get_graph(self, placeholders):
+        """
+        Get the tensorflow based computation graph of the Symmetry Function.
+        """
+        with tf.name_scope("Behler"):
+            g = self._get_g2_graph(placeholders)
+            if self._k_max == 3:
+                g += self._get_g4_graph(placeholders)
+        return self._split_descriptors(g, placeholders)
+
+
+class FixedSizeSymmetryFunction(SymmetryFunction):
+    """
+    A batch implementation of Behler-Parinello's Symmetry Function. This class
+    """
+
+    def __init__(self, rc, max_occurs: Counter, elements: List[str],
+                 nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
+                 beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
+                 k_max=3, periodic=True):
+        """
+        Initialization method.
+        """
+        super(FixedSizeSymmetryFunction, self).__init__(
+            rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
+            zeta=zeta, k_max=k_max, periodic=periodic)
+
+        self._max_occurs = max_occurs
+        self._max_n_atoms = sum(max_occurs.values()) + 1
+        self._nij_max = nij_max
+        self._nijk_max = nijk_max
+        self._batch_size = batch_size
 
     @property
     def nij_max(self):
@@ -384,417 +698,208 @@ class SymmetryFunction:
         return self._nijk_max
 
     @property
-    def ndim(self):
+    def batch_size(self):
         """
-        Return the total dimension of an atom descriptor vector.
+        Return the batch size.
         """
-        return self._ndim
+        return self._batch_size
 
-    @property
-    def elements(self) -> List[str]:
-        """
-        Return a list of str as the sorted unique elements.
-        """
-        return self._elements
+    # def get_index_transformer(self, atoms: Atoms):
+    #     """
+    #     Return the corresponding `IndexTransformer`.
+    #
+    #     Parameters
+    #     ----------
+    #     atoms : Atoms
+    #         An `Atoms` object.
+    #
+    #     Returns
+    #     -------
+    #     clf : IndexTransformer
+    #         The `IndexTransformer` for the given `Atoms` object.
+    #
+    #     """
+    #     # The mode 'reduce' is important here because chemical symbol lists of
+    #     # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
+    #     formula = atoms.get_chemical_formula(mode='reduce')
+    #     if formula not in self._index_transformers:
+    #         self._index_transformers[formula] = IndexTransformer(
+    #             self._max_occurs, atoms.get_chemical_symbols()
+    #         )
+    #     return self._index_transformers[formula]
 
-    @property
-    def kbody_terms(self) -> List[str]:
-        """
-        A list of str as the ordered k-body terms.
-        """
-        return self._kbody_terms
+    # def get_initial_weights_for_normalizers(self) -> Dict[str, np.ndarray]:
+    #     """
+    #     Return the initial weights for the `arctan` input normalizers.
+    #     """
+    #     weights = {}
+    #     for element in self._elements:
+    #         kbody_terms = self._mapping[element]
+    #         values = []
+    #         for kbody_term in kbody_terms:
+    #             if len(get_elements_from_kbody_term(kbody_term)) == 2:
+    #                 values.extend(self._eta.tolist())
+    #             else:
+    #                 for p in self._parameter_grid:
+    #                     values.append(p['beta'])
+    #         weights[element] = np.exp(-np.asarray(values) / 20.0)
+    #     return weights
 
-    @property
-    def kbody_sizes(self) -> List[int]:
-        """
-        Return a list of int as the sizes of the k-body terms.
-        """
-        return self._kbody_sizes
+    # def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
+    #     """
+    #     A helper function to resize the given array.
+    #     """
+    #     if np.ndim(alist) == 1:
+    #         shape = [self._nij_max, ]
+    #     else:
+    #         shape = [self._nij_max, ] + list(alist.shape[1:])
+    #     nlist = np.zeros(shape, dtype=np.int32)
+    #     length = len(alist)
+    #     nlist[:length] = alist
+    #     if is_indices:
+    #         nlist[:length] += 1
+    #     return nlist
 
-    def get_initial_weights_for_normalizers(self) -> Dict[str, np.ndarray]:
-        """
-        Return the initial weights for the `arctan` input normalizers.
-        """
-        weights = {}
-        for element in self._elements:
-            kbody_terms = self._mapping[element]
-            values = []
-            for kbody_term in kbody_terms:
-                if len(get_elements_from_kbody_term(kbody_term)) == 2:
-                    values.extend(self._eta.tolist())
-                else:
-                    for p in self._parameter_grid:
-                        values.append(p['beta'])
-            weights[element] = np.exp(-np.asarray(values) / 20.0)
-        return weights
+    # def get_radial_indexed_slices(self, trajectory: List[Atoms]):
+    #     """
+    #     Return the indexed slices for radial functions.
+    #     """
+    #     batch_size = len(trajectory)
+    #     nij_max = self._nij_max
+    #     v2g_map = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
+    #     ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
+    #     jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
+    #     shift = np.zeros((batch_size, nij_max, 3), dtype=np.float64)
+    #     tlist = np.zeros(nij_max, dtype=np.int32)
+    #
+    #     for idx, atoms in enumerate(trajectory):
+    #         symbols = atoms.get_chemical_symbols()
+    #         transformer = self.get_index_transformer(atoms)
+    #         kilist, kjlist, kSlist = neighbor_list('ijS', atoms, self._rc)
+    #         if self._k_max == 1:
+    #             cols = []
+    #             for i in range(len(kilist)):
+    #                 if symbols[kilist[i]] == symbols[kjlist[i]]:
+    #                     cols.append(i)
+    #             kilist = kilist[cols]
+    #             kjlist = kjlist[cols]
+    #             kSlist = kSlist[cols]
+    #         n = len(kilist)
+    #         kilist = self._resize_to_nij_max(kilist, True)
+    #         kjlist = self._resize_to_nij_max(kjlist, True)
+    #         kSlist = self._resize_to_nij_max(kSlist, False)
+    #         ilist[idx] = transformer.map(kilist.copy())
+    #         jlist[idx] = transformer.map(kjlist.copy())
+    #         shift[idx] = kSlist @ atoms.cell
+    #         tlist.fill(0)
+    #         for i in range(n):
+    #             symboli = symbols[kilist[i] - 1]
+    #             symbolj = symbols[kjlist[i] - 1]
+    #             tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+    #         kilist = transformer.map(kilist)
+    #         v2g_map[idx, :nij_max, 0] = idx
+    #         v2g_map[idx, :nij_max, 1] = kilist
+    #         v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
+    #     return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+    #                                shift=shift)
 
-    def get_index_transformer(self, atoms: Atoms):
+    # def get_angular_indexed_slices(self, trajectory: List[Atoms],
+    #                                rslices: RadialIndexedSlices):
+    #     """
+    #     Return the indexed slices for angular functions.
+    #     """
+    #     if self._k_max < 3:
+    #         return None
+    #
+    #     batch_size = len(trajectory)
+    #     v2g_map = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
+    #     ij = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
+    #     ik = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
+    #     jk = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
+    #     ij_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
+    #     ik_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
+    #     jk_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
+    #
+    #     for idx, atoms in enumerate(trajectory):
+    #         symbols = atoms.get_chemical_symbols()
+    #         transformer = self.get_index_transformer(atoms)
+    #         indices = {}
+    #         vectors = {}
+    #         for i, atomi in enumerate(rslices.ilist[idx]):
+    #             if atomi == 0:
+    #                 break
+    #             if atomi not in indices:
+    #                 indices[atomi] = []
+    #                 vectors[atomi] = []
+    #             indices[atomi].append(rslices.jlist[idx, i])
+    #             vectors[atomi].append(rslices.shift[idx, i])
+    #         count = 0
+    #         for atomi, nl in indices.items():
+    #             num = len(nl)
+    #             symboli = symbols[transformer.map(atomi, True, True)]
+    #             prefix = '{}'.format(symboli)
+    #             for j in range(num):
+    #                 atomj = nl[j]
+    #                 symbolj = symbols[transformer.map(atomj, True, True)]
+    #                 for k in range(j + 1, num):
+    #                     atomk = nl[k]
+    #                     symbolk = symbols[transformer.map(atomk, True, True)]
+    #                     suffix = ''.join(sorted([symbolj, symbolk]))
+    #                     term = '{}{}'.format(prefix, suffix)
+    #                     ij[idx, count] = atomi, atomj
+    #                     ik[idx, count] = atomi, atomk
+    #                     jk[idx, count] = atomj, atomk
+    #                     ij_shift[idx, count] = vectors[atomi][j]
+    #                     ik_shift[idx, count] = vectors[atomi][k]
+    #                     jk_shift[idx, count] = \
+    #                         vectors[atomi][k] - vectors[atomi][j]
+    #                     index = self._kbody_index[term]
+    #                     v2g_map[idx, count, 0] = idx
+    #                     v2g_map[idx, count, 1] = atomi
+    #                     v2g_map[idx, count, 2] = self._offsets[index]
+    #                     count += 1
+    #     return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+    #                                 ij_shift=ij_shift, ik_shift=ik_shift,
+    #                                 jk_shift=jk_shift)
+
+    # def get_indexed_slices(self, trajectory):
+    #     """
+    #     Return both the radial and angular indexed slices for the trajectory.
+    #     """
+    #     rslices = self.get_radial_indexed_slices(trajectory)
+    #     aslices = self.get_angular_indexed_slices(trajectory, rslices)
+    #     return rslices, aslices
+
+    def _gather(self, R, ilist, name):
         """
-        Return the corresponding `IndexTransformer`.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            An `Atoms` object.
-
-        Returns
-        -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
-
+        A wrapper of `batch_gather_positions`.
         """
-        # The mode 'reduce' is important here because chemical symbol lists of
-        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
-        formula = atoms.get_chemical_formula(mode='reduce')
-        if formula not in self._index_transformers:
-            self._index_transformers[formula] = IndexTransformer(
-                self._max_occurs, atoms.get_chemical_symbols()
-            )
-        return self._index_transformers[formula]
+        return batch_gather_positions(R, ilist, self._batch_size, name)
 
-    def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
-        """
-        A helper function to resize the given array.
-        """
-        if np.ndim(alist) == 1:
-            shape = [self._nij_max, ]
-        else:
-            shape = [self._nij_max, ] + list(alist.shape[1:])
-        nlist = np.zeros(shape, dtype=np.int32)
-        length = len(alist)
-        nlist[:length] = alist
-        if is_indices:
-            nlist[:length] += 1
-        return nlist
+    def _get_g_shape(self, _):
+        return [self._batch_size, self._max_n_atoms, self._ndim]
 
-    def get_radial_indexed_slices(self, trajectory: List[Atoms]):
-        """
-        Return the indexed slices for radial functions.
-        """
-        batch_size = len(trajectory)
-        nij_max = self._nij_max
-        v2g_map = np.zeros((batch_size, nij_max, 3), dtype=np.int32)
-        ilist = np.zeros((batch_size, nij_max), dtype=np.int32)
-        jlist = np.zeros((batch_size, nij_max), dtype=np.int32)
-        shift = np.zeros((batch_size, nij_max, 3), dtype=np.float64)
-        tlist = np.zeros(nij_max, dtype=np.int32)
-
-        for idx, atoms in enumerate(trajectory):
-            symbols = atoms.get_chemical_symbols()
-            transformer = self.get_index_transformer(atoms)
-            kilist, kjlist, kSlist = neighbor_list('ijS', atoms, self._rc)
-            if self._k_max == 1:
-                cols = []
-                for i in range(len(kilist)):
-                    if symbols[kilist[i]] == symbols[kjlist[i]]:
-                        cols.append(i)
-                kilist = kilist[cols]
-                kjlist = kjlist[cols]
-                kSlist = kSlist[cols]
-            n = len(kilist)
-            kilist = self._resize_to_nij_max(kilist, True)
-            kjlist = self._resize_to_nij_max(kjlist, True)
-            kSlist = self._resize_to_nij_max(kSlist, False)
-            ilist[idx] = transformer.map(kilist.copy())
-            jlist[idx] = transformer.map(kjlist.copy())
-            shift[idx] = kSlist @ atoms.cell
-            tlist.fill(0)
-            for i in range(n):
-                symboli = symbols[kilist[i] - 1]
-                symbolj = symbols[kjlist[i] - 1]
-                tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
-            kilist = transformer.map(kilist)
-            v2g_map[idx, :nij_max, 0] = idx
-            v2g_map[idx, :nij_max, 1] = kilist
-            v2g_map[idx, :nij_max, 2] = self._offsets[tlist]
-        return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                                   shift=shift)
-
-    def get_angular_indexed_slices(self, trajectory: List[Atoms],
-                                   rslices: RadialIndexedSlices):
-        """
-        Return the indexed slices for angular functions.
-        """
-        if self._k_max < 3:
-            return None
-
-        batch_size = len(trajectory)
-        v2g_map = np.zeros((batch_size, self._nijk_max, 3), dtype=np.int32)
-        ij = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
-        ik = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
-        jk = np.zeros((batch_size, self._nijk_max, 2), dtype=np.int32)
-        ij_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
-        ik_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
-        jk_shift = np.zeros((batch_size, self._nijk_max, 3), dtype=np.float64)
-
-        for idx, atoms in enumerate(trajectory):
-            symbols = atoms.get_chemical_symbols()
-            transformer = self.get_index_transformer(atoms)
-            indices = {}
-            vectors = {}
-            for i, atomi in enumerate(rslices.ilist[idx]):
-                if atomi == 0:
-                    break
-                if atomi not in indices:
-                    indices[atomi] = []
-                    vectors[atomi] = []
-                indices[atomi].append(rslices.jlist[idx, i])
-                vectors[atomi].append(rslices.shift[idx, i])
-            count = 0
-            for atomi, nl in indices.items():
-                num = len(nl)
-                symboli = symbols[transformer.map(atomi, True, True)]
-                prefix = '{}'.format(symboli)
-                for j in range(num):
-                    atomj = nl[j]
-                    symbolj = symbols[transformer.map(atomj, True, True)]
-                    for k in range(j + 1, num):
-                        atomk = nl[k]
-                        symbolk = symbols[transformer.map(atomk, True, True)]
-                        suffix = ''.join(sorted([symbolj, symbolk]))
-                        term = '{}{}'.format(prefix, suffix)
-                        ij[idx, count] = atomi, atomj
-                        ik[idx, count] = atomi, atomk
-                        jk[idx, count] = atomj, atomk
-                        ij_shift[idx, count] = vectors[atomi][j]
-                        ik_shift[idx, count] = vectors[atomi][k]
-                        jk_shift[idx, count] = \
-                            vectors[atomi][k] - vectors[atomi][j]
-                        index = self._kbody_index[term]
-                        v2g_map[idx, count, 0] = idx
-                        v2g_map[idx, count, 1] = atomi
-                        v2g_map[idx, count, 2] = self._offsets[index]
-                        count += 1
-        return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
-                                    ij_shift=ij_shift, ik_shift=ik_shift,
-                                    jk_shift=jk_shift)
-
-    def get_indexed_slices(self, trajectory):
-        """
-        Return both the radial and angular indexed slices for the trajectory.
-        """
-        rslices = self.get_radial_indexed_slices(trajectory)
-        aslices = self.get_angular_indexed_slices(trajectory, rslices)
-        return rslices, aslices
-
-    @staticmethod
-    def _get_v2g_map_batch_indexing_matrix(batch_size, ndim):
+    def _get_v2g_map_batch_indexing_matrix(self, fn_name='g2'):
         """
         Return an `int32` matrix of shape `[batch_size, ndim, 3]` to rebuild the
         batch indexing of a `v2g_map`.
         """
-        inc = np.zeros((batch_size, ndim, 3), dtype=np.int32)
-        for i in range(batch_size):
-            inc[i] += [i, 0, 0]
-        return inc
+        if fn_name == 'g2':
+            ndim = self._nij_max
+        else:
+            ndim = self._nijk_max
+        indexing_matrix = np.zeros((self._batch_size, ndim, 3), dtype=np.int32)
+        for i in range(self._batch_size):
+            indexing_matrix[i] += [i, 0, 0]
+        return indexing_matrix
 
-    def get_radial_function_graph(self, R, v2g_map, ilist, jlist, shift,
-                                  batch_size=None):
-        """
-        The implementation of Behler's radial symmetry function.
-        """
-        with tf.name_scope("G2"):
-            with tf.name_scope("constants"):
-                rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
-                eta = tf.constant(self._eta, dtype=tf.float64, name='eta')
-                R = tf.convert_to_tensor(R, dtype=tf.float64, name='R')
-                batch_size = batch_size or R.shape[0]
+    def _get_v2g_map(self, placeholders, fn_name: str):
+        ndim = {'g2': self._nij_max, 'g4': self._nijk_max}.get(fn_name)
+        indexing = self._get_v2g_map_batch_indexing_matrix(fn_name=fn_name)
+        return tf.add(placeholders[fn_name].v2g_map, indexing, name='v2g_map')
 
-                with tf.name_scope("v2g_map"):
-                    batch_indexing = self._get_v2g_map_batch_indexing_matrix(
-                        batch_size, self._nij_max)
-                    batch_indexing = tf.convert_to_tensor(
-                        batch_indexing, dtype=tf.int32, name='batch_indexing')
-                    v2g_map = tf.convert_to_tensor(
-                        v2g_map, dtype=tf.int32, name='v2g_map_raw')
-                    v2g_map = tf.add(v2g_map, batch_indexing, name='v2g_map')
-                    v2g_map.set_shape([batch_size, self._nij_max, 3])
-
-            with tf.name_scope("rij"):
-                Ri = batch_gather_positions(R, ilist, batch_size, name='Ri')
-                Rj = batch_gather_positions(R, jlist, batch_size, name='Rj')
-                D_ij = tf.subtract(Rj, Ri, name='Dij')
-                if self._periodic:
-                    D_ij = tf.add(D_ij, shift, name='pbc')
-                r = tf.norm(D_ij, axis=2, name='r')
-                r2 = tf.square(r, name='r2')
-                r2c = tf.div(r2, rc2, name='div')
-
-            with tf.name_scope("fc"):
-                fc_r = cutoff(r, rc=self._rc, name='fc_r')
-
-            with tf.name_scope("features"):
-                shape = tf.constant((batch_size, self._max_n_atoms, self._ndim),
-                                    dtype=tf.int32, name='shape')
-                g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-                for i in range(len(self._eta)):
-                    with tf.name_scope("eta{}".format(i)):
-                        vi = tf.exp(-eta[i] * r2c) * fc_r
-                        delta = tf.constant(
-                            [0, 0, i], dtype=tf.int32, name='delta')
-                        v2g_map_i = tf.add(v2g_map, delta, name='v2g_map_i')
-                        g += tf.scatter_nd(
-                            v2g_map_i, vi, shape, 'g{}'.format(i))
-                return g
-
-    def get_angular_function_graph(self, R, v2g_map, ij, ik, jk, ij_shift,
-                                   ik_shift, jk_shift, batch_size=None):
-        """
-        The implementation of Behler's angular symmetry function.
-        """
-
-        def _extract(_params):
-            """
-            A helper function to get `beta`, `gamma` and `zeta`.
-            """
-            return [tf.constant(_params[key], dtype=tf.float64, name=key)
-                    for key in ('beta', 'gamma', 'zeta')]
-
-        with tf.name_scope("G4"):
-
-            with tf.name_scope("constants"):
-                one = tf.constant(1.0, dtype=tf.float64)
-                two = tf.constant(2.0, dtype=tf.float64)
-                rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
-                batch_size = batch_size or R.shape[0]
-                v2g_map = tf.convert_to_tensor(
-                    v2g_map, dtype=tf.int32, name='v2g_map')
-                v2g_map.set_shape([batch_size, self._nijk_max, 3])
-
-            with tf.name_scope("Rij"):
-                Ri_ij = batch_gather_positions(R, ij[:, :, 0], batch_size, 'Ri')
-                Rj_ij = batch_gather_positions(R, ij[:, :, 1], batch_size, 'Rj')
-                D_ij = tf.subtract(Rj_ij, Ri_ij, name='Dij')
-                if self._periodic:
-                    D_ij = tf.add(D_ij, ij_shift, name='pbc')
-                r_ij = tf.norm(D_ij, axis=2)
-
-            with tf.name_scope("Rik"):
-                Ri_ik = batch_gather_positions(R, ik[:, :, 0], batch_size, 'Ri')
-                Rk_ik = batch_gather_positions(R, ik[:, :, 1], batch_size, 'Rk')
-                D_ik = tf.subtract(Rk_ik, Ri_ik, name='Dik')
-                if self._periodic:
-                    D_ik = tf.add(D_ik, ik_shift, name='pbc')
-                r_ik = tf.norm(D_ik, axis=2)
-
-            with tf.name_scope("Rjk"):
-                Rj_jk = batch_gather_positions(R, jk[:, :, 0], batch_size, 'Rj')
-                Rk_jk = batch_gather_positions(R, jk[:, :, 1], batch_size, 'Rk')
-                D_jk = tf.subtract(Rk_jk, Rj_jk, name='Djk')
-                if self._periodic:
-                    D_jk = tf.add(D_jk, jk_shift, name='pbc')
-                r_jk = tf.norm(D_jk, axis=2)
-
-            # Compute $\cos{(\theta_{ijk})}$ using the cosine formula
-            with tf.name_scope("cosine"):
-                upper = tf.square(r_ij) + tf.square(r_ik) - tf.square(r_jk)
-                lower = two * tf.multiply(r_ij, r_ik, name='bc')
-                theta = tf.div(upper, lower, name='theta')
-
-            # Compute the damping term: f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})
-            with tf.name_scope("fc"):
-                fc_r_ij = cutoff(r_ij, self._rc, name='fc_r_ij')
-                fc_r_ik = cutoff(r_ik, self._rc, name='fc_r_ik')
-                fc_r_jk = cutoff(r_jk, self._rc, name='fc_r_jk')
-                fc_r_ijk = fc_r_ij * fc_r_ik * fc_r_jk
-
-            # Compute $R_{ij}^{2} + R_{ik}^{2} + R_{jk}^{2}$
-            with tf.name_scope("r2"):
-                r2_ij = tf.square(r_ij, name='r2_ij')
-                r2_ik = tf.square(r_ik, name='r2_ik')
-                r2_jk = tf.square(r_jk, name='r2_jk')
-                r2 = r2_ij + r2_ik + r2_jk
-                r2c = tf.div(r2, rc2, name='r2_rc2')
-
-            with tf.name_scope("features"):
-                shape = tf.constant((batch_size, self._max_n_atoms, self._ndim),
-                                    dtype=tf.int32, name='shape')
-                g = tf.zeros(shape=shape, dtype=tf.float64, name='zeros')
-                for i, params in enumerate(self._parameter_grid):
-                    with tf.name_scope("p_{}".format(i)):
-                        beta, gamma, zeta = _extract(params)
-                        c = (one + gamma * theta) ** zeta * two ** (1.0 - zeta)
-                        vi = c * tf.exp(-beta * r2c) * fc_r_ijk
-                        delta = tf.constant(
-                            [0, 0, i], dtype=tf.int32, name='delta')
-                        v2g_map_i = tf.add(v2g_map, delta, name='v2g_map_i')
-                        g += tf.scatter_nd(
-                            v2g_map_i, vi, shape, 'g{}'.format(i))
-                return g
-
-    def get_split_sizes(self) -> (List[int], Dict):
-        """
-        Return the row-wise and column-wise split sizes.
-        """
+    def _get_row_split_sizes(self, _):
         row_splits = [1, ]
-        column_splits = {}
         for i, element in enumerate(self._elements):
             row_splits.append(self._max_occurs[element])
-            column_splits[element] = [len(self._elements), i]
-        return row_splits, column_splits
-
-    def split_descriptors(self, g) -> Dict[str, tf.Tensor]:
-        """
-        Split the descriptors into `N_element` subsets.
-        """
-        with tf.name_scope("Split"):
-            # Atom 0 is a virtual atom.
-            row_splits, column_splits = self.get_split_sizes()
-            splits = tf.split(g, row_splits, axis=1, name='row_splits')[1:]
-            if len(self._elements) > 1:
-                # Further split the element arrays to remove redundant zeros
-                blocks = []
-                for i in range(len(splits)):
-                    element = self._elements[i]
-                    size_splits, idx = column_splits[element]
-                    block = tf.split(splits[i], size_splits, axis=2,
-                                     name='{}_block'.format(element))[idx]
-                    blocks.append(block)
-            else:
-                blocks = splits
-            return dict(zip(self._elements, blocks))
-
-    def get_descriptors_graph(self, examples: AttributeDict,
-                              batch_size=None):
-        """
-        Build the tensorflow graph for computing symmetry function descriptors
-        from an input batch.
-
-        Parameters
-        ----------
-        examples : AttributeDict
-            A dict returned by `Dataset.next_batch` as the inputs to the graph.
-        batch_size : int
-            The size of one batch.
-
-        Returns
-        -------
-        splits : Dict[str, tf.Tensor]
-            A list of tensors. `splits[i]` represents the descriptors of element
-            type `self.elements[i]`.
-
-        """
-        with tf.name_scope("Descriptors"):
-
-            g = self.get_radial_function_graph(
-                examples.positions,
-                v2g_map=examples.rv2g,
-                ilist=examples.ilist,
-                jlist=examples.jlist,
-                shift=examples.shift,
-                batch_size=batch_size
-            )
-
-            if self._k_max == 3:
-                g += self.get_angular_function_graph(
-                    examples.positions,
-                    v2g_map=examples.av2g,
-                    ij=examples.ij,
-                    ik=examples.ik,
-                    jk=examples.jk,
-                    ij_shift=examples.ij_shift,
-                    ik_shift=examples.ik_shift,
-                    jk_shift=examples.jk_shift,
-                    batch_size=batch_size)
-
-            return self.split_descriptors(g)
+        return row_splits
