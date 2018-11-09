@@ -780,11 +780,15 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
     descriptors of an `Atoms` object.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 periodic=True):
         """
         Initialization method.
         """
-        super(SymmetryFunctionTransformer, self).__init__(*args, **kwargs)
+        super(SymmetryFunctionTransformer, self).__init__(
+            rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
+            zeta=zeta, k_max=k_max, periodic=periodic)
         self._index_transformers = {}
         self._placeholders = AttributeDict()
 
@@ -1039,11 +1043,17 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     A batch implementation of `SymmetryFunctionTransformer`.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, rc, max_occurs: Counter, elements: List[str],
+                 nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
+                 beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
+                 k_max=3, periodic=True):
         """
         Initialization method.
         """
-        super(BatchSymmetryFunctionTransformer, self).__init__(*args, **kwargs)
+        super(BatchSymmetryFunctionTransformer, self).__init__(
+            rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
+            nijk_max=nijk_max, batch_size=batch_size, eta=eta, beta=beta,
+            gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic)
         self._index_transformers = {}
 
     @property
@@ -1094,7 +1104,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
     def get_g2_indexed_slices(self, atoms: Atoms):
         """
-        Return the indexed slices for G2.
+        Return the indexed slices for the radial function G2.
         """
         v2g_map = np.zeros((self._nij_max, 3), dtype=np.int32)
         tlist = np.zeros(self._nij_max, dtype=np.int32)
@@ -1129,9 +1139,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
-    def get_g4_indexed_slices(self, atoms: Atoms, rslices: G2IndexedSlices):
+    def get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices):
         """
-        Return the indexed slices for angular functions.
+        Return the indexed slices for the angular function G4.
         """
         if self._k_max < 3:
             return None
@@ -1148,14 +1158,14 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         transformer = self.get_index_transformer(atoms)
         indices = {}
         vectors = {}
-        for i, atomi in enumerate(rslices.ilist):
+        for i, atomi in enumerate(g2.ilist):
             if atomi == 0:
                 break
             if atomi not in indices:
                 indices[atomi] = []
                 vectors[atomi] = []
-            indices[atomi].append(rslices.jlist[i])
-            vectors[atomi].append(rslices.shift[i])
+            indices[atomi].append(g2.jlist[i])
+            vectors[atomi].append(g2.shift[i])
 
         count = 0
         for atomi, nl in indices.items():
@@ -1188,9 +1198,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Return both the radial and angular indexed slices for the trajectory.
         """
-        rslices = self.get_g2_indexed_slices(atoms)
-        aslices = self.get_g4_indexed_slices(atoms, rslices)
-        return rslices, aslices
+        g2 = self.get_g2_indexed_slices(atoms)
+        g4 = self.get_g4_indexed_slices(atoms, g2)
+        return g2, g4
 
     def get_initial_weights_for_normalizers(self) -> Dict[str, np.ndarray]:
         """
@@ -1210,45 +1220,36 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         return weights
 
     @staticmethod
-    def _merge_and_encode_rslices(rslices: G2IndexedSlices):
+    def _encode_g2_indexed_slices(g2: G2IndexedSlices):
         """
-        Encode `rslices`:
+        Encode the indexed slices of G2:
             * `v2g_map`, `ilist` and `jlist` are merged into a single array
               with key 'r_indices'.
             * `shift` will be encoded separately with key 'r_shifts'.
 
         """
         merged = np.concatenate((
-            rslices.v2g_map,
-            rslices.ilist[..., np.newaxis],
-            rslices.jlist[..., np.newaxis],
+            g2.v2g_map, g2.ilist[..., np.newaxis], g2.jlist[..., np.newaxis],
         ), axis=2).tostring()
-        return {'r_indices': _bytes_feature(merged),
-                'r_shifts': _bytes_feature(rslices.shift.tostring())}
+        return {'g2.indices': _bytes_feature(merged),
+                'g2.shifts': _bytes_feature(g2.shift.tostring())}
 
     @staticmethod
-    def _merge_and_encode_aslices(aslices: G4IndexedSlices):
+    def _encode_g4_indexed_slices(g4: G4IndexedSlices):
         """
-        Encode `aslices`:
+        Encode the indexed slices of G4:
             * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
               with key 'a_indices'.
             * `ij_shift`, `ik_shift` and `jk_shift` are merged into another
               array with key 'a_shifts'.
 
         """
-        merged = np.concatenate((
-            aslices.v2g_map,
-            aslices.ij,
-            aslices.ik,
-            aslices.jk,
-        ), axis=2).tostring()
-        shifts = np.concatenate((
-            aslices.ij_shift,
-            aslices.ik_shift,
-            aslices.jk_shift,
-        ), axis=2).tostring()
-        return {'a_indices': _bytes_feature(merged),
-                'a_shifts': _bytes_feature(shifts)}
+        merged = np.concatenate(
+            (g4.v2g_map, g4.ij, g4.ik, g4.jk), axis=2).tostring()
+        shifts = np.concatenate(
+            (g4.ij_shift, g4.ik_shift, g4.jk_shift), axis=2).tostring()
+        return {'g4.indices': _bytes_feature(merged),
+                'g4.shifts': _bytes_feature(shifts)}
 
     def _get_composition(self, atoms: Atoms) -> np.ndarray:
         """
@@ -1268,7 +1269,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         y_true = atoms.get_total_energy()
         f_true = atoms.get_forces()
         composition = self._get_composition(atoms)
-        rslices, aslices = self.get_indexed_slices(atoms)
+        g2, g4 = self.get_indexed_slices(atoms)
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
@@ -1276,9 +1277,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             'composition': _bytes_feature(composition.tostring()),
             'f_true': _bytes_feature(f_true.tostring()),
         }
-        feature_list.update(self._merge_and_encode_rslices(rslices))
+        feature_list.update(self._encode_g2_indexed_slices(g2))
         if self.k_max == 3:
-            feature_list.update(self._merge_and_encode_aslices(aslices))
+            feature_list.update(self._encode_g4_indexed_slices(g4))
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))
 
@@ -1308,27 +1309,27 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         return positions, y_true, f_true, mask, composition
 
-    def _decode_rslices(self, example: Dict[str, tf.Tensor]):
+    def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
         Decode v2g_map, ilist, jlist and Slist for radial functions.
         """
-        with tf.name_scope("Radial"):
-            r_indices = tf.decode_raw(example['r_indices'], tf.int32)
-            r_indices.set_shape([self._nij_max * 5])
-            r_indices = tf.reshape(
-                r_indices, [self._nij_max, 5], name='r_indices')
+        with tf.name_scope("G2"):
+            indices = tf.decode_raw(example['g2.indices'], tf.int32)
+            indices.set_shape([self._nij_max * 5])
+            indices = tf.reshape(
+                indices, [self._nij_max, 5], name='g2.indices')
             v2g_map, ilist, jlist = tf.split(
-                r_indices, [3, 1, 1], axis=1, name='splits')
+                indices, [3, 1, 1], axis=1, name='splits')
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
-            shift = tf.decode_raw(example['r_shifts'], tf.float64)
+            shift = tf.decode_raw(example['g2.shifts'], tf.float64)
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
             return G2IndexedSlices(v2g_map, ilist, jlist, shift)
 
-    def _decode_aslices(self, example: Dict[str, tf.Tensor]):
+    def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
         Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
         functions.
@@ -1336,25 +1337,25 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         if self.k_max < 3:
             return None
 
-        with tf.name_scope("Angular"):
+        with tf.name_scope("G4"):
             with tf.name_scope("indices"):
-                a_indices = tf.decode_raw(example['a_indices'], tf.int32)
-                a_indices.set_shape([self.nijk_max * 9])
-                a_indices = tf.reshape(
-                    a_indices, [self.nijk_max, 9], name='a_indices')
+                indices = tf.decode_raw(example['g4.indices'], tf.int32)
+                indices.set_shape([self.nijk_max * 9])
+                indices = tf.reshape(
+                    indices, [self._nijk_max, 9], name='g4.indices')
                 v2g_map, ij, ik, jk = \
-                    tf.split(a_indices, [3, 2, 2, 2], axis=1, name='splits')
+                    tf.split(indices, [3, 2, 2, 2], axis=1, name='splits')
 
             with tf.name_scope("shifts"):
-                a_shifts = tf.decode_raw(example['a_shifts'], tf.float64)
-                a_shifts.set_shape([self.nijk_max * 9])
-                a_shifts = tf.reshape(
-                    a_shifts, [self.nijk_max, 9], name='a_shifts')
+                shifts = tf.decode_raw(example['g4.shifts'], tf.float64)
+                shifts.set_shape([self.nijk_max * 9])
+                shifts = tf.reshape(
+                    shifts, [self._nijk_max, 9], name='g4.shifts')
                 ij_shift, ik_shift, jk_shift = \
-                    tf.split(a_shifts, [3, 3, 3], axis=1, name='splits')
+                    tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
-            return G4IndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
-                                   jk_shift)
+        return G4IndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
+                               jk_shift)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]):
         """
@@ -1362,24 +1363,22 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         positions, y_true, f_true, mask, composition = \
             self._decode_atoms(example)
-        rslices = self._decode_rslices(example)
-        aslices = self._decode_aslices(example)
+        g2 = self._decode_g2_indexed_slices(example)
+        g4 = self._decode_g4_indexed_slices(example)
 
-        decoded = AttributeDict(positions=positions, y_true=y_true, mask=mask,
-                                composition=composition, rv2g=rslices.v2g_map,
-                                ilist=rslices.ilist, jlist=rslices.jlist,
-                                shift=rslices.shift)
+        decoded = AttributeDict(
+            positions=positions, y_true=y_true, f_true=f_true, mask=mask,
+            composition=composition, rv2g=g2.v2g_map, ilist=g2.ilist,
+            jlist=g2.jlist, shift=g2.shift)
 
-        decoded.f_true = f_true
-
-        if aslices is not None:
-            decoded.av2g = aslices.v2g_map
-            decoded.ij = aslices.ij
-            decoded.ik = aslices.ik
-            decoded.jk = aslices.jk
-            decoded.ij_shift = aslices.ij_shift
-            decoded.ik_shift = aslices.ik_shift
-            decoded.jk_shift = aslices.jk_shift
+        if g4 is not None:
+            decoded.av2g = g4.v2g_map
+            decoded.ij = g4.ij
+            decoded.ik = g4.ik
+            decoded.jk = g4.jk
+            decoded.ij_shift = g4.ij_shift
+            decoded.ik_shift = g4.ik_shift
+            decoded.jk_shift = g4.jk_shift
 
         return decoded
 
@@ -1393,15 +1392,15 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'positions': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'f_true': tf.FixedLenFeature([], tf.string),
-                'r_indices': tf.FixedLenFeature([], tf.string),
-                'r_shifts': tf.FixedLenFeature([], tf.string),
+                'g2.indices': tf.FixedLenFeature([], tf.string),
+                'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
                 'composition': tf.FixedLenFeature([], tf.string),
             }
             if self._k_max == 3:
                 feature_list.update({
-                    'a_indices': tf.FixedLenFeature([], tf.string),
-                    'a_shifts': tf.FixedLenFeature([], tf.string),
+                    'g4.indices': tf.FixedLenFeature([], tf.string),
+                    'g4.shifts': tf.FixedLenFeature([], tf.string),
                 })
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
@@ -1469,4 +1468,4 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     ij=batch.ij_shift, ik=batch.ik_shift, jk=batch.jk_shift,),
                 v2g_map=batch.av2g,
             )
-        return self.get_graph(inputs)
+        return self.build_graph(inputs)
