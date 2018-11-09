@@ -212,7 +212,7 @@ class IndexTransformer:
         """
         self._max_occurs = max_occurs
         self._symbols = symbols
-        self._count = sum(max_occurs.values())
+        self._n_atoms = sum(max_occurs.values()) + IndexTransformer._ISTART
 
         istart = IndexTransformer._ISTART
         elements = sorted(max_occurs.keys())
@@ -220,7 +220,7 @@ class IndexTransformer:
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
-        mask = np.zeros(self._count + istart, dtype=bool)
+        mask = np.zeros(self._n_atoms, dtype=bool)
         for i, symbol in enumerate(symbols):
             idx_old = i + istart
             idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
@@ -233,6 +233,13 @@ class IndexTransformer:
         self._mask = mask
         self._index_map = index_map
         self._reverse_map = reverse_map
+
+    @property
+    def n_atoms(self):
+        """
+        Return the number of atoms (including the virtual atom at index 0).
+        """
+        return self._n_atoms
 
     @property
     def max_occurs(self) -> Counter:
@@ -302,7 +309,7 @@ class IndexTransformer:
             for i in range(istart, istart + len(self._symbols)):
                 indices.append(self._index_map[i])
         else:
-            for i in range(istart + self._count):
+            for i in range(self._n_atoms):
                 indices.append(self._reverse_map.get(i, 0))
         params = params[:, indices]
         if rank == 2:
@@ -310,7 +317,7 @@ class IndexTransformer:
         return params
 
 
-class SymmetryFunction:
+class SymmetryFunction(AtomicDescriptor):
     """
     A tensorflow based implementation of Behler-Parinello's SymmetryFunction
     descriptor.
@@ -689,6 +696,9 @@ class FixedSizeSymmetryFunction(SymmetryFunction):
         return batch_gather_positions(R, ilist, self._batch_size, name)
 
     def _get_g_shape(self, _):
+        """
+        Return the shape of the descriptor matrix.
+        """
         return [self._batch_size, self._max_n_atoms, self._ndim]
 
     def _get_v2g_map_batch_indexing_matrix(self, fn_name='g2'):
@@ -706,7 +716,9 @@ class FixedSizeSymmetryFunction(SymmetryFunction):
         return indexing_matrix
 
     def _get_v2g_map(self, placeholders, fn_name: str):
-        ndim = {'g2': self._nij_max, 'g4': self._nijk_max}.get(fn_name)
+        """
+
+        """
         indexing = self._get_v2g_map_batch_indexing_matrix(fn_name=fn_name)
         return tf.add(placeholders[fn_name].v2g_map, indexing, name='v2g_map')
 
@@ -718,10 +730,71 @@ class FixedSizeSymmetryFunction(SymmetryFunction):
 
 
 class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
+    """
+    A tranformer for calculating symmetry function descriptors of an `Atoms` and
+    convert the
+    """
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialization method.
+        """
         super(SymmetryFunctionTransformer, self).__init__(*args, **kwargs)
         self._index_transformers = {}
+        self._placeholders = AttributeDict()
+
+    @property
+    def placeholders(self) -> AttributeDict:
+        """
+        Return a dict of placeholders.
+        """
+        return self._placeholders
+
+    def _initialize_placeholders(self):
+        """
+        Initialize the placeholders.
+        """
+        with tf.name_scope("Placeholders"):
+
+            def _double_2d_placeholder(ndim, name):
+                return tf.placeholder(tf.float64, (None, ndim), name)
+
+            def _int_0d_placeholder(name):
+                return tf.placeholder(tf.int32, (), name)
+
+            def _int_1d_placeholder(name):
+                return tf.placeholder(tf.int32, (None, ), name)
+
+            def _int_2d_placeholder(ndim, name):
+                return tf.placeholder(tf.int32, (None, ndim), name)
+
+            self._placeholders.positions = _double_2d_placeholder(3, 'positions')
+            self._placeholders.n_atoms = _int_0d_placeholder('n_atoms')
+            self._placeholders.g2 = AttributeDict(
+                ilist=_int_1d_placeholder('g2.ilist'),
+                jlist=_int_1d_placeholder('g2.jlist'),
+                shift=_double_2d_placeholder(3, 'g2.shift'),
+                v2g_map=_int_2d_placeholder(2, 'g2.v2g_map')
+            )
+
+            if self._k_max == 3:
+                self._placeholders.g4 = AttributeDict(
+                    v2g_map=_int_2d_placeholder(2, 'g2.v2g_map'),
+                    ij=AttributeDict(
+                        ilist=_int_1d_placeholder('g4.ij.ilist'),
+                        jlist=_int_1d_placeholder('g4.ij.jlist')),
+                    ik=AttributeDict(
+                        ilist=_int_1d_placeholder('g4.ik.ilist'),
+                        klist=_int_1d_placeholder('g4.ik.klist')),
+                    jk=AttributeDict(
+                        jlist=_int_1d_placeholder('g4.jk.jlist'),
+                        klist=_int_1d_placeholder('g4.jk.klist')),
+                    shift=AttributeDict(
+                        ij=_double_2d_placeholder(3, 'g4.shift.ij'),
+                        ik=_double_2d_placeholder(3, 'g4.shift.ik'),
+                        jk=_double_2d_placeholder(3, 'g4.shift.jk'))
+                )
+        return self._placeholders
 
     def get_index_transformer(self, atoms: Atoms):
         """
@@ -752,7 +825,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             )
         return self._index_transformers[formula]
 
-    def _get_g2_dict(self, atoms, index_transformer: IndexTransformer):
+    def _get_g2_indexed_slices(self, atoms, index_transformer: IndexTransformer):
         """
         Return the indexed slices for G2.
         """
@@ -781,12 +854,111 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                    shift=shift)
 
-    def _get_g4_dict(self, g2):
-        pass
+    def _get_g4_indexed_slices(self, atoms: Atoms, g2: RadialIndexedSlices,
+                               index_transformer: IndexTransformer):
+        """
+        Return the indexed slices for G4.
+        """
+        symbols = atoms.get_chemical_symbols()
+        indices = {}
+        vectors = {}
+        for i, atomi in enumerate(g2.ilist):
+            if atomi not in indices:
+                indices[atomi] = []
+                vectors[atomi] = []
+            indices[atomi].append(g2.jlist[i])
+            vectors[atomi].append(g2.shift[i])
+
+        nijk = 0
+        for atomi, nl in indices.items():
+            n = len(nl)
+            nijk += (n - 1) * n // 2
+
+        v2g_map = np.zeros((nijk, 2), dtype=np.int32)
+        ij = np.zeros((nijk, 2), dtype=np.int32)
+        ik = np.zeros((nijk, 2), dtype=np.int32)
+        jk = np.zeros((nijk, 2), dtype=np.int32)
+        ij_shift = np.zeros((nijk, 3), dtype=np.float64)
+        ik_shift = np.zeros((nijk, 3), dtype=np.float64)
+        jk_shift = np.zeros((nijk, 3), dtype=np.float64)
+
+        count = 0
+        for atomi, nl in indices.items():
+            num = len(nl)
+            symboli = symbols[index_transformer.map(atomi, True, True)]
+            prefix = '{}'.format(symboli)
+            for j in range(num):
+                atomj = nl[j]
+                symbolj = symbols[index_transformer.map(atomj, True, True)]
+                for k in range(j + 1, num):
+                    atomk = nl[k]
+                    symbolk = symbols[index_transformer.map(atomk, True, True)]
+                    suffix = ''.join(sorted([symbolj, symbolk]))
+                    term = '{}{}'.format(prefix, suffix)
+                    ij[count] = atomi, atomj
+                    ik[count] = atomi, atomk
+                    jk[count] = atomj, atomk
+                    ij_shift[count] = vectors[atomi][j]
+                    ik_shift[count] = vectors[atomi][k]
+                    jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
+                    index = self._kbody_index[term]
+                    v2g_map[count, 0] = atomi
+                    v2g_map[count, 1] = self._offsets[index]
+                    count += 1
+        return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+                                    ij_shift=ij_shift, ik_shift=ik_shift,
+                                    jk_shift=jk_shift)
+
+    def _get_composition(self, atoms: Atoms) -> np.ndarray:
+        """
+        Return the composition of the `Atoms`.
+        """
+        composition = np.zeros(self._n_elements, dtype=np.float64)
+        for element, count in Counter(atoms.get_chemical_symbols()).items():
+            composition[self._elements.index(element)] = float(count)
+        return composition
 
     def get_feed_dict(self, atoms: Atoms):
+        """
+        Return the feed dict.
+        """
+        feed_dict = {}
+
+        if not self._placeholders:
+            self._initialize_placeholders()
+        placeholders = self._placeholders
 
         index_transformer = self.get_index_transformer(atoms)
+        g2 = self._get_g2_indexed_slices(atoms, index_transformer)
+
+        positions = index_transformer.gather(atoms.positions)
+        n_atoms = index_transformer.n_atoms
+        mask = index_transformer.mask
+        composition = self._get_composition(atoms)
+
+        feed_dict[placeholders.positions] = positions
+        feed_dict[placeholders.n_atoms] = n_atoms
+        feed_dict[placeholders.mask] = mask
+        feed_dict[placeholders.composition] = composition
+        feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
+        feed_dict[placeholders.g2.ilist] = g2.ilist
+        feed_dict[placeholders.g2.jlist] = g2.jlist
+        feed_dict[placeholders.g2.shift] = g2.shift
+
+        if self._k_max == 3:
+            g4 = self._get_g4_indexed_slices(atoms, g2, index_transformer)
+            feed_dict[placeholders.g4.v2g_map] = g4.v2g_map
+            feed_dict[placeholders.g4.ij.ilist] = g4.ij[:, 0]
+            feed_dict[placeholders.g4.ij.jlist] = g4.ij[:, 1]
+            feed_dict[placeholders.g4.ik.ilist] = g4.ik[:, 0]
+            feed_dict[placeholders.g4.ik.klist] = g4.ik[:, 1]
+            feed_dict[placeholders.g4.jk.jlist] = g4.jk[:, 0]
+            feed_dict[placeholders.g4.jk.klist] = g4.jk[:, 1]
+            feed_dict[placeholders.g4.shift.ij] = g4.ij_shift
+            feed_dict[placeholders.g4.shift.ik] = g4.ik_shift
+            feed_dict[placeholders.g4.shift.jk] = g4.jk_shift
+
+        return feed_dict
 
 
 def _bytes_feature(value):
@@ -862,30 +1034,28 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
         symbols = atoms.get_chemical_symbols()
         transformer = self.get_index_transformer(atoms)
 
-        kilist, kjlist, kSlist = neighbor_list('ijS', atoms, self._rc)
+        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
         if self._k_max == 1:
-            cols = []
-            for i in range(len(kilist)):
-                if symbols[kilist[i]] == symbols[kjlist[i]]:
-                    cols.append(i)
-            kilist = kilist[cols]
-            kjlist = kjlist[cols]
-            kSlist = kSlist[cols]
-        n = len(kilist)
+            cols = [i for i in range(len(ilist))
+                    if symbols[ilist[i]] == symbols[jlist[i]]]
+            ilist = ilist[cols]
+            jlist = jlist[cols]
+            Slist = Slist[cols]
+        nij = len(ilist)
 
-        kilist = self._resize_to_nij_max(kilist, True)
-        kjlist = self._resize_to_nij_max(kjlist, True)
-        kSlist = self._resize_to_nij_max(kSlist, False)
-        ilist = transformer.map(kilist.copy())
-        jlist = transformer.map(kjlist.copy())
-        shift = kSlist @ atoms.cell
         tlist.fill(0)
-        for i in range(n):
-            symboli = symbols[kilist[i] - 1]
-            symbolj = symbols[kjlist[i] - 1]
+        for i in range(nij):
+            symboli = symbols[ilist[i]]
+            symbolj = symbols[jlist[i]]
             tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
-        kilist = transformer.map(kilist)
-        v2g_map[:self._nij_max, 1] = kilist
+
+        ilist = self._resize_to_nij_max(ilist, True)
+        jlist = self._resize_to_nij_max(jlist, True)
+        Slist = self._resize_to_nij_max(Slist, False)
+        ilist = transformer.map(ilist)
+        jlist = transformer.map(jlist)
+        shift = Slist @ atoms.cell
+        v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
 
         return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
