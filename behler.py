@@ -441,8 +441,14 @@ class SymmetryFunction(AtomicDescriptor):
                 Dij = tf.add(Dij, shift, name='pbc')
             return tf.norm(Dij, axis=-1, name='r')
 
-    def _get_g2_graph_for_eta(self, index, shape, r2c, fc_r,
-                              v2g_map):
+    @staticmethod
+    def _get_v2g_map_delta(index):
+        """
+        Return the step delta for `v2g_map`.
+        """
+        return tf.constant([0, index], dtype=tf.int32, name='delta')
+
+    def _get_g2_graph_for_eta(self, index, shape, r2c, fc_r, v2g_map):
         """
         Return the subgraph to compute G2 with the given `eta`.
 
@@ -468,7 +474,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.name_scope(f"eta{index}"):
             eta = tf.constant(self._eta[index], dtype=tf.float64, name='eta')
-            delta = tf.constant([0, 0, index], dtype=tf.int32, name='delta')
+            delta = self._get_v2g_map_delta(index)
             v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
             v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
             return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
@@ -489,7 +495,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.name_scope("G2"):
 
-            r = self._get_rij(placeholders.R,
+            r = self._get_rij(placeholders.positions,
                               placeholders.g2.ilist,
                               placeholders.g2.jlist,
                               placeholders.g2.shift,
@@ -507,8 +513,9 @@ class SymmetryFunction(AtomicDescriptor):
                 # TODO: maybe `tf.while` can be used here
                 blocks = []
                 for index in range(len(self._eta)):
-                    blocks = self._get_g2_graph_for_eta(
+                    blocks.append(self._get_g2_graph_for_eta(
                         index, shape, r2c, fc_r, v2g_map)
+                    )
                 return tf.add_n(blocks, name='g')
 
     @staticmethod
@@ -548,7 +555,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.name_scope(f"grid{index}"):
             beta, gamma, zeta = self._extract(self._parameter_grid[index])
-            delta = tf.constant([0, 0, index], dtype=tf.int32, name='delta')
+            delta = self._get_v2g_map_delta(index)
             c = (1.0 + gamma * theta) ** zeta * 2.0 ** (1.0 - zeta)
             v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
@@ -560,20 +567,20 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.name_scope("G4"):
 
-            rij = self._get_rij(placeholders.R,
+            rij = self._get_rij(placeholders.positions,
                                 placeholders.g4.ij.ilist,
                                 placeholders.g4.ij.jlist,
-                                placeholders.g4.ij.shift,
+                                placeholders.g4.shift.ij,
                                 name='rij')
-            rik = self._get_rij(placeholders.R,
+            rik = self._get_rij(placeholders.positions,
                                 placeholders.g4.ik.ilist,
                                 placeholders.g4.ik.klist,
-                                placeholders.g4.ik.shift,
+                                placeholders.g4.shift.ik,
                                 name='rik')
-            rjk = self._get_rij(placeholders.R,
+            rjk = self._get_rij(placeholders.positions,
                                 placeholders.g4.jk.jlist,
                                 placeholders.g4.jk.klist,
-                                placeholders.g4.jk.shift,
+                                placeholders.g4.shift.jk,
                                 name='rjk')
 
             rij2 = tf.square(rij, name='rij2')
@@ -606,13 +613,33 @@ class SymmetryFunction(AtomicDescriptor):
                 return tf.add_n(blocks, name='g')
 
     def _get_row_split_sizes(self, placeholders):
+        """
+        Return the sizes of the rowwise splitted subsets of `g`.
+        """
         return placeholders.row_splits
 
+    @staticmethod
+    def _get_row_split_axis():
+        """
+        Return the axis to rowwise split `g`.
+        """
+        return 0
+
     def _get_column_split_sizes(self):
+        """
+        Return the sizes of the column-wise splitted subsets of `g`.
+        """
         column_splits = {}
         for i, element in enumerate(self._elements):
             column_splits[element] = [len(self._elements), i]
         return column_splits
+
+    @staticmethod
+    def _get_column_split_axis():
+        """
+        Return the axis to column-wise split `g`.
+        """
+        return 1
 
     def _split_descriptors(self, g, placeholders) -> Dict[str, tf.Tensor]:
         """
@@ -620,22 +647,27 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.name_scope("Split"):
             row_split_sizes = self._get_row_split_sizes(placeholders)
+            row_split_axis = self._get_row_split_axis()
             column_split_sizes = self._get_column_split_sizes()
-            splits = tf.split(g, row_split_sizes, axis=1, name='rows')[1:]
+            column_split_axis = self._get_column_split_axis()
+            splits = tf.split(
+                g, row_split_sizes, axis=row_split_axis, name='rows')[1:]
             if len(self._elements) > 1:
                 # Further split the element arrays to remove redundant zeros
                 blocks = []
                 for i in range(len(splits)):
                     element = self._elements[i]
                     size_splits, idx = column_split_sizes[element]
-                    block = tf.split(splits[i], size_splits, axis=2,
+                    block = tf.split(splits[i],
+                                     size_splits,
+                                     axis=column_split_axis,
                                      name='{}_block'.format(element))[idx]
                     blocks.append(block)
             else:
                 blocks = splits
             return dict(zip(self._elements, blocks))
 
-    def get_graph(self, placeholders):
+    def build_graph(self, placeholders: AttributeDict):
         """
         Get the tensorflow based computation graph of the Symmetry Function.
         """
@@ -716,6 +748,10 @@ class BatchSymmetryFunction(SymmetryFunction):
             indexing_matrix[i] += [i, 0, 0]
         return indexing_matrix
 
+    @staticmethod
+    def _get_v2g_map_delta(index):
+        return tf.constant([0, 0, index], tf.int32, name='delta')
+
     def _get_v2g_map(self, placeholders, fn_name: str):
         """
 
@@ -728,6 +764,14 @@ class BatchSymmetryFunction(SymmetryFunction):
         for i, element in enumerate(self._elements):
             row_splits.append(self._max_occurs[element])
         return row_splits
+
+    @staticmethod
+    def _get_row_split_axis():
+        return 1
+
+    @staticmethod
+    def _get_column_split_axis():
+        return 2
 
 
 class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
@@ -743,6 +787,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         super(SymmetryFunctionTransformer, self).__init__(*args, **kwargs)
         self._index_transformers = {}
         self._placeholders = AttributeDict()
+
+    def get_graph(self):
+        """
+        Return the graph to compute symmetry function descriptors.
+        """
+        if not self._placeholders:
+            self._initialize_placeholders()
+        return self.build_graph(self.placeholders)
 
     @property
     def placeholders(self) -> AttributeDict:
@@ -766,8 +818,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             def _int(name):
                 return tf.placeholder(tf.int32, (), name)
 
-            def _int_1d(name):
-                return tf.placeholder(tf.int32, (None, ), name)
+            def _int_1d(name, length=None):
+                return tf.placeholder(tf.int32, (length, ), name)
 
             def _int_2d(ndim, name):
                 return tf.placeholder(tf.int32, (None, ndim), name)
@@ -776,7 +828,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             self._placeholders.n_atoms = _int('n_atoms')
             self._placeholders.mask = _double_1d('mask')
             self._placeholders.composition = _double_1d('composition')
-            self._placeholders.row_splits = _int_1d('row_splits')
+            self._placeholders.row_splits = _int_1d(
+                'row_splits', length=self._n_elements + 1)
             self._placeholders.g2 = AttributeDict(
                 ilist=_int_1d('g2.ilist'),
                 jlist=_int_1d('g2.jlist'),
@@ -841,7 +894,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             jlist = jlist[cols]
             Slist = Slist[cols]
         nij = len(ilist)
-        v2g_map = np.zeros((nij, 3), dtype=np.int32)
+        v2g_map = np.zeros((nij, 2), dtype=np.int32)
 
         tlist = np.zeros(nij, dtype=np.int32)
         for i in range(nij):
