@@ -24,9 +24,9 @@ __email__ = 'Bismarrck@me.com'
 
 
 @dataclass(frozen=True)
-class RadialIndexedSlices:
+class G2IndexedSlices:
     """
-    A `dataclass` contains indexed slices for radial functions.
+    A `dataclass` contains indexed slices for the symmetry function G2.
     
     'v2g_map' : array_like
         A list of (atomi, etai, termi) where atomi is the index of the center
@@ -36,7 +36,7 @@ class RadialIndexedSlices:
         A list of first atom indices.
     'jlist' : array_like
         A list of second atom indices.
-    'ij_shift' : array_like
+    'shift' : array_like
         The cell boundary shift vectors, `shift[k] = Slist[k] @ cell`.
 
     """
@@ -49,9 +49,9 @@ class RadialIndexedSlices:
 
 
 @dataclass
-class AngularIndexedSlices:
+class G4IndexedSlices:
     """
-    A `dataclass` contains indexed slices for angular functions.
+    A `dataclass` contains indexed slices for the symmetry function G4.
 
     'v2g_map' : array_like
         A list of (atomi, termi) where atomi is the index of the center atom and
@@ -646,9 +646,10 @@ class SymmetryFunction(AtomicDescriptor):
         return self._split_descriptors(g, placeholders)
 
 
-class FixedSizeSymmetryFunction(SymmetryFunction):
+class BatchSymmetryFunction(SymmetryFunction):
     """
-    A special implementation of Behler-Parinello's Symmetry Function.
+    A special implementation of Behler-Parinello's Symmetry Function for batch
+    training and evaluations.
     """
 
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
@@ -658,7 +659,7 @@ class FixedSizeSymmetryFunction(SymmetryFunction):
         """
         Initialization method.
         """
-        super(FixedSizeSymmetryFunction, self).__init__(
+        super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
             zeta=zeta, k_max=k_max, periodic=periodic)
 
@@ -731,8 +732,8 @@ class FixedSizeSymmetryFunction(SymmetryFunction):
 
 class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
     """
-    A tranformer for calculating symmetry function descriptors of an `Atoms` and
-    convert the
+    A tranformer for providing the feed dict to calculate symmetry function
+    descriptors of an `Atoms` object.
     """
 
     def __init__(self, *args, **kwargs):
@@ -756,43 +757,45 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         with tf.name_scope("Placeholders"):
 
-            def _double_2d_placeholder(ndim, name):
+            def _double_1d(name):
+                return tf.placeholder(tf.float64, (None, ), name)
+
+            def _double_2d(ndim, name):
                 return tf.placeholder(tf.float64, (None, ndim), name)
 
-            def _int_0d_placeholder(name):
+            def _int(name):
                 return tf.placeholder(tf.int32, (), name)
 
-            def _int_1d_placeholder(name):
+            def _int_1d(name):
                 return tf.placeholder(tf.int32, (None, ), name)
 
-            def _int_2d_placeholder(ndim, name):
+            def _int_2d(ndim, name):
                 return tf.placeholder(tf.int32, (None, ndim), name)
 
-            self._placeholders.positions = _double_2d_placeholder(3, 'positions')
-            self._placeholders.n_atoms = _int_0d_placeholder('n_atoms')
+            self._placeholders.positions = _double_2d(3, 'positions')
+            self._placeholders.n_atoms = _int('n_atoms')
+            self._placeholders.mask = _double_1d('mask')
+            self._placeholders.composition = _double_1d('composition')
+            self._placeholders.row_splits = _int_1d('row_splits')
             self._placeholders.g2 = AttributeDict(
-                ilist=_int_1d_placeholder('g2.ilist'),
-                jlist=_int_1d_placeholder('g2.jlist'),
-                shift=_double_2d_placeholder(3, 'g2.shift'),
-                v2g_map=_int_2d_placeholder(2, 'g2.v2g_map')
+                ilist=_int_1d('g2.ilist'),
+                jlist=_int_1d('g2.jlist'),
+                shift=_double_2d(3, 'g2.shift'),
+                v2g_map=_int_2d(2, 'g2.v2g_map')
             )
 
             if self._k_max == 3:
                 self._placeholders.g4 = AttributeDict(
-                    v2g_map=_int_2d_placeholder(2, 'g2.v2g_map'),
-                    ij=AttributeDict(
-                        ilist=_int_1d_placeholder('g4.ij.ilist'),
-                        jlist=_int_1d_placeholder('g4.ij.jlist')),
-                    ik=AttributeDict(
-                        ilist=_int_1d_placeholder('g4.ik.ilist'),
-                        klist=_int_1d_placeholder('g4.ik.klist')),
-                    jk=AttributeDict(
-                        jlist=_int_1d_placeholder('g4.jk.jlist'),
-                        klist=_int_1d_placeholder('g4.jk.klist')),
-                    shift=AttributeDict(
-                        ij=_double_2d_placeholder(3, 'g4.shift.ij'),
-                        ik=_double_2d_placeholder(3, 'g4.shift.ik'),
-                        jk=_double_2d_placeholder(3, 'g4.shift.jk'))
+                    v2g_map=_int_2d(2, 'g2.v2g_map'),
+                    ij=AttributeDict(ilist=_int_1d('g4.ij.ilist'),
+                                     jlist=_int_1d('g4.ij.jlist')),
+                    ik=AttributeDict(ilist=_int_1d('g4.ik.ilist'),
+                                     klist=_int_1d('g4.ik.klist')),
+                    jk=AttributeDict(jlist=_int_1d('g4.jk.jlist'),
+                                     klist=_int_1d('g4.jk.klist')),
+                    shift=AttributeDict(ij=_double_2d(3, 'g4.shift.ij'),
+                                        ik=_double_2d(3, 'g4.shift.ik'),
+                                        jk=_double_2d(3, 'g4.shift.jk'))
                 )
         return self._placeholders
 
@@ -827,7 +830,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
     def _get_g2_indexed_slices(self, atoms, index_transformer: IndexTransformer):
         """
-        Return the indexed slices for G2.
+        Return the indexed slices for the symmetry function G2.
         """
         symbols = atoms.get_chemical_symbols()
         ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
@@ -851,13 +854,13 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         shift = Slist @ atoms.cell
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self._offsets[tlist]
-        return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                                   shift=shift)
+        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                               shift=shift)
 
-    def _get_g4_indexed_slices(self, atoms: Atoms, g2: RadialIndexedSlices,
+    def _get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices,
                                index_transformer: IndexTransformer):
         """
-        Return the indexed slices for G4.
+        Return the indexed slices for the symmetry function G4.
         """
         symbols = atoms.get_chemical_symbols()
         indices = {}
@@ -905,9 +908,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                     v2g_map[count, 0] = atomi
                     v2g_map[count, 1] = self._offsets[index]
                     count += 1
-        return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
-                                    ij_shift=ij_shift, ik_shift=ik_shift,
-                                    jk_shift=jk_shift)
+        return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+                               ij_shift=ij_shift, ik_shift=ik_shift,
+                               jk_shift=jk_shift)
 
     def _get_composition(self, atoms: Atoms) -> np.ndarray:
         """
@@ -934,12 +937,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         positions = index_transformer.gather(atoms.positions)
         n_atoms = index_transformer.n_atoms
         mask = index_transformer.mask
+        splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
 
         feed_dict[placeholders.positions] = positions
         feed_dict[placeholders.n_atoms] = n_atoms
         feed_dict[placeholders.mask] = mask
         feed_dict[placeholders.composition] = composition
+        feed_dict[placeholders.row_splits] = splits
         feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
         feed_dict[placeholders.g2.ilist] = g2.ilist
         feed_dict[placeholders.g2.jlist] = g2.jlist
@@ -975,15 +980,25 @@ def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
-class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
+class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                                        BatchDescriptorTransformer):
     """
     A batch implementation of `SymmetryFunctionTransformer`.
     """
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialization method.
+        """
         super(BatchSymmetryFunctionTransformer, self).__init__(*args, **kwargs)
         self._index_transformers = {}
+
+    @property
+    def batch_size(self):
+        """
+        Return the batch size.
+        """
+        return self._batch_size
 
     def get_index_transformer(self, atoms: Atoms):
         """
@@ -1058,10 +1073,10 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
 
-        return RadialIndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                                   shift=shift)
+        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                               shift=shift)
 
-    def get_g4_indexed_slices(self, atoms: Atoms, rslices: RadialIndexedSlices):
+    def get_g4_indexed_slices(self, atoms: Atoms, rslices: G2IndexedSlices):
         """
         Return the indexed slices for angular functions.
         """
@@ -1112,9 +1127,9 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
                     v2g_map[count, 1] = atomi
                     v2g_map[count, 2] = self._offsets[index]
                     count += 1
-        return AngularIndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
-                                    ij_shift=ij_shift, ik_shift=ik_shift,
-                                    jk_shift=jk_shift)
+        return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+                               ij_shift=ij_shift, ik_shift=ik_shift,
+                               jk_shift=jk_shift)
 
     def get_indexed_slices(self, atoms: Atoms):
         """
@@ -1142,7 +1157,7 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
         return weights
 
     @staticmethod
-    def _merge_and_encode_rslices(rslices: RadialIndexedSlices):
+    def _merge_and_encode_rslices(rslices: G2IndexedSlices):
         """
         Encode `rslices`:
             * `v2g_map`, `ilist` and `jlist` are merged into a single array
@@ -1159,7 +1174,7 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
                 'r_shifts': _bytes_feature(rslices.shift.tostring())}
 
     @staticmethod
-    def _merge_and_encode_aslices(aslices: AngularIndexedSlices):
+    def _merge_and_encode_aslices(aslices: G4IndexedSlices):
         """
         Encode `aslices`:
             * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
@@ -1258,7 +1273,7 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
-            return RadialIndexedSlices(v2g_map, ilist, jlist, shift)
+            return G2IndexedSlices(v2g_map, ilist, jlist, shift)
 
     def _decode_aslices(self, example: Dict[str, tf.Tensor]):
         """
@@ -1285,8 +1300,8 @@ class BatchSymmetryFunctionTransformer(FixedSizeSymmetryFunction,
                 ij_shift, ik_shift, jk_shift = \
                     tf.split(a_shifts, [3, 3, 3], axis=1, name='splits')
 
-            return AngularIndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
-                                        jk_shift)
+            return G4IndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
+                                   jk_shift)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]):
         """
