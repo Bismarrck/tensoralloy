@@ -19,16 +19,16 @@ class AtomicDescriptor(abc.ABC):
     The base interface class for all kinds of atomic descriptors.
     """
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def cutoff(self) -> float:
         """
         Return the cutoff radius.
         """
         pass
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def elements(self) -> List[str]:
         """
         Return a list of str as the ordered unique elements.
@@ -49,8 +49,8 @@ class DescriptorTransformer(AtomicDescriptor):
     transformers.
     """
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def placeholders(self) -> Dict[str, tf.Tensor]:
         """
         Return a dict of names and placeholders.
@@ -71,8 +71,8 @@ class BatchDescriptorTransformer(AtomicDescriptor):
     transformers.
     """
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def batch_size(self) -> int:
         """
         Return the batch size.
