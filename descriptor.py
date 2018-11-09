@@ -36,9 +36,9 @@ class AtomicDescriptor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_graph(self, placeholders: AttributeDict):
+    def build_graph(self, placeholders: AttributeDict):
         """
-        Return the tensorflow graph for computing atomic descriptors.
+        Build the tensorflow graph for computing atomic descriptors.
         """
         pass
 
@@ -61,6 +61,13 @@ class DescriptorTransformer(AtomicDescriptor):
     def get_feed_dict(self, atoms: Atoms):
         """
         Return a feed dict.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_graph(self):
+        """
+        Return the graph for computing atomic descriptors.
         """
         pass
 
