@@ -8,6 +8,7 @@ import tensorflow as tf
 import abc
 from ase import Atoms
 from typing import List, Dict
+from collections import Counter
 from misc import AttributeDict
 
 __author__ = 'Xin Chen'
@@ -83,6 +84,14 @@ class BatchDescriptorTransformer(AtomicDescriptor):
     def batch_size(self) -> int:
         """
         Return the batch size.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def max_occurs(self) -> Counter:
+        """
+        Return the maximum occurance of each type of element.
         """
         pass
 
