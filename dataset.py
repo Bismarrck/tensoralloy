@@ -14,11 +14,11 @@ from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
 from multiprocessing import cpu_count
 from os.path import join, basename, splitext
-from typing import List
+from typing import List, Dict
 
 from transformer import BatchSymmetryFunctionTransformer
 from descriptor import BatchDescriptorTransformer
-from file_io import find_neighbor_size_limits, compute_elemental_static_energies
+from file_io import find_neighbor_size_limits, compute_atomic_static_energy
 from file_io import convert_rc_to_key, convert_k_max_to_key
 from misc import check_path, Defaults, AttributeDict, brange, safe_select
 
@@ -33,7 +33,7 @@ class Dataset:
     """
 
     def __init__(self, database, name, k_max=3, rc=Defaults.rc, eta=None,
-                 beta=None, gamma=None, zeta=None):
+                 beta=None, gamma=None, zeta=None, serial=False):
         """
         Initialization method.
 
@@ -53,6 +53,8 @@ class Dataset:
             A list of float as the `gamma` for angular functions.
         zeta : array_like
             A list of float as the `zeta` for angular functions.
+        serial : bool
+            If True, all parallel routines will be disabled.
 
         """
         self._database = database
@@ -65,6 +67,7 @@ class Dataset:
         self._zeta = safe_select(zeta, Defaults.zeta)
         self._files = {}
         self._file_sizes = {}
+        self._serial = serial
         self._read_database()
 
     @property
@@ -139,11 +142,18 @@ class Dataset:
         return self._file_sizes.get(tf.estimator.ModeKeys.EVAL, 0)
 
     @property
-    def elemental_static_energies(self) -> List[float]:
+    def atomic_static_energy(self) -> Dict[str, float]:
         """
         Return a list of `float` as the static energy for each type of element.
         """
-        return self._y_static
+        return self._atomic_static_energy
+
+    @property
+    def serial(self):
+        """
+        Return True if this dataset is in serial mode.
+        """
+        return self._serial
 
     def __len__(self) -> int:
         """
@@ -151,11 +161,11 @@ class Dataset:
         """
         return len(self._database)
 
-    def _should_compute_static_energies(self):
+    def _should_compute_atomic_static_energy(self):
         """
         A helper function. Return True if `y_static` cannot be accessed.
         """
-        return len(self._database.metadata.get('y_static', [])) == 0
+        return len(self._database.metadata.get('atomic_static_energy', {})) == 0
 
     def _should_find_neighbor_sizes(self):
         """
@@ -186,8 +196,13 @@ class Dataset:
         """
         Read the metadata of the database and finalize the initialization.
         """
+        if self._serial:
+            n_jobs = 1
+        else:
+            n_jobs = -1
+
         if self._should_find_neighbor_sizes():
-            find_neighbor_size_limits(self._database, self._rc,
+            find_neighbor_size_limits(self._database, self._rc, n_jobs=n_jobs,
                                       k_max=self._k_max, verbose=True)
 
         extxyz = self._database.metadata['extxyz']
@@ -203,18 +218,18 @@ class Dataset:
             nij_max=nij_max, nijk_max=nijk_max, eta=self._eta, beta=self._beta,
             gamma=self._gamma, zeta=self._zeta, periodic=extxyz)
 
-        if self._should_compute_static_energies():
-            compute_elemental_static_energies(self._database, sf.elements,
-                                              verbose=True)
+        if self._should_compute_atomic_static_energy():
+            compute_atomic_static_energy(self._database, sf.elements, True)
 
         self._transformer = sf
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
-        self._y_static = self._database.metadata['y_static']
+        self._atomic_static_energy = \
+            self._database.metadata['atomic_static_energy']
 
     def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
-                      indices: List[int], parallel=True, verbose=False):
+                      indices: List[int], verbose=False):
         """
         Write a subset of this dataset to the given file.
 
@@ -226,8 +241,6 @@ class Dataset:
             The file to write.
         indices : List[int]
             A list of int as the ids of the `Atoms` to use for this file.
-        parallel : bool
-            If True, a joblib based parallel scheme shall be used.
         verbose : bool
             If True, the progress shall be logged.
 
@@ -236,7 +249,7 @@ class Dataset:
 
             num_examples = len(indices)
 
-            if parallel:
+            if not self._serial:
                 batch_size = cpu_count() * 50
                 n_cpus = cpu_count()
             else:
@@ -278,7 +291,7 @@ class Dataset:
         """
         return "k{:d}-rc{:.2f}".format(self._k_max, self._rc)
 
-    def to_records(self, savedir, test_size=0.2, parallel=True, verbose=False):
+    def to_records(self, savedir, test_size=0.2, verbose=False):
         """
         Split the dataset into a training set and a testing set and write these
         subsets to tfrecords files.
@@ -290,8 +303,6 @@ class Dataset:
         test_size : float or int
             The proportion (float) or size (int) of the dataset to include in
             the test split.
-        parallel : bool
-            If True, a joblib based parallel scheme shall be used.
         verbose : bool
             If True, the progress shall be logged.
 
@@ -305,7 +316,6 @@ class Dataset:
             check_path(join(savedir, '{}-test-{}-{}.tfrecords'.format(
                 self._name, signature, len(test)))),
             test,
-            parallel=parallel,
             verbose=verbose,
         )
         self._write_subset(
@@ -313,7 +323,6 @@ class Dataset:
             check_path(join(savedir, '{}-train-{}-{}.tfrecords'.format(
                 self._name, signature, len(train)))),
             train,
-            parallel=parallel,
             verbose=verbose,
         )
 
