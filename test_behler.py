@@ -794,42 +794,24 @@ def test_batch_multi_elements():
         assert_less(np.abs(results['O'] - targets['O']).max(), eps)
 
 
-# def test_splits():
-#     """
-#     Test splitting descriptors into blocks.
-#     """
-#     symbols = Pd3O2.get_chemical_symbols()
-#     rc = 6.0
-#     k_max = 3
-#     max_occurs = Counter(symbols)
-#     transformer = IndexTransformer(max_occurs, symbols)
-#     positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
-#     ref, _, _ = legacy_symmetry_function(Pd3O2, rc, 'all')
-#
-#     nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
-#     sf = SymmetryFunction(rc, max_occurs, k_max=k_max, nij_max=nij_max,
-#                           nijk_max=nijk_max)
-#     rslices, aslices = sf.get_indexed_slices([Pd3O2])
-#
-#     g = sf.get_radial_function_graph(positions,
-#                                      v2g_map=rslices.v2g_map,
-#                                      ilist=rslices.ilist,
-#                                      jlist=rslices.jlist,
-#                                      shift=rslices.shift)
-#     g += sf.get_angular_function_graph(positions,
-#                                        v2g_map=aslices.v2g_map,
-#                                        ij=aslices.ij,
-#                                        ik=aslices.ik,
-#                                        jk=aslices.jk,
-#                                        ij_shift=aslices.ij_shift,
-#                                        ik_shift=aslices.ik_shift,
-#                                        jk_shift=aslices.jk_shift)
-#
-#     inputs = sf.split_descriptors(g)
-#     assert_less(
-#         np.abs(inputs['O'].numpy()[0] - ref.numpy()[3:, :20]).max(), 1e-8)
-#     assert_less(
-#         np.abs(inputs['Pd'].numpy()[0] - ref.numpy()[:3, 20:]).max(), 1e-8)
+def test_splits():
+    """
+    Test splitting descriptors into blocks.
+    """
+    symbols = Pd3O2.get_chemical_symbols()
+    rc = 6.0
+    eps = 1e-8
+    max_occurs = Counter(symbols)
+    elements = sorted(max_occurs.keys())
+    ref, _, _ = legacy_symmetry_function(Pd3O2, rc, 'all')
+
+    tf.reset_default_graph()
+    sf = SymmetryFunctionTransformer(rc, elements, k_max=3)
+    with tf.Session() as sess:
+        values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
+
+    assert_less(np.abs(values['O'] - ref[3:, :20]).max(), eps)
+    assert_less(np.abs(values['Pd'] - ref[:3, 20:]).max(), eps)
 
 
 if __name__ == "__main__":
