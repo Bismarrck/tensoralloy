@@ -292,7 +292,8 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
         print('Start finding neighbors for rc = {} and k_max = {}. This may '
               'take a very long time.'.format(rc, k_max))
 
-    results = Parallel(n_jobs=n_jobs, verbose=5 if verbose else 0)(
+    verb_level = 5 if verbose else 0
+    results = Parallel(n_jobs=n_jobs, verbose=verb_level)(
         delayed(_pipeline)(jid) for jid in range(1, len(database) + 1)
     )
 
@@ -314,9 +315,9 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
             len(database), nij_max, nijk_max))
 
 
-def compute_elemental_static_energies(database: SQLite3Database,
-                                      elements: List[str],
-                                      verbose=True):
+def compute_atomic_static_energy(database: SQLite3Database,
+                                 elements: List[str],
+                                 verbose=True):
     """
     Compute the static energy for each type of element and add the results to
     the metadata.
@@ -339,7 +340,7 @@ def compute_elemental_static_energies(database: SQLite3Database,
     b = np.zeros(n, dtype=np.float64)
 
     if verbose:
-        print("Start computing elemental static energies ...")
+        print("Start computing atomic static energies ...")
 
     for aid in range(id_first, id_first + n):
         atoms = database.get_atoms(id=aid)
@@ -359,11 +360,13 @@ def compute_elemental_static_energies(database: SQLite3Database,
     if verbose:
         print("Done.")
         for i in range(len(elements)):
-            print("  * y_static of {:2s} = {: 12.6f}".format(elements[i], x[i]))
+            print("  * Atomic Static Energy of {:2s} = {: 12.6f}".format(
+                elements[i], x[i]))
         print("")
 
     metadata = dict(database.metadata)
-    metadata["y_static"] = x.tolist()
+    metadata["atomic_static_energy"] = {elements[i]: x[i]
+                                        for i in range(len(elements))}
     database.metadata = metadata
 
 

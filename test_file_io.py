@@ -35,7 +35,7 @@ def test_read_extxyz():
     assert_dict_equal(metadata['max_occurs'], max_occurs)
 
 
-def test_find_neighbors():
+def test_find_neighbor_size_limits():
     xyzfile = 'test_files/examples.extxyz'
     database = read(xyzfile, verbose=False)
 
