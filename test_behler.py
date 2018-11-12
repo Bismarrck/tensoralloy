@@ -13,8 +13,8 @@ from utils import cutoff
 from behler import get_kbody_terms, compute_dimension
 from behler import IndexTransformer
 from behler import G2IndexedSlices, G4IndexedSlices
-from behler import SymmetryFunctionTransformer
-from behler import BatchSymmetryFunctionTransformer
+from transformer import SymmetryFunctionTransformer
+from transformer import BatchSymmetryFunctionTransformer
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
