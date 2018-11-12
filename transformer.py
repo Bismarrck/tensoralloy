@@ -483,10 +483,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * `shift` will be encoded separately with key 'r_shifts'.
 
         """
-        merged = np.concatenate((
+        indices = np.concatenate((
             g2.v2g_map, g2.ilist[..., np.newaxis], g2.jlist[..., np.newaxis],
-        ), axis=2).tostring()
-        return {'g2.indices': _bytes_feature(merged),
+        ), axis=1).tostring()
+        return {'g2.indices': _bytes_feature(indices),
                 'g2.shifts': _bytes_feature(g2.shift.tostring())}
 
     @staticmethod
@@ -499,11 +499,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
               array with key 'a_shifts'.
 
         """
-        merged = np.concatenate(
-            (g4.v2g_map, g4.ij, g4.ik, g4.jk), axis=2).tostring()
+        indices = np.concatenate(
+            (g4.v2g_map, g4.ij, g4.ik, g4.jk), axis=1).tostring()
         shifts = np.concatenate(
-            (g4.ij_shift, g4.ik_shift, g4.jk_shift), axis=2).tostring()
-        return {'g4.indices': _bytes_feature(merged),
+            (g4.ij_shift, g4.ik_shift, g4.jk_shift), axis=1).tostring()
+        return {'g4.indices': _bytes_feature(indices),
                 'g4.shifts': _bytes_feature(shifts)}
 
     def _get_composition(self, atoms: Atoms) -> np.ndarray:
@@ -522,7 +522,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         clf = self.get_index_transformer(atoms)
         positions = clf.gather(atoms.positions)
         y_true = atoms.get_total_energy()
-        f_true = atoms.get_forces()
+        f_true = clf.gather(atoms.get_forces())
         composition = self._get_composition(atoms)
         g2, g4 = self.get_indexed_slices(atoms)
         feature_list = {
@@ -595,7 +595,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         with tf.name_scope("G4"):
             with tf.name_scope("indices"):
                 indices = tf.decode_raw(example['g4.indices'], tf.int32)
-                indices.set_shape([self.nijk_max * 9])
+                indices.set_shape([self._nijk_max * 9])
                 indices = tf.reshape(
                     indices, [self._nijk_max, 9], name='g4.indices')
                 v2g_map, ij, ik, jk = \
@@ -603,7 +603,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             with tf.name_scope("shifts"):
                 shifts = tf.decode_raw(example['g4.shifts'], tf.float64)
-                shifts.set_shape([self.nijk_max * 9])
+                shifts.set_shape([self._nijk_max * 9])
                 shifts = tf.reshape(
                     shifts, [self._nijk_max, 9], name='g4.shifts')
                 ij_shift, ik_shift, jk_shift = \

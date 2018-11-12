@@ -8,15 +8,15 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.learn import ModeKeys
 from ase.db import connect
-from ase.io import read
-from dataset import Dataset, TrainableProperty
-from behler import SymmetryFunction
-from misc import test_dir, Defaults, AttributeDict
 from nose import main
-from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
+from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_in, assert_true
 from os.path import join
-from collections import Counter
+
+from transformer import BatchSymmetryFunctionTransformer
+from dataset import Dataset
+from misc import test_dir, Defaults, AttributeDict
+from test_behler import qm7m
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -26,23 +26,19 @@ def qm7m_compute():
     """
     Compute the reference values.
     """
-    trajectory = read('test_files/qm7m/qm7m.xyz', index=':', format='xyz')
-    max_occurs = Counter()
-    for atoms in trajectory:
-        for element, n in Counter(atoms.get_chemical_symbols()).items():
-            max_occurs[element] = max(max_occurs[element], n)
-
-    batch_size = len(trajectory)
-    max_atoms = sum(max_occurs.values())
-    sf = SymmetryFunction(Defaults.rc, max_occurs, k_max=2, nij_max=198,
-                          nijk_max=0)
-    rslices, _ = sf.get_indexed_slices(trajectory)
-    positions = np.zeros((batch_size, max_atoms + 1, 3))
-    for i, atoms in enumerate(trajectory):
+    batch_size = len(qm7m.trajectory)
+    sf = BatchSymmetryFunctionTransformer(Defaults.rc, qm7m.max_occurs,
+                                          nij_max=qm7m.nij_max, nijk_max=0,
+                                          k_max=2)
+    max_n_atoms = sum(qm7m.max_occurs.values()) + 1
+    g2 = []
+    positions = np.zeros((batch_size, max_n_atoms, 3))
+    for i, atoms in enumerate(qm7m.trajectory):
         positions[i] = sf.get_index_transformer(atoms).gather(
             atoms.positions)
+        g2.append(sf.get_g2_indexed_slices(atoms))
 
-    return AttributeDict(positions=positions, rslices=rslices)
+    return AttributeDict(positions=positions, g2=g2)
 
 
 def test_qm7m():
@@ -61,7 +57,7 @@ def test_qm7m():
         dataset = Dataset(database, 'qm7m', k_max=2)
 
         assert_equal(len(dataset), 3)
-        assert_list_equal(dataset.trainable_properties, [TrainableProperty.energy])
+        assert_equal(dataset.forces, False)
         assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
 
         dataset.to_records(savedir, test_size=0.33)
@@ -76,11 +72,11 @@ def test_qm7m():
             res = sess.run(next_batch)
             eps = 1e-8
 
-            assert_equal(len(res.keys()), 8)
+            assert_equal(len(res.keys()), 9)
             assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
-            assert_less(np.abs(res.rv2g[0] - ref.rslices.v2g_map[0]).max(), eps)
-            assert_less(np.abs(res.ilist[0] - ref.rslices.ilist[0]).max(), eps)
-            assert_less(np.abs(res.shift[0] - ref.rslices.shift[0]).max(), eps)
+            assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
+            assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
+            assert_less(np.abs(res.rv2g[0] - ref.g2[0].v2g_map).max(), eps)
 
 
 def test_ethanol():
@@ -109,7 +105,7 @@ def test_ethanol():
                                         num_epochs=1, shuffle=False)
 
         atoms = database.get_atoms(id=2)
-        clf = dataset.descriptor.get_index_transformer(atoms)
+        clf = dataset.transformer.get_index_transformer(atoms)
         positions = clf.gather(atoms.positions)
         energy = atoms.get_total_energy()
         forces = clf.gather(atoms.get_forces())

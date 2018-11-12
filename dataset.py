@@ -5,263 +5,26 @@ This module defines the `Dataset` class for this project.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-import numpy as np
 import sys
 import time
 import glob
-from tensorflow.train import Example, Features
 from tensorflow.contrib.data import shuffle_and_repeat
-from behler import SymmetryFunction
-from behler import RadialIndexedSlices, AngularIndexedSlices
-from ase import Atoms
 from ase.db.sqlite import SQLite3Database
-from file_io import find_neighbor_size_limits, compute_elemental_static_energies
-from file_io import convert_rc_to_key, convert_k_max_to_key
-from misc import check_path, Defaults, AttributeDict, brange, safe_select
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
 from multiprocessing import cpu_count
 from os.path import join, basename, splitext
-from enum import Enum
-from typing import List, Dict
-from collections import Counter
+from typing import List
+
+from transformer import BatchSymmetryFunctionTransformer
+from descriptor import BatchDescriptorTransformer
+from file_io import find_neighbor_size_limits, compute_elemental_static_energies
+from file_io import convert_rc_to_key, convert_k_max_to_key
+from misc import check_path, Defaults, AttributeDict, brange, safe_select
 
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-class TrainableProperty(Enum):
-    """
-    A enumeration list declaring the trainable properties.
-    """
-    energy = 0
-    forces = 1
-
-
-def _bytes_feature(value):
-    """
-    Convert the `value` to Protobuf bytes.
-    """
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-
-def _float_feature(value):
-    """
-    Convert the `value` to Protobuf float32.
-    """
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-
-class RawSerializer:
-    """
-    This class is used to serialize training examples in raw format.
-    """
-
-    def __init__(self, n_elements: int, k_max: int, n_atoms: int, nij_max: int,
-                 nijk_max: int, trainable_properties: List[TrainableProperty]):
-        """
-        Initialization method.
-        """
-        self.n_elements = n_elements
-        self.k_max = k_max
-        self.natoms = n_atoms
-        self.nij_max = nij_max
-        self.nijk_max = nijk_max
-        if not trainable_properties:
-            trainable_properties = [TrainableProperty.energy, ]
-        self.trainable_properties = trainable_properties
-
-    @staticmethod
-    def _merge_and_encode_rslices(rslices: RadialIndexedSlices):
-        """
-        Encode `rslices`:
-            * `v2g_map`, `ilist` and `jlist` are merged into a single array
-              with key 'r_indices'.
-            * `shift` will be encoded separately with key 'r_shifts'.
-
-        """
-        merged = np.concatenate((
-            rslices.v2g_map,
-            rslices.ilist[..., np.newaxis],
-            rslices.jlist[..., np.newaxis],
-        ), axis=2).tostring()
-        return {'r_indices': _bytes_feature(merged),
-                'r_shifts': _bytes_feature(rslices.shift.tostring())}
-
-    @staticmethod
-    def _merge_and_encode_aslices(aslices: AngularIndexedSlices):
-        """
-        Encode `aslices`:
-            * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
-              with key 'a_indices'.
-            * `ij_shift`, `ik_shift` and `jk_shift` are merged into another
-              array with key 'a_shifts'.
-
-        """
-        merged = np.concatenate((
-            aslices.v2g_map,
-            aslices.ij,
-            aslices.ik,
-            aslices.jk,
-        ), axis=2).tostring()
-        shifts = np.concatenate((
-            aslices.ij_shift,
-            aslices.ik_shift,
-            aslices.jk_shift,
-        ), axis=2).tostring()
-        return {'a_indices': _bytes_feature(merged),
-                'a_shifts': _bytes_feature(shifts)}
-
-    def encode(self, positions: np.ndarray, y_true: float, f_true: np.ndarray,
-               mask: np.ndarray, composition: np.ndarray,
-               rslices: RadialIndexedSlices, aslices: AngularIndexedSlices):
-        """
-        Encode the data and return a `tf.train.Example`.
-        """
-        feature_list = {
-            'positions': _bytes_feature(positions.tostring()),
-            'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
-            'mask': _bytes_feature(mask.tostring()),
-            'composition': _bytes_feature(composition.tostring()),
-        }
-        feature_list.update(self._merge_and_encode_rslices(rslices))
-        if TrainableProperty.forces in self.trainable_properties:
-            feature_list.update({'f_true': _bytes_feature(f_true.tostring())})
-        if self.k_max == 3:
-            feature_list.update(self._merge_and_encode_aslices(aslices))
-        return Example(features=Features(feature=feature_list))
-
-    def _decode_atoms(self, example: Dict[str, tf.Tensor]):
-        """
-        Decode `Atoms` related properties.
-        """
-        length = 3 * (self.natoms + 1)
-
-        positions = tf.decode_raw(example['positions'], tf.float64)
-        positions.set_shape([length])
-        positions = tf.reshape(positions, (self.natoms + 1, 3), name='R')
-
-        y_true = tf.decode_raw(example['y_true'], tf.float64)
-        y_true.set_shape([1])
-        y_true = tf.squeeze(y_true, name='y_true')
-
-        mask = tf.decode_raw(example['mask'], tf.float64)
-        mask.set_shape([self.natoms + 1, ])
-
-        composition = tf.decode_raw(example['composition'], tf.float64)
-        composition.set_shape([self.n_elements, ])
-
-        if TrainableProperty.forces in self.trainable_properties:
-            f_true = tf.decode_raw(example['f_true'], tf.float64)
-            f_true.set_shape([length])
-            f_true = tf.reshape(f_true, (self.natoms + 1, 3), name='f_true')
-        else:
-            f_true = None
-
-        return positions, y_true, f_true, mask, composition
-
-    def _decode_rslices(self, example: Dict[str, tf.Tensor]):
-        """
-        Decode v2g_map, ilist, jlist and Slist for radial functions.
-        """
-        with tf.name_scope("Radial"):
-
-            r_indices = tf.decode_raw(example['r_indices'], tf.int32)
-            r_indices.set_shape([self.nij_max * 5])
-            r_indices = tf.reshape(
-                r_indices, [self.nij_max, 5], name='r_indices')
-            v2g_map, ilist, jlist = tf.split(
-                r_indices, [3, 1, 1], axis=1, name='splits')
-            ilist = tf.squeeze(ilist, axis=1, name='ilist')
-            jlist = tf.squeeze(jlist, axis=1, name='jlist')
-
-            shift = tf.decode_raw(example['r_shifts'], tf.float64)
-            shift.set_shape([self.nij_max * 3])
-            shift = tf.reshape(shift, [self.nij_max, 3], name='shift')
-
-            return RadialIndexedSlices(v2g_map, ilist, jlist, shift)
-
-    def _decode_aslices(self, example: Dict[str, tf.Tensor]):
-        """
-        Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
-        functions.
-        """
-        if self.k_max < 3:
-            return None
-
-        with tf.name_scope("Angular"):
-
-            with tf.name_scope("indices"):
-                a_indices = tf.decode_raw(example['a_indices'], tf.int32)
-                a_indices.set_shape([self.nijk_max * 9])
-                a_indices = tf.reshape(
-                    a_indices, [self.nijk_max, 9], name='a_indices')
-                v2g_map, ij, ik, jk = \
-                    tf.split(a_indices, [3, 2, 2, 2], axis=1, name='splits')
-
-            with tf.name_scope("shifts"):
-                a_shifts = tf.decode_raw(example['a_shifts'], tf.float64)
-                a_shifts.set_shape([self.nijk_max * 9])
-                a_shifts = tf.reshape(
-                    a_shifts, [self.nijk_max, 9], name='a_shifts')
-                ij_shift, ik_shift, jk_shift = \
-                    tf.split(a_shifts, [3, 3, 3], axis=1, name='splits')
-
-            return AngularIndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
-                                        jk_shift)
-
-    def decode_example(self, example: Dict[str, tf.Tensor]):
-        """
-        Decode the parsed single example.
-        """
-        positions, y_true, f_true, mask, composition = \
-            self._decode_atoms(example)
-        rslices = self._decode_rslices(example)
-        aslices = self._decode_aslices(example)
-
-        decoded = AttributeDict(positions=positions, y_true=y_true, mask=mask,
-                                composition=composition, rv2g=rslices.v2g_map,
-                                ilist=rslices.ilist, jlist=rslices.jlist,
-                                shift=rslices.shift)
-
-        if f_true is not None:
-            decoded.f_true = f_true
-
-        if aslices is not None:
-            decoded.av2g = aslices.v2g_map
-            decoded.ij = aslices.ij
-            decoded.ik = aslices.ik
-            decoded.jk = aslices.jk
-            decoded.ij_shift = aslices.ij_shift
-            decoded.ik_shift = aslices.ik_shift
-            decoded.jk_shift = aslices.jk_shift
-
-        return decoded
-
-    def decode_protobuf(self, example_proto: tf.Tensor) -> AttributeDict:
-        """
-        Decode the scalar string Tensor, which is a single serialized Example.
-        See `_parse_single_example_raw` documentation for more details.
-        """
-        with tf.name_scope("decoding"):
-            feature_list = {
-                'positions': tf.FixedLenFeature([], tf.string),
-                'y_true': tf.FixedLenFeature([], tf.string),
-                'r_indices': tf.FixedLenFeature([], tf.string),
-                'r_shifts': tf.FixedLenFeature([], tf.string),
-                'mask': tf.FixedLenFeature([], tf.string),
-                'composition': tf.FixedLenFeature([], tf.string),
-            }
-            if TrainableProperty.forces in self.trainable_properties:
-                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
-            if self.k_max == 3:
-                feature_list.update({
-                    'a_indices': tf.FixedLenFeature([], tf.string),
-                    'a_shifts': tf.FixedLenFeature([], tf.string),
-                })
-            example = tf.parse_single_example(example_proto, feature_list)
-            return self.decode_example(example)
 
 
 class Dataset:
@@ -319,12 +82,18 @@ class Dataset:
         return self._name
 
     @property
-    def trainable_properties(self) -> List[TrainableProperty]:
+    def forces(self) -> bool:
         """
-        Return a list of `TrainableProperty`. Currently only energy and forces
-        are supported.
+        Return True if atomic forces are provided.
         """
-        return self._trainable_properties
+        return self._forces
+
+    @property
+    def stress(self) -> bool:
+        """
+        Return True if stress data are provided.
+        """
+        return False
 
     @property
     def k_max(self):
@@ -349,12 +118,11 @@ class Dataset:
         return self._max_occurs
 
     @property
-    def descriptor(self):
+    def transformer(self) -> BatchDescriptorTransformer:
         """
-        Return the descriptor instance. Currently only `SymmetryFunction` is
-        implemented.
+        Return the assigned batch version of an atomic descriptor transformer.
         """
-        return self._descriptor
+        return self._transformer
 
     @property
     def train_size(self):
@@ -421,57 +189,29 @@ class Dataset:
         if self._should_find_neighbor_sizes():
             find_neighbor_size_limits(self._database, self._rc,
                                       k_max=self._k_max, verbose=True)
-        trainable_properties = [TrainableProperty.energy]
+
         extxyz = self._database.metadata['extxyz']
         if extxyz:
-            trainable_properties += [TrainableProperty.forces]
+            self._forces = True
+        else:
+            self._forces = False
+
         max_occurs = self._database.metadata['max_occurs']
-        n_atoms = sum(max_occurs.values())
         nij_max, nijk_max = self._get_nij_and_nijk()
-        sf = SymmetryFunction(self._rc, max_occurs, k_max=self._k_max,
-                              nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
-                              beta=self._beta, gamma=self._gamma,
-                              zeta=self._zeta, periodic=extxyz)
+        sf = BatchSymmetryFunctionTransformer(
+            rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
+            nij_max=nij_max, nijk_max=nijk_max, eta=self._eta, beta=self._beta,
+            gamma=self._gamma, zeta=self._zeta, periodic=extxyz)
 
         if self._should_compute_static_energies():
             compute_elemental_static_energies(self._database, sf.elements,
                                               verbose=True)
-        y_static = self._database.metadata['y_static']
 
-        self._descriptor = sf
+        self._transformer = sf
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
-        self._trainable_properties = trainable_properties
-        self._y_static = y_static
-        self._serializer = RawSerializer(
-            n_elements=len(max_occurs), k_max=self._k_max, n_atoms=n_atoms,
-            nij_max=nij_max, nijk_max=nijk_max,
-            trainable_properties=trainable_properties)
-
-    def _get_composition(self, atoms: Atoms) -> np.ndarray:
-        """
-        Return the composition of the `Atoms`.
-        """
-        elements = self._descriptor.elements
-        composition = np.zeros(len(elements), dtype=np.float64)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            composition[elements.index(element)] = float(count)
-        return composition
-
-    def convert_atoms_to_example(self, atoms: Atoms) -> Example:
-        """
-        Convert an `Atoms` object to `tf.train.Example`.
-        """
-        transformer = self._descriptor.get_index_transformer(atoms)
-        positions = transformer.gather(atoms.positions)
-        mask = transformer.mask.astype(np.float64)
-        composition = self._get_composition(atoms)
-        y_true = np.atleast_2d(atoms.get_total_energy())
-        f_true = transformer.gather(atoms.get_forces())
-        rslices, aslices = self._descriptor.get_indexed_slices([atoms])
-        return self._serializer.encode(positions, y_true, f_true, mask,
-                                       composition, rslices, aslices)
+        self._y_static = self._database.metadata['y_static']
 
     def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
                       indices: List[int], parallel=True, verbose=False):
@@ -518,7 +258,7 @@ class Dataset:
                 for atoms_id in indices[istart: istop]:
                     trajectory.append(self._database.get_atoms(id=atoms_id))
                 examples = Parallel(n_jobs=n_cpus)(
-                    delayed(self.convert_atoms_to_example)(atoms)
+                    delayed(self._transformer.encode)(atoms)
                     for atoms in trajectory
                 )
                 for example in examples:
@@ -579,24 +319,6 @@ class Dataset:
 
         self.load_tfrecords(savedir)
 
-    def decode_protobuf(self, example_proto):
-        """
-        Decode the protobuf into a tuple of tensors.
-
-        Parameters
-        ----------
-        example_proto : tf.Tensor
-            A scalar string Tensor, a single serialized Example. See
-            `_parse_single_example_raw` documentation for more details.
-
-        Returns
-        -------
-        example : DecodedExample
-            A `DecodedExample` from a tfrecords file.
-
-        """
-        return self._serializer.decode_protobuf(example_proto)
-
     def load_tfrecords(self, savedir, idx=0) -> bool:
         """
         Load converted tfrecords files for this dataset.
@@ -639,13 +361,13 @@ class Dataset:
                 batch = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
                     shuffle=shuffle)
-            splits = self.descriptor.get_descriptors_graph(batch, batch_size)
+            splits = self._transformer.get_graph_from_batch(batch)
             features = AttributeDict(descriptors=splits,
                                      positions=batch.positions,
                                      composition=batch.composition,
                                      mask=batch.mask)
             labels = AttributeDict(y=batch.y_true)
-            if TrainableProperty.forces in self.trainable_properties:
+            if self._forces:
                 labels.update({'f': batch.f_true})
             return features, labels
 
@@ -680,7 +402,7 @@ class Dataset:
 
             # Initialize a basic dataset
             dataset = tf.data.TFRecordDataset([tfrecords_file])
-            dataset = dataset.map(self.decode_protobuf,
+            dataset = dataset.map(self._transformer.decode_protobuf,
                                   num_parallel_calls=cpu_count())
 
             # Shuffle it if needed
