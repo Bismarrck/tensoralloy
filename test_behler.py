@@ -661,46 +661,31 @@ def test_legacy_and_new_flexible():
             assert_less(np.abs(values['B'] - targets[i]).max(), 1e-8)
 
 
-# def test_manybody_k():
-#     """
-#     Test computing descriptors for different `k_max`.
-#     """
-#     symbols = Pd3O2.get_chemical_symbols()
-#     rc = 6.0
-#     max_occurs = Counter(symbols)
-#     transformer = IndexTransformer(max_occurs, symbols)
-#     positions = transformer.gather(Pd3O2.positions)[np.newaxis, ...]
-#     ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc, 'all')
-#     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
-#
-#     for k_max in (1, 2, 3):
-#
-#         nij_max, nijk_max = get_ij_ijk_max([Pd3O2], rc, k_max=k_max)
-#         sf = SymmetryFunction(rc, max_occurs, k_max=k_max, nij_max=nij_max,
-#                               nijk_max=nijk_max)
-#         rslices, aslices = sf.get_indexed_slices([Pd3O2])
-#
-#         g = sf.get_radial_function_graph(positions,
-#                                          v2g_map=rslices.v2g_map,
-#                                          ilist=rslices.ilist,
-#                                          jlist=rslices.jlist,
-#                                          shift=rslices.shift)
-#         if k_max == 3:
-#             g += sf.get_angular_function_graph(positions,
-#                                                v2g_map=aslices.v2g_map,
-#                                                ij=aslices.ij,
-#                                                ik=aslices.ik,
-#                                                jk=aslices.jk,
-#                                                ij_shift=aslices.ij_shift,
-#                                                ik_shift=aslices.ik_shift,
-#                                                jk_shift=aslices.jk_shift)
-#         columns = []
-#         for i, ref_term in enumerate(ref_terms):
-#             if ref_term in sf.kbody_terms:
-#                 columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-#         g = transformer.gather(g.numpy()[0], reverse=True)
-#         assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8,
-#                     msg="Test case at k_max = {} is failed".format(str(k_max)))
+def test_manybody_k():
+    """
+    Test computing descriptors for different `k_max`.
+    """
+    symbols = Pd3O2.get_chemical_symbols()
+    rc = 6.0
+    eps = 1e-8
+    max_occurs = Counter(symbols)
+    elements = sorted(max_occurs.keys())
+    ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc, 'all')
+    ref = ref[[3, 4, 0, 1, 2]]
+    ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
+
+    for k_max in (1, 2, 3):
+        tf.reset_default_graph()
+        sf = SymmetryFunctionTransformer(rc, elements, k_max=k_max)
+        g = sf.get_graph(split=False)
+        with tf.Session() as sess:
+            values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
+        columns = []
+        for i, ref_term in enumerate(ref_terms):
+            if ref_term in sf.kbody_terms:
+                columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
+        assert_less((values[1:] - ref[:, columns]).max(), eps)
+
 
 def _merge_indexed_slices(
         indexed_slices: List[Tuple[G2IndexedSlices, G4IndexedSlices]]):
@@ -780,8 +765,10 @@ def test_batch_multi_elements():
     """
     rc = 6.0
     batch_size = len(qm7m.trajectory)
-    elements = sorted(qm7m.max_occurs)
+    elements = sorted(qm7m.max_occurs.keys())
     targets = _compute_qm7m_descriptors_legacy(rc)
+
+    tf.reset_default_graph()
 
     nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
     sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, elements,

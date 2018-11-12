@@ -667,7 +667,7 @@ class SymmetryFunction(AtomicDescriptor):
                 blocks = splits
             return dict(zip(self._elements, blocks))
 
-    def build_graph(self, placeholders: AttributeDict):
+    def build_graph(self, placeholders: AttributeDict, split=True):
         """
         Get the tensorflow based computation graph of the Symmetry Function.
         """
@@ -675,7 +675,10 @@ class SymmetryFunction(AtomicDescriptor):
             g = self._get_g2_graph(placeholders)
             if self._k_max == 3:
                 g += self._get_g4_graph(placeholders)
-        return self._split_descriptors(g, placeholders)
+        if split:
+            return self._split_descriptors(g, placeholders)
+        else:
+            return g
 
 
 class BatchSymmetryFunction(SymmetryFunction):
@@ -792,13 +795,13 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         self._index_transformers = {}
         self._placeholders = AttributeDict()
 
-    def get_graph(self):
+    def get_graph(self, **kwargs):
         """
         Return the graph to compute symmetry function descriptors.
         """
         if not self._placeholders:
             self._initialize_placeholders()
-        return self.build_graph(self.placeholders)
+        return self.build_graph(self.placeholders, **kwargs)
 
     @property
     def placeholders(self) -> AttributeDict:
