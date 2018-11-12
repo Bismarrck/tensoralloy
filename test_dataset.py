@@ -28,7 +28,8 @@ def qm7m_compute():
     Compute the reference values.
     """
     batch_size = len(qm7m.trajectory)
-    sf = BatchSymmetryFunctionTransformer(Defaults.rc, qm7m.max_occurs,
+    sf = BatchSymmetryFunctionTransformer(rc=Defaults.rc,
+                                          max_occurs=qm7m.max_occurs,
                                           nij_max=qm7m.nij_max, nijk_max=0,
                                           k_max=2)
     max_n_atoms = sum(qm7m.max_occurs.values()) + 1
@@ -53,7 +54,7 @@ def test_qm7m():
 
         savedir = join(test_dir(), 'qm7m')
         database = connect(join(savedir, 'qm7m.db'))
-        dataset = Dataset(database, 'qm7m', k_max=2)
+        dataset = Dataset(database, 'qm7m', k_max=2, serial=True)
 
         assert_equal(len(dataset), 3)
         assert_equal(dataset.forces, False)
@@ -87,7 +88,7 @@ def test_ethanol():
 
         savedir = join(test_dir(), 'ethanol')
         database = connect(join(savedir, 'ethanol.db'))
-        dataset = Dataset(database, 'ethanol', k_max=3)
+        dataset = Dataset(database, 'ethanol', k_max=3, serial=True)
 
         assert_equal(len(dataset), 10)
         assert_true(dataset.forces)
