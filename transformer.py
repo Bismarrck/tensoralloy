@@ -318,6 +318,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         return self._batch_size
 
+    @property
+    def max_occurs(self):
+        """
+        Return the maximum occurances of the elements.
+        """
+        return self._max_occurs
+
     def get_index_transformer(self, atoms: Atoms):
         """
         Return the corresponding `IndexTransformer`.
@@ -524,11 +531,12 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         y_true = atoms.get_total_energy()
         f_true = clf.gather(atoms.get_forces())
         composition = self._get_composition(atoms)
+        mask = clf.mask.astype(np.float64)
         g2, g4 = self.get_indexed_slices(atoms)
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
-            'mask': _bytes_feature(clf.mask.tostring()),
+            'mask': _bytes_feature(mask.tostring()),
             'composition': _bytes_feature(composition.tostring()),
             'f_true': _bytes_feature(f_true.tostring()),
         }
