@@ -54,11 +54,17 @@ Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
                                     [3.89, 2.75064538, 8.37532269]]))
 
 qm7m = AttributeDict(
-    max_occurs=Counter({'H': 8, 'C': 5, 'O': 2}),
+    max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
     nij_max=198,
     nijk_max=1217,
     trajectory=read('test_files/qm7m/qm7m.xyz', index=':', format='xyz'),
 )
+
+for _atoms in qm7m.trajectory:
+    # Setting the boundary cell is important because `neighbor_list` may give
+    # totally different results.
+    _atoms.set_cell(np.eye(3) * 20.0)
+
 
 grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
                       'zeta': Defaults.zeta})
