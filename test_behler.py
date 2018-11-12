@@ -765,15 +765,13 @@ def test_batch_multi_elements():
     """
     rc = 6.0
     batch_size = len(qm7m.trajectory)
-    elements = sorted(qm7m.max_occurs.keys())
     targets = _compute_qm7m_descriptors_legacy(rc)
 
     tf.reset_default_graph()
 
     nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
-    sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, elements,
-                                          nij_max, nijk_max, batch_size)
-
+    sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
+                                          nijk_max, batch_size)
     indexed_slices = []
     positions = []
     for i, atoms in enumerate(qm7m.trajectory):

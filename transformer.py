@@ -4,13 +4,12 @@ This module defines the descriptor transformers.
 """
 from __future__ import print_function, absolute_import
 
-from collections.__init__ import Counter
-from typing import List, Dict
-
 import numpy as np
 import tensorflow as tf
 from ase import Atoms
 from ase.neighborlist import neighbor_list
+from collections.__init__ import Counter
+from typing import Dict
 
 from behler import SymmetryFunction, BatchSymmetryFunction
 from behler import get_elements_from_kbody_term
@@ -291,10 +290,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     A batch implementation of `SymmetryFunctionTransformer`.
     """
 
-    def __init__(self, rc, max_occurs: Counter, elements: List[str],
-                 nij_max: int, nijk_max: int, batch_size=None, eta=Defaults.eta,
-                 beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 k_max=3, periodic=True):
+    def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
+                 batch_size=None, eta=Defaults.eta, beta=Defaults.beta,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 periodic=True):
         """
         Initialization method.
 
@@ -304,6 +303,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         indexed slices does not need this value. However, `batch_size` must be
         set before calling `build_graph()`.
         """
+        elements = sorted(max_occurs.keys())
+
         super(BatchSymmetryFunctionTransformer, self).__init__(
             rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
             nijk_max=nijk_max, batch_size=batch_size, eta=eta, beta=beta,
