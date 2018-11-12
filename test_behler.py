@@ -12,7 +12,8 @@ from unittest import TestCase
 from utils import cutoff
 from behler import get_kbody_terms, compute_dimension
 from behler import IndexTransformer
-from behler import SymmetryFunctionTransformer, SymmetryFunction
+from behler import G2IndexedSlices, G4IndexedSlices
+from behler import SymmetryFunctionTransformer
 from behler import BatchSymmetryFunctionTransformer
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
@@ -21,7 +22,7 @@ from ase.neighborlist import neighbor_list
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
 from itertools import product
-from typing import List, Union
+from typing import List, Union, Tuple
 from collections import Counter
 from misc import Defaults, AttributeDict
 from dataclasses import dataclass
@@ -701,77 +702,109 @@ def test_legacy_and_new_flexible():
 #         assert_less(np.abs(ref.numpy()[:, columns] - g).max(), 1e-8,
 #                     msg="Test case at k_max = {} is failed".format(str(k_max)))
 
+def _merge_indexed_slices(
+        indexed_slices: List[Tuple[G2IndexedSlices, G4IndexedSlices]]):
+    """
+    Merge the indexed slices into a single dict.
+    """
+    batch_size = len(indexed_slices)
+    g2 = 0
+    g4 = 1
 
-# def test_batch_multi_elements():
-#     """
-#     Test computing descriptors of a batch of multi-elements molecules.
-#     """
-#     rc = 6.0
-#     batch_size = len(qm7m.trajectory)
-#     n_atoms = sum(qm7m.max_occurs.values())
-#     kbody_terms, mapping, elements = get_kbody_terms(
-#         list(qm7m.max_occurs.keys()), k_max=3
-#     )
-#     total_dim, kbody_sizes = compute_dimension(kbody_terms,
-#                                                Defaults.n_etas,
-#                                                Defaults.n_betas,
-#                                                Defaults.n_gammas,
-#                                                Defaults.n_zetas)
-#     element_offsets = np.insert(
-#         np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
-#
-#     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-#     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
-#     for i, atoms in enumerate(qm7m.trajectory):
-#         g, local_terms, local_sizes = legacy_symmetry_function(
-#             atoms, rc, atoms.get_chemical_formula())
-#         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
-#         row = Counter()
-#         for k, atom in enumerate(atoms):
-#             atom_kbody_terms = mapping[atom.symbol]
-#             j = row[atom.symbol] + element_offsets[elements.index(atom.symbol)]
-#             for term in atom_kbody_terms:
-#                 if term not in local_terms:
-#                     continue
-#                 idx = kbody_terms.index(term)
-#                 istart = offsets[idx]
-#                 istop = istart + kbody_sizes[idx]
-#                 idx = local_terms.index(term)
-#                 lstart = local_offsets[idx]
-#                 lstop = lstart + local_sizes[idx]
-#                 targets[i, j + 1, istart: istop] = g[k, lstart: lstop]
-#             row[atom.symbol] += 1
-#
-#     nij_max = 198
-#     nijk_max = 1217
-#     if nij_max is None:
-#         nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
-#
-#     sf = SymmetryFunction(rc, qm7m.max_occurs, k_max=3, nij_max=nij_max,
-#                           nijk_max=nijk_max)
-#
-#     rslices, aslices = sf.get_indexed_slices(qm7m.trajectory)
-#
-#     positions = np.zeros((batch_size, n_atoms + 1, 3))
-#     for i, atoms in enumerate(qm7m.trajectory):
-#         positions[i] = sf.get_index_transformer(atoms).gather(atoms.positions)
-#
-#     gr = sf.get_radial_function_graph(positions,
-#                                       v2g_map=rslices.v2g_map,
-#                                       ilist=rslices.ilist,
-#                                       jlist=rslices.jlist,
-#                                       shift=rslices.shift)
-#     ga = sf.get_angular_function_graph(positions,
-#                                        v2g_map=aslices.v2g_map,
-#                                        ij=aslices.ij,
-#                                        ik=aslices.ik,
-#                                        jk=aslices.jk,
-#                                        ij_shift=aslices.ij_shift,
-#                                        ik_shift=aslices.ik_shift,
-#                                        jk_shift=aslices.jk_shift)
-#     g = gr + ga
-#     values = g.numpy()
-#     assert_less(np.abs(values[:, 1:] - targets[:, 1:]).max(), 1e-8)
+    def _stack(index, attr):
+        return np.stack([getattr(indexed_slices[i][index], attr)
+                         for i in range(batch_size)],
+                        axis=0)
+
+    batch = AttributeDict()
+    batch.ilist = _stack(g2, 'ilist')
+    batch.jlist = _stack(g2, 'jlist')
+    batch.shift = _stack(g2, 'shift')
+    batch.rv2g = _stack(g2, 'v2g_map')
+    batch.ij = _stack(g4, 'ij')
+    batch.ik = _stack(g4, 'ik')
+    batch.jk = _stack(g4, 'jk')
+    batch.ij_shift = _stack(g4, 'ij_shift')
+    batch.ik_shift = _stack(g4, 'ik_shift')
+    batch.jk_shift = _stack(g4, 'jk_shift')
+    batch.av2g = _stack(g4, 'v2g_map')
+
+    return batch
+
+
+def _compute_qm7m_descriptors_legacy(rc):
+    """
+    The legacy approach to compute symmetry function descriptors of the qm7m
+    trajectory.
+    """
+    batch_size = len(qm7m.trajectory)
+    n_atoms = sum(qm7m.max_occurs.values())
+    kbody_terms, mapping, elements = get_kbody_terms(
+        list(qm7m.max_occurs.keys()), k_max=3
+    )
+    total_dim, kbody_sizes = compute_dimension(
+        kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
+        Defaults.n_zetas)
+    element_offsets = np.insert(
+        np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
+
+    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
+    targets = np.zeros((batch_size, n_atoms + 1, total_dim))
+    for i, atoms in enumerate(qm7m.trajectory):
+        g, local_terms, local_sizes = legacy_symmetry_function(
+            atoms, rc, atoms.get_chemical_formula())
+        local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
+        row = Counter()
+        for k, atom in enumerate(atoms):
+            atom_kbody_terms = mapping[atom.symbol]
+            j = row[atom.symbol] + element_offsets[elements.index(atom.symbol)]
+            for term in atom_kbody_terms:
+                if term not in local_terms:
+                    continue
+                idx = kbody_terms.index(term)
+                istart = offsets[idx]
+                istop = istart + kbody_sizes[idx]
+                idx = local_terms.index(term)
+                lstart = local_offsets[idx]
+                lstop = lstart + local_sizes[idx]
+                targets[i, j + 1, istart: istop] = g[k, lstart: lstop]
+            row[atom.symbol] += 1
+    return {'C': targets[:, 1: 6, :36],
+            'H': targets[:, 6: 14, 36: 72],
+            'O': targets[:, 14: 16, 72:]}
+
+
+def test_batch_multi_elements():
+    """
+    Test computing descriptors of a batch of multi-elements molecules.
+    """
+    rc = 6.0
+    batch_size = len(qm7m.trajectory)
+    elements = sorted(qm7m.max_occurs)
+    targets = _compute_qm7m_descriptors_legacy(rc)
+
+    nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
+    sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, elements,
+                                          nij_max, nijk_max, batch_size)
+
+    indexed_slices = []
+    positions = []
+    for i, atoms in enumerate(qm7m.trajectory):
+        clf = sf.get_index_transformer(atoms)
+        indexed_slices.append(sf.get_indexed_slices(atoms))
+        positions.append(clf.gather(atoms.positions))
+
+    batch = _merge_indexed_slices(indexed_slices)
+    batch.positions = np.asarray(positions)
+
+    g = sf.get_graph_from_batch(batch)
+    with tf.Session() as sess:
+        results = sess.run(g)
+        eps = 1e-8
+
+        assert_less(np.abs(results['C'] - targets['C']).max(), eps)
+        assert_less(np.abs(results['H'] - targets['H']).max(), eps)
+        assert_less(np.abs(results['O'] - targets['O']).max(), eps)
 
 
 # def test_splits():

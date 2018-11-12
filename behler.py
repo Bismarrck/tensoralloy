@@ -1461,9 +1461,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 ij=AttributeDict(
                     ilist=batch.ij[..., 0], jlist=batch.ij[..., 1]),
                 ik=AttributeDict(
-                    ilist=batch.ik[..., 0], jlist=batch.ik[..., 1]),
+                    ilist=batch.ik[..., 0], klist=batch.ik[..., 1]),
                 jk=AttributeDict(
-                    ilist=batch.jk[..., 0], jlist=batch.jk[..., 1]),
+                    jlist=batch.jk[..., 0], klist=batch.jk[..., 1]),
                 shift=AttributeDict(
                     ij=batch.ij_shift, ik=batch.ik_shift, jk=batch.jk_shift,),
                 v2g_map=batch.av2g,
