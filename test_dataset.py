@@ -10,10 +10,11 @@ from tensorflow.contrib.learn import ModeKeys
 from ase.db import connect
 from nose import main
 from nose.tools import assert_equal, assert_dict_equal
-from nose.tools import assert_less, assert_in, assert_true
+from nose.tools import assert_less, assert_true
 from os.path import join
 
 from transformer import BatchSymmetryFunctionTransformer
+from behler import IndexTransformer
 from dataset import Dataset
 from misc import test_dir, Defaults, AttributeDict
 from test_behler import qm7m
@@ -48,9 +49,7 @@ def test_qm7m():
     """
     ref = qm7m_compute()
 
-    graph = tf.Graph()
-
-    with graph.as_default():
+    with tf.Graph().as_default():
 
         savedir = join(test_dir(), 'qm7m')
         database = connect(join(savedir, 'qm7m.db'))
@@ -84,18 +83,14 @@ def test_ethanol():
     This is a minimal subset of the ethanol MD dataset with 10 configurations.
     Forces are provided.
     """
-    tf.reset_default_graph()
-
-    graph = tf.Graph()
-
-    with graph.as_default():
+    with tf.Graph().as_default():
 
         savedir = join(test_dir(), 'ethanol')
         database = connect(join(savedir, 'ethanol.db'))
         dataset = Dataset(database, 'ethanol', k_max=3)
 
         assert_equal(len(dataset), 10)
-        assert_in(TrainableProperty.forces, dataset.trainable_properties)
+        assert_true(dataset.forces)
 
         dataset.to_records(savedir, test_size=0.5)
         assert_true(dataset.load_tfrecords(savedir))
@@ -105,7 +100,9 @@ def test_ethanol():
                                         num_epochs=1, shuffle=False)
 
         atoms = database.get_atoms(id=2)
-        clf = dataset.transformer.get_index_transformer(atoms)
+
+        clf = IndexTransformer(dataset.transformer.max_occurs,
+                               atoms.get_chemical_symbols())
         positions = clf.gather(atoms.positions)
         energy = atoms.get_total_energy()
         forces = clf.gather(atoms.get_forces())
