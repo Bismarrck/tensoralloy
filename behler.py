@@ -715,13 +715,6 @@ class BatchSymmetryFunction(SymmetryFunction):
         """
         return self._nijk_max
 
-    @property
-    def batch_size(self):
-        """
-        Return the batch size.
-        """
-        return self._batch_size
-
     def _gather(self, R, ilist, name):
         """
         A wrapper of `batch_gather_positions`.

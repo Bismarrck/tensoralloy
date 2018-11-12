@@ -543,7 +543,7 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
             return g
 
 
-def legacy_symmetry_function(atoms: Atoms, rc: float, name_scope: str):
+def legacy_symmetry_function(atoms: Atoms, rc: float):
     """
     Compute the symmetry function descriptors for unit tests.
     """
@@ -553,9 +553,7 @@ def legacy_symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
         Defaults.n_zetas)
 
-    tf.reset_default_graph()
-
-    with tf.name_scope(name_scope):
+    with tf.Graph().as_default():
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell, tf.float64, name='cell')
         rmap = legacy_build_radial_v2g_map(atoms, rc, Defaults.n_etas,
@@ -572,7 +570,7 @@ def legacy_symmetry_function(atoms: Atoms, rc: float, name_scope: str):
         with tf.Session() as sess:
             results = sess.run(g)
 
-    return results, kbody_terms, kbody_sizes
+        return results, kbody_terms, kbody_sizes
 
 
 def test_monoatomic_molecule():
@@ -589,7 +587,7 @@ def test_monoatomic_molecule():
     za = get_augular_fingerprints_v1(coords, rr, rc, Defaults.beta,
                                      Defaults.gamma, Defaults.zeta)
     z = np.hstack((zr, za))
-    g, _, _ = legacy_symmetry_function(atoms, rc=rc, name_scope='B28')
+    g, _, _ = legacy_symmetry_function(atoms, rc=rc)
     assert_less(np.abs(z - g).max(), 1e-8)
 
 
@@ -598,7 +596,7 @@ def test_single_structure():
     Test computing descriptors of a single multi-elements periodic structure.
     """
     amp = np.load('test_files/amp_Pd3O2.npz')['g']
-    g, _, _ = legacy_symmetry_function(Pd3O2, rc=6.5, name_scope='Pd3O2')
+    g, _, _ = legacy_symmetry_function(Pd3O2, rc=6.5)
     assert_less(np.abs(amp - g).max(), 1e-8)
 
 
@@ -647,18 +645,17 @@ def test_legacy_and_new_flexible():
     for i, atoms in enumerate(trajectory):
         atoms.set_cell([20.0, 20.0, 20.0])
         atoms.set_pbc([False, False, False])
-        targets[i] = legacy_symmetry_function(atoms, rc, name_scope='B28')[0]
+        targets[i] = legacy_symmetry_function(atoms, rc)[0]
 
-    tf.reset_default_graph()
+    with tf.Graph().as_default():
+        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'])
+        g = sf.get_graph()
 
-    sf = SymmetryFunctionTransformer(rc=rc, elements=['B'])
-    g = sf.get_graph()
-
-    with tf.Session() as sess:
-        for i, atoms in enumerate(trajectory):
-            feed_dict = sf.get_feed_dict(atoms)
-            values = sess.run(g, feed_dict=feed_dict)
-            assert_less(np.abs(values['B'] - targets[i]).max(), 1e-8)
+        with tf.Session() as sess:
+            for i, atoms in enumerate(trajectory):
+                feed_dict = sf.get_feed_dict(atoms)
+                values = sess.run(g, feed_dict=feed_dict)
+                assert_less(np.abs(values['B'] - targets[i]).max(), 1e-8)
 
 
 def test_manybody_k():
@@ -670,21 +667,21 @@ def test_manybody_k():
     eps = 1e-8
     max_occurs = Counter(symbols)
     elements = sorted(max_occurs.keys())
-    ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc, 'all')
+    ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc)
     ref = ref[[3, 4, 0, 1, 2]]
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
     for k_max in (1, 2, 3):
-        tf.reset_default_graph()
-        sf = SymmetryFunctionTransformer(rc, elements, k_max=k_max)
-        g = sf.get_graph(split=False)
-        with tf.Session() as sess:
-            values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
-        columns = []
-        for i, ref_term in enumerate(ref_terms):
-            if ref_term in sf.kbody_terms:
-                columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-        assert_less((values[1:] - ref[:, columns]).max(), eps)
+        with tf.Graph().as_default():
+            sf = SymmetryFunctionTransformer(rc, elements, k_max=k_max)
+            g = sf.get_graph(split=False)
+            with tf.Session() as sess:
+                values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
+            columns = []
+            for i, ref_term in enumerate(ref_terms):
+                if ref_term in sf.kbody_terms:
+                    columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
+            assert_less((values[1:] - ref[:, columns]).max(), eps)
 
 
 def _merge_indexed_slices(
@@ -736,8 +733,7 @@ def _compute_qm7m_descriptors_legacy(rc):
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
     for i, atoms in enumerate(qm7m.trajectory):
-        g, local_terms, local_sizes = legacy_symmetry_function(
-            atoms, rc, atoms.get_chemical_formula())
+        g, local_terms, local_sizes = legacy_symmetry_function(atoms, rc)
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
         row = Counter()
         for k, atom in enumerate(atoms):
@@ -767,29 +763,29 @@ def test_batch_multi_elements():
     batch_size = len(qm7m.trajectory)
     targets = _compute_qm7m_descriptors_legacy(rc)
 
-    tf.reset_default_graph()
+    with tf.Graph().as_default():
 
-    nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
-    sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
-                                          nijk_max, batch_size)
-    indexed_slices = []
-    positions = []
-    for i, atoms in enumerate(qm7m.trajectory):
-        clf = sf.get_index_transformer(atoms)
-        indexed_slices.append(sf.get_indexed_slices(atoms))
-        positions.append(clf.gather(atoms.positions))
+        nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
+        sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
+                                              nijk_max, batch_size)
+        indexed_slices = []
+        positions = []
+        for i, atoms in enumerate(qm7m.trajectory):
+            clf = sf.get_index_transformer(atoms)
+            indexed_slices.append(sf.get_indexed_slices(atoms))
+            positions.append(clf.gather(atoms.positions))
 
-    batch = _merge_indexed_slices(indexed_slices)
-    batch.positions = np.asarray(positions)
+        batch = _merge_indexed_slices(indexed_slices)
+        batch.positions = np.asarray(positions)
 
-    g = sf.get_graph_from_batch(batch)
-    with tf.Session() as sess:
-        results = sess.run(g)
-        eps = 1e-8
+        g = sf.get_graph_from_batch(batch)
+        with tf.Session(graph=tf.get_default_graph()) as sess:
+            results = sess.run(g)
+            eps = 1e-8
 
-        assert_less(np.abs(results['C'] - targets['C']).max(), eps)
-        assert_less(np.abs(results['H'] - targets['H']).max(), eps)
-        assert_less(np.abs(results['O'] - targets['O']).max(), eps)
+            assert_less(np.abs(results['C'] - targets['C']).max(), eps)
+            assert_less(np.abs(results['H'] - targets['H']).max(), eps)
+            assert_less(np.abs(results['O'] - targets['O']).max(), eps)
 
 
 def test_splits():
@@ -801,15 +797,16 @@ def test_splits():
     eps = 1e-8
     max_occurs = Counter(symbols)
     elements = sorted(max_occurs.keys())
-    ref, _, _ = legacy_symmetry_function(Pd3O2, rc, 'all')
+    ref, _, _ = legacy_symmetry_function(Pd3O2, rc)
 
-    tf.reset_default_graph()
-    sf = SymmetryFunctionTransformer(rc, elements, k_max=3)
-    with tf.Session() as sess:
-        values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
+    with tf.Graph().as_default():
 
-    assert_less(np.abs(values['O'] - ref[3:, :20]).max(), eps)
-    assert_less(np.abs(values['Pd'] - ref[:3, 20:]).max(), eps)
+        sf = SymmetryFunctionTransformer(rc, elements, k_max=3)
+        with tf.Session() as sess:
+            values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
+
+        assert_less(np.abs(values['O'] - ref[3:, :20]).max(), eps)
+        assert_less(np.abs(values['Pd'] - ref[:3, 20:]).max(), eps)
 
 
 if __name__ == "__main__":
