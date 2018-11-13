@@ -5,12 +5,39 @@ This module defines custom session hooks for this project.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
+from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
 from tensorflow.python.training import training_util
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
+    """
+    A modified implementation of `LoggingTensorHook`.
+    """
+
+    def _log_tensors(self, tensor_values):
+        original = np.get_printoptions()
+        np.set_printoptions(precision=8, sign=' ', suppress=True, linewidth=75,
+                            floatmode='fixed')
+        elapsed_secs, _ = self._timer.update_last_triggered_step(
+            self._iter_count)
+        if self._formatter:
+            logging.info(self._formatter(tensor_values))
+        else:
+            stats = []
+            for tag in self._tag_order:
+                out = "%s = %s" % (tag, np.array2string(tensor_values[tag]))
+                stats.append(out)
+            if elapsed_secs is not None:
+                logging.info("%s (%.3f sec)", ", ".join(stats), elapsed_secs)
+            else:
+                logging.info("%s", ", ".join(stats))
+        np.set_printoptions(**original)
 
 
 class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
