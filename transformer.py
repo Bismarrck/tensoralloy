@@ -735,5 +735,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 else:
                     for p in self._parameter_grid:
                         values.append(p['beta'])
-            weights[element] = np.exp(-np.asarray(values) / 20.0)
+            values = np.asarray(values)
+            weights[element] = 0.25 / np.exp(-values * 0.25**2)
         return weights
