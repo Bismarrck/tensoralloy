@@ -107,6 +107,7 @@ class ConfigParser(configparser.ConfigParser):
         name = self[section].get('name', splitext(basename(filename))[0])
         rc = self[section].getfloat('rc', Defaults.rc)
         k_max = self[section].getint('k_max', Defaults.k_max)
+        zeros_forces_mode = self[section].getboolean('zero_forces_mode', False)
 
         section = 'behler'
         eta = self[section].getfloats('eta', Defaults.eta)
@@ -116,6 +117,8 @@ class ConfigParser(configparser.ConfigParser):
 
         dataset = Dataset(database=database, name=name, k_max=k_max, rc=rc,
                           eta=eta, beta=beta, gamma=gamma, zeta=zeta)
+        if zeros_forces_mode:
+            dataset.use_zero_forces()
 
         section = 'tfrecords'
         test_size = self[section].getint('test_size', 1000)
