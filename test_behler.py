@@ -784,7 +784,7 @@ def test_batch_multi_elements():
         batch = _merge_indexed_slices(indexed_slices)
         batch.positions = np.asarray(positions)
 
-        g = sf.get_graph_from_batch(batch)
+        g = sf.get_graph_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
             results = sess.run(g)
             eps = 1e-8

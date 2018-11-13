@@ -13,7 +13,7 @@ from typing import List, Union, Dict
 from dataclasses import dataclass
 
 from descriptor import AtomicDescriptor
-from utils import cutoff, batch_gather_positions
+from utils import cutoff
 from misc import Defaults, AttributeDict
 
 __author__ = 'Xin Chen'
@@ -320,6 +320,8 @@ class SymmetryFunction(AtomicDescriptor):
     descriptor.
     """
 
+    gather_fn = staticmethod(tf.gather)
+
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
                  periodic=True):
@@ -420,19 +422,13 @@ class SymmetryFunction(AtomicDescriptor):
         """
         return self._kbody_sizes
 
-    def _gather(self, R, ilist, name):
-        """
-        A wrapper of the gather function.
-        """
-        return tf.gather(R, ilist, name=name)
-
     def _get_rij(self, R, ilist, jlist, shift, name):
         """
         Return the subgraph to compute `rij`.
         """
         with tf.name_scope(name):
-            Ri = self._gather(R, ilist, 'Ri')
-            Rj = self._gather(R, jlist, 'Rj')
+            Ri = self.gather_fn(R, ilist, 'Ri')
+            Rj = self.gather_fn(R, jlist, 'Rj')
             Dij = tf.subtract(Rj, Ri, name='Dij')
             if self._periodic:
                 Dij = tf.add(Dij, shift, name='pbc')
@@ -684,6 +680,8 @@ class BatchSymmetryFunction(SymmetryFunction):
     training and evaluations.
     """
 
+    gather_fn = staticmethod(tf.batch_gather)
+
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
                  nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
@@ -714,12 +712,6 @@ class BatchSymmetryFunction(SymmetryFunction):
         Return the maximum allowed length of the expanded Angle[i,j,k] list.
         """
         return self._nijk_max
-
-    def _gather(self, R, ilist, name):
-        """
-        A wrapper of `batch_gather_positions`.
-        """
-        return batch_gather_positions(R, ilist, self._batch_size, name)
 
     def _get_g_shape(self, _):
         """
