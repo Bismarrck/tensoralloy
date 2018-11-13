@@ -58,10 +58,10 @@ def train_and_evaluate(config: ConfigParser):
                 num_epochs=1,
                 shuffle=False),
             steps=hparams.train.eval_steps,
+            start_delay_secs=300,
             # Explicitly set these thresholds to lower values so that every
             # checkpoint can be evaluated.
-            start_delay_secs=30,
-            throttle_secs=60,
+            throttle_secs=120,
         )
         tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
