@@ -117,3 +117,11 @@ class BatchDescriptorTransformer(AtomicDescriptor):
         input batch.
         """
         pass
+
+    @abc.abstractmethod
+    def get_descriptor_normalization_weights(self, method):
+        """
+        Return the initial weights for column-wise normalising the output atomic
+        descriptors.
+        """
+        pass

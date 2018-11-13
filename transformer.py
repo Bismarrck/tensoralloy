@@ -464,23 +464,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         g4 = self.get_g4_indexed_slices(atoms, g2)
         return g2, g4
 
-    def get_initial_weights_for_normalizers(self) -> Dict[str, np.ndarray]:
-        """
-        Return the initial weights for the `arctan` input normalizers.
-        """
-        weights = {}
-        for element in self._elements:
-            kbody_terms = self._mapping[element]
-            values = []
-            for kbody_term in kbody_terms:
-                if len(get_elements_from_kbody_term(kbody_term)) == 2:
-                    values.extend(self._eta.tolist())
-                else:
-                    for p in self._parameter_grid:
-                        values.append(p['beta'])
-            weights[element] = np.exp(-np.asarray(values) / 20.0)
-        return weights
-
     @staticmethod
     def _encode_g2_indexed_slices(g2: G2IndexedSlices):
         """
@@ -737,3 +720,21 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 v2g_map=batch.av2g,
             )
         return self.build_graph(inputs)
+
+    def get_descriptor_normalization_weights(self, _) -> Dict[str, np.ndarray]:
+        """
+        Return the initial weights for the column-wise normalising the output
+        descriptors.
+        """
+        weights = {}
+        for element in self._elements:
+            kbody_terms = self._mapping[element]
+            values = []
+            for kbody_term in kbody_terms:
+                if len(get_elements_from_kbody_term(kbody_term)) == 2:
+                    values.extend(self._eta.tolist())
+                else:
+                    for p in self._parameter_grid:
+                        values.append(p['beta'])
+            weights[element] = np.exp(-np.asarray(values) / 20.0)
+        return weights
