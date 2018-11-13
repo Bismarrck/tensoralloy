@@ -68,6 +68,7 @@ class Dataset:
         self._files = {}
         self._file_sizes = {}
         self._serial = serial
+        self._forces = False
         self._read_database()
 
     @property
@@ -161,6 +162,13 @@ class Dataset:
         """
         return len(self._database)
 
+    def use_zero_forces(self):
+        """
+        Set `forces` to True by treating all structures as local minima whose
+        forces should be zeros.
+        """
+        self._forces = True
+
     def _should_compute_atomic_static_energy(self):
         """
         A helper function. Return True if `y_static` cannot be accessed.
@@ -208,8 +216,6 @@ class Dataset:
         extxyz = self._database.metadata['extxyz']
         if extxyz:
             self._forces = True
-        else:
-            self._forces = False
 
         max_occurs = self._database.metadata['max_occurs']
         nij_max, nijk_max = self._get_nij_and_nijk()
