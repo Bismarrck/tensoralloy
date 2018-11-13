@@ -512,7 +512,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         clf = self.get_index_transformer(atoms)
         positions = clf.gather(atoms.positions)
         y_true = atoms.get_total_energy()
-        f_true = clf.gather(atoms.get_forces())
+        f_true = clf.gather(atoms.get_forces())[1:]
         composition = self._get_composition(atoms)
         mask = clf.mask.astype(np.float64)
         g2, g4 = self.get_indexed_slices(atoms)
@@ -550,8 +550,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         composition.set_shape([self._n_elements, ])
 
         f_true = tf.decode_raw(example['f_true'], tf.float64)
-        f_true.set_shape([length])
-        f_true = tf.reshape(f_true, (self._max_n_atoms, 3), name='f_true')
+        # Ignore the forces of the virtual atom
+        f_true.set_shape([length - 3])
+        f_true = tf.reshape(f_true, (self._max_n_atoms - 1, 3), name='f_true')
 
         return positions, y_true, f_true, mask, composition
 
@@ -669,7 +670,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             * 'positions': float64, [batch_size, max_n_atoms, 3]
             * 'y_true': float64, [batch_size, ]
-            * 'f_true': float64, [batch_size, 3]
+            * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
             * 'mask': float64, [batch_size, max_n_atoms]
             * 'ilist': int32, [batch_size, nij_max]
