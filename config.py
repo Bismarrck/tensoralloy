@@ -11,7 +11,7 @@ from typing import Callable
 from shutil import rmtree
 
 from misc import Defaults, AttributeDict, safe_select
-from dataset import Dataset, TrainableProperty
+from dataset import Dataset
 from nn import AtomicNN, AtomicResNN
 
 __author__ = 'Xin Chen'
@@ -120,11 +120,8 @@ class ConfigParser(configparser.ConfigParser):
         section = 'tfrecords'
         test_size = self[section].getint('test_size', 1000)
         tfrecords_dir = self[section].get('tfrecords_dir', '.')
-        parallel = self[section].getboolean('build_in_parallel', True)
         if not dataset.load_tfrecords(tfrecords_dir):
-            dataset.to_records(
-                tfrecords_dir, test_size=test_size, parallel=parallel,
-                verbose=True)
+            dataset.to_records(tfrecords_dir, test_size=test_size, verbose=True)
         return dataset
 
     def _build_nn(self) -> AtomicNN:
@@ -135,31 +132,32 @@ class ConfigParser(configparser.ConfigParser):
 
         l2_weight = self[section].getfloat('l2_weight', 0.0)
         activation = self[section].get('activation', 'leaky_relu')
-        forces = TrainableProperty.forces in self._dataset.trainable_properties
+        forces = self._dataset.forces
 
-        descriptor = self._dataset.descriptor
-        elements = descriptor.elements
+        transformer = self._dataset.transformer
+        elements = transformer.elements
         hidden_sizes = {}
         for element in elements:
             hidden_sizes[element] = self[section].getints(
                 element, Defaults.hidden_sizes)
 
-        normalizer_weights = descriptor.get_initial_weights_for_normalizers()
-        normalizer = self[section].get('input_normalizer', 'none')
+        normalizer = self[section].get('input_normalizer', None)
+        normalizer_weights = transformer.get_descriptor_normalization_weights(
+            method=normalizer)
         arch = self[section].get('arch', 'AtomicNN')
 
         if arch == 'AtomicNN':
             nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
                           activation=activation, l2_weight=l2_weight,
                           forces=forces, normalizer=normalizer,
-                          initial_normalizer_weights=normalizer_weights)
+                          normalization_weights=normalizer_weights)
         elif arch == 'AtomicResNN':
-            y_static_weights = self._dataset.elemental_static_energies
+            atomic_static_energy = self._dataset.atomic_static_energy
             nn = AtomicResNN(elements=elements, hidden_sizes=hidden_sizes,
                              activation=activation, l2_weight=l2_weight,
                              forces=forces, normalizer=normalizer,
-                             initial_normalizer_weights=normalizer_weights,
-                             initial_y_static_weights=y_static_weights)
+                             normalization_weights=normalizer_weights,
+                             atomic_static_energy=atomic_static_energy)
         else:
             raise ValueError(f"The arch {arch} is not supported. Please use: "
                              f"AtomicNN or AtomicResNN.")

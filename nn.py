@@ -156,18 +156,22 @@ class _InputNormalizer:
         """
         Initialization method.
         """
-        assert method in ('linear', 'arctan', 'none')
-        self.method = method
-        self.scope = '{}Norm'.format(method.capitalize())
+        assert method in ('linear', 'arctan', '', None)
+        if not method:
+            self.method = None
+            self.scope = 'NoNorm'
+        else:
+            self.method = method
+            self.scope = '{}Norm'.format(method.capitalize())
 
     def __call__(self, x: tf.Tensor, values=None):
         """
         Apply the normalization.
         """
-        if self.method == 'none':
-            return x
-
         with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+            if not self.method:
+                return tf.identity(x, name='identity')
+
             if values is None:
                 values = np.ones(x.shape[2], dtype=np.float64)
             alpha = tf.get_variable(
@@ -205,7 +209,7 @@ class AtomicNN:
 
     def __init__(self, elements: List[str], hidden_sizes=None,
                  activation=None, l2_weight=0.0, forces=False,
-                 normalizer='linear', initial_normalizer_weights=None):
+                 normalizer='linear', normalization_weights=None):
         """
         Initialization method.
 
@@ -223,10 +227,11 @@ class AtomicNN:
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
         normalizer : str
-            The normalization method. Defaults to 'linear'.
-        initial_normalizer_weights : Dict[str, array_like]
-            The initialer weights for arctan normalization layers for each type
-            of element.
+            The normalization method. Defaults to 'linear'. Set this to None to
+            disable normalization.
+        normalization_weights : Dict[str, array_like]
+            The initial weights for column-wise normalizing the input atomic
+            descriptors.
 
         """
         self._elements = elements
@@ -235,7 +240,7 @@ class AtomicNN:
         self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
         self._l2_weight = max(l2_weight, 0.0)
-        self._initial_normalizer_weights = initial_normalizer_weights
+        self._initial_normalizer_weights = normalization_weights
         self._normalizer = _InputNormalizer(method=normalizer)
 
     @property
@@ -623,22 +628,29 @@ class AtomicResNN(AtomicNN):
     energies.
 
     The total energy, `y_total`, is expressed as:
+
         y_total = y_static + y_res
-    where `y_static` depends only on chemical compositions.
+
+    where `y_static` is the total atomic static energy and this only depends on
+    chemical compositions:
+
+        y_static = sum([atomic_static_energy[e] * count(e) for e in elements])
+
+    where `count(e)` represents the number of element `e`.
 
     """
 
-    def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation=None, l2_weight=0.0, forces=False,
-                 normalizer='linear', initial_normalizer_weights=None,
-                 initial_y_static_weights=None):
+    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
+                 l2_weight=0.0, forces=False, normalizer='linear',
+                 normalization_weights=None,
+                 atomic_static_energy: Dict[str, float] = None):
         """
         Initialization method.
         """
         super(AtomicResNN, self).__init__(elements, hidden_sizes, activation,
                                           l2_weight, forces, normalizer,
-                                          initial_normalizer_weights)
-        self._initial_y_static_weights = initial_y_static_weights
+                                          normalization_weights)
+        self._atomic_static_energy = atomic_static_energy
 
     def build(self, features: AttributeDict, verbose=True):
         """
@@ -647,10 +659,11 @@ class AtomicResNN(AtomicNN):
         outputs = self._build_atomic_nn(features, verbose)
 
         with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-            if self._initial_y_static_weights is None:
+            if self._atomic_static_energy is None:
                 values = np.ones(len(self._elements), dtype=np.float64)
             else:
-                values = self._initial_y_static_weights
+                values = np.asarray([self._atomic_static_energy[e]
+                                     for e in self._elements], dtype=np.float64)
             initializer = tf.constant_initializer(values, dtype=tf.float64)
             x = tf.identity(features.composition, name='input')
             z = tf.get_variable("weights", shape=(len(self._elements)),
