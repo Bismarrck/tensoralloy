@@ -10,7 +10,7 @@ from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from misc import Defaults, AttributeDict, safe_select
-from hooks import ExamplesPerSecondHook
+from hooks import ExamplesPerSecondHook, LoggingTensorHook
 from typing import List, Dict
 from os.path import join
 
@@ -351,7 +351,10 @@ class AtomicNN:
                 y = tf.reduce_sum(y_mask, axis=1, keepdims=False, name='y')
             if self._forces:
                 with tf.name_scope("Forces"):
-                    f = tf.gradients(y, features.positions, name='f')[0]
+                    f = tf.gradients(y, features.positions, name='grads')[0]
+                    # Please remember: f = -dE/dR
+                    f = tf.negative(
+                        tf.split(f, [1, -1], axis=1, name='split')[1], name='f')
                 return AttributeDict(y=y, f=f)
             else:
                 return AttributeDict(y=y)
@@ -377,9 +380,10 @@ class AtomicNN:
             weight = tf.convert_to_tensor(
                 self._l2_weight, dtype=tf.float64, name='weight')
             l2 = tf.multiply(l2_loss, weight, name='l2')
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
             tf.summary.scalar(l2.op.name + '/summary', l2,
                               collections=[GraphKeys.TRAIN_SUMMARY, ])
+
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
             return l2
 
     def get_total_loss(self, predictions, labels):
@@ -406,12 +410,14 @@ class AtomicNN:
                 mse = tf.reduce_mean(
                     tf.squared_difference(labels.y, predictions.y), name='mse')
                 y_loss = tf.sqrt(mse, name='y_rmse')
+                y_mae = tf.reduce_mean(
+                    tf.abs(labels.y - predictions.y, name='abs'), name='y_mae')
+                losses.append(y_loss)
+
                 tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
-                losses.append(y_loss)
-                y_mae = tf.reduce_mean(
-                    tf.abs(labels.y - predictions.y, name='abs'), name='mae')
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_mae)
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_loss)
 
             if self._forces:
                 with tf.name_scope("forces"):
@@ -419,14 +425,20 @@ class AtomicNN:
                         tf.squared_difference(labels.f, predictions.f),
                         name='mse')
                     f_loss = tf.sqrt(mse, name='f_rmse')
+                    f_mae = tf.reduce_mean(
+                        tf.abs(labels.f - predictions.f, name='abs'),
+                        name='f_mae')
+                    losses.append(f_loss)
+
                     tf.summary.scalar(f_loss.op.name + '/summary', f_loss,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
-                    losses.append(f_loss)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_mae)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_loss)
 
             if self._l2_weight > 0.0:
                 losses.append(self.add_l2_penalty())
 
-            return tf.add_n(losses, name='loss')
+        return tf.add_n(losses, name='loss')
 
     @staticmethod
     def add_grads_summary(grads_and_vars):
@@ -512,7 +524,7 @@ class AtomicNN:
             hooks = [summary_saver_hook, examples_per_sec_hook]
 
             if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
-                logging_tensor_hook = tf.train.LoggingTensorHook(
+                logging_tensor_hook = LoggingTensorHook(
                     tensors=self.get_logging_tensors(GraphKeys.TRAIN_METRICS),
                     every_n_iter=hparams.train.log_steps,
                     at_end=True,
@@ -533,14 +545,16 @@ class AtomicNN:
         """
         Return a list of `tf.train.SessionRunHook` objects for evaluation.
         """
-        with tf.name_scope("Hooks"):
-            with tf.name_scope("Accuracy"):
-                logging_tensor_hook = tf.train.LoggingTensorHook(
-                    tensors=self.get_logging_tensors(GraphKeys.EVAL_METRICS),
-                    every_n_iter=hparams.train.eval_steps,
-                    at_end=True)
-
-        hooks = [logging_tensor_hook, ]
+        hooks = []
+        if len(tf.get_collection(GraphKeys.EVAL_METRICS)) > 0:
+            with tf.name_scope("Hooks"):
+                with tf.name_scope("Accuracy"):
+                    logging_tensor_hook = LoggingTensorHook(
+                        tensors=self.get_logging_tensors(
+                            GraphKeys.EVAL_METRICS),
+                        every_n_iter=hparams.train.eval_steps,
+                        at_end=True)
+                hooks.append(logging_tensor_hook)
         return hooks
 
     def get_eval_metrics_ops(self, predictions, labels):
@@ -561,10 +575,6 @@ class AtomicNN:
                     'f_mae': tf.metrics.mean_absolute_error(
                         labels.f, predictions.f, name='f_mae')
                 })
-
-            for _, (metric, update_op) in metrics.items():
-                tf.add_to_collection(GraphKeys.EVAL_METRICS, metric)
-
             return metrics
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
