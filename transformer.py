@@ -651,7 +651,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_graph_from_batch(self, batch: AttributeDict):
+    def get_graph_from_batch(self, batch: AttributeDict, batch_size: int):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -686,6 +686,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'ik_shift': float64, [batch_size, nijk_max, 3]
             * 'jk_shift': float64, [batch_size, nijk_max, 3]
             * 'av2g': int32, [batch_size, nijk_max, 3]
+        batch_size : int
+            The size of the batch.
 
         Returns
         -------
@@ -694,11 +696,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             given batch of examples.
 
         """
-        if not self._batch_size:
-            batch_size = batch.positions.shape[0]
-            if not batch_size:
-                raise ValueError('Batch size cannot be inferred')
-            self._batch_size = batch_size
+        self._batch_size = batch_size
 
         inputs = AttributeDict()
         inputs.g2 = AttributeDict(
@@ -721,7 +719,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             )
         return self.build_graph(inputs)
 
-    def get_descriptor_normalization_weights(self, _) -> Dict[str, np.ndarray]:
+    def get_descriptor_normalization_weights(self, method):
         """
         Return the initial weights for the column-wise normalising the output
         descriptors.
