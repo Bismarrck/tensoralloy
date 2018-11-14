@@ -8,16 +8,12 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import time
 import sys
-import re
-from ase import Atoms
 from ase.db import connect
 from ase.db.sqlite import SQLite3Database
 from ase.neighborlist import neighbor_list
-from ase.io import extxyz
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.io.extxyz import read_xyz
 from collections import Counter
-from os.path import splitext, exists
-from os import remove
+from os.path import splitext
 from joblib import Parallel, delayed
 from argparse import ArgumentParser
 from typing import Dict, List
@@ -28,7 +24,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def _read_extxyz(filename, unit_convertion=None, num_examples=None,
+def _read_extxyz(filename, ext=True, units=None, num_examples=None,
                  verbose=True):
     """
     Read `Atoms` objects from a `xyz` or an `extxyz` file.
@@ -37,7 +33,9 @@ def _read_extxyz(filename, unit_convertion=None, num_examples=None,
     ----------
     filename : str
         The xyz file to read.
-    unit_convertion : Dict[str, float]
+    ext : bool
+        The file is in `extxyz` format if True.
+    units : Dict[str, float]
         A dict of units. Supported keys are 'energy', 'forces' and 'stress'.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
@@ -50,30 +48,36 @@ def _read_extxyz(filename, unit_convertion=None, num_examples=None,
         The database for the given xyz file.
 
     """
-    logstr = "\rProgress: {:7d}  /  {:7d} | Speed = {:.1f}"
+    units = safe_select(units, {})
+    energy_unit = units.get('energy', 1.0)
+    forces_unit = units.get('forces', 1.0)
 
-    unit_convertion = safe_select(unit_convertion, {})
-    energy_unit = unit_convertion.get('energy', 1.0)
-    forces_unit = unit_convertion.get('forces', 1.0)
-
+    count = 0
     max_occurs = Counter()
-    dbfile = '{}.db'.format(splitext(filename)[0])
-    if exists(dbfile):
-        remove(dbfile)
-    database = connect(name=dbfile)
+
+    database = connect(name='{}.db'.format(splitext(filename)[0]),
+                       append=False)
 
     tic = time.time()
     if verbose:
         sys.stdout.write("Extract cartesian coordinates ...\n")
 
-    with open(filename) as f:
+    with open(filename) as fp:
+        index = slice(0, num_examples, 1)
+        if ext:
+            reader = read_xyz(fp, index)
+        else:
+            def _parser(line):
+                return {'energy': float(line.strip())}
+            reader = read_xyz(fp, index, properties_parser=_parser)
 
-        count = 0
-
-        for atoms in extxyz.read_extxyz(f, index=slice(0, num_examples, 1)):
+        for atoms in reader:
 
             atoms.calc.results['energy'] *= energy_unit
-            atoms.calc.results['forces'] *= forces_unit
+            if ext:
+                atoms.calc.results['forces'] *= forces_unit
+            else:
+                atoms.calc.results['forces'] = np.zeros_like(atoms.positions)
             database.write(atoms)
 
             for symbol, n in Counter(atoms.get_chemical_symbols()).items():
@@ -82,14 +86,15 @@ def _read_extxyz(filename, unit_convertion=None, num_examples=None,
             if verbose and (count + 1) % 100 == 0:
                 speed = (count + 1) / (time.time() - tic)
                 total = num_examples or -1
-                sys.stdout.write(logstr.format(count + 1, total, speed))
-
+                sys.stdout.write(
+                    "\rProgress: {:7d} / {:7d} | Speed = {:.1f}".format(
+                        count + 1, total, speed))
         if verbose:
             print("")
             print("Total {} structures, time: {:.3f} sec".format(
                 count, time.time() - tic))
 
-    database.metadata = {'max_occurs': max_occurs, 'extxyz': True,
+    database.metadata = {'max_occurs': max_occurs, 'extxyz': ext,
                          'unit_conversion': {
                              'energy': energy_unit,
                              'forces': forces_unit}
@@ -97,122 +102,7 @@ def _read_extxyz(filename, unit_convertion=None, num_examples=None,
     return database
 
 
-def _read_xyz(filename, unit_convertion=None, num_examples=None, verbose=True):
-    """
-    Read `Atoms` objects from a standard `xyz` file.
-
-    Parameters
-    ----------
-    filename : str
-        The xyz file to read.
-    unit_convertion : Dict[str, float]
-        A dict of units. Supported keys are 'energy', 'forces' and 'stress'.
-    num_examples : int
-        An `int` indicating the maximum number of examples to read.
-    verbose : bool
-        If True, the reading progress shall be logged.
-
-    Returns
-    -------
-    database : SQLite3Database
-        The database for the given xyz file.
-
-    """
-    energy_patt = re.compile(r"([\d.-]+)")
-    string_patt = re.compile(r"([A-Za-z]{1,2})\s+"
-                             r"([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)")
-
-    logstr = "\rProgress: {:7d}  /  {:7d} | Speed = {:.1f}"
-
-    unit_convertion = safe_select(unit_convertion, {})
-    energy_unit = unit_convertion.get('energy', 1.0)
-    forces_unit = unit_convertion.get('forces', 1.0)
-
-    count = 0
-    stage = 0
-    atom_index = 0
-    natoms = 0
-    symbols = []
-    positions = []
-    energy = 0.0
-    max_occurs = Counter()
-
-    dbfile = '{}.db'.format(splitext(filename)[0])
-    if exists(dbfile):
-        remove(dbfile)
-    database = connect(name=dbfile)
-
-    tic = time.time()
-    if verbose:
-        sys.stdout.write("Extract cartesian coordinates ...\n")
-
-    with open(filename) as f:
-        for line in f:
-            if num_examples and count == num_examples:
-                break
-            line = line.strip()
-            if line == "":
-                continue
-            if stage == 0:
-                if line.isdigit():
-                    natoms = int(line)
-                    stage += 1
-            elif stage == 1:
-                m = energy_patt.search(line)
-                if m:
-                    energy = float(m.group(1)) * energy_unit
-                    stage += 1
-            elif stage == 2:
-                m = string_patt.search(line)
-                if m:
-                    symbols.append(m.group(1))
-                    positions.append([float(v) for v in m.groups()[1: 4]])
-                    atom_index += 1
-
-                    if atom_index == natoms:
-
-                        length = 20.0 + (divmod(natoms, 50)[0] * 5.0)
-                        pbc = [False] * 3
-                        cell = np.eye(3) * length
-
-                        atoms = Atoms(symbols,
-                                      positions,
-                                      cell=cell,
-                                      pbc=pbc)
-                        results = {'energy': energy,
-                                   'forces': np.zeros((natoms, 3))}
-
-                        calc = SinglePointCalculator(atoms, **results)
-                        atoms.set_calculator(calc)
-                        database.write(atoms)
-
-                        for symbol, n in Counter(
-                                atoms.get_chemical_symbols()).items():
-                            max_occurs[symbol] = max(max_occurs[symbol], n)
-
-                        atom_index = 0
-                        stage = 0
-                        symbols.clear()
-                        positions.clear()
-                        count += 1
-                        if verbose and count % 100 == 0:
-                            speed = count / (time.time() - tic)
-                            total = num_examples or -1
-                            sys.stdout.write(logstr.format(count, total, speed))
-        if verbose:
-            print("")
-            print("Total {} structures, time: {:.3f} sec".format(
-                count, time.time() - tic))
-    database.metadata = {'max_occurs': max_occurs, 'extxyz': False,
-                         'unit_conversion': {
-                             'energy': energy_unit,
-                             'forces': forces_unit}
-                         }
-    return database
-
-
-
-def read(filename, unit_conversion=None, num_examples=None, verbose=True):
+def read(filename, units=None, num_examples=None, verbose=True):
     """
     Read `Atoms` objects from a file.
 
@@ -220,7 +110,7 @@ def read(filename, unit_conversion=None, num_examples=None, verbose=True):
     ----------
     filename : str
         The file to read. Can be a `xyz` file, a `extxyz` file or a `db` file.
-    unit_conversion : Dict[str, float]
+    units : Dict[str, float]
         A dict of units. Supported keys are 'energy', 'forces' and 'stress'.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
@@ -242,12 +132,15 @@ def read(filename, unit_conversion=None, num_examples=None, verbose=True):
             if key not in database.metadata:
                 print("Warning: the key '{}' is missing!".format(key))
         return database
+
     elif file_type == 'extxyz':
-        return _read_extxyz(filename, num_examples=num_examples,
-                            unit_convertion=unit_conversion, verbose=verbose)
+        return _read_extxyz(filename, ext=True, num_examples=num_examples,
+                            units=units, verbose=verbose)
+
     elif file_type == 'xyz':
-        return _read_xyz(filename, num_examples=num_examples,
-                         unit_convertion=unit_conversion, verbose=verbose)
+        return _read_extxyz(filename, ext=False, num_examples=num_examples,
+                            units=units, verbose=verbose)
+
     else:
         raise ValueError("Unknown file type: {}".format(file_type))
 
@@ -419,7 +312,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     read(args.filename,
-         unit_conversion={'energy': args.energy_unit,
-                          'forces': args.forces_unit},
+         units={'energy': args.energy_unit,
+                'forces': args.forces_unit},
          num_examples=args.num_examples,
          verbose=True)
