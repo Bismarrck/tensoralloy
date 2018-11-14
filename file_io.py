@@ -117,6 +117,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             else:
                 atoms.calc.results['forces'] = np.zeros_like(atoms.positions)
             database.write(atoms)
+            count += 1
 
             for symbol, n in Counter(atoms.get_chemical_symbols()).items():
                 max_occurs[symbol] = max(max_occurs[symbol], n)
@@ -349,8 +350,8 @@ if __name__ == "__main__":
         '--forces-unit',
         type=str,
         default='eV/Angstrom',
-        choices=['kcal/mol/Angstrom', 'Hartree/Angstrom', 'eV/Bohr',
-                 'Hartree/Bohr'],
+        choices=['kcal/mol/Angstrom', 'kcal/mol/Bohr', 'eV/Bohr', 'eV/Angstrom',
+                 'Hartree/Bohr', 'Hartree/Angstrom'],
         help='The unit of the atomic forces in the file.'
     )
     args = parser.parse_args()
