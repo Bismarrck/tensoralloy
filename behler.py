@@ -422,7 +422,28 @@ class SymmetryFunction(AtomicDescriptor):
         """
         return self._kbody_sizes
 
-    def _get_rij(self, R, ilist, jlist, shift, name):
+    @staticmethod
+    def _get_pbc_displacements(shift, cells):
+        """
+        Return the periodic boundary shift displacements.
+
+        Parameters
+        ----------
+        shift : tf.Tensor
+            A `float64` tensor of shape `[-1, 3]` as the cell shift vector.
+        cells : tf.Tensor
+            A `float64` tensor of shape `[3, 3]` as the cell.
+
+        Returns
+        -------
+        Dij : tf.Tensor
+            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
+            vector.
+
+        """
+        return tf.matmul(shift, cells, name='displacements')
+
+    def _get_rij(self, R, cells, ilist, jlist, shift, name):
         """
         Return the subgraph to compute `rij`.
         """
@@ -431,7 +452,8 @@ class SymmetryFunction(AtomicDescriptor):
             Rj = self.gather_fn(R, jlist, 'Rj')
             Dij = tf.subtract(Rj, Ri, name='Dij')
             if self._periodic:
-                Dij = tf.add(Dij, shift, name='pbc')
+                pbc = self._get_pbc_displacements(shift, cells)
+                Dij = tf.add(Dij, pbc, name='pbc')
             return tf.norm(Dij, axis=-1, name='r')
 
     @staticmethod
@@ -489,6 +511,7 @@ class SymmetryFunction(AtomicDescriptor):
         with tf.name_scope("G2"):
 
             r = self._get_rij(placeholders.positions,
+                              placeholders.cells,
                               placeholders.g2.ilist,
                               placeholders.g2.jlist,
                               placeholders.g2.shift,
@@ -561,16 +584,19 @@ class SymmetryFunction(AtomicDescriptor):
         with tf.name_scope("G4"):
 
             rij = self._get_rij(placeholders.positions,
+                                placeholders.cells,
                                 placeholders.g4.ij.ilist,
                                 placeholders.g4.ij.jlist,
                                 placeholders.g4.shift.ij,
                                 name='rij')
             rik = self._get_rij(placeholders.positions,
+                                placeholders.cells,
                                 placeholders.g4.ik.ilist,
                                 placeholders.g4.ik.klist,
                                 placeholders.g4.shift.ik,
                                 name='rik')
             rjk = self._get_rij(placeholders.positions,
+                                placeholders.cells,
                                 placeholders.g4.jk.jlist,
                                 placeholders.g4.jk.klist,
                                 placeholders.g4.shift.jk,
@@ -712,6 +738,31 @@ class BatchSymmetryFunction(SymmetryFunction):
         Return the maximum allowed length of the expanded Angle[i,j,k] list.
         """
         return self._nijk_max
+
+    @staticmethod
+    def _get_pbc_displacements(shift, cells):
+        """
+        Return the periodic boundary shift displacements.
+
+        Parameters
+        ----------
+        shift : tf.Tensor
+            A `float64` tensor of shape `[batch_size, ndim, 3]` as the cell
+            shift vector where `ndim == nij_max` or `ndim == nijk_max`.
+        cells : tf.Tensor
+            A `float64` tensor of shape `[batch_size, 3, 3]` as the cells.
+
+        Returns
+        -------
+        Dij : tf.Tensor
+            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
+            vector.
+
+        """
+        with tf.name_scope("Einsum"):
+            shift = tf.convert_to_tensor(shift, dtype=tf.float64, name='shift')
+            cells = tf.convert_to_tensor(cells, dtype=tf.float64, name='cells')
+            return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
 
     def _get_g_shape(self, _):
         """

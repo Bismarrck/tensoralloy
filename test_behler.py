@@ -776,13 +776,16 @@ def test_batch_multi_elements():
                                               nijk_max, batch_size)
         indexed_slices = []
         positions = []
+        cells = []
         for i, atoms in enumerate(qm7m.trajectory):
             clf = sf.get_index_transformer(atoms)
             indexed_slices.append(sf.get_indexed_slices(atoms))
             positions.append(clf.gather(atoms.positions))
+            cells.append(atoms.get_cell(complete=True))
 
         batch = _merge_indexed_slices(indexed_slices)
         batch.positions = np.asarray(positions)
+        batch.cells = np.asarray(cells)
 
         g = sf.get_graph_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:

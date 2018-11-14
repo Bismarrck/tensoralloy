@@ -63,24 +63,25 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             def _double_1d(name):
                 return tf.placeholder(tf.float64, (None, ), name)
 
-            def _double_2d(ndim, name):
-                return tf.placeholder(tf.float64, (None, ndim), name)
+            def _double_2d(d1, name, d0=None):
+                return tf.placeholder(tf.float64, (d0, d1), name)
 
             def _int(name):
                 return tf.placeholder(tf.int32, (), name)
 
-            def _int_1d(name, length=None):
-                return tf.placeholder(tf.int32, (length, ), name)
+            def _int_1d(name, d0=None):
+                return tf.placeholder(tf.int32, (d0, ), name)
 
-            def _int_2d(ndim, name):
-                return tf.placeholder(tf.int32, (None, ndim), name)
+            def _int_2d(d1, name, d0=None):
+                return tf.placeholder(tf.int32, (d0, d1), name)
 
             self._placeholders.positions = _double_2d(3, 'positions')
+            self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
             self._placeholders.n_atoms = _int('n_atoms')
             self._placeholders.mask = _double_1d('mask')
             self._placeholders.composition = _double_1d('composition')
             self._placeholders.row_splits = _int_1d(
-                'row_splits', length=self._n_elements + 1)
+                'row_splits', d0=self._n_elements + 1)
             self._placeholders.g2 = AttributeDict(
                 ilist=_int_1d('g2.ilist'),
                 jlist=_int_1d('g2.jlist'),
@@ -155,7 +156,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
         ilist = index_transformer.map(ilist + 1)
         jlist = index_transformer.map(jlist + 1)
-        shift = Slist @ atoms.cell
+        shift = np.asarray(Slist, dtype=np.float64)
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self._offsets[tlist]
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
@@ -240,6 +241,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
         positions = index_transformer.gather(atoms.positions)
         n_atoms = index_transformer.n_atoms
+        cells = atoms.get_cell(complete=True)
         mask = index_transformer.mask
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
@@ -247,6 +249,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict[placeholders.positions] = positions
         feed_dict[placeholders.n_atoms] = n_atoms
         feed_dict[placeholders.mask] = mask
+        feed_dict[placeholders.cells] = cells
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits
         feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
@@ -394,7 +397,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Slist = self._resize_to_nij_max(Slist, False)
         ilist = transformer.map(ilist)
         jlist = transformer.map(jlist)
-        shift = Slist @ atoms.cell
+        shift = np.asarray(Slist, dtype=np.float64)
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
 
@@ -511,6 +514,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         clf = self.get_index_transformer(atoms)
         positions = clf.gather(atoms.positions)
+        cells = atoms.get_cell(complete=True)
         y_true = atoms.get_total_energy()
         f_true = clf.gather(atoms.get_forces())[1:]
         composition = self._get_composition(atoms)
@@ -518,6 +522,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         g2, g4 = self.get_indexed_slices(atoms)
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
+            'cells': _bytes_feature(cells.tostring()),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
             'mask': _bytes_feature(mask.tostring()),
             'composition': _bytes_feature(composition.tostring()),
@@ -543,6 +548,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         y_true.set_shape([1])
         y_true = tf.squeeze(y_true, name='y_true')
 
+        cells = tf.decode_raw(example['cells'], tf.float64)
+        cells.set_shape([9])
+        cells = tf.reshape(cells, (3, 3), name='cells')
+
         mask = tf.decode_raw(example['mask'], tf.float64)
         mask.set_shape([self._max_n_atoms, ])
 
@@ -554,7 +563,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         f_true.set_shape([length - 3])
         f_true = tf.reshape(f_true, (self._max_n_atoms - 1, 3), name='f_true')
 
-        return positions, y_true, f_true, mask, composition
+        return positions, cells, y_true, f_true, mask, composition
 
     def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
@@ -608,14 +617,14 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Decode the parsed single example.
         """
-        positions, y_true, f_true, mask, composition = \
+        positions, cells, y_true, f_true, mask, composition = \
             self._decode_atoms(example)
         g2 = self._decode_g2_indexed_slices(example)
         g4 = self._decode_g4_indexed_slices(example)
 
         decoded = AttributeDict(
-            positions=positions, y_true=y_true, f_true=f_true, mask=mask,
-            composition=composition, rv2g=g2.v2g_map, ilist=g2.ilist,
+            positions=positions, cells=cells, y_true=y_true, f_true=f_true,
+            mask=mask, composition=composition, rv2g=g2.v2g_map, ilist=g2.ilist,
             jlist=g2.jlist, shift=g2.shift)
 
         if g4 is not None:
@@ -637,6 +646,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         with tf.name_scope("decoding"):
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
+                'cells': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'f_true': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
@@ -669,6 +679,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             Here are default keys:
 
             * 'positions': float64, [batch_size, max_n_atoms, 3]
+            * 'cells': float64, [batch_size, 3, 3]
             * 'y_true': float64, [batch_size, ]
             * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
@@ -705,6 +716,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             shift=batch.shift, v2g_map=batch.rv2g
         )
         inputs.positions = batch.positions
+        inputs.cells = batch.cells
 
         if self._k_max == 3:
             inputs.g4 = AttributeDict(
