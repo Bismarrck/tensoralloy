@@ -8,6 +8,8 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import time
 import sys
+import re
+import ase.units
 from ase.db import connect
 from ase.db.sqlite import SQLite3Database
 from ase.neighborlist import neighbor_list
@@ -17,14 +19,52 @@ from os.path import splitext
 from joblib import Parallel, delayed
 from argparse import ArgumentParser
 from typing import Dict, List
-from misc import safe_select
 
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def _read_extxyz(filename, ext=True, units=None, num_examples=None,
+def get_conversion(units: Dict[str, str]) -> (float, float):
+    """
+    Return the conversion factors.
+    """
+    def _parse_comb(unit: str):
+        if '/' in unit or '*' in unit:
+            values = [getattr(ase.units, name)
+                      for name in re.split(r'[/*]', unit)]
+            total = values[0]
+            index = 1
+            for i in range(len(unit)):
+                if unit[i] == '/':
+                    total /= values[index]
+                    index += 1
+                elif unit[i] == '*':
+                    total *= values[index]
+                    index += 1
+                if index == len(values):
+                    break
+            return total
+        else:
+            return getattr(ase.units, unit)
+
+    eV = ase.units.eV
+    Angstrom = ase.units.Angstrom
+
+    if 'energy' not in units:
+        to_eV = eV
+    else:
+        to_eV = _parse_comb(units['energy']) / eV
+
+    if 'forces' not in units:
+        to_eV_Angstrom = eV / Angstrom
+    else:
+        to_eV_Angstrom = _parse_comb(units['forces']) / eV / Angstrom
+
+    return to_eV, to_eV_Angstrom
+
+
+def _read_extxyz(filename, units, ext=True, num_examples=None,
                  verbose=True):
     """
     Read `Atoms` objects from a `xyz` or an `extxyz` file.
@@ -33,10 +73,11 @@ def _read_extxyz(filename, ext=True, units=None, num_examples=None,
     ----------
     filename : str
         The xyz file to read.
+    units : Dict[str, str]
+        A dict of str as the units of the properties in the file. Supported keys
+        are 'energy' and 'forces'.
     ext : bool
         The file is in `extxyz` format if True.
-    units : Dict[str, float]
-        A dict of units. Supported keys are 'energy', 'forces' and 'stress'.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
     verbose : bool
@@ -48,13 +89,9 @@ def _read_extxyz(filename, ext=True, units=None, num_examples=None,
         The database for the given xyz file.
 
     """
-    units = safe_select(units, {})
-    energy_unit = units.get('energy', 1.0)
-    forces_unit = units.get('forces', 1.0)
-
+    to_eV, to_eV_Angstrom = get_conversion(units)
     count = 0
     max_occurs = Counter()
-
     database = connect(name='{}.db'.format(splitext(filename)[0]),
                        append=False)
 
@@ -72,10 +109,11 @@ def _read_extxyz(filename, ext=True, units=None, num_examples=None,
             reader = read_xyz(fp, index, properties_parser=_parser)
 
         for atoms in reader:
-
-            atoms.calc.results['energy'] *= energy_unit
+            # Make sure all energies are in 'eV' and all forces are in
+            # 'eV/angstroms'
+            atoms.calc.results['energy'] *= to_eV
             if ext:
-                atoms.calc.results['forces'] *= forces_unit
+                atoms.calc.results['forces'] *= to_eV_Angstrom
             else:
                 atoms.calc.results['forces'] = np.zeros_like(atoms.positions)
             database.write(atoms)
@@ -96,8 +134,8 @@ def _read_extxyz(filename, ext=True, units=None, num_examples=None,
 
     database.metadata = {'max_occurs': max_occurs, 'extxyz': ext,
                          'unit_conversion': {
-                             'energy': energy_unit,
-                             'forces': forces_unit}
+                             'energy': to_eV,
+                             'forces': to_eV_Angstrom}
                          }
     return database
 
@@ -110,8 +148,9 @@ def read(filename, units=None, num_examples=None, verbose=True):
     ----------
     filename : str
         The file to read. Can be a `xyz` file, a `extxyz` file or a `db` file.
-    units : Dict[str, float]
-        A dict of units. Supported keys are 'energy', 'forces' and 'stress'.
+    units : Dict[str, str]
+        A dict of str as the units of the properties ('energy', 'forces') in the
+        file. Defaults to 'eV' for 'energy' and 'eV/Angstrom' for 'forces'.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
     verbose : bool
@@ -125,6 +164,9 @@ def read(filename, units=None, num_examples=None, verbose=True):
     """
     file_type = splitext(filename)[1][1:]
 
+    if units is None:
+        units = {'energy': 'eV', 'forces': 'eV/Angstrom'}
+
     if file_type == 'db':
         database = connect(filename)
         validated_keys = ('max_occurs', 'ext')
@@ -134,12 +176,10 @@ def read(filename, units=None, num_examples=None, verbose=True):
         return database
 
     elif file_type == 'extxyz':
-        return _read_extxyz(filename, ext=True, num_examples=num_examples,
-                            units=units, verbose=verbose)
+        return _read_extxyz(filename, units, True, num_examples, verbose)
 
     elif file_type == 'xyz':
-        return _read_extxyz(filename, ext=False, num_examples=num_examples,
-                            units=units, verbose=verbose)
+        return _read_extxyz(filename, units, False, num_examples, verbose)
 
     else:
         raise ValueError("Unknown file type: {}".format(file_type))
@@ -300,15 +340,18 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--energy-unit',
-        type=float,
-        default=1.0,
-        help='The energy conversion unit.'
+        type=str,
+        default='eV',
+        choices=('eV', 'Hartree', 'kcal/mol'),
+        help='The unit of the energies in the file'
     )
     parser.add_argument(
         '--forces-unit',
-        type=float,
-        default=1.0,
-        help='The forces conversion unit.'
+        type=str,
+        default='eV/Angstrom',
+        choices=['kcal/mol/Angstrom', 'Hartree/Angstrom', 'eV/Bohr',
+                 'Hartree/Bohr'],
+        help='The unit of the atomic forces in the file.'
     )
     args = parser.parse_args()
     read(args.filename,
