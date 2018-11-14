@@ -22,30 +22,6 @@ class AtomicDescriptor(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def forces(self) -> bool:
-        """
-        Return True if atomic forces can be calculated.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def stress(self) -> bool:
-        """
-        Return True if stress tensor can be calculated.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def periodic(self) -> bool:
-        """
-        Return True if periodic structures can be used.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
     def cutoff(self) -> float:
         """
         Return the cutoff radius.
