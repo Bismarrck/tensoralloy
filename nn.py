@@ -183,6 +183,8 @@ class _InputNormalizer:
                              tf.GraphKeys.GLOBAL_VARIABLES,
                              GraphKeys.NORMALIZE_VARIABLES],
                 trainable=True)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, x)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, alpha)
             tf.summary.histogram(
                 name=alpha.op.name + '/summary',
                 values=alpha,
@@ -349,12 +351,16 @@ class AtomicNN:
                         features.mask, [1, -1], axis=1, name='split')[1]
                     y_mask = tf.multiply(y_atomic, mask, name='mask')
                 y = tf.reduce_sum(y_mask, axis=1, keepdims=False, name='y')
+                if verbose:
+                    log_tensor(y)
             if self._forces:
                 with tf.name_scope("Forces"):
                     f = tf.gradients(y, features.positions, name='grads')[0]
                     # Please remember: f = -dE/dR
                     f = tf.negative(
                         tf.split(f, [1, -1], axis=1, name='split')[1], name='f')
+                    if verbose:
+                        log_tensor(f)
                 return AttributeDict(y=y, f=f)
             else:
                 return AttributeDict(y=y)
@@ -424,6 +430,12 @@ class AtomicNN:
                     mse = tf.reduce_mean(
                         tf.squared_difference(labels.f, predictions.f),
                         name='mse')
+                    # Add a very small 'eps' to the mean squared error to make
+                    # sure `mse` is always greater than zero. Otherwise NaN may
+                    # occur at `Sqrt_Grad`.
+                    with tf.name_scope("safe_sqrt"):
+                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+                        mse = tf.add(mse, eps)
                     f_loss = tf.sqrt(mse, name='f_rmse')
                     f_mae = tf.reduce_mean(
                         tf.abs(labels.f - predictions.f, name='abs'),
