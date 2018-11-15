@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.learn import ModeKeys
 from ase.db import connect
+from ase.units import GPa
 from nose import main
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
@@ -113,6 +114,39 @@ def test_ethanol():
             assert_less(np.abs(result.positions[1] - positions).max(), eps)
             assert_less(np.abs(result.f_true[1] - forces).max(), eps)
             assert_less(float(result.y_true[1] - energy), eps)
+
+
+def test_nickel():
+    """
+    Test the nickel dataset for stress.
+    """
+    with tf.Graph().as_default():
+
+        savedir = join(test_dir(), 'Ni')
+        database = connect(join(savedir, 'Ni.db'))
+        dataset = Dataset(database, 'Ni', k_max=2, serial=True)
+
+        assert_equal(len(dataset), 2)
+        assert_true(dataset.stress)
+
+        dataset.to_records(savedir, test_size=1)
+        assert_true(dataset.load_tfrecords(savedir))
+
+        next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=1,
+                                        num_epochs=1, shuffle=False)
+
+        with tf.Session() as sess:
+
+            result = sess.run(next_batch)
+            eps = 1e-8
+            xx, yy, zz, xy, yz, xz = \
+                -51.13853, -36.29178, -36.29178, 19.26837, -0.44384, 19.26837
+            stress = -np.array([
+                [xx, xy, xz],
+                [xy, yy, yz],
+                [xz, yz, zz]
+            ]) * GPa
+            assert_less(np.abs(result.stress[0] - stress).max(), eps)
 
 
 if __name__ == "__main__":

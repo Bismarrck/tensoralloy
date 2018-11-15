@@ -560,8 +560,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             feature_list['f_true'] = _bytes_feature(f_true.tostring())
 
         if self._stress:
-            stress = atoms.get_stress()
-            feature_list['stress'] = _bytes_feature(stress.tostring())
+            values = atoms.get_stress(voigt=False)
+            feature_list['stress'] = _bytes_feature(values.tostring())
 
         feature_list.update(self._encode_g2_indexed_slices(g2))
 
