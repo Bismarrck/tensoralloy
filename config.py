@@ -107,7 +107,6 @@ class ConfigParser(configparser.ConfigParser):
         name = self[section].get('name', splitext(basename(filename))[0])
         rc = self[section].getfloat('rc', Defaults.rc)
         k_max = self[section].getint('k_max', Defaults.k_max)
-        zeros_forces_mode = self[section].getboolean('zero_forces_mode', False)
 
         section = 'behler'
         eta = self[section].getfloats('eta', Defaults.eta)
@@ -117,8 +116,6 @@ class ConfigParser(configparser.ConfigParser):
 
         dataset = Dataset(database=database, name=name, k_max=k_max, rc=rc,
                           eta=eta, beta=beta, gamma=gamma, zeta=zeta)
-        if zeros_forces_mode:
-            dataset.use_zero_forces()
 
         section = 'tfrecords'
         test_size = self[section].getint('test_size', 1000)
@@ -136,6 +133,7 @@ class ConfigParser(configparser.ConfigParser):
         l2_weight = self[section].getfloat('l2_weight', 0.0)
         activation = self[section].get('activation', 'leaky_relu')
         forces = self._dataset.forces
+        stress = self._dataset.stress
 
         transformer = self._dataset.transformer
         elements = transformer.elements
@@ -152,13 +150,14 @@ class ConfigParser(configparser.ConfigParser):
         if arch == 'AtomicNN':
             nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
                           activation=activation, l2_weight=l2_weight,
-                          forces=forces, normalizer=normalizer,
+                          forces=forces, stress=stress, normalizer=normalizer,
                           normalization_weights=normalizer_weights)
         elif arch == 'AtomicResNN':
             atomic_static_energy = self._dataset.atomic_static_energy
             nn = AtomicResNN(elements=elements, hidden_sizes=hidden_sizes,
                              activation=activation, l2_weight=l2_weight,
-                             forces=forces, normalizer=normalizer,
+                             forces=forces, stress=stress,
+                             normalizer=normalizer,
                              normalization_weights=normalizer_weights,
                              atomic_static_energy=atomic_static_energy)
         else:
