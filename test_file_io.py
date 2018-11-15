@@ -33,6 +33,7 @@ def test_read_extxyz():
     assert_almost_equal(atoms.get_forces()[0, 2], 2.49790655, delta=thres)
     assert_almost_equal(atoms.get_total_energy(), -17637.613286, delta=thres)
     assert_dict_equal(metadata['max_occurs'], max_occurs)
+    assert_equal(metadata['periodic'], False)
 
 
 def test_find_neighbor_size_limits():

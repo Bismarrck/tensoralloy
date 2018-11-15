@@ -107,7 +107,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
     count = 0
     max_occurs = Counter()
     stress = None
-    periodic = True
+    periodic = False
     database = connect(name='{}.db'.format(splitext(filename)[0]),
                        append=False)
 
