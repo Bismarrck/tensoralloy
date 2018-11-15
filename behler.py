@@ -454,7 +454,11 @@ class SymmetryFunction(AtomicDescriptor):
             if self._periodic:
                 pbc = self._get_pbc_displacements(shift, cells)
                 Dij = tf.add(Dij, pbc, name='pbc')
-            return tf.norm(Dij, axis=-1, name='r')
+            # By adding `eps` to the reduced sum NaN can be eliminated.
+            with tf.name_scope("safe_norm"):
+                eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+                return tf.sqrt(tf.reduce_sum(
+                    tf.square(Dij, name='Dij2'), axis=-1) + eps)
 
     @staticmethod
     def _get_v2g_map_delta(index):
