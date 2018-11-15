@@ -287,6 +287,13 @@ def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
+def _int64_feature(value):
+    """
+    Convert the `value` to Protobuf int64.
+    """
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
 class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                                        BatchDescriptorTransformer):
     """
@@ -296,7 +303,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
                  batch_size=None, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
-                 periodic=True):
+                 periodic=True, forces=True, stress=False):
         """
         Initialization method.
 
@@ -306,13 +313,20 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         indexed slices does not need this value. However, `batch_size` must be
         set before calling `build_graph()`.
         """
+        if (not periodic) and stress:
+            raise ValueError(
+                'The stress tensor is not applicable to molecules.')
+
         elements = sorted(max_occurs.keys())
 
         super(BatchSymmetryFunctionTransformer, self).__init__(
             rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
             nijk_max=nijk_max, batch_size=batch_size, eta=eta, beta=beta,
             gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic)
+
         self._index_transformers = {}
+        self._forces = forces
+        self._stress = stress
 
     @property
     def batch_size(self):
@@ -327,6 +341,20 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Return the maximum occurances of the elements.
         """
         return self._max_occurs
+
+    @property
+    def forces(self):
+        """
+        Return True if atomic forces can be calculated.
+        """
+        return self._forces
+
+    @property
+    def stress(self):
+        """
+        Return True if the stress tensor can be calculated.
+        """
+        return self._stress
 
     def get_index_transformer(self, atoms: Atoms):
         """
@@ -516,54 +544,78 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         positions = clf.gather(atoms.positions)
         cells = atoms.get_cell(complete=True)
         y_true = atoms.get_total_energy()
-        f_true = clf.gather(atoms.get_forces())[1:]
         composition = self._get_composition(atoms)
         mask = clf.mask.astype(np.float64)
         g2, g4 = self.get_indexed_slices(atoms)
         feature_list = {
             'positions': _bytes_feature(positions.tostring()),
             'cells': _bytes_feature(cells.tostring()),
+            'n_atoms': _int64_feature(len(atoms)),
             'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
             'mask': _bytes_feature(mask.tostring()),
             'composition': _bytes_feature(composition.tostring()),
-            'f_true': _bytes_feature(f_true.tostring()),
         }
+        if self._forces:
+            f_true = clf.gather(atoms.get_forces())[1:]
+            feature_list['f_true'] = _bytes_feature(f_true.tostring())
+
+        if self._stress:
+            stress = atoms.get_stress()
+            feature_list['stress'] = _bytes_feature(stress.tostring())
+
         feature_list.update(self._encode_g2_indexed_slices(g2))
+
         if self.k_max == 3:
             feature_list.update(self._encode_g4_indexed_slices(g4))
+
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))
 
-    def _decode_atoms(self, example: Dict[str, tf.Tensor]):
+    def _decode_atoms(self, example: Dict[str, tf.Tensor]) -> AttributeDict:
         """
         Decode `Atoms` related properties.
         """
+        decoded = AttributeDict()
+
         length = 3 * self._max_n_atoms
 
         positions = tf.decode_raw(example['positions'], tf.float64)
         positions.set_shape([length])
-        positions = tf.reshape(positions, (self._max_n_atoms, 3), name='R')
+        decoded.positions = tf.reshape(
+            positions, (self._max_n_atoms, 3), name='R')
+
+        n_atoms = tf.decode_raw(example['n_atoms'], tf.int64)
+        decoded.natoms = n_atoms
 
         y_true = tf.decode_raw(example['y_true'], tf.float64)
         y_true.set_shape([1])
-        y_true = tf.squeeze(y_true, name='y_true')
+        decoded.y_true = tf.squeeze(y_true, name='y_true')
 
         cells = tf.decode_raw(example['cells'], tf.float64)
         cells.set_shape([9])
-        cells = tf.reshape(cells, (3, 3), name='cells')
+        decoded.cells = tf.reshape(cells, (3, 3), name='cells')
 
         mask = tf.decode_raw(example['mask'], tf.float64)
         mask.set_shape([self._max_n_atoms, ])
+        decoded.mask = mask
 
         composition = tf.decode_raw(example['composition'], tf.float64)
         composition.set_shape([self._n_elements, ])
+        decoded.composition = composition
 
-        f_true = tf.decode_raw(example['f_true'], tf.float64)
-        # Ignore the forces of the virtual atom
-        f_true.set_shape([length - 3])
-        f_true = tf.reshape(f_true, (self._max_n_atoms - 1, 3), name='f_true')
+        if self._forces:
+            f_true = tf.decode_raw(example['f_true'], tf.float64)
+            # Ignore the forces of the virtual atom
+            f_true.set_shape([length - 3])
+            decoded.f_true = tf.reshape(
+                f_true, (self._max_n_atoms - 1, 3), name='f_true')
 
-        return positions, cells, y_true, f_true, mask, composition
+        if self._stress:
+            stress = tf.decode_raw(example['stress'], tf.float64)
+            stress.set_shape([9])
+            decoded.stress = tf.reshape(stress, (3, 3), name='stress')
+
+        return decoded
 
     def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
@@ -617,15 +669,14 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Decode the parsed single example.
         """
-        positions, cells, y_true, f_true, mask, composition = \
-            self._decode_atoms(example)
+        decoded = self._decode_atoms(example)
         g2 = self._decode_g2_indexed_slices(example)
         g4 = self._decode_g4_indexed_slices(example)
 
-        decoded = AttributeDict(
-            positions=positions, cells=cells, y_true=y_true, f_true=f_true,
-            mask=mask, composition=composition, rv2g=g2.v2g_map, ilist=g2.ilist,
-            jlist=g2.jlist, shift=g2.shift)
+        decoded.rv2g = g2.v2g_map
+        decoded.ilist = g2.ilist
+        decoded.jlist = g2.jlist
+        decoded.shift = g2.shift
 
         if g4 is not None:
             decoded.av2g = g4.v2g_map
@@ -644,21 +695,29 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         See `_parse_single_example_raw` documentation for more details.
         """
         with tf.name_scope("decoding"):
+
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
+                'n_atoms': tf.FixedLenFeature([], tf.int64),
                 'cells': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
-                'f_true': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
                 'composition': tf.FixedLenFeature([], tf.string),
             }
+            if self._forces:
+                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+
+            if self._stress:
+                feature_list['stress'] = tf.FixedLenFeature([], tf.string)
+
             if self._k_max == 3:
                 feature_list.update({
                     'g4.indices': tf.FixedLenFeature([], tf.string),
                     'g4.shifts': tf.FixedLenFeature([], tf.string),
                 })
+
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 

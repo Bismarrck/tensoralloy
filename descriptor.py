@@ -81,6 +81,22 @@ class BatchDescriptorTransformer(AtomicDescriptor):
 
     @property
     @abc.abstractmethod
+    def forces(self):
+        """
+        Return True if atomic forces should be encoded and trained.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def stress(self):
+        """
+        Return True if the stress tensor should be encoded and trained.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
     def batch_size(self) -> int:
         """
         Return the batch size.
