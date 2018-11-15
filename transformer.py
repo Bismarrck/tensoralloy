@@ -585,7 +585,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             positions, (self._max_n_atoms, 3), name='R')
 
         n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
-        decoded.natoms = n_atoms
+        decoded.n_atoms = n_atoms
 
         y_true = tf.decode_raw(example['y_true'], tf.float64)
         y_true.set_shape([1])
