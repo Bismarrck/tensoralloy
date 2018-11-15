@@ -25,43 +25,57 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def get_conversion(units: Dict[str, str]) -> (float, float):
+def get_conversion(units: Dict[str, str]) -> (float, float, float):
     """
     Return the conversion factors.
     """
-    def _parse_comb(unit: str):
-        if '/' in unit or '*' in unit:
-            values = [getattr(ase.units, name)
-                      for name in re.split(r'[/*]', unit)]
+    def _parse_unit(unit: str):
+        try:
+            return getattr(ase.units, unit)
+        except AttributeError:
+            try:
+                return float(unit)
+            except Exception:
+                raise ValueError('Unknown unit: {}'.format(unit))
+
+    def _parse_comb(comb: str):
+        if '/' in comb or '*' in comb:
+            values = [_parse_unit(unit) for unit in re.split(r'[/*]', comb)]
             total = values[0]
             index = 1
-            for i in range(len(unit)):
-                if unit[i] == '/':
+            for i in range(len(comb)):
+                if comb[i] == '/':
                     total /= values[index]
                     index += 1
-                elif unit[i] == '*':
+                elif comb[i] == '*':
                     total *= values[index]
                     index += 1
                 if index == len(values):
                     break
             return total
         else:
-            return getattr(ase.units, unit)
+            return getattr(ase.units, comb)
 
     eV = ase.units.eV
     Angstrom = ase.units.Angstrom
+    kB = ase.units.kB
 
     if 'energy' not in units:
-        to_eV = eV
+        to_eV = 1.0
     else:
         to_eV = _parse_comb(units['energy']) / eV
 
     if 'forces' not in units:
-        to_eV_Angstrom = eV / Angstrom
+        to_eV_Angstrom = 1.0
     else:
         to_eV_Angstrom = _parse_comb(units['forces']) / eV / Angstrom
 
-    return to_eV, to_eV_Angstrom
+    if 'stress' not in units:
+        to_kB = 1.0
+    else:
+        to_kB = _parse_comb(units['stress']) / kB
+
+    return to_eV, to_eV_Angstrom, to_kB
 
 
 def _read_extxyz(filename, units, ext=True, num_examples=None,
@@ -89,9 +103,11 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         The database for the given xyz file.
 
     """
-    to_eV, to_eV_Angstrom = get_conversion(units)
+    to_eV, to_eV_Angstrom, to_kB = get_conversion(units)
     count = 0
     max_occurs = Counter()
+    stress = None
+    periodic = True
     database = connect(name='{}.db'.format(splitext(filename)[0]),
                        append=False)
 
@@ -104,24 +120,42 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         if ext:
             reader = read_xyz(fp, index)
         else:
+            # The default parser for normal xyz files will ignore the energies.
+            # So here we implement a single parser just converting the second
+            # line of each XYZ block to a float.
             def _parser(line):
                 return {'energy': float(line.strip())}
             reader = read_xyz(fp, index, properties_parser=_parser)
 
         for atoms in reader:
-            # Make sure all energies are in 'eV' and all forces are in
-            # 'eV/angstroms'
+
+            # Scale the energies, forces and stress tensors to make sure
+            # energies are in 'eV', forces in 'eV/Angstrom' and stress in 'kB'.
             atoms.calc.results['energy'] *= to_eV
+
             if ext:
                 atoms.calc.results['forces'] *= to_eV_Angstrom
             else:
+                # Structures without forces are considered to be local minima so
+                # we manually set the forces to zeros.
                 atoms.calc.results['forces'] = np.zeros_like(atoms.positions)
+
+            # Check if the stress tensor is included in the results.
+            if stress is None:
+                stress = bool('stress' in atoms.calc.results)
+            if stress:
+                atoms.calc.results['stress'] *= to_kB
+
+            # `periodic` will be set to True if any of the `Atoms` is periodic.
+            periodic = any(atoms.pbc) or periodic
+
+            # Write the `Atoms` object to the database.
             database.write(atoms)
             count += 1
 
+            # Update the dict of `max_occurs` and print the parsing progress.
             for symbol, n in Counter(atoms.get_chemical_symbols()).items():
                 max_occurs[symbol] = max(max_occurs[symbol], n)
-
             if verbose and (count + 1) % 100 == 0:
                 speed = (count + 1) / (time.time() - tic)
                 total = num_examples or -1
@@ -133,11 +167,15 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             print("Total {} structures, time: {:.3f} sec".format(
                 count, time.time() - tic))
 
-    database.metadata = {'max_occurs': max_occurs, 'extxyz': ext,
-                         'unit_conversion': {
-                             'energy': to_eV,
-                             'forces': to_eV_Angstrom}
-                         }
+    database.metadata = {
+        'max_occurs': max_occurs,
+        'extxyz': ext,
+        'forces': True,
+        'stress': stress,
+        'periodic': periodic,
+        'unit_conversion': {'energy': to_eV,
+                            'forces': to_eV_Angstrom,
+                            'stress': to_kB}}
     return database
 
 
@@ -354,9 +392,16 @@ if __name__ == "__main__":
                  'Hartree/Bohr', 'Hartree/Angstrom'],
         help='The unit of the atomic forces in the file.'
     )
+    parser.add_argument(
+        '--stress-unit',
+        type=str,
+        default='0.1*GPa',
+        help='The unit of the stress tensors in the file.',
+    )
     args = parser.parse_args()
     read(args.filename,
          units={'energy': args.energy_unit,
-                'forces': args.forces_unit},
+                'forces': args.forces_unit,
+                'stress': args.stress_unit},
          num_examples=args.num_examples,
          verbose=True)
