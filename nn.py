@@ -183,8 +183,6 @@ class _InputNormalizer:
                              tf.GraphKeys.GLOBAL_VARIABLES,
                              GraphKeys.NORMALIZE_VARIABLES],
                 trainable=True)
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, x)
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, alpha)
             tf.summary.histogram(
                 name=alpha.op.name + '/summary',
                 values=alpha,
@@ -210,7 +208,7 @@ class AtomicNN:
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation=None, l2_weight=0.0, forces=False,
+                 activation=None, l2_weight=0.0, forces=False, stress=False,
                  normalizer='linear', normalization_weights=None):
         """
         Initialization method.
@@ -225,7 +223,9 @@ class AtomicNN:
         activation : str
             The name of the activation function to use.
         forces : bool
-            If True, atomic forces will be derived.
+            If True, atomic forces will be calculated and trained..
+        stress : bool
+            If True, the stress tensor will be calculated and trained.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
         normalizer : str
@@ -241,6 +241,7 @@ class AtomicNN:
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
+        self._stress = stress
         self._l2_weight = max(l2_weight, 0.0)
         self._initial_normalizer_weights = normalization_weights
         self._normalizer = _InputNormalizer(method=normalizer)
@@ -262,9 +263,16 @@ class AtomicNN:
     @property
     def forces(self):
         """
-        Return True if forces are derived.
+        Return True if atomic forces will be calculated.
         """
         return self._forces
+
+    @property
+    def stress(self):
+        """
+        Return True if the stress tensor will be calculated.
+        """
+        return self._stress
 
     @property
     def l2_weight(self):
@@ -344,26 +352,44 @@ class AtomicNN:
         outputs = self._build_atomic_nn(features, verbose)
 
         with tf.name_scope("Output"):
+
+            predictions = AttributeDict()
+
             with tf.name_scope("Energy"):
                 y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
                 with tf.name_scope("mask"):
                     mask = tf.split(
                         features.mask, [1, -1], axis=1, name='split')[1]
                     y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y = tf.reduce_sum(y_mask, axis=1, keepdims=False, name='y')
+                energy = tf.reduce_sum(
+                    y_mask, axis=1, keepdims=False, name='energy')
                 if verbose:
-                    log_tensor(y)
+                    log_tensor(energy)
+            predictions.energy = energy
+
             if self._forces:
                 with tf.name_scope("Forces"):
-                    f = tf.gradients(y, features.positions, name='grads')[0]
+                    dEdR = tf.gradients(
+                        energy, features.positions, name='dEdR')[0]
                     # Please remember: f = -dE/dR
-                    f = tf.negative(
-                        tf.split(f, [1, -1], axis=1, name='split')[1], name='f')
+                    forces = tf.negative(
+                        tf.split(dEdR, [1, -1], axis=1, name='split')[1],
+                        name='forces')
                     if verbose:
-                        log_tensor(f)
-                return AttributeDict(y=y, f=f)
-            else:
-                return AttributeDict(y=y)
+                        log_tensor(forces)
+                predictions.forces = forces
+
+            if self._stress:
+                with tf.name_scope("Stress"):
+                    dEdC = tf.gradients(energy, features.cells, name='dEdC')[0]
+                    stress = tf.negative(
+                        tf.einsum('ijk,ikl->ijl', dEdC, features.cells),
+                        name='stress')
+                    if verbose:
+                        log_tensor(stress)
+                predictions.stress = stress
+
+            return predictions
 
     def add_l2_penalty(self):
         """
@@ -399,9 +425,19 @@ class AtomicNN:
         Parameters
         ----------
         predictions : AttributeDict
-            A dict of tensors as the predictions. Valid keys are: 'y' and 'f'.
+            A dict of tensors as the predictions.
+                * 'energy' of shape `[batch_size, ]` is required.
+                * 'forces' of shape `[batch_size, N, 3]` is required if
+                  `self.forces == True`.
+                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                  `self.stress == True`.
         labels : AttributeDict
             A dict of label tensors as the desired regression targets.
+                * 'energy' of shape `[batch_size, ]` is required.
+                * 'forces' of shape `[batch_size, N, 3]` is required if
+                  `self.forces == True`.
+                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                  `self.stress == True`.
 
         Returns
         -------
@@ -414,10 +450,12 @@ class AtomicNN:
 
             with tf.name_scope("energy"):
                 mse = tf.reduce_mean(
-                    tf.squared_difference(labels.y, predictions.y), name='mse')
+                    tf.squared_difference(labels.energy, predictions.energy),
+                    name='mse')
                 y_loss = tf.sqrt(mse, name='y_rmse')
                 y_mae = tf.reduce_mean(
-                    tf.abs(labels.y - predictions.y, name='abs'), name='y_mae')
+                    tf.abs(labels.energy - predictions.energy, name='abs'),
+                    name='y_mae')
                 losses.append(y_loss)
 
                 tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
@@ -428,7 +466,8 @@ class AtomicNN:
             if self._forces:
                 with tf.name_scope("forces"):
                     mse = tf.reduce_mean(
-                        tf.squared_difference(labels.f, predictions.f),
+                        tf.squared_difference(
+                            labels.forces, predictions.forces),
                         name='mse')
                     # Add a very small 'eps' to the mean squared error to make
                     # sure `mse` is always greater than zero. Otherwise NaN may
@@ -438,7 +477,7 @@ class AtomicNN:
                         mse = tf.add(mse, eps)
                     f_loss = tf.sqrt(mse, name='f_rmse')
                     f_mae = tf.reduce_mean(
-                        tf.abs(labels.f - predictions.f, name='abs'),
+                        tf.abs(labels.forces - predictions.forces, name='abs'),
                         name='f_mae')
                     losses.append(f_loss)
 
@@ -446,6 +485,9 @@ class AtomicNN:
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_mae)
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_loss)
+
+            if self._stress:
+                pass
 
             if self._l2_weight > 0.0:
                 losses.append(self.add_l2_penalty())
@@ -589,6 +631,21 @@ class AtomicNN:
                 })
             return metrics
 
+    def _check_keys(self, features: AttributeDict, labels: AttributeDict):
+        """
+        Check the keys of `features` and `labels`.
+        """
+        assert 'descriptors' in features
+        assert 'positions' in features
+        assert 'cells' in features
+        assert 'mask' in features
+        assert 'n_atoms' in features
+        assert 'energy' in labels
+        if self._forces:
+            assert 'forces' in labels
+        if self._stress:
+            assert 'stress' in labels
+
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
                  mode: tf.estimator.ModeKeys, params: AttributeDict):
         """
@@ -600,12 +657,16 @@ class AtomicNN:
             A dict of input tensors with three keys:
                 * 'descriptors' of shape `[batch_size, N, D]`
                 * 'positions' of `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
+                * 'n_atoms' of dtype `int64`.
         labels : AttributeDict
             A dict of reference tensors.
-                * 'y' of shape `[batch_size, ]` is required.
-                * 'f' of shape `[batch_size, N, 3]` is also required if
+                * 'energy' of shape `[batch_size, ]` is required.
+                * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
+                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                  `self.stress == True`.
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
@@ -620,6 +681,8 @@ class AtomicNN:
             by an `Estimator`.
 
         """
+        self._check_keys(features, labels)
+
         predictions = self.build(features,
                                  verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 
@@ -663,15 +726,15 @@ class AtomicResNN(AtomicNN):
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 l2_weight=0.0, forces=False, normalizer='linear',
-                 normalization_weights=None,
-                 atomic_static_energy: Dict[str, float] = None):
+                 l2_weight=0.0, forces=False, stress=False, normalizer='linear',
+                 normalization_weights=None, atomic_static_energy=None):
         """
         Initialization method.
         """
-        super(AtomicResNN, self).__init__(elements, hidden_sizes, activation,
-                                          l2_weight, forces, normalizer,
-                                          normalization_weights)
+        super(AtomicResNN, self).__init__(
+            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
+            l2_weight=l2_weight, forces=forces, stress=stress,
+            normalizer=normalizer, normalization_weights=normalization_weights)
         self._atomic_static_energy = atomic_static_energy
 
     def build(self, features: AttributeDict, verbose=True):
