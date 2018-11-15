@@ -10,7 +10,7 @@ __email__ = 'Bismarrck@me.com'
 from nose import main
 from nose.tools import assert_almost_equal, assert_equal, assert_dict_equal
 from file_io import read, find_neighbor_size_limits, get_conversion
-from ase.units import kcal, mol, eV, Hartree
+from ase.units import kcal, mol, eV, Hartree, GPa, kB
 
 
 def test_read_xyz():
@@ -61,8 +61,12 @@ def test_unit_conversion():
 
 
 def test_get_convertion():
-    x, _ = get_conversion({'energy': 'kcal/mol*Hartree/eV'})
+    x, _, z = get_conversion({
+        'energy': 'kcal/mol*Hartree/eV',
+        'stress': '0.1*GPa',
+    })
     assert_almost_equal(x, (kcal / mol * Hartree / eV) / eV)
+    assert_almost_equal(z, 0.1 * GPa / kB)
 
 
 if __name__ == "__main__":
