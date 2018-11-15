@@ -133,7 +133,10 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             # the size of the `Atoms`.
             if atoms.cell.sum() < 1e-8:
                 length = 20.0 + (divmod(len(atoms), 50)[0] * 5.0)
-                atoms.cell = np.eye(3) * length
+                cell = np.eye(3) * length
+                # To pass `calc.check_state` both must be set because 'cell' is
+                # included in `all_changes`.
+                atoms.cell, atoms.calc.atoms.cell = cell, cell
 
             # Scale the energies, forces and stress tensors to make sure
             # energies are in 'eV', forces in 'eV/Angstrom' and stress in 'kB'.

@@ -20,6 +20,7 @@ def test_read_xyz():
     atoms = database.get_atoms('id=2')
     assert_equal(len(database), 2)
     assert_almost_equal(atoms.positions[1, 1], 10.65007390)
+    assert_almost_equal(atoms.get_total_energy(), -78.51063520)
     assert_true(atoms.cell.sum() > 1e-8)
 
 
