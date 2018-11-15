@@ -9,6 +9,7 @@ __email__ = 'Bismarrck@me.com'
 
 from nose import main
 from nose.tools import assert_almost_equal, assert_equal, assert_dict_equal
+from nose.tools import assert_true
 from file_io import read, find_neighbor_size_limits, get_conversion
 from ase.units import kcal, mol, eV, Hartree, GPa, kB
 
@@ -19,6 +20,7 @@ def test_read_xyz():
     atoms = database.get_atoms('id=2')
     assert_equal(len(database), 2)
     assert_almost_equal(atoms.positions[1, 1], 10.65007390)
+    assert_true(atoms.cell.sum() > 1e-8)
 
 
 def test_read_extxyz():
