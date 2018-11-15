@@ -448,7 +448,7 @@ class AtomicNN:
         with tf.name_scope("Loss"):
             losses = []
 
-            with tf.name_scope("energy"):
+            with tf.name_scope("Energy"):
                 mse = tf.reduce_mean(
                     tf.squared_difference(labels.energy, predictions.energy),
                     name='mse')
@@ -464,7 +464,7 @@ class AtomicNN:
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_loss)
 
             if self._forces:
-                with tf.name_scope("forces"):
+                with tf.name_scope("Forces"):
                     mse = tf.reduce_mean(
                         tf.squared_difference(
                             labels.forces, predictions.forces),
@@ -487,7 +487,27 @@ class AtomicNN:
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_loss)
 
             if self._stress:
-                pass
+                with tf.name_scope("Stress"):
+                    mse = tf.reduce_mean(
+                        tf.squared_difference(
+                            labels.stress, predictions.stress),
+                        name='mse')
+                    # Add a very small 'eps' to the mean squared error to make
+                    # sure `mse` is always greater than zero. Otherwise NaN may
+                    # occur at `Sqrt_Grad`.
+                    with tf.name_scope("safe_sqrt"):
+                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+                        mse = tf.add(mse, eps)
+                    t_loss = tf.sqrt(mse, name='t_rmse')
+                    t_mae = tf.reduce_mean(
+                        tf.abs(labels.stress - predictions.stress, name='abs'),
+                        name='t_mae')
+                    losses.append(t_loss)
+
+                    tf.summary.scalar(t_loss.op.name + '/summary', t_loss,
+                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, t_mae)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, t_loss)
 
             if self._l2_weight > 0.0:
                 losses.append(self.add_l2_penalty())
@@ -616,19 +636,27 @@ class AtomicNN:
         Return a dict of Ops as the evaluation metrics.
         """
         with tf.name_scope("Metrics"):
+
             metrics = {
                 'y_rmse': tf.metrics.root_mean_squared_error(
-                    labels.y, predictions.y, name='y_rmse'),
+                    labels.energy, predictions.energy, name='y_rmse'),
                 'y_mae': tf.metrics.mean_absolute_error(
-                    labels.y, predictions.y, name='y_mae'),
-            }
+                    labels.energy, predictions.energy, name='y_mae')}
+
             if self._forces:
                 metrics.update({
                     'f_rmse': tf.metrics.root_mean_squared_error(
-                        labels.f, predictions.f, name='f_rmse'),
+                        labels.forces, predictions.forces, name='f_rmse'),
                     'f_mae': tf.metrics.mean_absolute_error(
-                        labels.f, predictions.f, name='f_mae')
-                })
+                        labels.forces, predictions.forces, name='f_mae')})
+
+            if self._stress:
+                metrics.update({
+                    't_rmse': tf.metrics.root_mean_squared_error(
+                        labels.stress, predictions.stress, name='t_rmse'),
+                    't_mae': tf.metrics.mean_absolute_error(
+                        labels.stress, predictions.stress, name='t_mae')})
+
             return metrics
 
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
