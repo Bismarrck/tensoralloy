@@ -29,14 +29,20 @@ def get_conversion(units: Dict[str, str]) -> (float, float, float):
     """
     Return the conversion factors.
     """
+    _units = {
+        'kbar': 0.1 * ase.units.GPa,
+    }
+
     def _parse_unit(unit: str):
-        try:
+        if hasattr(ase.units, unit):
             return getattr(ase.units, unit)
-        except AttributeError:
+        elif unit in _units:
+            return _units[unit]
+        else:
             try:
                 return float(unit)
             except Exception:
-                raise ValueError('Unknown unit: {}'.format(unit))
+                raise ValueError("Unknown unit: {}".format(unit))
 
     def _parse_comb(comb: str):
         if '/' in comb or '*' in comb:
@@ -58,7 +64,7 @@ def get_conversion(units: Dict[str, str]) -> (float, float, float):
 
     eV = ase.units.eV
     Angstrom = ase.units.Angstrom
-    kB = ase.units.kB
+    kbar = _units['kbar']
 
     if 'energy' not in units:
         to_eV = 1.0
@@ -71,11 +77,11 @@ def get_conversion(units: Dict[str, str]) -> (float, float, float):
         to_eV_Angstrom = _parse_comb(units['forces']) / eV / Angstrom
 
     if 'stress' not in units:
-        to_kB = 1.0
+        to_kbar = 1.0
     else:
-        to_kB = _parse_comb(units['stress']) / kB
+        to_kbar = _parse_comb(units['stress']) / kbar
 
-    return to_eV, to_eV_Angstrom, to_kB
+    return to_eV, to_eV_Angstrom, to_kbar
 
 
 def _read_extxyz(filename, units, ext=True, num_examples=None,
@@ -103,7 +109,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         The database for the given xyz file.
 
     """
-    to_eV, to_eV_Angstrom, to_kB = get_conversion(units)
+    to_eV, to_eV_Angstrom, to_kbar = get_conversion(units)
     count = 0
     max_occurs = Counter()
     stress = None
@@ -153,7 +159,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             if stress is None:
                 stress = bool('stress' in atoms.calc.results)
             if stress:
-                atoms.calc.results['stress'] *= to_kB
+                atoms.calc.results['stress'] *= to_kbar
 
             # `periodic` will be set to True if any of the `Atoms` is periodic.
             periodic = any(atoms.pbc) or periodic
@@ -184,7 +190,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         'periodic': periodic,
         'unit_conversion': {'energy': to_eV,
                             'forces': to_eV_Angstrom,
-                            'stress': to_kB}}
+                            'stress': to_kbar}}
     return database
 
 
@@ -404,7 +410,8 @@ if __name__ == "__main__":
     parser.add_argument(
         '--stress-unit',
         type=str,
-        default='0.1*GPa',
+        default='GPa',
+        choices=['GPa', 'kbar'],
         help='The unit of the stress tensors in the file.',
     )
     args = parser.parse_args()
