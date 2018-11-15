@@ -551,7 +551,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             'positions': _bytes_feature(positions.tostring()),
             'cells': _bytes_feature(cells.tostring()),
             'n_atoms': _int64_feature(len(atoms)),
-            'y_true': _bytes_feature(np.atleast_2d(y_true).tostring()),
+            'y_true': _bytes_feature(np.atleast_1d(y_true).tostring()),
             'mask': _bytes_feature(mask.tostring()),
             'composition': _bytes_feature(composition.tostring()),
         }
@@ -584,7 +584,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         decoded.positions = tf.reshape(
             positions, (self._max_n_atoms, 3), name='R')
 
-        n_atoms = tf.decode_raw(example['n_atoms'], tf.int64)
+        n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
         decoded.natoms = n_atoms
 
         y_true = tf.decode_raw(example['y_true'], tf.float64)
@@ -739,6 +739,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             * 'positions': float64, [batch_size, max_n_atoms, 3]
             * 'cells': float64, [batch_size, 3, 3]
+            * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64, [batch_size, ]
             * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
@@ -757,6 +758,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'ik_shift': float64, [batch_size, nijk_max, 3]
             * 'jk_shift': float64, [batch_size, nijk_max, 3]
             * 'av2g': int32, [batch_size, nijk_max, 3]
+
         batch_size : int
             The size of the batch.
 

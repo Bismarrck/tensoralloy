@@ -45,8 +45,7 @@ def qm7m_compute():
 
 def test_qm7m():
     """
-    qm7m is a minimal subset of the `qm7` dataset. This dataset only has three
-    molecules. Forces are not provided.
+    Test the qm7m dataset for energy only and k_max = 2.
     """
     ref = qm7m_compute()
 
@@ -57,7 +56,6 @@ def test_qm7m():
         dataset = Dataset(database, 'qm7m', k_max=2, serial=True)
 
         assert_equal(len(dataset), 3)
-        assert_equal(dataset.forces, False)
         assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
 
         dataset.to_records(savedir, test_size=0.33)
@@ -72,7 +70,7 @@ def test_qm7m():
             res = sess.run(next_batch)
             eps = 1e-8
 
-            assert_equal(len(res.keys()), 9)
+            assert_equal(len(res.keys()), 11)
             assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
             assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
             assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
@@ -81,8 +79,7 @@ def test_qm7m():
 
 def test_ethanol():
     """
-    This is a minimal subset of the ethanol MD dataset with 10 configurations.
-    Forces are provided.
+    Test the ethanol MD dataset for energy and forces and k_max = 3.
     """
     with tf.Graph().as_default():
 
@@ -106,7 +103,7 @@ def test_ethanol():
                                atoms.get_chemical_symbols())
         positions = clf.gather(atoms.positions)
         energy = atoms.get_total_energy()
-        forces = clf.gather(atoms.get_forces())
+        forces = clf.gather(atoms.get_forces())[1:]
 
         with tf.Session() as sess:
 

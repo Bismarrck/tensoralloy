@@ -69,6 +69,7 @@ class Dataset:
         self._file_sizes = {}
         self._serial = serial
         self._forces = False
+        self._stress = False
         self._read_database()
 
     @property
@@ -88,16 +89,16 @@ class Dataset:
     @property
     def forces(self) -> bool:
         """
-        Return True if atomic forces are provided.
+        Return True if the atomic forces are provided.
         """
         return self._forces
 
     @property
     def stress(self) -> bool:
         """
-        Return True if stress data are provided.
+        Return True if the stress tensors are provided.
         """
-        return False
+        return self._stress
 
     @property
     def k_max(self):
@@ -162,13 +163,6 @@ class Dataset:
         """
         return len(self._database)
 
-    def use_zero_forces(self):
-        """
-        Set `forces` to True by treating all structures as local minima whose
-        forces should be zeros.
-        """
-        self._forces = True
-
     def _should_compute_atomic_static_energy(self):
         """
         A helper function. Return True if `y_static` cannot be accessed.
@@ -213,21 +207,24 @@ class Dataset:
             find_neighbor_size_limits(self._database, self._rc, n_jobs=n_jobs,
                                       k_max=self._k_max, verbose=True)
 
-        extxyz = self._database.metadata['extxyz']
-        if extxyz:
-            self._forces = True
+        periodic = self._database.metadata['periodic']
+        forces = self._database.metadata['forces']
+        stress = self._database.metadata['stress']
 
         max_occurs = self._database.metadata['max_occurs']
         nij_max, nijk_max = self._get_nij_and_nijk()
         sf = BatchSymmetryFunctionTransformer(
             rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
             nij_max=nij_max, nijk_max=nijk_max, eta=self._eta, beta=self._beta,
-            gamma=self._gamma, zeta=self._zeta, periodic=extxyz)
+            gamma=self._gamma, zeta=self._zeta, periodic=periodic,
+            stress=stress, forces=forces)
 
         if self._should_compute_atomic_static_energy():
             compute_atomic_static_energy(self._database, sf.elements, True)
 
         self._transformer = sf
+        self._forces = forces
+        self._stress = stress
         self._max_occurs = max_occurs
         self._nij_max = nij_max
         self._nijk_max = nijk_max
@@ -379,11 +376,15 @@ class Dataset:
             splits = self._transformer.get_graph_from_batch(batch, batch_size)
             features = AttributeDict(descriptors=splits,
                                      positions=batch.positions,
+                                     n_atoms=batch.n_atoms,
+                                     cells=batch.cells,
                                      composition=batch.composition,
                                      mask=batch.mask)
-            labels = AttributeDict(y=batch.y_true)
+            labels = AttributeDict(energy=batch.y_true)
             if self._forces:
-                labels.update({'f': batch.f_true})
+                labels['forces'] = batch.f_true
+            if self._stress:
+                labels['stress'] = batch.stress
             return features, labels
 
         return _input_fn
