@@ -667,17 +667,44 @@ class AtomicNN:
                 hooks.append(logging_tensor_hook)
         return hooks
 
-    def get_eval_metrics_ops(self, predictions, labels):
+    def get_eval_metrics_ops(self, predictions, labels, n_atoms=None):
         """
         Return a dict of Ops as the evaluation metrics.
+
+        `predictions` and `labels` are `AttributeDict` with the following keys
+        required:
+            * 'energy' of shape `[batch_size, ]` is required.
+            * 'forces' of shape `[batch_size, N, 3]` is required if
+              `self.forces == True`.
+            * 'stress' of shape `[batch_size, 3, 3]` is required if
+              `self.stress == True`.
+
+        `n_atoms` is an optional `int32` tensor with shape `[batch_size, ]`,
+        representing the number of atoms in each structure. If give, per-atom
+        metrics will be evaluated.
+
         """
         with tf.name_scope("Metrics"):
+
+            def _per_atom_metric_fn(metric: tf.Tensor):
+                return tf.div(metric, n_atoms, metric.op.name + '_atom')
 
             metrics = {
                 'y_rmse': tf.metrics.root_mean_squared_error(
                     labels.energy, predictions.energy, name='y_rmse'),
                 'y_mae': tf.metrics.mean_absolute_error(
                     labels.energy, predictions.energy, name='y_mae')}
+
+            if n_atoms is not None:
+                metrics.update({
+                    'y_rmse_atom': tf.metrics.root_mean_squared_error(
+                        labels=_per_atom_metric_fn(labels.energy),
+                        predictions=_per_atom_metric_fn(predictions.energy),
+                        name='y_rmse_atom'),
+                    'y_mae_atom': tf.metrics.mean_absolute_error(
+                        labels=_per_atom_metric_fn(labels.energy),
+                        predictions=_per_atom_metric_fn(predictions.energy),
+                        name='y_rmse_atom')})
 
             if self._forces:
                 metrics.update({
@@ -763,7 +790,8 @@ class AtomicNN:
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
-        eval_metrics_ops = self.get_eval_metrics_ops(predictions, labels)
+        eval_metrics_ops = self.get_eval_metrics_ops(
+            predictions, labels, n_atoms=features.n_atoms)
         evaluation_hooks = self.get_evaluation_hooks(hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
