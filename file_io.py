@@ -27,7 +27,11 @@ __email__ = 'Bismarrck@me.com'
 
 def get_conversion(units: Dict[str, str]) -> (float, float, float):
     """
-    Return the conversion factors.
+    Return the conversion factors:
+        * 'energy' should be converted to 'eV'
+        * 'forces' should be converted to 'eV / Angstrom'
+        * 'stress' should be converted to 'GPa'
+
     """
     _units = {
         'kbar': 0.1 * ase.units.GPa,
@@ -64,7 +68,7 @@ def get_conversion(units: Dict[str, str]) -> (float, float, float):
 
     eV = ase.units.eV
     Angstrom = ase.units.Angstrom
-    kbar = _units['kbar']
+    GPa = ase.units.GPa
 
     if 'energy' not in units:
         to_eV = 1.0
@@ -77,11 +81,11 @@ def get_conversion(units: Dict[str, str]) -> (float, float, float):
         to_eV_Angstrom = _parse_comb(units['forces']) / eV / Angstrom
 
     if 'stress' not in units:
-        to_kbar = 1.0
+        to_GPa = 1.0
     else:
-        to_kbar = _parse_comb(units['stress']) / kbar
+        to_GPa = _parse_comb(units['stress']) / GPa
 
-    return to_eV, to_eV_Angstrom, to_kbar
+    return to_eV, to_eV_Angstrom, to_GPa
 
 
 def _read_extxyz(filename, units, ext=True, num_examples=None,
@@ -109,7 +113,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         The database for the given xyz file.
 
     """
-    to_eV, to_eV_Angstrom, to_kbar = get_conversion(units)
+    to_eV, to_eV_Angstrom, to_GPa = get_conversion(units)
     count = 0
     max_occurs = Counter()
     stress = None
@@ -159,7 +163,11 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             if stress is None:
                 stress = bool('stress' in atoms.calc.results)
             if stress:
-                atoms.calc.results['stress'] *= to_kbar
+                # Convert the unit of stress tensors to 'eV':
+                # 1 eV/Angstrom**3 = 160.21766208 GPa
+                # 1 GPa = 10 kbar
+                # stress_eV = stress * volume_of_cell
+                atoms.calc.results['stress'] *= (to_GPa * atoms.get_cell())
 
             # `periodic` will be set to True if any of the `Atoms` is periodic.
             periodic = any(atoms.pbc) or periodic
@@ -190,7 +198,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         'periodic': periodic,
         'unit_conversion': {'energy': to_eV,
                             'forces': to_eV_Angstrom,
-                            'stress': to_kbar}}
+                            'stress': to_GPa}}
     return database
 
 

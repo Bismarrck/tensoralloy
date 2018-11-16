@@ -54,12 +54,12 @@ def test_find_neighbor_size_limits():
 
 
 def test_unit_conversion():
-    to_eV, _, to_kbar = get_conversion({
+    to_eV, _, to_GPa = get_conversion({
         'energy': 'kcal/mol*Hartree/eV',
         'stress': '0.1*GPa',
     })
     assert_almost_equal(to_eV, (kcal / mol * Hartree / eV) / eV)
-    assert_almost_equal(to_kbar, 1.0)
+    assert_almost_equal(to_GPa, 0.1)
 
     xyzfile = 'test_files/examples.extxyz'
     database = read(xyzfile, verbose=False,
