@@ -8,7 +8,6 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.learn import ModeKeys
 from ase.db import connect
-from ase.units import GPa
 from nose import main
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
@@ -138,14 +137,14 @@ def test_nickel():
         with tf.Session() as sess:
 
             result = sess.run(next_batch)
-            eps = 1e-8
+            eps = 1e-5
             xx, yy, zz, xy, yz, xz = \
-                -51.13853, -36.29178, -36.29178, 19.26837, -0.44384, 19.26837
+                -0.35196, - 0.24978, - 0.24978, 0.13262, -0.00305, 0.13262,
             stress = -np.array([
                 [xx, xy, xz],
                 [xy, yy, yz],
                 [xz, yz, zz]
-            ]) * GPa
+            ])
             assert_less(np.abs(result.stress[0] - stress).max(), eps)
 
 

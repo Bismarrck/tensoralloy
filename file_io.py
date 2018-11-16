@@ -167,7 +167,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
                 # 1 eV/Angstrom**3 = 160.21766208 GPa
                 # 1 GPa = 10 kbar
                 # stress_eV = stress * volume_of_cell
-                atoms.calc.results['stress'] *= (to_GPa * atoms.get_cell())
+                atoms.calc.results['stress'] *= (to_GPa * atoms.get_volume())
 
             # `periodic` will be set to True if any of the `Atoms` is periodic.
             periodic = any(atoms.pbc) or periodic

@@ -89,14 +89,16 @@ class Dataset:
     @property
     def forces(self) -> bool:
         """
-        Return True if the atomic forces are provided.
+        Return True if the atomic forces are provided. The unit of the atomic
+        forces is 'eV / Angstrom'.
         """
         return self._forces
 
     @property
     def stress(self) -> bool:
         """
-        Return True if the stress tensors are provided.
+        Return True if the stress tensors are provided. The unit of the stress
+        tensors is 'eV'.
         """
         return self._stress
 
