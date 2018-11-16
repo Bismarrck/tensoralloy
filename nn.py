@@ -331,6 +331,65 @@ class AtomicNN:
                     outputs.append(yi)
             return outputs
 
+    def _get_energy(self, outputs, features, verbose=True):
+        """
+        Return the Op to compute total energy.
+
+        Parameters
+        ----------
+        outputs : List[tf.Tensor]
+            A list of `tf.Tensor` as the outputs of the ANNs.
+        features : AttributeDict
+            A dict of input features.
+        verbose : bool
+            If True, the total energy tensor will be logged.
+
+        Returns
+        -------
+        energy : tf.Tensor
+            The total energy tensor.
+
+        """
+        with tf.name_scope("Energy"):
+            y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+            with tf.name_scope("mask"):
+                mask = tf.split(
+                    features.mask, [1, -1], axis=1, name='split')[1]
+                y_mask = tf.multiply(y_atomic, mask, name='mask')
+            energy = tf.reduce_sum(
+                y_mask, axis=1, keepdims=False, name='energy')
+            if verbose:
+                log_tensor(energy)
+            return energy
+
+    @staticmethod
+    def _get_forces(energy, positions, verbose=True):
+        """
+        Return the Op to compute atomic forces (eV / Angstrom).
+        """
+        with tf.name_scope("Forces"):
+            dEdR = tf.gradients(energy, positions, name='dEdR')[0]
+            # Please remember: f = -dE/dR
+            forces = tf.negative(
+                tf.split(dEdR, [1, -1], axis=1, name='split')[1],
+                name='forces')
+            if verbose:
+                log_tensor(forces)
+            return forces
+
+    @staticmethod
+    def _get_stress(energy, cells, verbose=True):
+        """
+        Return the Op to compute reduced stress tensor (eV).
+        """
+        with tf.name_scope("Stress"):
+            dEdC = tf.gradients(energy, cells, name='dEdC')[0]
+            stress = tf.negative(tf.einsum('ijk,ikl->ijl', dEdC, cells),
+                                 name='stress')
+            if verbose:
+                log_tensor(stress)
+            return stress
+
     def build(self, features: AttributeDict, verbose=True):
         """
         Build the atomic neural network.
@@ -341,7 +400,7 @@ class AtomicNN:
             A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
             and 'positions' of `[batch_size, N, 3]` are required.
         verbose : bool
-            If True, the
+            If True, the prediction tensors will be logged.
 
         Returns
         -------
@@ -355,39 +414,16 @@ class AtomicNN:
 
             predictions = AttributeDict()
 
-            with tf.name_scope("Energy"):
-                y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-                with tf.name_scope("mask"):
-                    mask = tf.split(
-                        features.mask, [1, -1], axis=1, name='split')[1]
-                    y_mask = tf.multiply(y_atomic, mask, name='mask')
-                energy = tf.reduce_sum(
-                    y_mask, axis=1, keepdims=False, name='energy')
-                if verbose:
-                    log_tensor(energy)
-            predictions.energy = energy
+            predictions.energy = self._get_energy(
+                outputs, features, verbose=verbose)
 
             if self._forces:
-                with tf.name_scope("Forces"):
-                    dEdR = tf.gradients(
-                        energy, features.positions, name='dEdR')[0]
-                    # Please remember: f = -dE/dR
-                    forces = tf.negative(
-                        tf.split(dEdR, [1, -1], axis=1, name='split')[1],
-                        name='forces')
-                    if verbose:
-                        log_tensor(forces)
-                predictions.forces = forces
+                predictions.forces = self._get_forces(
+                    predictions.energy, features.positions, verbose=verbose)
 
             if self._stress:
-                with tf.name_scope("Stress"):
-                    dEdC = tf.gradients(energy, features.cells, name='dEdC')[0]
-                    stress = tf.negative(
-                        tf.einsum('ijk,ikl->ijl', dEdC, features.cells),
-                        name='stress')
-                    if verbose:
-                        log_tensor(stress)
-                predictions.stress = stress
+                predictions.stress = self._get_stress(
+                    predictions.energy, features.cells, verbose=verbose)
 
             return predictions
 
@@ -765,55 +801,60 @@ class AtomicResNN(AtomicNN):
             normalizer=normalizer, normalization_weights=normalization_weights)
         self._atomic_static_energy = atomic_static_energy
 
-    def build(self, features: AttributeDict, verbose=True):
+    def _check_keys(self, features: AttributeDict, labels: AttributeDict):
         """
-        Build the atomic residual network.
+        Check the keys of `features` and `labels`.
         """
-        outputs = self._build_atomic_nn(features, verbose)
+        super(AtomicResNN, self)._check_keys(features, labels)
+        assert 'composition' in features
 
-        with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-            if self._atomic_static_energy is None:
-                values = np.ones(len(self._elements), dtype=np.float64)
-            else:
-                values = np.asarray([self._atomic_static_energy[e]
-                                     for e in self._elements], dtype=np.float64)
-            initializer = tf.constant_initializer(values, dtype=tf.float64)
-            x = tf.identity(features.composition, name='input')
-            z = tf.get_variable("weights", shape=(len(self._elements)),
-                                dtype=tf.float64, trainable=True,
-                                collections=[GraphKeys.Y_STATIC_VARIABLES,
-                                             tf.GraphKeys.TRAINABLE_VARIABLES,
-                                             tf.GraphKeys.GLOBAL_VARIABLES,
-                                             GraphKeys.TRAIN_METRICS],
-                                initializer=initializer)
-            xz = tf.multiply(x, z, name='xz')
-            y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
-                                     name='y_static')
-            if verbose:
-                log_tensor(y_static)
+    def _get_energy(self, outputs, features, verbose=True):
+        """
+        Return the Op to compute total energy (eV).
+        """
+        with tf.name_scope("Energy"):
 
-        with tf.name_scope("Output"):
-            with tf.name_scope("Energy"):
-                with tf.name_scope("Residual"):
-                    y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-                    with tf.name_scope("mask"):
-                        mask = tf.split(
-                            features.mask, [1, -1], axis=1, name='split')[1]
-                        y_mask = tf.multiply(y_atomic, mask, name='mask')
-                    y_res = tf.reduce_sum(y_mask, axis=1, keepdims=False,
-                                          name='y')
-                with tf.name_scope("Static"):
-                    y_static = tf.identity(y_static, 'y')
-                y = tf.add(y_static, y_res, name='y')
-                with tf.name_scope("Ratio"):
-                    ratio = tf.reduce_mean(tf.div(y_static, y, name='ratio'),
-                                           name='avg')
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
-                    tf.summary.scalar(ratio.op.name + '/summary', ratio,
-                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
-            if self._forces:
-                with tf.name_scope("Forces"):
-                    f = tf.gradients(y, features.positions, name='f')[0]
-                return AttributeDict(y=y, f=f)
-            else:
-                return AttributeDict(y=y)
+            with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
+                if self._atomic_static_energy is None:
+                    values = np.ones(len(self._elements), dtype=np.float64)
+                else:
+                    values = np.asarray(
+                        [self._atomic_static_energy[e] for e in self._elements],
+                        dtype=np.float64)
+                initializer = tf.constant_initializer(values, dtype=tf.float64)
+                x = tf.identity(features.composition, name='input')
+                z = tf.get_variable("weights",
+                                    shape=(len(self._elements)),
+                                    dtype=tf.float64,
+                                    trainable=True,
+                                    collections=[
+                                        GraphKeys.Y_STATIC_VARIABLES,
+                                        tf.GraphKeys.TRAINABLE_VARIABLES,
+                                        tf.GraphKeys.GLOBAL_VARIABLES,
+                                        GraphKeys.TRAIN_METRICS],
+                                    initializer=initializer)
+                xz = tf.multiply(x, z, name='xz')
+                y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
+                                         name='y_static')
+                if verbose:
+                    log_tensor(y_static)
+
+            with tf.name_scope("Residual"):
+                y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+                with tf.name_scope("mask"):
+                    mask = tf.split(
+                        features.mask, [1, -1], axis=1, name='split')[1]
+                    y_mask = tf.multiply(y_atomic, mask, name='mask')
+                y_res = tf.reduce_sum(y_mask, axis=1, keepdims=False,
+                                      name='residual')
+
+            energy = tf.add(y_static, y_res, name='energy')
+
+            with tf.name_scope("Ratio"):
+                ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
+                                       name='avg')
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
+                tf.summary.scalar(ratio.op.name + '/summary', ratio,
+                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
+
+            return energy
