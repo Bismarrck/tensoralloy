@@ -9,10 +9,12 @@ import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
-from misc import Defaults, AttributeDict, safe_select
-from hooks import ExamplesPerSecondHook, LoggingTensorHook
 from typing import List, Dict
 from os.path import join
+
+from utils import sum_of_grads_and_vars_collections
+from misc import Defaults, AttributeDict, safe_select
+from hooks import ExamplesPerSecondHook, LoggingTensorHook
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -482,10 +484,13 @@ class AtomicNN:
         -------
         loss : tf.Tensor
             A `float64` tensor as the total loss.
+        losses : AttributeDict
+            A dict. The loss tensor for energy, forces and stress.
 
         """
         with tf.name_scope("Loss"):
-            losses = []
+            collections = []
+            losses = AttributeDict()
 
             with tf.name_scope("Energy"):
                 mse = tf.reduce_mean(
@@ -495,7 +500,8 @@ class AtomicNN:
                 y_mae = tf.reduce_mean(
                     tf.abs(labels.energy - predictions.energy, name='abs'),
                     name='y_mae')
-                losses.append(y_loss)
+                collections.append(y_loss)
+                losses.energy = y_loss
 
                 tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -518,7 +524,8 @@ class AtomicNN:
                     f_mae = tf.reduce_mean(
                         tf.abs(labels.forces - predictions.forces, name='abs'),
                         name='f_mae')
-                    losses.append(f_loss)
+                    collections.append(f_loss)
+                    losses.forces = f_loss
 
                     tf.summary.scalar(f_loss.op.name + '/summary', f_loss,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -541,7 +548,8 @@ class AtomicNN:
                     t_mae = tf.reduce_mean(
                         tf.abs(labels.stress - predictions.stress, name='abs'),
                         name='t_mae')
-                    losses.append(t_loss)
+                    collections.append(t_loss)
+                    losses.stress = t_loss
 
                     tf.summary.scalar(t_loss.op.name + '/summary', t_loss,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -549,12 +557,12 @@ class AtomicNN:
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, t_loss)
 
             if self._l2_weight > 0.0:
-                losses.append(self.add_l2_penalty())
+                collections.append(self.add_l2_penalty())
 
-        return tf.add_n(losses, name='loss')
+        return tf.add_n(collections, name='loss'), losses
 
     @staticmethod
-    def add_grads_summary(grads_and_vars):
+    def add_grads_and_vars_summary(grads_and_vars, name):
         """
         Add summary of the gradients.
         """
@@ -563,15 +571,16 @@ class AtomicNN:
             if grad is not None:
                 norm = tf.norm(grad, name=var.op.name + "/norm")
                 list_of_ops.append(norm)
-                with tf.name_scope("gradients/"):
+                with tf.name_scope("gradients/{}/".format(name)):
                     tf.summary.scalar(var.op.name + "/norm", norm,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
-        with tf.name_scope("gradients/"):
+        with tf.name_scope("gradients/{}/".format(name)):
             total_norm = tf.add_n(list_of_ops, name='sum')
             tf.summary.scalar('total', total_norm,
                               collections=[GraphKeys.TRAIN_SUMMARY, ])
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
 
-    def get_train_op(self, total_loss, hparams: AttributeDict):
+    def get_train_op(self, losses: AttributeDict, hparams: AttributeDict):
         """
         Return the Op for a training step.
         """
@@ -585,12 +594,33 @@ class AtomicNN:
                 decay_steps=hparams.opt.decay_steps,
                 staircase=hparams.opt.staircase
             )
-            optimizer = get_optimizer(learning_rate, hparams.opt.method)
-            grads_and_vars = optimizer.compute_gradients(total_loss)
-            apply_gradients_op = optimizer.apply_gradients(
-                grads_and_vars, global_step)
 
-            self.add_grads_summary(grads_and_vars)
+            with tf.control_dependencies(
+                    tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+                optimizer = get_optimizer(learning_rate, hparams.opt.method)
+
+            collections = []
+
+            with tf.name_scope("Energy"):
+                grads_and_vars = optimizer.compute_gradients(losses.energy)
+                self.add_grads_and_vars_summary(grads_and_vars, 'energy')
+                collections.append(grads_and_vars)
+
+            if self._forces:
+                with tf.name_scope("Forces"):
+                    grads_and_vars = optimizer.compute_gradients(losses.forces)
+                    self.add_grads_and_vars_summary(grads_and_vars, 'forces')
+                    collections.append(grads_and_vars)
+
+            if self._stress:
+                with tf.name_scope("Stress"):
+                    grads_and_vars = optimizer.compute_gradients(losses.stress)
+                    self.add_grads_and_vars_summary(grads_and_vars, 'stress')
+                    collections.append(grads_and_vars)
+
+            grads_and_vars = sum_of_grads_and_vars_collections(collections)
+            apply_gradients_op = optimizer.apply_gradients(
+                grads_and_vars, global_step=global_step)
 
         with tf.name_scope("Average"):
             variable_averages = tf.train.ExponentialMovingAverage(
@@ -787,8 +817,8 @@ class AtomicNN:
             return tf.estimator.EstimatorSpec(mode=mode,
                                               predictions=predictions)
 
-        total_loss = self.get_total_loss(predictions, labels)
-        train_op = self.get_train_op(total_loss, hparams=params)
+        total_loss, losses = self.get_total_loss(predictions, labels)
+        train_op = self.get_train_op(losses=losses, hparams=params)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
             training_hooks = self.get_training_hooks(hparams=params)
