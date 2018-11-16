@@ -384,8 +384,10 @@ class AtomicNN:
         """
         with tf.name_scope("Stress"):
             dEdC = tf.gradients(energy, cells, name='dEdC')[0]
-            stress = tf.negative(tf.einsum('ijk,ikl->ijl', dEdC, cells),
-                                 name='stress')
+            stress = tf.multiply(
+                tf.constant(-0.5, dtype=tf.float64),
+                tf.einsum('ijk,ikl->ijl', dEdC, cells),
+                name='stress')
             if verbose:
                 log_tensor(stress)
             return stress
@@ -686,9 +688,6 @@ class AtomicNN:
         """
         with tf.name_scope("Metrics"):
 
-            def _per_atom_metric_fn(metric: tf.Tensor):
-                return tf.div(metric, n_atoms, metric.op.name + '_atom')
-
             metrics = {
                 'y_rmse': tf.metrics.root_mean_squared_error(
                     labels.energy, predictions.energy, name='y_rmse'),
@@ -696,6 +695,12 @@ class AtomicNN:
                     labels.energy, predictions.energy, name='y_mae')}
 
             if n_atoms is not None:
+
+                n_atoms = tf.cast(n_atoms, tf.float64, name='cast')
+
+                def _per_atom_metric_fn(metric: tf.Tensor):
+                    return tf.div(metric, n_atoms, metric.op.name + '_atom')
+
                 metrics.update({
                     'y_rmse_atom': tf.metrics.root_mean_squared_error(
                         labels=_per_atom_metric_fn(labels.energy),
