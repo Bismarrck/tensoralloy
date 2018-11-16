@@ -22,7 +22,7 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
 
     def _log_tensors(self, tensor_values):
         original = np.get_printoptions()
-        np.set_printoptions(precision=8, sign=' ', suppress=True, linewidth=75,
+        np.set_printoptions(precision=6, suppress=True, linewidth=75,
                             floatmode='fixed')
         elapsed_secs, _ = self._timer.update_last_triggered_step(
             self._iter_count)
@@ -30,13 +30,22 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
             logging.info(self._formatter(tensor_values))
         else:
             stats = []
+            line = []
+            length = 0
             for tag in self._tag_order:
                 out = "%s = %s" % (tag, np.array2string(tensor_values[tag]))
-                stats.append(out)
+                length += len(out)
+                if length > 120:
+                    stats.append(', '.join(line))
+                    length = 0
+                    line = []
+                line.append(out)
+            stats.append(', '.join(line))
+            contents = "\n".join(stats)
             if elapsed_secs is not None:
-                logging.info("%s (%.3f sec)", ", ".join(stats), elapsed_secs)
+                logging.info('({:.3f} sec)\n'.format(elapsed_secs) + contents)
             else:
-                logging.info("%s", ", ".join(stats))
+                logging.info('\n' + contents)
         np.set_printoptions(**original)
 
 
