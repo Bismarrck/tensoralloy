@@ -209,7 +209,7 @@ class AtomicNN:
 
     def __init__(self, elements: List[str], hidden_sizes=None,
                  activation=None, l2_weight=0.0, forces=False, stress=False,
-                 normalizer='linear', normalization_weights=None):
+                 normalizer=None, normalization_weights=None):
         """
         Initialization method.
 
@@ -302,8 +302,9 @@ class AtomicNN:
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
                     x = tf.identity(features.descriptors[element], name='input')
-                    x = self._normalizer(
-                        x, self._initial_normalizer_weights[element])
+                    if self._initial_normalizer_weights is not None:
+                        x = self._normalizer(
+                            x, self._initial_normalizer_weights[element])
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
@@ -383,7 +384,7 @@ class AtomicNN:
         Return the Op to compute reduced stress tensor (eV).
         """
         with tf.name_scope("Stress"):
-            dEdC = tf.gradients(energy, cells, name='dEdC')[0]
+            dEdC = tf.identity(tf.gradients(energy, cells)[0], 'dEdC')
             stress = tf.multiply(
                 tf.constant(-0.5, dtype=tf.float64),
                 tf.einsum('ijk,ikl->ijl', dEdC, cells),
