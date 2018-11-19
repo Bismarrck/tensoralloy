@@ -141,7 +141,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
 
             # Make sure the property `cell` is a non-zero matrix or set it based
             # the size of the `Atoms`.
-            if atoms.cell.sum() < 1e-8:
+            if np.abs(atoms.cell).sum() < 1e-8:
                 length = 20.0 + (divmod(len(atoms), 50)[0] * 5.0)
                 cell = np.eye(3) * length
                 # To pass `calc.check_state` both must be set because 'cell' is
@@ -163,11 +163,10 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             if stress is None:
                 stress = bool('stress' in atoms.calc.results)
             if stress:
-                # Convert the unit of stress tensors to 'eV':
+                # Convert the unit of stress tensors to 'GPa':
                 # 1 eV/Angstrom**3 = 160.21766208 GPa
                 # 1 GPa = 10 kbar
-                # stress_eV = stress * volume_of_cell
-                atoms.calc.results['stress'] *= (to_GPa * atoms.get_volume())
+                atoms.calc.results['stress'] *= to_GPa
 
             # `periodic` will be set to True if any of the `Atoms` is periodic.
             periodic = any(atoms.pbc) or periodic
