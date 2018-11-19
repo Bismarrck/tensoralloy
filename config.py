@@ -132,8 +132,10 @@ class ConfigParser(configparser.ConfigParser):
 
         l2_weight = self[section].getfloat('l2_weight', 0.0)
         activation = self[section].get('activation', 'leaky_relu')
-        forces = self._dataset.forces
-        stress = self._dataset.stress
+        forces = \
+            self._dataset.forces and self[section].getboolean('forces', True)
+        stress = \
+            self._dataset.stress and self[section].getboolean('forces', False)
 
         transformer = self._dataset.transformer
         elements = transformer.elements
