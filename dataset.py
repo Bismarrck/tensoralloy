@@ -98,7 +98,7 @@ class Dataset:
     def stress(self) -> bool:
         """
         Return True if the stress tensors are provided. The unit of the stress
-        tensors is 'eV'.
+        tensors is 'eV/Angstrom'.
         """
         return self._stress
 

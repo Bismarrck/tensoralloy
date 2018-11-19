@@ -560,7 +560,19 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             feature_list['f_true'] = _bytes_feature(f_true.tostring())
 
         if self._stress:
-            values = atoms.get_stress(voigt=False)
+            # Convert the unit of the stress tensor to 'eV / Angstrom' for
+            # simplification:
+            # 1 eV/Angstrom**3 = 160.21766208 GPa
+            # 1 GPa = 10 kbar
+            # stress_eV = stress * volume_of_cell
+            volume = atoms.get_volume()
+            icell = np.linalg.inv(atoms.cell)
+            values = atoms.get_stress(False) * volume @ icell
+            # The stress tensors are stored in the traditional Voigt order:
+            # xx, yy, zz, yz, xz, xy
+            ilist = [0, 1, 2, 1, 0, 0]
+            jlist = [0, 1, 2, 2, 2, 1]
+            values = -2.0 * values[ilist, jlist]
             feature_list['stress'] = _bytes_feature(values.tostring())
 
         feature_list.update(self._encode_g2_indexed_slices(g2))
@@ -612,8 +624,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         if self._stress:
             stress = tf.decode_raw(example['stress'], tf.float64)
-            stress.set_shape([9])
-            decoded.stress = tf.reshape(stress, (3, 3), name='stress')
+            stress.set_shape([6])
+            decoded.stress = tf.reshape(stress, (6, ), name='stress')
 
         return decoded
 
@@ -744,6 +756,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
             * 'mask': float64, [batch_size, max_n_atoms]
+            * 'stress': float64, [batch_size, 6]
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
             * 'shift': float64, [batch_size, nij_max, 3]
