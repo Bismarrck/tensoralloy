@@ -355,10 +355,12 @@ class AtomicNN:
         """
         with tf.name_scope("Energy"):
             y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+            shape = y_atomic.shape
             with tf.name_scope("mask"):
                 mask = tf.split(
                     features.mask, [1, -1], axis=1, name='split')[1]
                 y_mask = tf.multiply(y_atomic, mask, name='mask')
+                y_mask.set_shape(shape)
             energy = tf.reduce_sum(
                 y_mask, axis=1, keepdims=False, name='energy')
             if verbose:
@@ -383,14 +385,31 @@ class AtomicNN:
     @staticmethod
     def _get_stress(energy, cells, verbose=True):
         """
-        Return the Op to compute reduced stress tensor (eV).
+        Return the Op to compute reduced stress tensor (eV/Angstrom).
+
+            dy/dC = -2.0 * volume * C^-1 * stress
+
+        where `volume` is the volume of the cell, C is the cell matrix and
+        stress is the raw stress tensor whose unit should be 'eV/Angstrom**3'.
+
         """
         with tf.name_scope("Stress"):
             dEdC = tf.identity(tf.gradients(energy, cells)[0], 'dEdC')
-            stress = tf.multiply(
-                tf.constant(-0.5, dtype=tf.float64),
-                tf.einsum('ijk,ikl->ijl', dEdC, cells),
-                name='stress')
+            with tf.name_scope("Voigt"):
+                voigt = tf.convert_to_tensor(
+                    [[0, 0], [1, 1], [2, 2], [2, 1], [0, 2], [0, 1]],
+                    dtype=tf.int32, name='voigt')
+                if len(cells.shape) == 3:
+                    batch_size = cells.shape[0].value or energy.shape[0].value
+                    if batch_size is None:
+                        raise ValueError("The batch size cannot be inferred.")
+                    voigt = tf.tile(
+                        tf.reshape(voigt, [1, 6, 2]), (batch_size, 1, 1))
+                    indices = tf.tile(tf.reshape(
+                        tf.range(batch_size), [batch_size, 1, 1]),
+                        [1, 6, 1])
+                    voigt = tf.concat((indices, voigt), axis=2)
+            stress = tf.gather_nd(dEdC, voigt, name='stress')
             if verbose:
                 log_tensor(stress)
             return stress
@@ -470,14 +489,14 @@ class AtomicNN:
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                * 'stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
         labels : AttributeDict
             A dict of label tensors as the desired regression targets.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                * 'stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
 
         Returns
@@ -709,7 +728,7 @@ class AtomicNN:
             * 'energy' of shape `[batch_size, ]` is required.
             * 'forces' of shape `[batch_size, N, 3]` is required if
               `self.forces == True`.
-            * 'stress' of shape `[batch_size, 3, 3]` is required if
+            * 'stress' of shape `[batch_size, 6]` is required if
               `self.stress == True`.
 
         `n_atoms` is an optional `int32` tensor with shape `[batch_size, ]`,
@@ -792,7 +811,7 @@ class AtomicNN:
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 3, 3]` is required if
+                * 'stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or

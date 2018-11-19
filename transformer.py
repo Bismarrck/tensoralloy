@@ -623,9 +623,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 f_true, (self._max_n_atoms - 1, 3), name='f_true')
 
         if self._stress:
-            stress = tf.decode_raw(example['stress'], tf.float64)
+            stress = tf.decode_raw(example['stress'], tf.float64, name='stress')
             stress.set_shape([6])
-            decoded.stress = tf.reshape(stress, (6, ), name='stress')
+            decoded.stress = stress
 
         return decoded
 
