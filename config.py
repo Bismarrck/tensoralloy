@@ -119,7 +119,8 @@ class ConfigParser(configparser.ConfigParser):
 
         section = 'tfrecords'
         test_size = self[section].getint('test_size', 1000)
-        tfrecords_dir = self[section].get('tfrecords_dir', '.')
+        tfrecords_dir = safe_select(
+            self[section].get('tfrecords_dir', '.'), '.')
         if not dataset.load_tfrecords(tfrecords_dir):
             dataset.to_records(tfrecords_dir, test_size=test_size, verbose=True)
         return dataset
@@ -131,7 +132,8 @@ class ConfigParser(configparser.ConfigParser):
         section = 'nn'
 
         l2_weight = self[section].getfloat('l2_weight', 0.0)
-        activation = self[section].get('activation', 'leaky_relu')
+        activation = safe_select(
+            self[section].get('activation', 'leaky_relu'), 'leaky_relu')
         forces = \
             self._dataset.forces and self[section].getboolean('forces', True)
         stress = \
@@ -144,10 +146,11 @@ class ConfigParser(configparser.ConfigParser):
             hidden_sizes[element] = self[section].getints(
                 element, Defaults.hidden_sizes)
 
-        normalizer = self[section].get('input_normalizer', None)
+        normalizer = safe_select(
+            self[section].get('input_normalizer', None), None)
         normalizer_weights = transformer.get_descriptor_normalization_weights(
             method=normalizer)
-        arch = self[section].get('arch', 'AtomicNN')
+        arch = safe_select(self[section].get('arch', 'AtomicNN'), 'AtomicNN')
 
         if arch == 'AtomicNN':
             nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
@@ -173,7 +176,7 @@ class ConfigParser(configparser.ConfigParser):
         """
         section = 'opt'
 
-        method = self[section].get('optimizer', 'adam')
+        method = safe_select(self[section].get('optimizer', 'adam'), 'adam')
         learning_rate = self[section].getfloat(
             'learning_rate', Defaults.learning_rate)
 
@@ -222,7 +225,8 @@ class ConfigParser(configparser.ConfigParser):
                 rmtree(eval_dir)
                 removed.append(eval_dir)
 
-        previous_checkpoint = self[section].get('previous_checkpoint', None)
+        previous_checkpoint = safe_select(
+            self[section].get('previous_checkpoint', None), None)
         if restart and previous_checkpoint:
             if dirname(previous_checkpoint) in removed:
                 print("Warning: {} was already deleted!".format(
