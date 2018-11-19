@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import configparser
 from ase.db import connect
-from os.path import splitext, basename, join, exists
+from os.path import splitext, basename, join, exists, dirname
 from typing import Callable
 from shutil import rmtree
 
@@ -135,7 +135,7 @@ class ConfigParser(configparser.ConfigParser):
         forces = \
             self._dataset.forces and self[section].getboolean('forces', True)
         stress = \
-            self._dataset.stress and self[section].getboolean('forces', False)
+            self._dataset.stress and self[section].getboolean('stress', False)
 
         transformer = self._dataset.transformer
         elements = transformer.elements
@@ -213,13 +213,24 @@ class ConfigParser(configparser.ConfigParser):
         profile_steps = self[section].getint('profile_steps', 0)
 
         restart = self[section].getboolean('restart', True)
+        removed = []
         if not restart:
             if exists(model_dir):
                 rmtree(model_dir)
+                removed.append(model_dir)
             if exists(eval_dir):
                 rmtree(eval_dir)
+                removed.append(eval_dir)
+
+        previous_checkpoint = self[section].get('previous_checkpoint', None)
+        if restart and previous_checkpoint:
+            if dirname(previous_checkpoint) in removed:
+                print("Warning: {} was already deleted!".format(
+                    previous_checkpoint))
+            previous_checkpoint = None
 
         train = AttributeDict(model_dir=model_dir,
+                              previous_checkpoint=previous_checkpoint,
                               batch_size=batch_size,
                               train_steps=train_steps,
                               eval_steps=eval_steps,

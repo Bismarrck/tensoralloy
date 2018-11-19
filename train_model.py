@@ -35,6 +35,7 @@ def train_and_evaluate(config: ConfigParser):
 
         estimator = tf.estimator.Estimator(
             model_fn=nn.model_fn,
+            warm_start_from=hparams.train.previous_checkpoint,
             model_dir=hparams.train.model_dir,
             config=tf.estimator.RunConfig(
                 save_checkpoints_steps=hparams.train.eval_steps,
