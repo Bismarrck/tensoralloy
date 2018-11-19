@@ -37,6 +37,11 @@ class GraphKeys:
     TRAIN_METRICS = 'train_metrics'
     EVAL_METRICS = 'eval_metrics'
 
+    # Gradient Keys
+    ENERGY_GRADIENTS = 'energy_gradients'
+    FORCES_GRADIENTS = 'forces_gradients'
+    STRESS_GRADIENTS = 'stress_gradients'
+
 
 def get_activation_fn(fn_name: str):
     """
@@ -464,8 +469,8 @@ class AtomicNN:
         """
         with tf.name_scope("Penalty"):
             for var in tf.trainable_variables():
-                if 'bias' in var.op.name:
-                    continue
+                # if 'bias' in var.op.name:
+                #     continue
                 l2 = tf.nn.l2_loss(var, name=var.op.name + "/l2")
                 tf.add_to_collection('l2_losses', l2)
             l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
@@ -581,7 +586,7 @@ class AtomicNN:
         return tf.add_n(collections, name='loss'), losses
 
     @staticmethod
-    def add_grads_and_vars_summary(grads_and_vars, name):
+    def add_grads_and_vars_summary(grads_and_vars, name, collection):
         """
         Add summary of the gradients.
         """
@@ -590,6 +595,7 @@ class AtomicNN:
             if grad is not None:
                 norm = tf.norm(grad, name=var.op.name + "/norm")
                 list_of_ops.append(norm)
+                tf.add_to_collection(collection, grad)
                 with tf.name_scope("gradients/{}/".format(name)):
                     tf.summary.scalar(var.op.name + "/norm", norm,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -598,6 +604,25 @@ class AtomicNN:
             tf.summary.scalar('total', total_norm,
                               collections=[GraphKeys.TRAIN_SUMMARY, ])
             tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
+
+    @staticmethod
+    def _add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
+        """
+        Compute the cosine distance of dL(energy)/dvars and dL(target)/dvars
+        where `target` is `forces` or `stress`.
+        """
+        with tf.name_scope("CosDist"):
+            eps = tf.constant(1e-14, dtype=tf.float64)
+            for i, (grad, var) in enumerate(grads_and_vars):
+                if grad is None:
+                    continue
+                energy_grad = energy_grad_vars[i][0]
+                dot = tf.tensordot(
+                    tf.reshape(grad, (-1,)),
+                    tf.reshape(energy_grad, (-1,)), axes=1)
+                norm = tf.norm(grad) * tf.norm(energy_grad) + eps
+                cos_dist = tf.div(dot, norm, name=var.op.name + '/cos_dist')
+                tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
 
     def get_train_op(self, losses: AttributeDict, hparams: AttributeDict):
         """
@@ -622,19 +647,26 @@ class AtomicNN:
 
             with tf.name_scope("Energy"):
                 grads_and_vars = optimizer.compute_gradients(losses.energy)
-                self.add_grads_and_vars_summary(grads_and_vars, 'energy')
+                self.add_grads_and_vars_summary(
+                    grads_and_vars, 'energy', GraphKeys.ENERGY_GRADIENTS)
                 collections.append(grads_and_vars)
 
             if self._forces:
                 with tf.name_scope("Forces"):
                     grads_and_vars = optimizer.compute_gradients(losses.forces)
-                    self.add_grads_and_vars_summary(grads_and_vars, 'forces')
+                    self._add_gradients_cos_dist_summary(
+                        collections[0], grads_and_vars)
+                    self.add_grads_and_vars_summary(
+                        grads_and_vars, 'forces', GraphKeys.FORCES_GRADIENTS)
                     collections.append(grads_and_vars)
 
             if self._stress:
                 with tf.name_scope("Stress"):
                     grads_and_vars = optimizer.compute_gradients(losses.stress)
-                    self.add_grads_and_vars_summary(grads_and_vars, 'stress')
+                    self._add_gradients_cos_dist_summary(
+                        collections[0], grads_and_vars)
+                    self.add_grads_and_vars_summary(
+                        grads_and_vars, 'stress', GraphKeys.STRESS_GRADIENTS)
                     collections.append(grads_and_vars)
 
             grads_and_vars = sum_of_grads_and_vars_collections(collections)
