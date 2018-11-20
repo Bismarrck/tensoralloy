@@ -70,7 +70,7 @@ def test_qm7m():
             res = sess.run(next_batch)
             eps = 1e-8
 
-            assert_equal(len(res.keys()), 11)
+            assert_equal(len(res.keys()), 12)
             assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
             assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
             assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
@@ -149,7 +149,7 @@ def test_nickel():
                 [xz, yz, zz]
             ]) @ np.linalg.inv(result.cells[0])
             stress = stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
-            assert_less(np.abs(result.stress[0] - stress).max(), eps)
+            assert_less(np.abs(result.reduced_stress[0] - stress).max(), eps)
 
 
 if __name__ == "__main__":

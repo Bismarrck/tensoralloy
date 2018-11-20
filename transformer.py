@@ -60,6 +60,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         with tf.name_scope("Placeholders"):
 
+            def _double(name):
+                return tf.placeholder(tf.float64, (), name)
+
             def _double_1d(name):
                 return tf.placeholder(tf.float64, (None, ), name)
 
@@ -78,6 +81,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             self._placeholders.positions = _double_2d(3, 'positions')
             self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
             self._placeholders.n_atoms = _int('n_atoms')
+            self._placeholders.volume = _double('volume')
             self._placeholders.mask = _double_1d('mask')
             self._placeholders.composition = _double_1d('composition')
             self._placeholders.row_splits = _int_1d(
@@ -242,6 +246,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         positions = index_transformer.gather(atoms.positions)
         n_atoms = index_transformer.n_atoms
         cells = atoms.get_cell(complete=True)
+        volume = atoms.get_volume()
         mask = index_transformer.mask
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
@@ -250,6 +255,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict[placeholders.n_atoms] = n_atoms
         feed_dict[placeholders.mask] = mask
         feed_dict[placeholders.cells] = cells
+        feed_dict[placeholders.volume] = volume
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits
         feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
@@ -543,6 +549,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         clf = self.get_index_transformer(atoms)
         positions = clf.gather(atoms.positions)
         cells = atoms.get_cell(complete=True)
+        volume = atoms.get_volume()
         y_true = atoms.get_total_energy()
         composition = self._get_composition(atoms)
         mask = clf.mask.astype(np.float64)
@@ -551,6 +558,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             'positions': _bytes_feature(positions.tostring()),
             'cells': _bytes_feature(cells.tostring()),
             'n_atoms': _int64_feature(len(atoms)),
+            'volume': _bytes_feature(np.atleast_1d(volume).tostring()),
             'y_true': _bytes_feature(np.atleast_1d(y_true).tostring()),
             'mask': _bytes_feature(mask.tostring()),
             'composition': _bytes_feature(composition.tostring()),
@@ -565,7 +573,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar
             # stress_eV = stress * volume_of_cell
-            volume = atoms.get_volume()
             icell = np.linalg.inv(atoms.cell)
             values = atoms.get_stress(False) * volume @ icell
             # The stress tensors are stored in the traditional Voigt order:
@@ -573,7 +580,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             ilist = [0, 1, 2, 1, 0, 0]
             jlist = [0, 1, 2, 2, 2, 1]
             values = -2.0 * values[ilist, jlist]
-            feature_list['stress'] = _bytes_feature(values.tostring())
+            feature_list['reduced_stress'] = _bytes_feature(values.tostring())
 
         feature_list.update(self._encode_g2_indexed_slices(g2))
 
@@ -607,6 +614,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         cells.set_shape([9])
         decoded.cells = tf.reshape(cells, (3, 3), name='cells')
 
+        volume = tf.decode_raw(example['volume'], tf.float64)
+        volume.set_shape([1])
+        decoded.volume = tf.squeeze(volume, name='volume')
+
         mask = tf.decode_raw(example['mask'], tf.float64)
         mask.set_shape([self._max_n_atoms, ])
         decoded.mask = mask
@@ -623,9 +634,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 f_true, (self._max_n_atoms - 1, 3), name='f_true')
 
         if self._stress:
-            stress = tf.decode_raw(example['stress'], tf.float64, name='stress')
-            stress.set_shape([6])
-            decoded.stress = stress
+            reduced_stress = tf.decode_raw(
+                example['reduced_stress'], tf.float64, name='stress')
+            reduced_stress.set_shape([6])
+            decoded.reduced_stress = reduced_stress
 
         return decoded
 
@@ -712,6 +724,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'positions': tf.FixedLenFeature([], tf.string),
                 'n_atoms': tf.FixedLenFeature([], tf.int64),
                 'cells': tf.FixedLenFeature([], tf.string),
+                'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
@@ -722,7 +735,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
 
             if self._stress:
-                feature_list['stress'] = tf.FixedLenFeature([], tf.string)
+                feature_list['reduced_stress'] = \
+                    tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:
                 feature_list.update({
@@ -751,12 +765,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             * 'positions': float64, [batch_size, max_n_atoms, 3]
             * 'cells': float64, [batch_size, 3, 3]
+            * 'volume': float64, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64, [batch_size, ]
             * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
             * 'mask': float64, [batch_size, max_n_atoms]
-            * 'stress': float64, [batch_size, 6]
+            * 'reduced_stress': float64, [batch_size, 6]
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
             * 'shift': float64, [batch_size, nij_max, 3]
@@ -791,6 +806,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         )
         inputs.positions = batch.positions
         inputs.cells = batch.cells
+        inputs.volume = batch.volume
 
         if self._k_max == 3:
             inputs.g4 = AttributeDict(

@@ -381,12 +381,13 @@ class Dataset:
                                      n_atoms=batch.n_atoms,
                                      cells=batch.cells,
                                      composition=batch.composition,
-                                     mask=batch.mask)
+                                     mask=batch.mask,
+                                     volume=batch.volume)
             labels = AttributeDict(energy=batch.y_true)
             if self._forces:
                 labels['forces'] = batch.f_true
             if self._stress:
-                labels['stress'] = batch.stress
+                labels['reduced_stress'] = batch.reduced_stress
             return features, labels
 
         return _input_fn

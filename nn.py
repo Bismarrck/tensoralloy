@@ -451,7 +451,7 @@ class AtomicNN:
                     predictions.energy, features.positions, verbose=verbose)
 
             if self._stress:
-                predictions.stress = self._get_stress(
+                predictions.reduced_stress = self._get_stress(
                     predictions.energy, features.cells, verbose=verbose)
 
             return predictions
@@ -494,14 +494,14 @@ class AtomicNN:
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 6]` is required if
+                * 'reduced_stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
         labels : AttributeDict
             A dict of label tensors as the desired regression targets.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 6]` is required if
+                * 'reduced_stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
 
         Returns
@@ -560,7 +560,7 @@ class AtomicNN:
                 with tf.name_scope("Stress"):
                     mse = tf.reduce_mean(
                         tf.squared_difference(
-                            labels.stress, predictions.stress),
+                            labels.reduced_stress, predictions.reduced_stress),
                         name='mse')
                     # Add a very small 'eps' to the mean squared error to make
                     # sure `mse` is always greater than zero. Otherwise NaN may
@@ -568,17 +568,17 @@ class AtomicNN:
                     with tf.name_scope("safe_sqrt"):
                         eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
                         mse = tf.add(mse, eps)
-                    t_loss = tf.sqrt(mse, name='t_rmse')
-                    t_mae = tf.reduce_mean(
-                        tf.abs(labels.stress - predictions.stress, name='abs'),
-                        name='t_mae')
-                    collections.append(t_loss)
-                    losses.stress = t_loss
+                    s_loss = tf.sqrt(mse, name='s_rmse')
+                    s_diff = labels.reduced_stress - predictions.reduced_stress
+                    s_mae = tf.reduce_mean(tf.abs(s_diff, name='abs'),
+                                           name='s_mae')
+                    collections.append(s_loss)
+                    losses.stress = s_loss
 
-                    tf.summary.scalar(t_loss.op.name + '/summary', t_loss,
+                    tf.summary.scalar(s_loss.op.name + '/summary', s_loss,
                                       collections=[GraphKeys.TRAIN_SUMMARY, ])
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, t_mae)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, t_loss)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, s_mae)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, s_loss)
 
             if self._l2_weight > 0.0:
                 collections.append(self.add_l2_penalty())
@@ -760,7 +760,7 @@ class AtomicNN:
             * 'energy' of shape `[batch_size, ]` is required.
             * 'forces' of shape `[batch_size, N, 3]` is required if
               `self.forces == True`.
-            * 'stress' of shape `[batch_size, 6]` is required if
+            * 'reduced_stress' of shape `[batch_size, 6]` is required if
               `self.stress == True`.
 
         `n_atoms` is an optional `int32` tensor with shape `[batch_size, ]`,
@@ -802,10 +802,12 @@ class AtomicNN:
 
             if self._stress:
                 metrics.update({
-                    't_rmse': tf.metrics.root_mean_squared_error(
-                        labels.stress, predictions.stress, name='t_rmse'),
-                    't_mae': tf.metrics.mean_absolute_error(
-                        labels.stress, predictions.stress, name='t_mae')})
+                    's_rmse': tf.metrics.root_mean_squared_error(
+                        labels.reduced_stress, predictions.reduced_stress,
+                        name='s_rmse'),
+                    's_mae': tf.metrics.mean_absolute_error(
+                        labels.reduced_stress, predictions.reduced_stress,
+                        name='s_mae')})
 
             return metrics
 
@@ -818,11 +820,13 @@ class AtomicNN:
         assert 'cells' in features
         assert 'mask' in features
         assert 'n_atoms' in features
+        assert 'volume' in features
+
         assert 'energy' in labels
         if self._forces:
             assert 'forces' in labels
         if self._stress:
-            assert 'stress' in labels
+            assert 'reduced_stress' in labels
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
                  mode: tf.estimator.ModeKeys, params: AttributeDict):
@@ -837,13 +841,14 @@ class AtomicNN:
                 * 'positions' of `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.
         labels : AttributeDict
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
-                * 'stress' of shape `[batch_size, 6]` is required if
+                * 'reduced_stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
