@@ -49,7 +49,7 @@ def train_and_evaluate(config: ConfigParser):
             input_fn=dataset.input_fn(
                 mode=tf.estimator.ModeKeys.TRAIN,
                 batch_size=hparams.train.batch_size,
-                shuffle=True),
+                shuffle=hparams.train.shuffle),
             max_steps=hparams.train.train_steps)
 
         eval_spec = tf.estimator.EvalSpec(

@@ -197,6 +197,7 @@ class ConfigParser(configparser.ConfigParser):
         section = 'train'
         model_dir = self[section].get('model_dir')
         batch_size = self[section].getint('batch_size', 50)
+        shuffle = safe_select(self[section].getboolean('shuffle', True), True)
 
         if self._dataset.test_size % batch_size != 0:
             eval_batch_size = next(x for x in range(batch_size, 0, -1)
@@ -235,6 +236,7 @@ class ConfigParser(configparser.ConfigParser):
 
         train = AttributeDict(model_dir=model_dir,
                               previous_checkpoint=previous_checkpoint,
+                              shuffle=shuffle,
                               batch_size=batch_size,
                               train_steps=train_steps,
                               eval_steps=eval_steps,
