@@ -643,10 +643,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             reduced_stress.set_shape([6])
             decoded.reduced_stress = reduced_stress
 
-            total_pressure = tf.decode_raw(
+            reduced_total_pressure = tf.decode_raw(
                 example['total_pressure'], tf.float64, name='stress')
-            total_pressure.set_shape([1])
-            decoded.total_pressure = total_pressure
+            reduced_total_pressure.set_shape([1])
+            decoded.reduced_total_pressure = reduced_total_pressure
 
         return decoded
 
