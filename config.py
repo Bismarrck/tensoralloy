@@ -134,10 +134,16 @@ class ConfigParser(configparser.ConfigParser):
         l2_weight = self[section].getfloat('l2_weight', 0.0)
         activation = safe_select(
             self[section].get('activation', 'leaky_relu'), 'leaky_relu')
-        forces = \
-            self._dataset.forces and self[section].getboolean('forces', True)
-        stress = \
-            self._dataset.stress and self[section].getboolean('stress', False)
+
+        forces = safe_select(self[section].getboolean('forces', True), True)
+        forces = self._dataset.forces and forces
+
+        stress = safe_select(self[section].getboolean('stress', False), False)
+        stress = self._dataset.stress and stress
+
+        total_pressure = safe_select(
+            self[section].getboolean('total_pressure', False), False)
+        total_pressure = self._dataset.stress and total_pressure
 
         transformer = self._dataset.transformer
         elements = transformer.elements
@@ -155,13 +161,15 @@ class ConfigParser(configparser.ConfigParser):
         if arch == 'AtomicNN':
             nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
                           activation=activation, l2_weight=l2_weight,
-                          forces=forces, stress=stress, normalizer=normalizer,
+                          forces=forces, stress=stress,
+                          total_pressure=total_pressure, normalizer=normalizer,
                           normalization_weights=normalizer_weights)
         elif arch == 'AtomicResNN':
             atomic_static_energy = self._dataset.atomic_static_energy
             nn = AtomicResNN(elements=elements, hidden_sizes=hidden_sizes,
                              activation=activation, l2_weight=l2_weight,
                              forces=forces, stress=stress,
+                             total_pressure=total_pressure,
                              normalizer=normalizer,
                              normalization_weights=normalizer_weights,
                              atomic_static_energy=atomic_static_energy)
