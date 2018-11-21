@@ -794,57 +794,44 @@ class AtomicNN:
         metrics will be evaluated.
 
         """
+
+        def _per_atom_metric_fn(metric: tf.Tensor):
+            return tf.div(x=metric,
+                          y=tf.cast(n_atoms, tf.float64, name='cast'),
+                          name=metric.op.name + '_atom')
+
+        def _get_metric(source, tag, cast_to_per_atom=False):
+            x = getattr(labels, source)
+            y = getattr(predictions, source)
+            if cast_to_per_atom:
+                x = _per_atom_metric_fn(x)
+                y = _per_atom_metric_fn(y)
+                suffix = '_atom'
+            else:
+                suffix = ''
+            return {
+                f"{tag}_rmse{suffix}": tf.metrics.root_mean_squared_error(x, y),
+                f"{tag}_mae{suffix}": tf.metrics.mean_absolute_error(x, y)
+            }
+
         with tf.name_scope("Metrics"):
 
-            metrics = {
-                'y_rmse': tf.metrics.root_mean_squared_error(
-                    labels.energy, predictions.energy, name='y_rmse'),
-                'y_mae': tf.metrics.mean_absolute_error(
-                    labels.energy, predictions.energy, name='y_mae')}
-
+            metrics = _get_metric('energy', 'y', cast_to_per_atom=False)
             if n_atoms is not None:
-
-                n_atoms = tf.cast(n_atoms, tf.float64, name='cast')
-
-                def _per_atom_metric_fn(metric: tf.Tensor):
-                    return tf.div(metric, n_atoms, metric.op.name + '_atom')
-
-                metrics.update({
-                    'y_rmse_atom': tf.metrics.root_mean_squared_error(
-                        labels=_per_atom_metric_fn(labels.energy),
-                        predictions=_per_atom_metric_fn(predictions.energy),
-                        name='y_rmse_atom'),
-                    'y_mae_atom': tf.metrics.mean_absolute_error(
-                        labels=_per_atom_metric_fn(labels.energy),
-                        predictions=_per_atom_metric_fn(predictions.energy),
-                        name='y_rmse_atom')})
+                metrics.update(
+                    _get_metric('energy', 'y', cast_to_per_atom=True))
 
             if self._forces:
-                metrics.update({
-                    'f_rmse': tf.metrics.root_mean_squared_error(
-                        labels.forces, predictions.forces, name='f_rmse'),
-                    'f_mae': tf.metrics.mean_absolute_error(
-                        labels.forces, predictions.forces, name='f_mae')})
+                metrics.update(_get_metric(
+                    'forces', 'f', cast_to_per_atom=False))
 
             if self._total_pressure:
-                metrics.update({
-                    'p_rmse': tf.metrics.root_mean_squared_error(
-                        labels.reduced_total_pressure,
-                        predictions.reduced_total_pressure,
-                        name='p_rmse'),
-                    'p_mae': tf.metrics.mean_absolute_error(
-                        labels.reduced_total_pressure,
-                        predictions.reduced_total_pressure,
-                        name='p_mae')})
+                metrics.update(_get_metric(
+                    'reduced_total_pressure', 'p', cast_to_per_atom=False))
 
             elif self._stress:
-                metrics.update({
-                    's_rmse': tf.metrics.root_mean_squared_error(
-                        labels.reduced_stress, predictions.reduced_stress,
-                        name='s_rmse'),
-                    's_mae': tf.metrics.mean_absolute_error(
-                        labels.reduced_stress, predictions.reduced_stress,
-                        name='s_mae')})
+                metrics.update(_get_metric(
+                    'reduced_stress', 's', cast_to_per_atom=False))
 
             return metrics
 
