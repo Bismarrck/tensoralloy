@@ -583,7 +583,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             jlist = [0, 1, 2, 2, 2, 1]
             voigt = dEdh[ilist, jlist]
             feature_list['reduced_stress'] = _bytes_feature(voigt.tostring())
-            feature_list['total_pressure'] = _bytes_feature(
+            feature_list['reduced_total_pressure'] = _bytes_feature(
                 np.atleast_1d(total_pressure).tostring())
 
         feature_list.update(self._encode_g2_indexed_slices(g2))
@@ -644,7 +644,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             decoded.reduced_stress = reduced_stress
 
             reduced_total_pressure = tf.decode_raw(
-                example['total_pressure'], tf.float64, name='stress')
+                example['reduced_total_pressure'], tf.float64, name='stress')
             reduced_total_pressure.set_shape([1])
             decoded.reduced_total_pressure = reduced_total_pressure
 
@@ -746,7 +746,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             if self._stress:
                 feature_list['reduced_stress'] = \
                     tf.FixedLenFeature([], tf.string)
-                feature_list['total_pressure'] = \
+                feature_list['reduced_total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:

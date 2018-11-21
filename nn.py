@@ -214,8 +214,8 @@ class AtomicNN:
     This class represents a general atomic neural network.
     """
 
-    def __init__(self, elements: List[str], hidden_sizes=None,
-                 activation=None, l2_weight=0.0, forces=False, stress=False,
+    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
+                 forces=False, stress=False, total_pressure=False, l2_weight=0.,
                  normalizer=None, normalization_weights=None):
         """
         Initialization method.
@@ -232,7 +232,10 @@ class AtomicNN:
         forces : bool
             If True, atomic forces will be calculated and trained..
         stress : bool
-            If True, the stress tensor will be calculated and trained.
+            If True, the reduced stress tensor will be calculated and trained.
+        total_pressure : bool
+            If True, the reduced total pressure will be calculated and trained.
+            This option will suppress `stress`.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
         normalizer : str
@@ -249,6 +252,7 @@ class AtomicNN:
         self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
         self._stress = stress
+        self._total_pressure = total_pressure
         self._l2_weight = max(l2_weight, 0.0)
         self._initial_normalizer_weights = normalization_weights
         self._normalizer = _InputNormalizer(method=normalizer)
@@ -275,11 +279,19 @@ class AtomicNN:
         return self._forces
 
     @property
-    def stress(self):
+    def reduced_stress(self):
         """
-        Return True if the stress tensor will be calculated.
+        Return True if the reduced stress tensor, dE/dC, will be calculated.
         """
         return self._stress
+
+    @property
+    def reduced_total_pressure(self):
+        """
+        Return True if the reduced total pressure (eV), Trace(virial)/3.0, will
+        be calculated.
+        """
+        return self._total_pressure
 
     @property
     def l2_weight(self):
@@ -388,9 +400,9 @@ class AtomicNN:
             return forces
 
     @staticmethod
-    def _get_stress(energy, cells, verbose=True):
+    def _get_reduced_stress(energy, cells, verbose=True):
         """
-        Return the Op to compute reduced stress tensor (eV/Angstrom).
+        Return the Op to compute the reduced stress tensor `dy/dC`.
 
             dy/dC = -2.0 * volume * C^-1 * stress
 
@@ -418,6 +430,25 @@ class AtomicNN:
             if verbose:
                 log_tensor(stress)
             return stress
+
+    @staticmethod
+    def _get_reduced_total_pressure(energy, cells, verbose=True):
+        """
+        Return the Op to compute the total pressure.
+
+            total_pressure = -0.5 * trace(dy/dC @ cells) / 3.0
+
+        """
+        with tf.name_scope("Pressure"):
+            with tf.name_scope("Constants"):
+                half = tf.constant(0.5, dtype=tf.float64, name='half')
+                three = tf.constant(3.0, dtype=tf.float64, name='three')
+            dEdC = tf.identity(tf.gradients(energy, cells)[0], 'dEdC')
+            virial = tf.einsum('ijk,ikl->ijl', tf.multiply(-half, dEdC), cells)
+            total_pressure = tf.div(tf.trace(virial), three, 'pressure')
+            if verbose:
+                log_tensor(total_pressure)
+            return total_pressure
 
     def build(self, features: AttributeDict, verbose=True):
         """
@@ -450,8 +481,12 @@ class AtomicNN:
                 predictions.forces = self._get_forces(
                     predictions.energy, features.positions, verbose=verbose)
 
-            if self._stress:
-                predictions.reduced_stress = self._get_stress(
+            if self._total_pressure:
+                predictions.reduced_total_pressure = \
+                    self._get_reduced_total_pressure(
+                        predictions.energy, features.cells, verbose=verbose)
+            elif self._stress:
+                predictions.reduced_stress = self._get_reduced_stress(
                     predictions.energy, features.cells, verbose=verbose)
 
             return predictions
@@ -496,94 +531,72 @@ class AtomicNN:
                   `self.forces == True`.
                 * 'reduced_stress' of shape `[batch_size, 6]` is required if
                   `self.stress == True`.
+                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
+                  if `self.reduced_total_pressure == True`.
         labels : AttributeDict
             A dict of label tensors as the desired regression targets.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
                 * 'reduced_stress' of shape `[batch_size, 6]` is required if
-                  `self.stress == True`.
+                  `self.reduced_stress and not self.reduced_total_pressure`.
+                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
+                  if `self.reduced_total_pressure == True`.
 
         Returns
         -------
         loss : tf.Tensor
             A `float64` tensor as the total loss.
         losses : AttributeDict
-            A dict. The loss tensor for energy, forces and stress.
+            A dict. The loss tensor for energy, forces and reduced stress or
+            reduced total pressure.
 
         """
-        with tf.name_scope("Loss"):
-            collections = []
-            losses = AttributeDict()
 
-            with tf.name_scope("Energy"):
-                mse = tf.reduce_mean(
-                    tf.squared_difference(labels.energy, predictions.energy),
-                    name='mse')
-                y_loss = tf.sqrt(mse, name='y_rmse')
-                y_mae = tf.reduce_mean(
-                    tf.abs(labels.energy - predictions.energy, name='abs'),
-                    name='y_mae')
-                collections.append(y_loss)
-                losses.energy = y_loss
+        def _get_loss(source: str, tag: str, scope: str, add_eps=False):
+            """
+            Return the loss tensor for the `source`.
+            """
+            with tf.name_scope(scope):
+                x = getattr(labels, source)
+                y = getattr(predictions, source)
+                mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse')
+                if add_eps:
+                    # Add a very small 'eps' to the mean squared error to make
+                    # sure `mse` is always greater than zero. Otherwise NaN may
+                    # occur at `Sqrt_Grad`.
+                    with tf.name_scope("safe_sqrt"):
+                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+                        mse = tf.add(mse, eps)
+                loss = tf.sqrt(mse, name=f"{tag}_rmse")
+                mae = tf.reduce_mean(tf.abs(x - y), name=f"{tag}_mae")
 
-                tf.summary.scalar(y_loss.op.name + '/summary', y_loss,
+                tf.summary.scalar(loss.op.name + '/summary', loss,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_mae)
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, y_loss)
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
+
+                return loss
+
+        with tf.name_scope("Loss"):
+
+            losses = AttributeDict()
+            losses.energy = _get_loss('energy', 'y', 'Energy')
 
             if self._forces:
-                with tf.name_scope("Forces"):
-                    mse = tf.reduce_mean(
-                        tf.squared_difference(
-                            labels.forces, predictions.forces),
-                        name='mse')
-                    # Add a very small 'eps' to the mean squared error to make
-                    # sure `mse` is always greater than zero. Otherwise NaN may
-                    # occur at `Sqrt_Grad`.
-                    with tf.name_scope("safe_sqrt"):
-                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
-                        mse = tf.add(mse, eps)
-                    f_loss = tf.sqrt(mse, name='f_rmse')
-                    f_mae = tf.reduce_mean(
-                        tf.abs(labels.forces - predictions.forces, name='abs'),
-                        name='f_mae')
-                    collections.append(f_loss)
-                    losses.forces = f_loss
+                losses.forces = _get_loss('forces', 'f', 'Forces', add_eps=True)
 
-                    tf.summary.scalar(f_loss.op.name + '/summary', f_loss,
-                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_mae)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, f_loss)
-
-            if self._stress:
-                with tf.name_scope("Stress"):
-                    mse = tf.reduce_mean(
-                        tf.squared_difference(
-                            labels.reduced_stress, predictions.reduced_stress),
-                        name='mse')
-                    # Add a very small 'eps' to the mean squared error to make
-                    # sure `mse` is always greater than zero. Otherwise NaN may
-                    # occur at `Sqrt_Grad`.
-                    with tf.name_scope("safe_sqrt"):
-                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
-                        mse = tf.add(mse, eps)
-                    s_loss = tf.sqrt(mse, name='s_rmse')
-                    s_diff = labels.reduced_stress - predictions.reduced_stress
-                    s_mae = tf.reduce_mean(tf.abs(s_diff, name='abs'),
-                                           name='s_mae')
-                    collections.append(s_loss)
-                    losses.stress = s_loss
-
-                    tf.summary.scalar(s_loss.op.name + '/summary', s_loss,
-                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, s_mae)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, s_loss)
+            if self._total_pressure:
+                losses.reduced_total_pressure = _get_loss(
+                    'reduced_total_pressure', 'p', 'Pressure', add_eps=True)
+            elif self._stress:
+                losses.reduced_stress = _get_loss(
+                    'reduced_stress', 's', 'Stress', add_eps=True)
 
             if self._l2_weight > 0.0:
-                collections.append(self.add_l2_penalty())
+                losses.l2 = self.add_l2_penalty()
 
-        return tf.add_n(collections, name='loss'), losses
+        return tf.add_n(list(losses.values()), name='loss'), losses
 
     @staticmethod
     def add_grads_and_vars_summary(grads_and_vars, name, collection):
@@ -660,9 +673,20 @@ class AtomicNN:
                         grads_and_vars, 'forces', GraphKeys.FORCES_GRADIENTS)
                     collections.append(grads_and_vars)
 
-            if self._stress:
+            if self._total_pressure:
+                with tf.name_scope("Pressure"):
+                    grads_and_vars = optimizer.compute_gradients(
+                        losses.reduced_total_pressure)
+                    self._add_gradients_cos_dist_summary(
+                        collections[0], grads_and_vars)
+                    self.add_grads_and_vars_summary(
+                        grads_and_vars, 'pressure', GraphKeys.STRESS_GRADIENTS)
+                    collections.append(grads_and_vars)
+
+            elif self._stress:
                 with tf.name_scope("Stress"):
-                    grads_and_vars = optimizer.compute_gradients(losses.stress)
+                    grads_and_vars = optimizer.compute_gradients(
+                        losses.reduced_stress)
                     self._add_gradients_cos_dist_summary(
                         collections[0], grads_and_vars)
                     self.add_grads_and_vars_summary(
@@ -761,7 +785,9 @@ class AtomicNN:
             * 'forces' of shape `[batch_size, N, 3]` is required if
               `self.forces == True`.
             * 'reduced_stress' of shape `[batch_size, 6]` is required if
-              `self.stress == True`.
+              `self.reduced_stress and not self.reduced_total_pressure`.
+            * 'reduced_total_pressure' of shape `[batch_size, ]` is required if
+              `self.reduced_total_pressure == True`.
 
         `n_atoms` is an optional `int32` tensor with shape `[batch_size, ]`,
         representing the number of atoms in each structure. If give, per-atom
@@ -800,7 +826,18 @@ class AtomicNN:
                     'f_mae': tf.metrics.mean_absolute_error(
                         labels.forces, predictions.forces, name='f_mae')})
 
-            if self._stress:
+            if self._total_pressure:
+                metrics.update({
+                    'p_rmse': tf.metrics.root_mean_squared_error(
+                        labels.reduced_total_pressure,
+                        predictions.reduced_total_pressure,
+                        name='p_rmse'),
+                    'p_mae': tf.metrics.mean_absolute_error(
+                        labels.reduced_total_pressure,
+                        predictions.reduced_total_pressure,
+                        name='p_mae')})
+
+            elif self._stress:
                 metrics.update({
                     's_rmse': tf.metrics.root_mean_squared_error(
                         labels.reduced_stress, predictions.reduced_stress,
@@ -825,6 +862,8 @@ class AtomicNN:
         assert 'energy' in labels
         if self._forces:
             assert 'forces' in labels
+        if self._total_pressure:
+            assert 'reduced_total_pressure' in labels
         if self._stress:
             assert 'reduced_stress' in labels
 
@@ -849,7 +888,9 @@ class AtomicNN:
                 * 'forces' of shape `[batch_size, N, 3]` is required if
                   `self.forces == True`.
                 * 'reduced_stress' of shape `[batch_size, 6]` is required if
-                  `self.stress == True`.
+                  `self.reduced_stress and not self.reduced_total_pressure`.
+                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
+                  if `self.reduced_total_pressure == True`.
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
@@ -910,15 +951,17 @@ class AtomicResNN(AtomicNN):
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 l2_weight=0.0, forces=False, stress=False, normalizer='linear',
-                 normalization_weights=None, atomic_static_energy=None):
+                 l2_weight=0., forces=False, stress=False, total_pressure=False,
+                 normalizer='linear', normalization_weights=None,
+                 atomic_static_energy=None):
         """
         Initialization method.
         """
         super(AtomicResNN, self).__init__(
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
             l2_weight=l2_weight, forces=forces, stress=stress,
-            normalizer=normalizer, normalization_weights=normalization_weights)
+            total_pressure=total_pressure, normalizer=normalizer,
+            normalization_weights=normalization_weights)
         self._atomic_static_energy = atomic_static_energy
 
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
