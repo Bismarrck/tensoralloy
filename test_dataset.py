@@ -149,7 +149,10 @@ def test_nickel():
                 [xz, yz, zz]
             ]) @ np.linalg.inv(result.cells[0])
             stress = stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
+            total_pressure = -(xx + yy + zz) / 3.0
+
             assert_less(np.abs(result.reduced_stress[0] - stress).max(), eps)
+            assert_less(result.total_pressure[0] - total_pressure, eps)
 
 
 if __name__ == "__main__":

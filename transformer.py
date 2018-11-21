@@ -574,13 +574,17 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             # 1 GPa = 10 kbar
             # stress_eV = stress * volume_of_cell
             icell = np.linalg.inv(atoms.cell)
-            values = atoms.get_stress(False) * volume @ icell
+            virial = atoms.get_stress(False) * volume
+            total_pressure = np.trace(virial) / 3.0
+            dEdh = -2.0 * virial @ icell
             # The stress tensors are stored in the traditional Voigt order:
             # xx, yy, zz, yz, xz, xy
             ilist = [0, 1, 2, 1, 0, 0]
             jlist = [0, 1, 2, 2, 2, 1]
-            values = -2.0 * values[ilist, jlist]
-            feature_list['reduced_stress'] = _bytes_feature(values.tostring())
+            voigt = dEdh[ilist, jlist]
+            feature_list['reduced_stress'] = _bytes_feature(voigt.tostring())
+            feature_list['total_pressure'] = _bytes_feature(
+                np.atleast_1d(total_pressure).tostring())
 
         feature_list.update(self._encode_g2_indexed_slices(g2))
 
@@ -638,6 +642,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 example['reduced_stress'], tf.float64, name='stress')
             reduced_stress.set_shape([6])
             decoded.reduced_stress = reduced_stress
+
+            total_pressure = tf.decode_raw(
+                example['total_pressure'], tf.float64, name='stress')
+            total_pressure.set_shape([1])
+            decoded.total_pressure = total_pressure
 
         return decoded
 
@@ -737,6 +746,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             if self._stress:
                 feature_list['reduced_stress'] = \
                     tf.FixedLenFeature([], tf.string)
+                feature_list['total_pressure'] = \
+                    tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:
                 feature_list.update({
@@ -771,11 +782,15 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
             * 'composition': float64, [batch_size, n_elements]
             * 'mask': float64, [batch_size, max_n_atoms]
-            * 'reduced_stress': float64, [batch_size, 6]
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
             * 'shift': float64, [batch_size, nij_max, 3]
             * 'rv2g': int32, [batch_size, nij_max, 3]
+
+            If `self.stress` is `True`, the following keys are provided:
+
+            * 'reduced_stress': float64, [batch_size, 6]
+            * 'total_pressure': float64, [batch_size, ]
 
             These keys will only be valid if G4 functions are used:
 
