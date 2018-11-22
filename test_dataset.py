@@ -142,13 +142,7 @@ def test_nickel():
             # These are raw VASP output. The unit is '-eV', `-stress * volume`.
             xx, yy, zz, xy, yz, xz = \
                 -0.35196, -0.24978, -0.24978, 0.13262, -0.00305, 0.13262,
-            # Convert these values to 'eV/Angstrom'.
-            stress = 2.0 * np.array([
-                [xx, xy, xz],
-                [xy, yy, yz],
-                [xz, yz, zz]
-            ]) @ np.linalg.inv(result.cells[0])
-            stress = stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
+            stress = [-xx, -yy, -zz, -yz, -xz, -xy]
             total_pressure = -(xx + yy + zz) / 3.0
 
             assert_less(np.abs(result.reduced_stress[0] - stress).max(), eps)

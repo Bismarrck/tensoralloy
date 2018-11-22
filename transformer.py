@@ -12,7 +12,7 @@ from collections.__init__ import Counter
 from typing import Dict
 
 from behler import SymmetryFunction, BatchSymmetryFunction
-from behler import get_elements_from_kbody_term
+from utils import get_elements_from_kbody_term
 from behler import IndexTransformer, G2IndexedSlices, G4IndexedSlices
 from descriptor import DescriptorTransformer, BatchDescriptorTransformer
 from misc import Defaults, AttributeDict
@@ -568,21 +568,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             feature_list['f_true'] = _bytes_feature(f_true.tostring())
 
         if self._stress:
-            # Convert the unit of the stress tensor to 'eV / Angstrom' for
-            # simplification:
+            # Convert the unit of the stress tensor to 'eV' for simplification:
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar
-            # stress_eV = stress * volume_of_cell
-            icell = np.linalg.inv(atoms.cell)
-            virial = atoms.get_stress(False) * volume
-            total_pressure = np.trace(virial) / 3.0
-            dEdh = -2.0 * virial @ icell
-            # The stress tensors are stored in the traditional Voigt order:
-            # xx, yy, zz, yz, xz, xy
-            ilist = [0, 1, 2, 1, 0, 0]
-            jlist = [0, 1, 2, 2, 2, 1]
-            voigt = dEdh[ilist, jlist]
-            feature_list['reduced_stress'] = _bytes_feature(voigt.tostring())
+            # reduced_stress (eV) = stress * volume
+            virial = atoms.get_stress(voigt=True) * volume
+            total_pressure = virial[:3].mean()
+            feature_list['reduced_stress'] = _bytes_feature(virial.tostring())
             feature_list['reduced_total_pressure'] = _bytes_feature(
                 np.atleast_1d(total_pressure).tostring())
 
