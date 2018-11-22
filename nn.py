@@ -209,14 +209,13 @@ class _InputNormalizer:
             return x
 
 
-class AtomicNN:
+class BasicNN:
     """
-    This class represents a general atomic neural network.
+    The base neural network class.
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 forces=False, stress=False, total_pressure=False, l2_weight=0.,
-                 normalizer=None, normalization_weights=None):
+                 forces=False, stress=False, total_pressure=False, l2_weight=0):
         """
         Initialization method.
 
@@ -238,12 +237,6 @@ class AtomicNN:
             This option will suppress `stress`.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
-        normalizer : str
-            The normalization method. Defaults to 'linear'. Set this to None to
-            disable normalization.
-        normalization_weights : Dict[str, array_like]
-            The initial weights for column-wise normalizing the input atomic
-            descriptors.
 
         """
         self._elements = elements
@@ -254,8 +247,6 @@ class AtomicNN:
         self._stress = stress
         self._total_pressure = total_pressure
         self._l2_weight = max(l2_weight, 0.0)
-        self._initial_normalizer_weights = normalization_weights
-        self._normalizer = _InputNormalizer(method=normalizer)
 
     @property
     def elements(self):
@@ -265,7 +256,7 @@ class AtomicNN:
         return self._elements
 
     @property
-    def hidden_sizes(self) -> Dict[str, List[int]]:
+    def hidden_sizes(self):
         """
         Return the sizes of hidden layers for each element.
         """
@@ -308,81 +299,11 @@ class AtomicNN:
             return hidden_sizes
         return {element: hidden_sizes for element in self._elements}
 
-    def _build_atomic_nn(self, features: AttributeDict, verbose=False):
-        """
-        Build 1x1 Convolution1D based atomic neural networks for all elements.
-        """
-        with tf.variable_scope("ANN"):
-            kernel_initializer = xavier_initializer(
-                seed=Defaults.seed, dtype=tf.float64)
-            bias_initializer = tf.zeros_initializer(dtype=tf.float64)
-            activation_fn = get_activation_fn(self._activation)
-            outputs = []
-            for i, element in enumerate(self._elements):
-                with tf.variable_scope(element):
-                    x = tf.identity(features.descriptors[element], name='input')
-                    if self._initial_normalizer_weights is not None:
-                        x = self._normalizer(
-                            x, self._initial_normalizer_weights[element])
-                    hidden_sizes = self._hidden_sizes[element]
-                    if verbose:
-                        log_tensor(x)
-                    for j in range(len(hidden_sizes)):
-                        with tf.variable_scope('Hidden{}'.format(j + 1)):
-                            x = tf.layers.conv1d(
-                                inputs=x, filters=hidden_sizes[j],
-                                kernel_size=1, strides=1,
-                                activation=activation_fn,
-                                use_bias=True,
-                                reuse=tf.AUTO_REUSE,
-                                kernel_initializer=kernel_initializer,
-                                bias_initializer=bias_initializer,
-                                name='1x1Conv{}'.format(i + 1))
-                            if verbose:
-                                log_tensor(x)
-                    yi = tf.layers.conv1d(inputs=x, filters=1, kernel_size=1,
-                                          strides=1, use_bias=False,
-                                          kernel_initializer=kernel_initializer,
-                                          reuse=tf.AUTO_REUSE,
-                                          name='Output')
-                    yi = tf.squeeze(yi, axis=2, name='y_atomic')
-                    if verbose:
-                        log_tensor(yi)
-                    outputs.append(yi)
-            return outputs
-
     def _get_energy(self, outputs, features, verbose=True):
         """
         Return the Op to compute total energy.
-
-        Parameters
-        ----------
-        outputs : List[tf.Tensor]
-            A list of `tf.Tensor` as the outputs of the ANNs.
-        features : AttributeDict
-            A dict of input features.
-        verbose : bool
-            If True, the total energy tensor will be logged.
-
-        Returns
-        -------
-        energy : tf.Tensor
-            The total energy tensor.
-
         """
-        with tf.name_scope("Energy"):
-            y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-            shape = y_atomic.shape
-            with tf.name_scope("mask"):
-                mask = tf.split(
-                    features.mask, [1, -1], axis=1, name='split')[1]
-                y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_mask.set_shape(shape)
-            energy = tf.reduce_sum(
-                y_mask, axis=1, keepdims=False, name='energy')
-            if verbose:
-                log_tensor(energy)
-            return energy
+        raise NotImplementedError("This method must be overridden!")
 
     @staticmethod
     def _get_forces(energy, positions, verbose=True):
@@ -453,47 +374,6 @@ class AtomicNN:
             if verbose:
                 log_tensor(total_pressure)
             return total_pressure
-
-    def build(self, features: AttributeDict, verbose=True):
-        """
-        Build the atomic neural network.
-
-        Parameters
-        ----------
-        features : AttributeDict
-            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
-            and 'positions' of `[batch_size, N, 3]` are required.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        Returns
-        -------
-        predictions : AttributeDict
-            A dict of output tensors.
-
-        """
-        outputs = self._build_atomic_nn(features, verbose)
-
-        with tf.name_scope("Output"):
-
-            predictions = AttributeDict()
-
-            predictions.energy = self._get_energy(
-                outputs, features, verbose=verbose)
-
-            if self._forces:
-                predictions.forces = self._get_forces(
-                    predictions.energy, features.positions, verbose=verbose)
-
-            if self._total_pressure:
-                predictions.reduced_total_pressure = \
-                    self._get_reduced_total_pressure(
-                        predictions.energy, features.cells, verbose=verbose)
-            elif self._stress:
-                predictions.reduced_stress = self._get_reduced_stress(
-                    predictions.energy, features.cells, verbose=verbose)
-
-            return predictions
 
     def add_l2_penalty(self):
         """
@@ -839,6 +719,12 @@ class AtomicNN:
 
             return metrics
 
+    def _build_nn(self, features: AttributeDict, verbose=False):
+        """
+        Build the neural network.
+        """
+        raise NotImplementedError("This method must be overridden!")
+
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
         """
         Check the keys of `features` and `labels`.
@@ -857,6 +743,47 @@ class AtomicNN:
             assert 'reduced_total_pressure' in labels
         if self._stress:
             assert 'reduced_stress' in labels
+
+    def build(self, features: AttributeDict, verbose=True):
+        """
+        Build the atomic neural network.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
+            and 'positions' of `[batch_size, N, 3]` are required.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        Returns
+        -------
+        predictions : AttributeDict
+            A dict of output tensors.
+
+        """
+        outputs = self._build_nn(features, verbose)
+
+        with tf.name_scope("Output"):
+
+            predictions = AttributeDict()
+
+            predictions.energy = self._get_energy(
+                outputs, features, verbose=verbose)
+
+            if self._forces:
+                predictions.forces = self._get_forces(
+                    predictions.energy, features.positions, verbose=verbose)
+
+            if self._total_pressure:
+                predictions.reduced_total_pressure = \
+                    self._get_reduced_total_pressure(
+                        predictions.energy, features.cells, verbose=verbose)
+            elif self._stress:
+                predictions.reduced_stress = self._get_reduced_stress(
+                    predictions.energy, features.cells, verbose=verbose)
+
+            return predictions
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
                  mode: tf.estimator.ModeKeys, params: AttributeDict):
@@ -921,6 +848,116 @@ class AtomicNN:
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,
                                           evaluation_hooks=evaluation_hooks)
+
+
+class AtomicNN(BasicNN):
+    """
+    This class represents a general atomic neural network.
+    """
+
+    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
+                 forces=False, stress=False, total_pressure=False, l2_weight=0.,
+                 normalizer=None, normalization_weights=None):
+        """
+        Initialization method.
+
+        normalizer : str
+            The normalization method. Defaults to 'linear'. Set this to None to
+            disable normalization.
+        normalization_weights : Dict[str, array_like]
+            The initial weights for column-wise normalizing the input atomic
+            descriptors.
+
+        """
+        super(AtomicNN, self).__init__(
+            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
+            forces=forces, stress=stress, total_pressure=total_pressure,
+            l2_weight=l2_weight)
+        self._initial_normalizer_weights = normalization_weights
+        self._normalizer = _InputNormalizer(method=normalizer)
+
+    @property
+    def hidden_sizes(self) -> Dict[str, List[int]]:
+        """
+        Return the sizes of hidden layers for each element.
+        """
+        return self._hidden_sizes
+
+    def _build_nn(self, features: AttributeDict, verbose=False):
+        """
+        Build 1x1 Convolution1D based atomic neural networks for all elements.
+        """
+        with tf.variable_scope("ANN"):
+            kernel_initializer = xavier_initializer(
+                seed=Defaults.seed, dtype=tf.float64)
+            bias_initializer = tf.zeros_initializer(dtype=tf.float64)
+            activation_fn = get_activation_fn(self._activation)
+            outputs = []
+            for i, element in enumerate(self._elements):
+                with tf.variable_scope(element):
+                    x = tf.identity(features.descriptors[element], name='input')
+                    if self._initial_normalizer_weights is not None:
+                        x = self._normalizer(
+                            x, self._initial_normalizer_weights[element])
+                    hidden_sizes = self._hidden_sizes[element]
+                    if verbose:
+                        log_tensor(x)
+                    for j in range(len(hidden_sizes)):
+                        with tf.variable_scope('Hidden{}'.format(j + 1)):
+                            x = tf.layers.conv1d(
+                                inputs=x, filters=hidden_sizes[j],
+                                kernel_size=1, strides=1,
+                                activation=activation_fn,
+                                use_bias=True,
+                                reuse=tf.AUTO_REUSE,
+                                kernel_initializer=kernel_initializer,
+                                bias_initializer=bias_initializer,
+                                name='1x1Conv{}'.format(i + 1))
+                            if verbose:
+                                log_tensor(x)
+                    yi = tf.layers.conv1d(inputs=x, filters=1, kernel_size=1,
+                                          strides=1, use_bias=False,
+                                          kernel_initializer=kernel_initializer,
+                                          reuse=tf.AUTO_REUSE,
+                                          name='Output')
+                    yi = tf.squeeze(yi, axis=2, name='y_atomic')
+                    if verbose:
+                        log_tensor(yi)
+                    outputs.append(yi)
+            return outputs
+
+    def _get_energy(self, outputs, features, verbose=True):
+        """
+        Return the Op to compute total energy.
+
+        Parameters
+        ----------
+        outputs : List[tf.Tensor]
+            A list of `tf.Tensor` as the outputs of the ANNs.
+        features : AttributeDict
+            A dict of input features.
+        verbose : bool
+            If True, the total energy tensor will be logged.
+
+        Returns
+        -------
+        energy : tf.Tensor
+            The total energy tensor.
+
+        """
+        with tf.name_scope("Energy"):
+            y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+            shape = y_atomic.shape
+            with tf.name_scope("mask"):
+                mask = tf.split(
+                    features.mask, [1, -1], axis=1, name='split')[1]
+                y_mask = tf.multiply(y_atomic, mask, name='mask')
+                y_mask.set_shape(shape)
+            energy = tf.reduce_sum(
+                y_mask, axis=1, keepdims=False, name='energy')
+            if verbose:
+                log_tensor(energy)
+            return energy
 
 
 class AtomicResNN(AtomicNN):
