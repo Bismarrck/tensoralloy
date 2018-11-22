@@ -4,7 +4,9 @@ This module defines utility functions.
 """
 from __future__ import print_function, absolute_import
 
+import logging
 from itertools import chain
+from logging.config import dictConfig
 from typing import List
 
 __author__ = 'Xin Chen'
@@ -86,3 +88,32 @@ def get_kbody_terms(elements: List[str], k_max=3):
         raise ValueError("`k_max>=4` is not supported yet!")
     terms = list(chain(*[mapping[element] for element in elements]))
     return terms, mapping, elements
+
+
+def set_logging_configs(logfile="logfile"):
+    """
+    Setup the logging module.
+    """
+    LOGGING_CONFIG = {
+        "version": 1,
+        "formatters": {
+            'file': {
+                'format': '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
+            },
+        },
+        "handlers": {
+            'file': {
+                'class': 'logging.FileHandler',
+                'level': logging.INFO,
+                'formatter': 'file',
+                'filename': logfile,
+                'mode': 'a',
+            },
+        },
+        "root": {
+            'handlers': ['file'],
+            'level': logging.INFO,
+        },
+        "disable_existing_loggers": False
+    }
+    dictConfig(LOGGING_CONFIG)
