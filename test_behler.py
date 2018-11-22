@@ -9,12 +9,6 @@ import numpy as np
 import tensorflow as tf
 import nose
 from unittest import TestCase
-from graph_utils import cutoff
-from behler import get_kbody_terms, compute_dimension
-from behler import IndexTransformer
-from behler import G2IndexedSlices, G4IndexedSlices
-from transformer import SymmetryFunctionTransformer
-from transformer import BatchSymmetryFunctionTransformer
 from nose.tools import assert_less, assert_equal, assert_list_equal
 from ase import Atoms
 from ase.io import read
@@ -26,6 +20,13 @@ from typing import List, Union, Tuple
 from collections import Counter
 from misc import Defaults, AttributeDict
 from dataclasses import dataclass
+
+from graph_utils import cutoff
+from utils import get_kbody_terms
+from behler import compute_dimension
+from behler import IndexTransformer, G2IndexedSlices, G4IndexedSlices
+from transformer import SymmetryFunctionTransformer
+from transformer import BatchSymmetryFunctionTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

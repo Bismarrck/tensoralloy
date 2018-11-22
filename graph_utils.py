@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines tensorflow-based functions.
+This module defines tensorflow-graph related utility functions.
 """
 from __future__ import print_function, absolute_import
 
