@@ -13,7 +13,7 @@ from typing import List, Union, Dict
 from dataclasses import dataclass
 
 from descriptor import AtomicDescriptor
-from utils import cutoff
+from graph_utils import cutoff
 from misc import Defaults, AttributeDict
 
 __author__ = 'Xin Chen'

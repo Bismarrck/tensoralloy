@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 import nose
 from unittest import TestCase
-from utils import cutoff
+from graph_utils import cutoff
 from behler import get_kbody_terms, compute_dimension
 from behler import IndexTransformer
 from behler import G2IndexedSlices, G4IndexedSlices
@@ -777,15 +777,18 @@ def test_batch_multi_elements():
         indexed_slices = []
         positions = []
         cells = []
+        volumes = []
         for i, atoms in enumerate(qm7m.trajectory):
             clf = sf.get_index_transformer(atoms)
             indexed_slices.append(sf.get_indexed_slices(atoms))
             positions.append(clf.gather(atoms.positions))
             cells.append(atoms.get_cell(complete=True))
+            volumes.append(atoms.get_volume())
 
         batch = _merge_indexed_slices(indexed_slices)
         batch.positions = np.asarray(positions)
         batch.cells = np.asarray(cells)
+        batch.volume = volumes
 
         g = sf.get_graph_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
