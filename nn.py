@@ -139,7 +139,7 @@ def log_tensor(tensor: tf.Tensor):
     """
     dimensions = ",".join(["{:6d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
-    tf.logging.info("{:<36s} : [{}]".format(tensor.op.name, dimensions))
+    tf.logging.info("{:<40s} : [{}]".format(tensor.op.name, dimensions))
 
 
 def msra_initializer(dtype=tf.float64, seed=Defaults.seed):
@@ -769,12 +769,15 @@ class BasicNN:
                 reuse=tf.AUTO_REUSE,
                 kernel_initializer=kernel_initializer,
                 bias_initializer=bias_initializer,
-                name='1x1Conv{}'.format(j + 1))
+                name=f'{conv.__name__.capitalize()}{j + 1}')
             if verbose:
                 log_tensor(x)
-        return conv(inputs=x, filters=1, kernel_size=1, strides=1,
-                    use_bias=False, kernel_initializer=kernel_initializer,
-                    reuse=tf.AUTO_REUSE, name='Output')
+        y = conv(inputs=x, filters=1, kernel_size=1, strides=1, use_bias=False,
+                 kernel_initializer=kernel_initializer, reuse=tf.AUTO_REUSE,
+                 name='Output')
+        if verbose:
+            log_tensor(y)
+        return y
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
@@ -1164,7 +1167,7 @@ class EamNN(BasicNN):
         """
         activation_fn = get_activation_fn(self._activation)
         outputs = []
-        with tf.name_scope("Embedding"):
+        with tf.name_scope("Embed"):
             for i, element in enumerate(self._elements):
                 hidden_sizes = self._hidden_sizes[element]
                 with tf.variable_scope(element):
@@ -1192,7 +1195,7 @@ class EamNN(BasicNN):
         """
         Return the nn-EAM model.
         """
-        with tf.name_scope("nEAM"):
+        with tf.name_scope("nnEAM"):
             outputs = (
                 self._build_phi_nn(features, verbose=verbose),
                 self._build_embed_nn(features, verbose=verbose)

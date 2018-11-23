@@ -16,7 +16,7 @@ from typing import List, Dict
 
 from misc import AttributeDict
 from behler import IndexTransformer, G2IndexedSlices
-from utils import get_kbody_terms
+from utils import get_kbody_terms, get_elements_from_kbody_term
 from descriptor import AtomicDescriptor, BatchDescriptorTransformer
 
 
@@ -40,6 +40,10 @@ class EAM(AtomicDescriptor):
 
         """
         kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=2)
+        kbody_index = {}
+        for kbody_term in kbody_terms:
+            center = get_elements_from_kbody_term(kbody_term)[0]
+            kbody_index[kbody_term] = mapping[center].index(kbody_term)
 
         self._rc = rc
         self._k_max = 2
@@ -47,9 +51,9 @@ class EAM(AtomicDescriptor):
         self._n_elements = len(elements)
         self._mapping = mapping
         self._kbody_terms = kbody_terms
-        self._max_n_terms = max(map(len, mapping.items()))
+        self._max_n_terms = max(map(len, mapping.values()))
         self._periodic = True
-        self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
+        self._kbody_index = kbody_index
 
     @property
     def cutoff(self):
@@ -375,30 +379,33 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         tlist = np.zeros(self._nij_max, dtype=np.int32)
 
         symbols = atoms.get_chemical_symbols()
-        transformer = self.get_index_transformer(atoms)
+        clf = self.get_index_transformer(atoms)
 
         ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
         nij = len(ilist)
 
         tlist.fill(0)
-        for i in range(nij):
-            symboli = symbols[ilist[i]]
-            symbolj = symbols[jlist[i]]
-            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+        for index in range(nij):
+            symboli = symbols[ilist[index]]
+            symbolj = symbols[jlist[index]]
+            tlist[index] = self._kbody_index['{}{}'.format(symboli, symbolj)]
 
         ilist = self._resize_to_nij_max(ilist, True)
         jlist = self._resize_to_nij_max(jlist, True)
         Slist = self._resize_to_nij_max(Slist, False)
-        ilist = transformer.map(ilist)
-        jlist = transformer.map(jlist)
+        ilist = clf.map(ilist)
+        jlist = clf.map(jlist)
         shift = np.asarray(Slist, dtype=np.float64)
 
         v2g_map[:, 1] = ilist
         v2g_map[:, 2] = tlist
-        counter = Counter()
+        counters = {}
         for index in range(nij):
-            v2g_map[index, 3] = counter[tlist[index]]
-            counter[tlist[index]] += 1
+            atomi = ilist[index]
+            if atomi not in counters:
+                counters[atomi] = Counter()
+            v2g_map[index, 3] = counters[atomi][tlist[index]]
+            counters[atomi][tlist[index]] += 1
 
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
@@ -530,11 +537,11 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         with tf.name_scope("G2"):
             indices = tf.decode_raw(example['g2.indices'], tf.int32)
-            indices.set_shape([self._nij_max * 5])
+            indices.set_shape([self._nij_max * 6])
             indices = tf.reshape(
-                indices, [self._nij_max, 5], name='g2.indices')
+                indices, [self._nij_max, 6], name='g2.indices')
             v2g_map, ilist, jlist = tf.split(
-                indices, [3, 1, 1], axis=1, name='splits')
+                indices, [4, 1, 1], axis=1, name='splits')
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
@@ -634,8 +641,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         self._batch_size = batch_size
 
-        inputs = AttributeDict()
-        inputs.g2 = AttributeDict(
+        inputs = AttributeDict(
             ilist=batch.ilist, jlist=batch.jlist,
             shift=batch.shift, v2g_map=batch.rv2g
         )
