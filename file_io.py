@@ -257,6 +257,47 @@ def convert_rc_to_key(rc):
     return "{:.2f}".format(round(rc, 4))
 
 
+def _find_sizes(atoms, rc, k_max):
+    """
+    A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
+    """
+    ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
+    if k_max >= 2:
+        nij = len(ilist)
+    else:
+        numbers = atoms.numbers
+        uniques = list(set(numbers))
+        inlist = numbers[ilist]
+        jnlist = numbers[jlist]
+        counter = Counter(cantor_pairing(inlist, jnlist))
+        nij = sum([counter[x] for x in cantor_pairing(uniques, uniques)])
+    numbers = atoms.numbers
+    nnl = 0
+    for i in range(len(atoms)):
+        indices = np.where(ilist == i)[0]
+        ii = numbers[ilist[indices]]
+        ij = numbers[jlist[indices]]
+        if k_max == 1:
+            indices = np.where(ii == ij)[0]
+            ii = ii[indices]
+            ij = ij[indices]
+        if len(ii) > 0:
+            nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
+    if k_max == 3:
+        nl = {}
+        for i, atomi in enumerate(ilist):
+            if atomi not in nl:
+                nl[atomi] = []
+            nl[atomi].append(jlist[i])
+        nijk = 0
+        for atomi, nlist in nl.items():
+            n = len(nlist)
+            nijk += (n - 1 + 1) * (n - 1) // 2
+    else:
+        nijk = 0
+    return nij, nijk, nnl
+
+
 def find_neighbor_size_limits(database: SQLite3Database, rc: float,
                               k_max: int=3, n_jobs=-1, verbose=True):
     """
@@ -280,32 +321,9 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
         If True, the progress shall be logged.
 
     """
+
     def _find(aid):
-        atoms = database.get_atoms(id=aid)
-        ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
-        plist = cantor_pairing(ilist, jlist)
-        counter = Counter(plist)
-        if k_max >= 2:
-            nnl = max(counter.values())
-            nij = len(ilist)
-        else:
-            ii = np.arange(0, len(atoms), 1)
-            cii = [counter[x] for x in cantor_pairing(ii, ii)]
-            nij = sum(cii)
-            nnl = max(cii)
-        if k_max == 3:
-            nl = {}
-            for i, atomi in enumerate(ilist):
-                if atomi not in nl:
-                    nl[atomi] = []
-                nl[atomi].append(jlist[i])
-            nijk = 0
-            for atomi, nlist in nl.items():
-                n = len(nlist)
-                nijk += (n - 1 + 1) * (n - 1) // 2
-        else:
-            nijk = 0
-        return nij, nijk, nnl
+        return _find_sizes(database.get_atoms(f'id={aid}'), rc, k_max)
 
     if verbose:
         print('Start finding neighbors for rc = {} and k_max = {}. This may '
@@ -332,8 +350,8 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
     database.metadata = metadata
 
     if verbose:
-        print('All {} jobs are done. nij_max = {}, nijk_max = {}'.format(
-            len(database), nij_max, nijk_max))
+        print(f'All {len(database)} jobs are done. nij_max = {nij_max}, '
+              f'nijk_max = {nijk_max}, nnl_max = {nnl_max}')
 
 
 def compute_atomic_static_energy(database: SQLite3Database,
