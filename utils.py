@@ -4,6 +4,7 @@ This module defines utility functions.
 """
 from __future__ import print_function, absolute_import
 
+import numpy as np
 import logging
 from itertools import chain
 from logging.config import dictConfig
@@ -11,6 +12,25 @@ from typing import List
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def cantor_pairing(x, y):
+    """
+    The Cantor Pairing function:
+
+        f(x, y) = (x + y)(x + y + 1) // 2 + y
+
+    f(x, y) will only be unique if x and y are integers.
+
+    See Also
+    --------
+    https://en.wikipedia.org/wiki/Pairing_function#Cantor_pairing_function
+
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    assert np.issubdtype(x.dtype, np.int_) and np.issubdtype(y.dtype, np.int_)
+    return (x + y) * (x + y + 1) // 2 + y
 
 
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
