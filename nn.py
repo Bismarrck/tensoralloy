@@ -31,7 +31,7 @@ class GraphKeys:
 
     # Variable keys
     NORMALIZE_VARIABLES = 'normalize_vars'
-    Y_STATIC_VARIABLES = 'y_static_vars'
+    STATIC_ENERGY_VARIABLES = 'static_energy_vars'
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'
@@ -166,7 +166,7 @@ class _InputNormalizer:
         assert method in ('linear', 'arctan', '', None)
         if not method:
             self.method = None
-            self.scope = 'NoNorm'
+            self.scope = 'Identity'
         else:
             self.method = method
             self.scope = '{}Norm'.format(method.capitalize())
@@ -719,6 +719,63 @@ class BasicNN:
 
             return metrics
 
+    @staticmethod
+    def _get_1x1conv_nn(x, activation_fn, hidden_sizes, verbose=False,
+                        **kwargs):
+        """
+        A helper function to construct a 1x1 convolutional neural network.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            The input of the convolutional neural network. `x` must be a tensor
+            with rank 3 (conv1d), 4 (conv2d) or 5 (conv3d) of dtype `float64`.
+        activation_fn : Callable
+            The activation function.
+        hidden_sizes : List[int]
+            The size of the hidden layers.
+
+        Returns
+        -------
+        y : tf.Tensor
+            The output tensor. `x` and `y` has the same rank. The last dimension
+            of `y` is 1.
+
+        """
+        kernel_initializer = kwargs.get(
+            'kernel_initializer',
+            xavier_initializer(seed=Defaults.seed, dtype=tf.float64))
+        bias_initializer = kwargs.get(
+            'bias_initializer',
+            tf.zeros_initializer(dtype=tf.float64))
+
+        rank = len(x.shape)
+        if rank == 3:
+            conv = tf.layers.conv1d
+        elif rank == 4:
+            conv = tf.layers.conv2d
+        elif rank == 5:
+            conv = tf.layers.conv3d
+        else:
+            raise ValueError(
+                f"The rank of `x` should be 3, 4 or 5 but not {rank}")
+
+        for j in range(len(hidden_sizes)):
+            x = conv(
+                inputs=x, filters=hidden_sizes[j],
+                kernel_size=1, strides=1,
+                activation=activation_fn,
+                use_bias=True,
+                reuse=tf.AUTO_REUSE,
+                kernel_initializer=kernel_initializer,
+                bias_initializer=bias_initializer,
+                name='1x1Conv{}'.format(j + 1))
+            if verbose:
+                log_tensor(x)
+        return conv(inputs=x, filters=1, kernel_size=1, strides=1,
+                    use_bias=False, kernel_initializer=kernel_initializer,
+                    reuse=tf.AUTO_REUSE, name='Output')
+
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
         Build the neural network.
@@ -888,9 +945,6 @@ class AtomicNN(BasicNN):
         Build 1x1 Convolution1D based atomic neural networks for all elements.
         """
         with tf.variable_scope("ANN"):
-            kernel_initializer = xavier_initializer(
-                seed=Defaults.seed, dtype=tf.float64)
-            bias_initializer = tf.zeros_initializer(dtype=tf.float64)
             activation_fn = get_activation_fn(self._activation)
             outputs = []
             for i, element in enumerate(self._elements):
@@ -902,25 +956,9 @@ class AtomicNN(BasicNN):
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
-                    for j in range(len(hidden_sizes)):
-                        with tf.variable_scope('Hidden{}'.format(j + 1)):
-                            x = tf.layers.conv1d(
-                                inputs=x, filters=hidden_sizes[j],
-                                kernel_size=1, strides=1,
-                                activation=activation_fn,
-                                use_bias=True,
-                                reuse=tf.AUTO_REUSE,
-                                kernel_initializer=kernel_initializer,
-                                bias_initializer=bias_initializer,
-                                name='1x1Conv{}'.format(i + 1))
-                            if verbose:
-                                log_tensor(x)
-                    yi = tf.layers.conv1d(inputs=x, filters=1, kernel_size=1,
-                                          strides=1, use_bias=False,
-                                          kernel_initializer=kernel_initializer,
-                                          reuse=tf.AUTO_REUSE,
-                                          name='Output')
-                    yi = tf.squeeze(yi, axis=2, name='y_atomic')
+                    yi = self._get_1x1conv_nn(
+                        x, activation_fn, hidden_sizes, verbose=verbose)
+                    yi = tf.squeeze(yi, axis=2, name='atomic')
                     if verbose:
                         log_tensor(yi)
                     outputs.append(yi)
@@ -1019,19 +1057,19 @@ class AtomicResNN(AtomicNN):
                                     dtype=tf.float64,
                                     trainable=True,
                                     collections=[
-                                        GraphKeys.Y_STATIC_VARIABLES,
+                                        GraphKeys.STATIC_ENERGY_VARIABLES,
+                                        GraphKeys.TRAIN_METRICS,
                                         tf.GraphKeys.TRAINABLE_VARIABLES,
-                                        tf.GraphKeys.GLOBAL_VARIABLES,
-                                        GraphKeys.TRAIN_METRICS],
+                                        tf.GraphKeys.GLOBAL_VARIABLES],
                                     initializer=initializer)
                 xz = tf.multiply(x, z, name='xz')
                 y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
-                                         name='y_static')
+                                         name='static')
                 if verbose:
                     log_tensor(y_static)
 
             with tf.name_scope("Residual"):
-                y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+                y_atomic = tf.concat(outputs, axis=1, name='atomic')
                 with tf.name_scope("mask"):
                     mask = tf.split(
                         features.mask, [1, -1], axis=1, name='split')[1]
