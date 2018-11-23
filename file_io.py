@@ -321,7 +321,7 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
     rc = convert_rc_to_key(rc)
     k_max = convert_k_max_to_key(k_max)
     details = {k_max: {rc: {
-        'nij_max': nij_max, 'nijk_max': nijk_max, 'nnl': nnl_max}}}
+        'nij_max': nij_max, 'nijk_max': nijk_max, 'nnl_max': nnl_max}}}
     metadata = dict(database.metadata)
     if 'neighbors' not in metadata:
         metadata['neighbors'] = details

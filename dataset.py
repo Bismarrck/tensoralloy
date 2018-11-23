@@ -17,6 +17,7 @@ from os.path import join, basename, splitext
 from typing import List, Dict
 
 from transformer import BatchSymmetryFunctionTransformer
+from eam import BatchEAMTransformer
 from descriptor import BatchDescriptorTransformer
 from file_io import find_neighbor_size_limits, compute_atomic_static_energy
 from file_io import convert_rc_to_key, convert_k_max_to_key
@@ -32,8 +33,9 @@ class Dataset:
     This class is used to manipulate data examples for this project.
     """
 
-    def __init__(self, database, name, k_max=3, rc=Defaults.rc, eta=None,
-                 beta=None, gamma=None, zeta=None, serial=False):
+    def __init__(self, database, name, descriptor='behler', k_max=3,
+                 rc=Defaults.rc, eta=None, beta=None, gamma=None, zeta=None,
+                 serial=False):
         """
         Initialization method.
 
@@ -43,6 +45,9 @@ class Dataset:
             A `SQLite3Database` created by `file_io.read`.
         name : str
             The name of this dataset.
+        descriptor : str
+            The name of the descriptor transformer. Defaults to 'behler'. 'eam'
+            is another valid option.
         rc : float
             The cutoff radius.
         eta : array_like
@@ -57,8 +62,13 @@ class Dataset:
             If True, all parallel routines will be disabled.
 
         """
+        assert descriptor in ('behler', 'eam')
+        if descriptor == 'eam' and k_max != 2:
+            raise ValueError("EAM requires `k_max = 2`.")
+
         self._database = database
         self._name = name
+        self._descriptor = descriptor
         self._k_max = k_max
         self._rc = rc
         self._eta = safe_select(eta, Defaults.eta)
@@ -183,18 +193,25 @@ class Dataset:
             return True
         elif rc not in neighbors[k_max]:
             return True
-        else:
-            return False
 
-    def _get_nij_and_nijk(self):
+        details = neighbors[k_max][rc]
+        if 'nij_max' not in details:
+            return True
+        elif 'nijk_max' not in details:
+            return True
+        elif 'nnl_max' not in details:
+            return True
+
+        return False
+
+    def _get_neighbor_sizes(self):
         """
-        A helper function to get `nij_max` and `nijk_max` from metadata of the
-        database.
+        A helper function to get `nij_max`, `nijk_max` and `nnl_max`.
         """
         k_max = convert_k_max_to_key(self._k_max)
         rc = convert_rc_to_key(self._rc)
         details = self._database.metadata['neighbors'][k_max][rc]
-        return details['nij_max'], details['nijk_max']
+        return details['nij_max'], details['nijk_max'], details['nnl_max']
 
     def _read_database(self):
         """
@@ -212,24 +229,29 @@ class Dataset:
         periodic = self._database.metadata['periodic']
         forces = self._database.metadata['forces']
         stress = self._database.metadata['stress']
-
         max_occurs = self._database.metadata['max_occurs']
-        nij_max, nijk_max = self._get_nij_and_nijk()
-        sf = BatchSymmetryFunctionTransformer(
-            rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
-            nij_max=nij_max, nijk_max=nijk_max, eta=self._eta, beta=self._beta,
-            gamma=self._gamma, zeta=self._zeta, periodic=periodic,
-            stress=stress, forces=forces)
+
+        nij_max, nijk_max, nnl_max = self._get_neighbor_sizes()
+
+        if self._descriptor == 'behler':
+            transformer = BatchSymmetryFunctionTransformer(
+                rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
+                nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
+                beta=self._beta, gamma=self._gamma, zeta=self._zeta,
+                periodic=periodic, stress=stress, forces=forces)
+        else:
+            transformer = BatchEAMTransformer(
+                rc=self._rc, max_occurs=max_occurs, nij_max=nij_max,
+                nnl_max=nnl_max, forces=forces, stress=stress)
 
         if self._should_compute_atomic_static_energy():
-            compute_atomic_static_energy(self._database, sf.elements, True)
+            compute_atomic_static_energy(
+                self._database, transformer.elements, True)
 
-        self._transformer = sf
+        self._transformer = transformer
         self._forces = forces
         self._stress = stress
         self._max_occurs = max_occurs
-        self._nij_max = nij_max
-        self._nijk_max = nijk_max
         self._atomic_static_energy = \
             self._database.metadata['atomic_static_energy']
 
@@ -318,15 +340,15 @@ class Dataset:
                                        test_size=test_size)
         self._write_subset(
             tf.estimator.ModeKeys.EVAL,
-            check_path(join(savedir, '{}-test-{}-{}.tfrecords'.format(
-                self._name, signature, len(test)))),
+            check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
+                self._name, signature, len(test), self._descriptor,))),
             test,
             verbose=verbose,
         )
         self._write_subset(
             tf.estimator.ModeKeys.TRAIN,
-            check_path(join(savedir, '{}-train-{}-{}.tfrecords'.format(
-                self._name, signature, len(train)))),
+            check_path(join(savedir, '{}-train-{}-{}.{}.tfrecords'.format(
+                self._name, signature, len(train), self._descriptor,))),
             train,
             verbose=verbose,
         )
@@ -340,13 +362,14 @@ class Dataset:
         signature = self._get_signature()
 
         def _get_file_size(filename):
-            return int(splitext(basename(filename))[0].split('-')[4])
+            suffix = str(splitext(basename(filename))[0].split('-')[4])
+            return int(suffix.split('.')[0])
 
         def _load(key):
             try:
                 files = list(glob.glob(
-                    '{}/{}-{}-{}-*.tfrecords'.format(
-                        savedir, self._name, key, signature)))
+                    '{}/{}-{}-{}-*.{}.tfrecords'.format(
+                        savedir, self._name, key, signature, self._descriptor)))
             except Exception:
                 return None, 0
             if len(files) >= 1:
