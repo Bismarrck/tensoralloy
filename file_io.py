@@ -19,6 +19,7 @@ from os.path import splitext
 from joblib import Parallel, delayed
 from argparse import ArgumentParser
 from typing import Dict, List
+from utils import cantor_pairing
 
 
 __author__ = 'Xin Chen'
@@ -259,7 +260,8 @@ def convert_rc_to_key(rc):
 def find_neighbor_size_limits(database: SQLite3Database, rc: float,
                               k_max: int=3, n_jobs=-1, verbose=True):
     """
-    Find `nij_max` and `nijk_max` of all `Atoms` objects in the database.
+    Find `nij_max`, `nijk_max` and 'nnl_max' of all `Atoms` objects in the
+    database.
 
     Parameters
     ----------
@@ -278,17 +280,19 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
         If True, the progress shall be logged.
 
     """
-    def _pipeline(aid):
+    def _find(aid):
         atoms = database.get_atoms(id=aid)
         ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
+        plist = cantor_pairing(ilist, jlist)
+        counter = Counter(plist)
         if k_max >= 2:
+            nnl = max(counter.values())
             nij = len(ilist)
         else:
-            symbols = atoms.get_chemical_symbols()
-            nij = 0
-            for k in range(len(ilist)):
-                if symbols[ilist[k]] == symbols[jlist[k]]:
-                   nij += 1
+            ii = np.arange(0, len(atoms), 1)
+            cii = [counter[x] for x in cantor_pairing(ii, ii)]
+            nij = sum(cii)
+            nnl = max(cii)
         if k_max == 3:
             nl = {}
             for i, atomi in enumerate(ilist):
@@ -301,7 +305,7 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
                 nijk += (n - 1 + 1) * (n - 1) // 2
         else:
             nijk = 0
-        return nij, nijk
+        return nij, nijk, nnl
 
     if verbose:
         print('Start finding neighbors for rc = {} and k_max = {}. This may '
@@ -309,13 +313,15 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
 
     verb_level = 5 if verbose else 0
     results = Parallel(n_jobs=n_jobs, verbose=verb_level)(
-        delayed(_pipeline)(jid) for jid in range(1, len(database) + 1)
+        delayed(_find)(jid) for jid in range(1, len(database) + 1)
     )
 
-    nij_max, nijk_max = np.asarray(results, dtype=int).max(axis=0).tolist()
+    nij_max, nijk_max, nnl_max = np.asarray(
+        results, dtype=int).max(axis=0).tolist()
     rc = convert_rc_to_key(rc)
     k_max = convert_k_max_to_key(k_max)
-    details = {k_max: {rc: {'nij_max': nij_max, 'nijk_max': nijk_max}}}
+    details = {k_max: {rc: {
+        'nij_max': nij_max, 'nijk_max': nijk_max, 'nnl': nnl_max}}}
     metadata = dict(database.metadata)
     if 'neighbors' not in metadata:
         metadata['neighbors'] = details
