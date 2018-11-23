@@ -12,7 +12,7 @@ from shutil import rmtree
 
 from misc import Defaults, AttributeDict, safe_select
 from dataset import Dataset
-from nn import AtomicNN, AtomicResNN
+from nn import AtomicNN, AtomicResNN, EamNN, BasicNN
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -67,7 +67,7 @@ class ConfigParser(configparser.ConfigParser):
     @property
     def nn(self):
         """
-        Return the `AtomicNN` initialized from this config.
+        Return an instance of `BasicNN` initialized from this config.
         """
         return self._nn
 
@@ -99,23 +99,27 @@ class ConfigParser(configparser.ConfigParser):
         filename = self[section]['sqlite3']
         descriptor = self[section]['descriptor']
 
-        if descriptor != 'behler':
+        if descriptor not in ('eam', 'behler'):
             raise NotImplementedError(
-                "Only Behler's Symmetry Function is implemented at this time!")
+                f"The descriptor `{descriptor}` is not implemented!")
 
         database = connect(filename)
         name = self[section].get('name', splitext(basename(filename))[0])
         rc = self[section].getfloat('rc', Defaults.rc)
         k_max = self[section].getint('k_max', Defaults.k_max)
 
-        section = 'behler'
-        eta = self[section].getfloats('eta', Defaults.eta)
-        beta = self[section].getfloats('beta', Defaults.beta)
-        gamma = self[section].getfloats('gamma', Defaults.gamma)
-        zeta = self[section].getfloats('zeta', Defaults.zeta)
+        if descriptor == 'behler':
+            section = 'behler'
+            eta = self[section].getfloats('eta', Defaults.eta)
+            beta = self[section].getfloats('beta', Defaults.beta)
+            gamma = self[section].getfloats('gamma', Defaults.gamma)
+            zeta = self[section].getfloats('zeta', Defaults.zeta)
+            kwargs = {'eta': eta, 'beta': beta, 'gamma': gamma, 'zeta': zeta}
+        else:
+            kwargs = {}
 
-        dataset = Dataset(database=database, name=name, k_max=k_max, rc=rc,
-                          eta=eta, beta=beta, gamma=gamma, zeta=zeta)
+        dataset = Dataset(database=database, descriptor=descriptor, name=name,
+                          k_max=k_max, rc=rc, **kwargs)
 
         section = 'tfrecords'
         test_size = self[section].getint('test_size', 1000)
@@ -125,9 +129,9 @@ class ConfigParser(configparser.ConfigParser):
             dataset.to_records(tfrecords_dir, test_size=test_size, verbose=True)
         return dataset
 
-    def _build_nn(self) -> AtomicNN:
+    def _get_nn_common_args(self):
         """
-        Build an `AtomicNN` with the given config and dataset.
+        Return the common args for building a `BasicNN`.
         """
         section = 'nn'
 
@@ -145,38 +149,49 @@ class ConfigParser(configparser.ConfigParser):
             self[section].getboolean('total_pressure', False), False)
         total_pressure = self._dataset.stress and total_pressure
 
-        transformer = self._dataset.transformer
-        elements = transformer.elements
         hidden_sizes = {}
-        for element in elements:
+        for element in self._dataset.transformer.elements:
             hidden_sizes[element] = self[section].getints(
                 element, Defaults.hidden_sizes)
 
-        normalizer = safe_select(
-            self[section].get('input_normalizer', None), None)
-        normalizer_weights = transformer.get_descriptor_normalization_weights(
-            method=normalizer)
+        return {'elements': self._dataset.transformer.elements,
+                'hidden_sizes': hidden_sizes,
+                'activation': activation, 'forces': forces, 'stress': stress,
+                'total_pressure': total_pressure, 'l2_weight': l2_weight}
+
+    def _build_nn(self) -> BasicNN:
+        """
+        Build an `AtomicNN` with the given config and dataset.
+        """
+        section = 'nn'
+
+        args = self._get_nn_common_args()
         arch = safe_select(self[section].get('arch', 'AtomicNN'), 'AtomicNN')
 
-        if arch == 'AtomicNN':
-            nn = AtomicNN(elements=elements, hidden_sizes=hidden_sizes,
-                          activation=activation, l2_weight=l2_weight,
-                          forces=forces, stress=stress,
-                          total_pressure=total_pressure, normalizer=normalizer,
-                          normalization_weights=normalizer_weights)
-        elif arch == 'AtomicResNN':
-            atomic_static_energy = self._dataset.atomic_static_energy
-            nn = AtomicResNN(elements=elements, hidden_sizes=hidden_sizes,
-                             activation=activation, l2_weight=l2_weight,
-                             forces=forces, stress=stress,
-                             total_pressure=total_pressure,
-                             normalizer=normalizer,
-                             normalization_weights=normalizer_weights,
-                             atomic_static_energy=atomic_static_energy)
+        if self._dataset.descriptor == 'eam':
+            if arch != 'EamNN':
+                raise ValueError(f"The arch {arch} is not supported "
+                                 f"for '{self._dataset.descriptor}'.")
+            return EamNN(**args)
+
         else:
-            raise ValueError(f"The arch {arch} is not supported. Please use: "
-                             f"AtomicNN or AtomicResNN.")
-        return nn
+            normalizer = safe_select(
+                self[section].get('input_normalizer', None), None)
+            normalization_weights = \
+                self._dataset._transformer.get_descriptor_normalization_weights(
+                    method=normalizer)
+            args.update({'normalizer': normalizer,
+                         'normalization_weights': normalization_weights})
+            if arch == 'AtomicNN':
+                nn = AtomicNN(**args)
+            elif arch == 'AtomicResNN':
+                args['atomic_static_energy'] = \
+                    self._dataset.atomic_static_energy
+                nn = AtomicResNN(**args)
+            else:
+                raise ValueError(f"The arch {arch} is not supported "
+                                 f"for '{self._dataset.descriptor}'.")
+            return nn
 
     def _read_hyperparams(self):
         """

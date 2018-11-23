@@ -34,8 +34,7 @@ class Dataset:
     """
 
     def __init__(self, database, name, descriptor='behler', k_max=3,
-                 rc=Defaults.rc, eta=None, beta=None, gamma=None, zeta=None,
-                 serial=False):
+                 rc=Defaults.rc, serial=False, **kwargs):
         """
         Initialization method.
 
@@ -50,16 +49,11 @@ class Dataset:
             is another valid option.
         rc : float
             The cutoff radius.
-        eta : array_like
-            A list of float as the `eta` for radial functions.
-        beta : array_like
-            A list of float as the `beta` for angular functions.
-        gamma : array_like
-            A list of float as the `gamma` for angular functions.
-        zeta : array_like
-            A list of float as the `zeta` for angular functions.
         serial : bool
             If True, all parallel routines will be disabled.
+        kwargs : dict
+            Key-value args for initializing the `BatchDescriptorTransformer` for
+            the `descriptor`.
 
         """
         assert descriptor in ('behler', 'eam')
@@ -71,16 +65,12 @@ class Dataset:
         self._descriptor = descriptor
         self._k_max = k_max
         self._rc = rc
-        self._eta = safe_select(eta, Defaults.eta)
-        self._beta = safe_select(beta, Defaults.beta)
-        self._gamma = safe_select(gamma, Defaults.gamma)
-        self._zeta = safe_select(zeta, Defaults.zeta)
         self._files = {}
         self._file_sizes = {}
         self._serial = serial
         self._forces = False
         self._stress = False
-        self._read_database()
+        self._read_database(**kwargs)
 
     @property
     def database(self):
@@ -133,6 +123,13 @@ class Dataset:
         type of element.
         """
         return self._max_occurs
+
+    @property
+    def descriptor(self) -> str:
+        """
+        Return the name of the descriptor.
+        """
+        return self._descriptor
 
     @property
     def transformer(self) -> BatchDescriptorTransformer:
@@ -213,7 +210,7 @@ class Dataset:
         details = self._database.metadata['neighbors'][k_max][rc]
         return details['nij_max'], details['nijk_max'], details['nnl_max']
 
-    def _read_database(self):
+    def _read_database(self, **kwargs):
         """
         Read the metadata of the database and finalize the initialization.
         """
@@ -234,11 +231,17 @@ class Dataset:
         nij_max, nijk_max, nnl_max = self._get_neighbor_sizes()
 
         if self._descriptor == 'behler':
+
+            eta = safe_select(kwargs.get('eta', None), Defaults.eta)
+            beta = safe_select(kwargs.get('beta', None), Defaults.beta)
+            gamma = safe_select(kwargs.get('gamma', None), Defaults.gamma)
+            zeta = safe_select(kwargs.get('zeta', None), Defaults.zeta)
+
             transformer = BatchSymmetryFunctionTransformer(
                 rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
-                nij_max=nij_max, nijk_max=nijk_max, eta=self._eta,
-                beta=self._beta, gamma=self._gamma, zeta=self._zeta,
-                periodic=periodic, stress=stress, forces=forces)
+                nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
+                gamma=gamma, zeta=zeta, periodic=periodic, stress=stress,
+                forces=forces)
         else:
             transformer = BatchEAMTransformer(
                 rc=self._rc, max_occurs=max_occurs, nij_max=nij_max,
