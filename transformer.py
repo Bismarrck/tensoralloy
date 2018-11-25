@@ -11,7 +11,7 @@ from ase.neighborlist import neighbor_list
 from collections.__init__ import Counter
 from typing import Dict
 
-from behler import SymmetryFunction, BatchSymmetryFunction
+from tensoralloy.descriptor.behler import SymmetryFunction, BatchSymmetryFunction
 from utils import get_elements_from_kbody_term
 from behler import IndexTransformer, G2IndexedSlices, G4IndexedSlices
 from descriptor import DescriptorTransformer, BatchDescriptorTransformer

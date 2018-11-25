@@ -12,7 +12,9 @@ from shutil import rmtree
 
 from misc import Defaults, AttributeDict, safe_select
 from dataset import Dataset
-from nn import AtomicNN, AtomicResNN, EamNN, BasicNN
+from tensoralloy.nn.eam import EamNN
+from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
+from tensoralloy.nn.basic import BasicNN
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

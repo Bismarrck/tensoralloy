@@ -17,7 +17,8 @@ from typing import List, Dict
 from misc import AttributeDict
 from behler import IndexTransformer, G2IndexedSlices
 from utils import get_kbody_terms, get_elements_from_kbody_term
-from descriptor import AtomicDescriptor, BatchDescriptorTransformer
+from descriptor import BatchDescriptorTransformer
+from tensoralloy.descriptor.interface import AtomicDescriptor
 
 
 class EAM(AtomicDescriptor):

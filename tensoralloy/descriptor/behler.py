@@ -10,7 +10,7 @@ from collections import Counter
 from typing import List, Dict
 from sklearn.model_selection import ParameterGrid
 
-from descriptor import AtomicDescriptor
+from tensoralloy.descriptor.interface import AtomicDescriptor
 from misc import Defaults, AttributeDict
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from utils import get_elements_from_kbody_term, get_kbody_terms
