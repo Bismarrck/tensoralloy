@@ -9,8 +9,8 @@ from tensorflow.contrib.layers import xavier_initializer
 from os.path import join
 from typing import List, Dict
 
-from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys, get_learning_rate, get_optimizer, \
-    log_tensor
+from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
+from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from misc import safe_select, Defaults, AttributeDict
 
