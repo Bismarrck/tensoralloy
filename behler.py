@@ -12,7 +12,7 @@ from typing import List, Union, Dict
 from dataclasses import dataclass
 
 from descriptor import AtomicDescriptor
-from tensoralloy.nn.utils import cutoff
+from tensoralloy.descriptor.cutoff import cosine_cutoff
 from misc import Defaults, AttributeDict
 from utils import get_elements_from_kbody_term, get_kbody_terms
 
@@ -446,7 +446,7 @@ class SymmetryFunction(AtomicDescriptor):
             r2 = tf.square(r, name='r2')
             rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
             r2c = tf.div(r2, rc2, name='div')
-            fc_r = cutoff(r, rc=self._rc, name='fc_r')
+            fc_r = cosine_cutoff(r, rc=self._rc, name='fc_r')
 
             with tf.name_scope("v2g_map"):
                 v2g_map = self._get_v2g_map(placeholders, 'g2')
@@ -542,9 +542,9 @@ class SymmetryFunction(AtomicDescriptor):
                 theta = tf.div(upper, lower, name='theta')
 
             with tf.name_scope("fc"):
-                fc_rij = cutoff(rij, self._rc, name='fc_rij')
-                fc_rik = cutoff(rik, self._rc, name='fc_rik')
-                fc_rjk = cutoff(rjk, self._rc, name='fc_rjk')
+                fc_rij = cosine_cutoff(rij, self._rc, name='fc_rij')
+                fc_rik = cosine_cutoff(rik, self._rc, name='fc_rik')
+                fc_rjk = cosine_cutoff(rjk, self._rc, name='fc_rjk')
                 fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
 
             with tf.name_scope("v2g_map"):

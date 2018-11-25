@@ -5,9 +5,6 @@ This module defines tensorflow-graph related utility functions.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-import numpy as np
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import math_ops
 from typing import Iterable
 
 __author__ = 'Xin Chen'
@@ -64,18 +61,3 @@ def sum_of_grads_and_vars_collections(grads_and_vars_collections):
 
         outputs.append(grad_and_var)
     return outputs
-
-
-def cutoff(r: tf.Tensor, rc: float, name=None):
-    """
-    The cutoff function.
-
-    f_c(r) = 0.5 * [ cos(min(r / rc) * pi) + 1 ]
-
-    """
-    with ops.name_scope(name, "fc", [r]) as name:
-        rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
-        ratio = math_ops.div(r, rc, name='ratio')
-        z = math_ops.minimum(ratio, 1.0, name='minimum')
-        z = math_ops.cos(z * np.pi, name='cos') + 1.0
-        return math_ops.multiply(z, 0.5, name=name)
