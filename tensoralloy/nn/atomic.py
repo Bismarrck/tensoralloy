@@ -10,7 +10,8 @@ import numpy as np
 import tensorflow as tf
 
 from misc import AttributeDict
-from nn import _InputNormalizer, get_activation_fn, log_tensor, GraphKeys
+from nn import _InputNormalizer
+from tensoralloy.nn.utils import GraphKeys, get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
 
 __author__ = 'Xin Chen'

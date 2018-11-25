@@ -8,7 +8,7 @@ import tensorflow as tf
 from typing import List
 
 from misc import AttributeDict
-from nn import log_tensor, get_activation_fn
+from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
 
 __author__ = 'Xin Chen'
