@@ -9,10 +9,10 @@ from typing import List, Dict
 import numpy as np
 import tensorflow as tf
 
-from misc import AttributeDict
-from nn import _InputNormalizer
+from tensoralloy.nn.normalizer import InputNormalizer
 from tensoralloy.nn.utils import GraphKeys, get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
+from misc import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -42,7 +42,7 @@ class AtomicNN(BasicNN):
             forces=forces, stress=stress, total_pressure=total_pressure,
             l2_weight=l2_weight)
         self._initial_normalizer_weights = normalization_weights
-        self._normalizer = _InputNormalizer(method=normalizer)
+        self._normalizer = InputNormalizer(method=normalizer)
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
