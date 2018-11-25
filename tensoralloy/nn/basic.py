@@ -10,7 +10,7 @@ from os.path import join
 from typing import List, Dict
 
 from tensoralloy.nn.utils import sum_of_grads_and_vars_collections
-from hooks import ExamplesPerSecondHook, LoggingTensorHook
+from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from misc import safe_select, Defaults, AttributeDict
 from nn import log_tensor, GraphKeys, get_learning_rate, get_optimizer
 
