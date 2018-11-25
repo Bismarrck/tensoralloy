@@ -12,7 +12,7 @@ from typing import List, Union, Dict
 from dataclasses import dataclass
 
 from descriptor import AtomicDescriptor
-from graph_utils import cutoff
+from tensoralloy.nn.utils import cutoff
 from misc import Defaults, AttributeDict
 from utils import get_elements_from_kbody_term, get_kbody_terms
 
