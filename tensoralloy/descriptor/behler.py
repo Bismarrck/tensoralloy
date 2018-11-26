@@ -10,10 +10,10 @@ from collections import Counter
 from typing import List, Dict
 from sklearn.model_selection import ParameterGrid
 
-from tensoralloy.descriptor.interface import AtomicDescriptor
-from misc import Defaults, AttributeDict
+from tensoralloy.descriptor.interface import AtomicDescriptorInterface
 from tensoralloy.descriptor.cutoff import cosine_cutoff
-from utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.misc import Defaults, AttributeDict
+from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -58,7 +58,7 @@ def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
     return total_dim, kbody_sizes
 
 
-class SymmetryFunction(AtomicDescriptor):
+class SymmetryFunction(AtomicDescriptorInterface):
     """
     A tensorflow based implementation of Behler-Parinello's SymmetryFunction
     descriptor.

@@ -17,7 +17,7 @@ from transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.indexed_slices import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.descriptor.tests.test_behler import qm7m
-from misc import test_dir, Defaults, AttributeDict
+from tensoralloy.misc import test_dir, Defaults, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

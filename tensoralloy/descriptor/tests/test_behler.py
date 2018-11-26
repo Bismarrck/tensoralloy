@@ -17,11 +17,11 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import List, Union, Tuple
 from collections import Counter
-from misc import Defaults, AttributeDict
 from dataclasses import dataclass
 
+from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.descriptor.cutoff import cosine_cutoff
-from utils import get_kbody_terms
+from tensoralloy.utils import get_kbody_terms
 from ..behler import compute_dimension
 from ..indexed_slices import G2IndexedSlices, G4IndexedSlices
 from transformer import SymmetryFunctionTransformer

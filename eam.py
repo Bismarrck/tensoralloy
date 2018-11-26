@@ -16,10 +16,10 @@ from ase.neighborlist import neighbor_list
 from collections import Counter
 from typing import Dict
 
-from misc import AttributeDict
+from tensoralloy.misc import AttributeDict
 from tensoralloy.descriptor.indexed_slices import IndexTransformer
-from tensoralloy.descriptor.indexer import G2IndexedSlices
-from descriptor import BatchDescriptorTransformer
+from tensoralloy.descriptor.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.interface import BatchDescriptorTransformer
 
 
 def _bytes_feature(value):

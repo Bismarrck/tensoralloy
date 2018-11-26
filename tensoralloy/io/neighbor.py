@@ -7,7 +7,7 @@ from ase.db.sqlite import SQLite3Database
 from ase.neighborlist import neighbor_list
 from joblib import Parallel, delayed
 
-from utils import cantor_pairing
+from tensoralloy.utils import cantor_pairing
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -9,15 +9,15 @@ import tensorflow as tf
 from collections import Counter
 from typing import List, Dict
 
-from misc import AttributeDict
-from tensoralloy.descriptor.interface import AtomicDescriptor
-from utils import get_kbody_terms, get_elements_from_kbody_term
+from tensoralloy.misc import AttributeDict
+from tensoralloy.descriptor.interface import AtomicDescriptorInterface
+from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class EAM(AtomicDescriptor):
+class EAM(AtomicDescriptorInterface):
     """
     A tensorflow based implementation of Embedded Atom Method (EAM).
     """

@@ -6,14 +6,13 @@ from __future__ import print_function, absolute_import
 
 import abc
 from typing import List
-
-from misc import AttributeDict
+from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class AtomicDescriptor(abc.ABC):
+class AtomicDescriptorInterface(abc.ABC):
     """
     The base interface class for all kinds of atomic descriptors.
     """

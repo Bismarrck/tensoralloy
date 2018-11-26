@@ -12,10 +12,10 @@ from collections.__init__ import Counter
 from typing import Dict
 
 from tensoralloy.descriptor.behler import SymmetryFunction, BatchSymmetryFunction
-from utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.descriptor.indexed_slices import G2IndexedSlices, G4IndexedSlices, IndexTransformer
-from descriptor import DescriptorTransformer, BatchDescriptorTransformer
-from misc import Defaults, AttributeDict
+from tensoralloy.transformer.interface import DescriptorTransformer, BatchDescriptorTransformer
+from tensoralloy.misc import Defaults, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

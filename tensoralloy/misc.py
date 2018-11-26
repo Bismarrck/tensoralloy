@@ -108,7 +108,7 @@ def test_dir():
     """
     Return the directory of `test_files`.
     """
-    return join(dirname(__file__), "test_files")
+    return join(dirname(__file__), "..", "test_files")
 
 
 def brange(start, stop, batch_size):
