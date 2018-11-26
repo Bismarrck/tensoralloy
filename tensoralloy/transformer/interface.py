@@ -1,3 +1,7 @@
+# coding=utf-8
+"""
+This module defines interfaces for feature transformers.
+"""
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
@@ -6,14 +10,13 @@ from collections import Counter
 from typing import Dict
 from ase import Atoms
 
-from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class DescriptorTransformer(AtomicDescriptor):
+class DescriptorTransformer:
     """
     This interface class defines the required methods for atomic descriptor
     transformers.
@@ -42,7 +45,7 @@ class DescriptorTransformer(AtomicDescriptor):
         pass
 
 
-class BatchDescriptorTransformer(AtomicDescriptor):
+class BatchDescriptorTransformer:
     """
     This interface class defines the required methods for atomic descriptor
     transformers.
