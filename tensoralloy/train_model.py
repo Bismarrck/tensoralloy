@@ -6,10 +6,11 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from argparse import ArgumentParser
-from config import ConfigParser
-from utils import set_logging_configs
 from os.path import join
-from misc import check_path, Defaults
+
+from tensoralloy.config import ConfigParser
+from tensoralloy.utils import set_logging_configs
+from tensoralloy.misc import check_path, Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -10,7 +10,7 @@ from os.path import splitext, basename, join, exists, dirname
 from typing import Callable
 from shutil import rmtree
 
-from misc import Defaults, AttributeDict, safe_select
+from tensoralloy.misc import Defaults, AttributeDict, safe_select
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.nn.eam import EamNN
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
