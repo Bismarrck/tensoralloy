@@ -8,8 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
-from unittest import TestCase
-from nose.tools import assert_less, assert_equal, assert_list_equal
+from nose.tools import assert_less
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
@@ -21,11 +20,10 @@ from collections import Counter
 from misc import Defaults, AttributeDict
 from dataclasses import dataclass
 
-from graph_utils import cutoff
+from tensoralloy.descriptor.cutoff import cosine_cutoff
 from utils import get_kbody_terms
-from tensoralloy.descriptor.behler import compute_dimension
-from tensoralloy.descriptor.indexed_slices import IndexTransformer
-from tensoralloy.descriptor.indexer import G2IndexedSlices, G4IndexedSlices
+from ..behler import compute_dimension
+from ..indexed_slices import G2IndexedSlices, G4IndexedSlices
 from transformer import SymmetryFunctionTransformer
 from transformer import BatchSymmetryFunctionTransformer
 
@@ -137,53 +135,6 @@ class LegacyAngularIndexedSlices:
     jkSlist: Union[np.ndarray, tf.Tensor]
 
     __slots__ = ["v2g_map", "ij", "ik", "jk", "ijSlist", "ikSlist", "jkSlist"]
-
-
-
-class IndexTransformerTest(TestCase):
-    """
-    A set of unit tests for the class `IndexTransformer`.
-    """
-
-    def setUp(self):
-        """
-        Setup the tests.
-        """
-        symbols = Pd3O2.get_chemical_symbols()
-        self.max_occurs = Counter({'Pd': 4, 'O': 5})
-        self.clf = IndexTransformer(self.max_occurs, symbols)
-
-    def test_forward(self):
-        assert_equal(len(self.clf.reference_symbols), 9)
-
-        array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array, reverse=False).flatten().tolist()
-        assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
-
-        array = np.expand_dims([7, 1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array, reverse=False).flatten().tolist()
-        assert_list_equal(results, [7, 4, 5, 7, 7, 7, 1, 2, 3, 7])
-
-    def test_reverse(self):
-        array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
-        results = self.clf.gather(array, reverse=True).flatten().tolist()
-        assert_list_equal(results, [1, 2, 3, 4, 5])
-
-    def test_call(self):
-        assert_equal(self.clf.map(1), 6)
-        assert_equal(self.clf.map(1, ignore_extra=True), 5)
-
-    def test_mask(self):
-        assert_list_equal(self.clf.mask.tolist(),
-                          [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
-
-    def test_permutation(self):
-        symbols = Pd2O2Pd.get_chemical_symbols()
-        clf = IndexTransformer(self.max_occurs, symbols)
-        assert_list_equal(clf.mask.tolist(),
-                          [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
-        assert_less(np.abs(clf.gather(Pd2O2Pd.positions) -
-                           self.clf.gather(Pd3O2.positions)).max(), 1e-8)
 
 
 def cutoff_fxn(r, rc):
@@ -467,7 +418,7 @@ def radial_function(R, rc, v2g_map, cell, etas, ilist, jlist, Slist, total_dim):
             r2c = tf.div(r2, rc2, name='div')
 
         with tf.name_scope("fc"):
-            fc_r = cutoff(r, rc=rc, name='fc_r')
+            fc_r = cosine_cutoff(r, rc=rc, name='fc_r')
 
         with tf.name_scope("features"):
             shape = tf.constant([R.shape[0], total_dim], tf.int32, name='shape')
@@ -519,9 +470,9 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
 
         # Compute the damping term: $f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})$
         with tf.name_scope("fc"):
-            fc_r_ij = cutoff(r_ij, rc, name='fc_r_ij')
-            fc_r_ik = cutoff(r_ik, rc, name='fc_r_ik')
-            fc_r_jk = cutoff(r_jk, rc, name='fc_r_jk')
+            fc_r_ij = cosine_cutoff(r_ij, rc, name='fc_r_ij')
+            fc_r_ik = cosine_cutoff(r_ik, rc, name='fc_r_ik')
+            fc_r_jk = cosine_cutoff(r_jk, rc, name='fc_r_jk')
             fc_r_ijk = fc_r_ij * fc_r_ik * fc_r_jk
 
         # Compute $R_{ij}^{2} + R_{ik}^{2} + R_{jk}^{2}$
