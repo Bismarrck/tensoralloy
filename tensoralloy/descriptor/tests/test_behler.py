@@ -24,8 +24,7 @@ from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.utils import get_kbody_terms
 from ..behler import compute_dimension
 from ..indexed_slices import G2IndexedSlices, G4IndexedSlices
-from transformer import SymmetryFunctionTransformer
-from transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer.behler import SymmetryFunctionTransformer, BatchSymmetryFunctionTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -13,7 +13,7 @@ from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
 from os.path import join
 
-from transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.indexed_slices import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.descriptor.tests.test_behler import qm7m
