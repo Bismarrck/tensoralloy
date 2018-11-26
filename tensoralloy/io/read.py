@@ -14,7 +14,7 @@ from ase.db.sqlite import SQLite3Database
 from ase.io.extxyz import read_xyz
 from argparse import ArgumentParser
 
-from tensoralloy.units import get_conversion_units
+from tensoralloy.io.units import get_conversion_units
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
