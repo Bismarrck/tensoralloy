@@ -16,13 +16,13 @@ from sklearn.model_selection import train_test_split
 from tensorflow.contrib.data import shuffle_and_repeat
 
 from tensoralloy.transformer.base import BatchDescriptorTransformer
-from tensoralloy.transformer.eam import BatchEAMTransformer
+from tensoralloy.transformer import BatchEAMTransformer
+from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.misc import Defaults, safe_select, brange, check_path
 from tensoralloy.misc import AttributeDict
 from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
-from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -11,7 +11,7 @@ from typing import Callable
 from shutil import rmtree
 
 from tensoralloy.misc import Defaults, AttributeDict, safe_select
-from tensoralloy.dataset.dataset import Dataset
+from tensoralloy.dataset import Dataset
 from tensoralloy.nn.eam import EamNN
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
 from tensoralloy.nn.basic import BasicNN
