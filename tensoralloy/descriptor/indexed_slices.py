@@ -148,15 +148,27 @@ class IndexTransformer:
         """
         return self._mask
 
-    def map(self, index_or_indices, reverse=False, ignore_extra=False):
+    def inplace_map_index(self, index_or_indices, reverse=False,
+                          exclude_extra=False):
         """
-        Do the in-place index transformation and return the array.
+        Do the in-place index transformation.
+
+        Parameters
+        ----------
+        index_or_indices : int or List[int] or array_like
+            An atom index or a list of indices.
+        reverse : bool, optional
+            If True, the indices will be mapped to the local reference from the
+            global reference.
+        exclude_extra : bool
+            Exclude the virtual atom when calculating the index.
+
         """
         if reverse:
             index_map = self._reverse_map
         else:
             index_map = self._index_map
-        delta = int(ignore_extra)
+        delta = int(exclude_extra)
         if not hasattr(index_or_indices, "__len__"):
             return index_map[index_or_indices] - delta
         else:
@@ -164,21 +176,28 @@ class IndexTransformer:
                 index_or_indices[i] = index_map[index_or_indices[i]] - delta
             return index_or_indices
 
-    def gather(self, params, reverse=False):
+    def map_array(self, params, reverse=False, fill=0):
         """
-        Gather slices from `params` at `axis`.
+        Do the array transformation.
 
-        `params` should be an array of rank 2 or 3 and `axis = params.ndim - 2`.
-        The dimension `params.shape[axis]` must be ether `len(self.symbols)` if
-        `reverse == False` or `N = sum(max_occurs.values()) + virtual_atom` if
-        `reverse == True`.
+        Parameters
+        ----------
+        params : array_like
+            A 2D or 3D array.
+        reverse : bool, optional
+            If True, the array will be mapped to the local reference from the
+            global reference.
+        fill : int or float
+            The value to fill for the virtual atom.
+
         """
         params = np.asarray(params)
         rank = np.ndim(params)
         if rank == 2:
             params = params[np.newaxis, ...]
         if not reverse and params.shape[1] == len(self._symbols):
-            params = np.insert(params, 0, 0, axis=1)
+            params = np.insert(
+                params, 0, np.asarray(fill, dtype=params.dtype), axis=1)
 
         indices = []
         istart = IndexTransformer._ISTART
@@ -188,7 +207,7 @@ class IndexTransformer:
         else:
             for i in range(self._n_atoms):
                 indices.append(self._reverse_map.get(i, 0))
-        params = params[:, indices]
+        output = params[:, indices]
         if rank == 2:
-            params = np.squeeze(params, axis=0)
-        return params
+            output = np.squeeze(output, axis=0)
+        return output

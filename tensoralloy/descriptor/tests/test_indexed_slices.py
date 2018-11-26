@@ -34,21 +34,21 @@ class IndexTransformerTest(TestCase):
         assert_equal(len(self.clf.reference_symbols), 9)
 
         array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array, reverse=False).flatten().tolist()
+        results = self.clf.map_array(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
 
         array = np.expand_dims([7, 1, 2, 3, 4, 5], axis=1)
-        results = self.clf.gather(array, reverse=False).flatten().tolist()
+        results = self.clf.map_array(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [7, 4, 5, 7, 7, 7, 1, 2, 3, 7])
 
     def test_reverse(self):
         array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
-        results = self.clf.gather(array, reverse=True).flatten().tolist()
+        results = self.clf.map_array(array, reverse=True).flatten().tolist()
         assert_list_equal(results, [1, 2, 3, 4, 5])
 
     def test_call(self):
-        assert_equal(self.clf.map(1), 6)
-        assert_equal(self.clf.map(1, ignore_extra=True), 5)
+        assert_equal(self.clf.inplace_map_index(1), 6)
+        assert_equal(self.clf.inplace_map_index(1, exclude_extra=True), 5)
 
     def test_mask(self):
         assert_list_equal(self.clf.mask.tolist(),
@@ -59,8 +59,8 @@ class IndexTransformerTest(TestCase):
         clf = IndexTransformer(self.max_occurs, symbols)
         assert_list_equal(clf.mask.tolist(),
                           [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
-        assert_less(np.abs(clf.gather(Pd2O2Pd.positions) -
-                           self.clf.gather(Pd3O2.positions)).max(), 1e-8)
+        assert_less(np.abs(clf.map_array(Pd2O2Pd.positions) -
+                           self.clf.map_array(Pd3O2.positions)).max(), 1e-8)
 
 
 if __name__ == "__main__":

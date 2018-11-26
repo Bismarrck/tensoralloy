@@ -162,8 +162,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             symbolj = symbols[jlist[i]]
             tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
 
-        ilist = index_transformer.map(ilist + 1)
-        jlist = index_transformer.map(jlist + 1)
+        ilist = index_transformer.inplace_map_index(ilist + 1)
+        jlist = index_transformer.inplace_map_index(jlist + 1)
         shift = np.asarray(Slist, dtype=np.float64)
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self._offsets[tlist]
@@ -171,7 +171,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                                shift=shift)
 
     def _get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices,
-                               index_transformer: IndexTransformer):
+                               transformer: IndexTransformer):
         """
         Return the indexed slices for the symmetry function G4.
         """
@@ -201,14 +201,17 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         count = 0
         for atomi, nl in indices.items():
             num = len(nl)
-            symboli = symbols[index_transformer.map(atomi, True, True)]
+            indexi = transformer.inplace_map_index(atomi, True, True)
+            symboli = symbols[indexi]
             prefix = '{}'.format(symboli)
             for j in range(num):
                 atomj = nl[j]
-                symbolj = symbols[index_transformer.map(atomj, True, True)]
+                indexj = transformer.inplace_map_index(atomj, True, True)
+                symbolj = symbols[indexj]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    symbolk = symbols[index_transformer.map(atomk, True, True)]
+                    indexk = transformer.inplace_map_index(atomk, True, True)
+                    symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     term = '{}{}'.format(prefix, suffix)
                     ij[count] = atomi, atomj
@@ -247,7 +250,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         index_transformer = self.get_index_transformer(atoms)
         g2 = self._get_g2_indexed_slices(atoms, index_transformer)
 
-        positions = index_transformer.gather(atoms.positions)
+        positions = index_transformer.map_array(atoms.positions)
         n_atoms = index_transformer.n_atoms
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
@@ -433,8 +436,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         ilist = self._resize_to_nij_max(ilist, True)
         jlist = self._resize_to_nij_max(jlist, True)
         Slist = self._resize_to_nij_max(Slist, False)
-        ilist = transformer.map(ilist)
-        jlist = transformer.map(jlist)
+        ilist = transformer.inplace_map_index(ilist)
+        jlist = transformer.inplace_map_index(jlist)
         shift = np.asarray(Slist, dtype=np.float64)
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
@@ -473,14 +476,17 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         count = 0
         for atomi, nl in indices.items():
             num = len(nl)
-            symboli = symbols[transformer.map(atomi, True, True)]
+            indexi = transformer.inplace_map_index(atomi, True, True)
+            symboli = symbols[indexi]
             prefix = '{}'.format(symboli)
             for j in range(num):
                 atomj = nl[j]
-                symbolj = symbols[transformer.map(atomj, True, True)]
+                indexj = transformer.inplace_map_index(atomj, True, True)
+                symbolj = symbols[indexj]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    symbolk = symbols[transformer.map(atomk, True, True)]
+                    indexk = transformer.inplace_map_index(atomk, True, True)
+                    symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     term = '{}{}'.format(prefix, suffix)
                     ij[count] = atomi, atomj
@@ -551,7 +557,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Encode the `Atoms` object and return a `tf.train.Example`.
         """
         clf = self.get_index_transformer(atoms)
-        positions = clf.gather(atoms.positions)
+        positions = clf.map_array(atoms.positions)
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         y_true = atoms.get_total_energy()
@@ -568,7 +574,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             'composition': _bytes_feature(composition.tostring()),
         }
         if self._forces:
-            f_true = clf.gather(atoms.get_forces())[1:]
+            f_true = clf.map_array(atoms.get_forces())[1:]
             feature_list['f_true'] = _bytes_feature(f_true.tostring())
 
         if self._stress:

@@ -130,8 +130,8 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         ilist = self._resize_to_nij_max(ilist, True)
         jlist = self._resize_to_nij_max(jlist, True)
         Slist = self._resize_to_nij_max(Slist, False)
-        ilist = clf.map(ilist)
-        jlist = clf.map(jlist)
+        ilist = clf.inplace_map_index(ilist)
+        jlist = clf.inplace_map_index(jlist)
         shift = np.asarray(Slist, dtype=np.float64)
 
         v2g_map[:, 1] = ilist
@@ -176,7 +176,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         Encode the `Atoms` object and return a `tf.train.Example`.
         """
         clf = self.get_index_transformer(atoms)
-        positions = clf.gather(atoms.positions)
+        positions = clf.map_array(atoms.positions)
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         y_true = atoms.get_total_energy()
@@ -193,7 +193,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             'composition': _bytes_feature(composition.tostring()),
         }
         if self._forces:
-            f_true = clf.gather(atoms.get_forces())[1:]
+            f_true = clf.map_array(atoms.get_forces())[1:]
             feature_list['f_true'] = _bytes_feature(f_true.tostring())
 
         if self._stress:
