@@ -6,14 +6,14 @@ from collections import Counter
 from typing import Dict
 from ase import Atoms
 
-from tensoralloy.descriptor.interface import AtomicDescriptorInterface
+from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class DescriptorTransformer(AtomicDescriptorInterface):
+class DescriptorTransformer(AtomicDescriptor):
     """
     This interface class defines the required methods for atomic descriptor
     transformers.
@@ -42,7 +42,7 @@ class DescriptorTransformer(AtomicDescriptorInterface):
         pass
 
 
-class BatchDescriptorTransformer(AtomicDescriptorInterface):
+class BatchDescriptorTransformer(AtomicDescriptor):
     """
     This interface class defines the required methods for atomic descriptor
     transformers.

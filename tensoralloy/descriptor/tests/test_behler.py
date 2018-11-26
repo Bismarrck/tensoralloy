@@ -23,7 +23,8 @@ from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms
-from tensoralloy.transformer.behler import SymmetryFunctionTransformer, BatchSymmetryFunctionTransformer
+from tensoralloy.transformer.behler import SymmetryFunctionTransformer
+from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

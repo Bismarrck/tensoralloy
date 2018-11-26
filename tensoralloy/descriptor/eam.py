@@ -10,7 +10,7 @@ from collections import Counter
 from typing import List, Dict
 
 from tensoralloy.misc import AttributeDict
-from tensoralloy.descriptor.interface import AtomicDescriptorInterface
+from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
@@ -19,7 +19,7 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["EAM", "BatchEAM"]
 
 
-class EAM(AtomicDescriptorInterface):
+class EAM(AtomicDescriptor):
     """
     A tensorflow based implementation of Embedded Atom Method (EAM).
     """
@@ -44,66 +44,13 @@ class EAM(AtomicDescriptorInterface):
             center = get_elements_from_kbody_term(kbody_term)[0]
             kbody_index[kbody_term] = mapping[center].index(kbody_term)
 
-        self._rc = rc
+        super(EAM, self).__init__(rc=rc, elements=elements, periodic=True)
+
         self._k_max = 2
-        self._elements = elements
-        self._n_elements = len(elements)
         self._mapping = mapping
         self._kbody_terms = kbody_terms
         self._max_n_terms = max(map(len, mapping.values()))
-        self._periodic = True
         self._kbody_index = kbody_index
-
-    @property
-    def cutoff(self):
-        """
-        Return the cutoff radius.
-        """
-        return self._rc
-
-    @property
-    def elements(self):
-        """
-        Return a list of str as the sorted unique elements.
-        """
-        return self._elements
-
-    @staticmethod
-    def _get_pbc_displacements(shift, cells):
-        """
-        Return the periodic boundary shift displacements.
-
-        Parameters
-        ----------
-        shift : tf.Tensor
-            A `float64` tensor of shape `[-1, 3]` as the cell shift vector.
-        cells : tf.Tensor
-            A `float64` tensor of shape `[3, 3]` as the cell.
-
-        Returns
-        -------
-        Dij : tf.Tensor
-            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
-            vector.
-
-        """
-        return tf.matmul(shift, cells, name='displacements')
-
-    def _get_rij(self, R, cells, ilist, jlist, shift, name):
-        """
-        Return the subgraph to compute `rij`.
-        """
-        with tf.name_scope(name):
-            Ri = self.gather_fn(R, ilist, 'Ri')
-            Rj = self.gather_fn(R, jlist, 'Rj')
-            Dij = tf.subtract(Rj, Ri, name='Dij')
-            pbc = self._get_pbc_displacements(shift, cells)
-            Dij = tf.add(Dij, pbc, name='pbc')
-            # By adding `eps` to the reduced sum NaN can be eliminated.
-            with tf.name_scope("safe_norm"):
-                eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
-                return tf.sqrt(tf.reduce_sum(
-                    tf.square(Dij, name='Dij2'), axis=-1) + eps)
 
     def _get_g_shape(self, placeholders):
         """
@@ -111,7 +58,7 @@ class EAM(AtomicDescriptorInterface):
         """
         return [placeholders.n_atoms, self._max_n_terms, placeholders.nnl_max]
 
-    def _get_v2g_map(self, placeholders):
+    def _get_v2g_map(self, placeholders, **kwargs):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
@@ -255,7 +202,7 @@ class BatchEAM(EAM):
         """
         return 1
 
-    def _get_v2g_map(self, placeholders):
+    def _get_v2g_map(self, placeholders, **kwargs):
         """
         Return the re-indexed `v2g_map` for batch training and evaluation.
         """

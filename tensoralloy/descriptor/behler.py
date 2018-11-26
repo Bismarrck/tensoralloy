@@ -10,7 +10,7 @@ from collections import Counter
 from typing import List, Dict
 from sklearn.model_selection import ParameterGrid
 
-from tensoralloy.descriptor.interface import AtomicDescriptorInterface
+from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
@@ -60,7 +60,7 @@ def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
     return total_dim, kbody_sizes
 
 
-class SymmetryFunction(AtomicDescriptorInterface):
+class SymmetryFunction(AtomicDescriptor):
     """
     A tensorflow based implementation of Behler-Parinello's SymmetryFunction
     descriptor.
@@ -99,11 +99,9 @@ class SymmetryFunction(AtomicDescriptorInterface):
         ndim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
                                               len(gamma), len(zeta))
 
-        self._rc = rc
+        super(SymmetryFunction, self).__init__(rc, elements, periodic=periodic)
+
         self._k_max = k_max
-        self._elements = elements
-        self._n_elements = len(elements)
-        self._periodic = periodic
         self._mapping = mapping
         self._kbody_terms = kbody_terms
         self._kbody_sizes = kbody_sizes
@@ -119,33 +117,11 @@ class SymmetryFunction(AtomicDescriptorInterface):
                                               'zeta': self._zeta})
 
     @property
-    def cutoff(self):
-        """
-        Return the cutoff radius.
-        """
-        return self._rc
-
-    @property
     def k_max(self):
         """
         Return the maximum k for the many-body expansion scheme.
         """
         return self._k_max
-
-    @property
-    def elements(self):
-        """
-        Return a list of str as the sorted unique elements.
-        """
-        return self._elements
-
-    @property
-    def periodic(self):
-        """
-        Return True if this can be applied to periodic structures.
-        For non-periodic molecules some Ops can be ignored.
-        """
-        return self._periodic
 
     @property
     def ndim(self):
@@ -167,44 +143,6 @@ class SymmetryFunction(AtomicDescriptorInterface):
         Return a list of int as the sizes of the k-body terms.
         """
         return self._kbody_sizes
-
-    @staticmethod
-    def _get_pbc_displacements(shift, cells):
-        """
-        Return the periodic boundary shift displacements.
-
-        Parameters
-        ----------
-        shift : tf.Tensor
-            A `float64` tensor of shape `[-1, 3]` as the cell shift vector.
-        cells : tf.Tensor
-            A `float64` tensor of shape `[3, 3]` as the cell.
-
-        Returns
-        -------
-        Dij : tf.Tensor
-            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
-            vector.
-
-        """
-        return tf.matmul(shift, cells, name='displacements')
-
-    def _get_rij(self, R, cells, ilist, jlist, shift, name):
-        """
-        Return the subgraph to compute `rij`.
-        """
-        with tf.name_scope(name):
-            Ri = self.gather_fn(R, ilist, 'Ri')
-            Rj = self.gather_fn(R, jlist, 'Rj')
-            Dij = tf.subtract(Rj, Ri, name='Dij')
-            if self._periodic:
-                pbc = self._get_pbc_displacements(shift, cells)
-                Dij = tf.add(Dij, pbc, name='pbc')
-            # By adding `eps` to the reduced sum NaN can be eliminated.
-            with tf.name_scope("safe_norm"):
-                eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
-                return tf.sqrt(tf.reduce_sum(
-                    tf.square(Dij, name='Dij2'), axis=-1) + eps)
 
     @staticmethod
     def _get_v2g_map_delta(index):
@@ -250,9 +188,10 @@ class SymmetryFunction(AtomicDescriptorInterface):
         """
         return [placeholders.n_atoms, self._ndim]
 
-    def _get_v2g_map(self, placeholders, fn_name: str):
-        assert fn_name in ('g2', 'g4')
-        return tf.identity(placeholders[fn_name].v2g_map, name='v2g_map')
+    def _get_v2g_map(self, placeholders, **kwargs):
+        symm_func = kwargs['symmetry_function']
+        assert symm_func in ('g2', 'g4')
+        return tf.identity(placeholders[symm_func].v2g_map, name='v2g_map')
 
     def _get_g2_graph(self, placeholders: AttributeDict):
         """
@@ -272,7 +211,8 @@ class SymmetryFunction(AtomicDescriptorInterface):
             fc_r = cosine_cutoff(r, rc=self._rc, name='fc_r')
 
             with tf.name_scope("v2g_map"):
-                v2g_map = self._get_v2g_map(placeholders, 'g2')
+                v2g_map = self._get_v2g_map(
+                    placeholders, symmetry_function='g2')
 
             with tf.name_scope("features"):
                 shape = self._get_g_shape(placeholders)
@@ -371,7 +311,8 @@ class SymmetryFunction(AtomicDescriptorInterface):
                 fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
 
             with tf.name_scope("v2g_map"):
-                v2g_map = self._get_v2g_map(placeholders, 'g4')
+                v2g_map = self._get_v2g_map(
+                    placeholders, symmetry_function='g4')
 
             with tf.name_scope("features"):
                 shape = self._get_g_shape(placeholders)
@@ -520,12 +461,12 @@ class BatchSymmetryFunction(SymmetryFunction):
         """
         return [self._batch_size, self._max_n_atoms, self._ndim]
 
-    def _get_v2g_map_batch_indexing_matrix(self, fn_name='g2'):
+    def _get_v2g_map_batch_indexing_matrix(self, symmetry_function='g2'):
         """
         Return an `int32` matrix of shape `[batch_size, ndim, 3]` to rebuild the
         batch indexing of a `v2g_map`.
         """
-        if fn_name == 'g2':
+        if symmetry_function == 'g2':
             ndim = self._nij_max
         else:
             ndim = self._nijk_max
@@ -538,14 +479,16 @@ class BatchSymmetryFunction(SymmetryFunction):
     def _get_v2g_map_delta(index):
         return tf.constant([0, 0, index], tf.int32, name='delta')
 
-    def _get_v2g_map(self, placeholders, fn_name: str):
+    def _get_v2g_map(self, placeholders, **kwargs):
         """
         Return the Op to get `v2g_map`. In the batch implementation, `v2g_map`
         has a shape of `[batch_size, ndim, 3]` and the first axis represents the
         local batch indices.
         """
-        indexing = self._get_v2g_map_batch_indexing_matrix(fn_name=fn_name)
-        return tf.add(placeholders[fn_name].v2g_map, indexing, name='v2g_map')
+        symm_func = kwargs['symmetry_function']
+        indexing = self._get_v2g_map_batch_indexing_matrix(
+            symmetry_function=symm_func)
+        return tf.add(placeholders[symm_func].v2g_map, indexing, name='v2g_map')
 
     def _get_row_split_sizes(self, _):
         row_splits = [1, ]
