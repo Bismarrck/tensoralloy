@@ -1,3 +1,7 @@
+# coding=utf-8
+"""
+This module defines the data container for this project.
+"""
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
@@ -11,7 +15,7 @@ from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.data import shuffle_and_repeat
 
-from tensoralloy.transformer.interface import BatchDescriptorTransformer
+from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer
 from tensoralloy.misc import Defaults, safe_select, brange, check_path
 from tensoralloy.misc import AttributeDict
