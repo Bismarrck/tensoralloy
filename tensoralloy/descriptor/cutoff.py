@@ -12,6 +12,8 @@ from tensorflow.python.ops import math_ops
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+__all__ = ["cosine_cutoff"]
+
 
 def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
     """

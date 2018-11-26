@@ -13,6 +13,8 @@ from typing import Union, List
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+__all__ = ["G2IndexedSlices", "G4IndexedSlices", "IndexTransformer"]
+
 
 @dataclass(frozen=True)
 class G2IndexedSlices:

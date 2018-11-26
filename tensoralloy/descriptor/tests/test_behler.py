@@ -20,10 +20,9 @@ from collections import Counter
 from dataclasses import dataclass
 
 from tensoralloy.misc import Defaults, AttributeDict
-from tensoralloy.descriptor.cutoff import cosine_cutoff
+from tensoralloy.descriptor import compute_dimension, cosine_cutoff
+from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms
-from ..behler import compute_dimension
-from ..indexed_slices import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.transformer.behler import SymmetryFunctionTransformer, BatchSymmetryFunctionTransformer
 
 __author__ = 'Xin Chen'

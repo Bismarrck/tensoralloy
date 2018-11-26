@@ -18,6 +18,8 @@ from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+__all__ = ["SymmetryFunction", "BatchSymmetryFunction", "compute_dimension"]
+
 
 def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
                       n_zetas):

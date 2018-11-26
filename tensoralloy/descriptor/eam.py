@@ -16,6 +16,8 @@ from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+__all__ = ["EAM", "BatchEAM"]
+
 
 class EAM(AtomicDescriptorInterface):
     """
