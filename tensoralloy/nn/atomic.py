@@ -12,7 +12,7 @@ import tensorflow as tf
 from tensoralloy.nn.normalizer import InputNormalizer
 from tensoralloy.nn.utils import GraphKeys, get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
-from misc import AttributeDict
+from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

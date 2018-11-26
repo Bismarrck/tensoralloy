@@ -12,7 +12,7 @@ from typing import List, Dict
 from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
 from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
-from misc import safe_select, Defaults, AttributeDict
+from tensoralloy.misc import safe_select, Defaults, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

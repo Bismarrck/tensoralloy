@@ -9,7 +9,7 @@ from typing import Iterable
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 
-from misc import Defaults
+from tensoralloy.misc import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 from typing import List
 
-from misc import AttributeDict
+from tensoralloy.misc import AttributeDict
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
 
