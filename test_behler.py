@@ -23,8 +23,9 @@ from dataclasses import dataclass
 
 from graph_utils import cutoff
 from utils import get_kbody_terms
-from behler import compute_dimension
-from behler import IndexTransformer, G2IndexedSlices, G4IndexedSlices
+from tensoralloy.descriptor.behler import compute_dimension
+from tensoralloy.descriptor.indexed_slices import IndexTransformer
+from tensoralloy.descriptor.indexer import G2IndexedSlices, G4IndexedSlices
 from transformer import SymmetryFunctionTransformer
 from transformer import BatchSymmetryFunctionTransformer
 

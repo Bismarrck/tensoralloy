@@ -15,7 +15,8 @@ from collections import Counter
 from typing import List, Dict
 
 from misc import AttributeDict
-from behler import IndexTransformer, G2IndexedSlices
+from tensoralloy.descriptor.indexed_slices import IndexTransformer
+from tensoralloy.descriptor.indexer import G2IndexedSlices
 from utils import get_kbody_terms, get_elements_from_kbody_term
 from descriptor import BatchDescriptorTransformer
 from tensoralloy.descriptor.interface import AtomicDescriptor

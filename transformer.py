@@ -13,7 +13,7 @@ from typing import Dict
 
 from tensoralloy.descriptor.behler import SymmetryFunction, BatchSymmetryFunction
 from utils import get_elements_from_kbody_term
-from behler import IndexTransformer, G2IndexedSlices, G4IndexedSlices
+from tensoralloy.descriptor.indexed_slices import G2IndexedSlices, G4IndexedSlices, IndexTransformer
 from descriptor import DescriptorTransformer, BatchDescriptorTransformer
 from misc import Defaults, AttributeDict
 
