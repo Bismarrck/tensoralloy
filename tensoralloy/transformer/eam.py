@@ -11,15 +11,15 @@ from typing import Dict
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
-from tensoralloy.transformer.behler import _bytes_feature, _int64_feature
 from tensoralloy.descriptor.eam import BatchEAM
-from tensoralloy.descriptor.indexed_slices import IndexTransformer
 from tensoralloy.descriptor.indexed_slices import G2IndexedSlices
 from tensoralloy.misc import AttributeDict
-from tensoralloy.transformer.interface import BatchDescriptorTransformer
+from tensoralloy.transformer.base import BatchDescriptorTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+__all__ = ["BatchEAMTransformer"]
 
 
 class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
@@ -69,45 +69,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         return self._stress
 
-    def get_index_transformer(self, atoms: Atoms):
-        """
-        Return the corresponding `IndexTransformer`.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            An `Atoms` object.
-
-        Returns
-        -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
-
-        """
-        # The mode 'reduce' is important here because chemical symbol lists of
-        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
-        formula = atoms.get_chemical_formula(mode='reduce')
-        if formula not in self._index_transformers:
-            self._index_transformers[formula] = IndexTransformer(
-                self._max_occurs, atoms.get_chemical_symbols()
-            )
-        return self._index_transformers[formula]
-
-    def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
-        """
-        A helper function to resize the given array.
-        """
-        if np.ndim(alist) == 1:
-            shape = [self._nij_max, ]
-        else:
-            shape = [self._nij_max, ] + list(alist.shape[1:])
-        nlist = np.zeros(shape, dtype=np.int32)
-        length = len(alist)
-        nlist[:length] = alist
-        if is_indices:
-            nlist[:length] += 1
-        return nlist
-
     def get_indexed_slices(self, atoms: Atoms):
         """
         Return the indexed slices.
@@ -147,21 +108,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
-    @staticmethod
-    def _encode_g2_indexed_slices(g2: G2IndexedSlices):
-        """
-        Encode the indexed slices of G2:
-            * `v2g_map`, `ilist` and `jlist` are merged into a single array
-              with key 'r_indices'.
-            * `shift` will be encoded separately with key 'r_shifts'.
-
-        """
-        indices = np.concatenate((
-            g2.v2g_map, g2.ilist[..., np.newaxis], g2.jlist[..., np.newaxis],
-        ), axis=1).tostring()
-        return {'g2.indices': _bytes_feature(indices),
-                'g2.shifts': _bytes_feature(g2.shift.tostring())}
-
     def _get_composition(self, atoms: Atoms) -> np.ndarray:
         """
         Return the composition of the `Atoms`.
@@ -175,40 +121,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         Encode the `Atoms` object and return a `tf.train.Example`.
         """
-        clf = self.get_index_transformer(atoms)
-        positions = clf.map_array(atoms.positions)
-        cells = atoms.get_cell(complete=True)
-        volume = atoms.get_volume()
-        y_true = atoms.get_total_energy()
-        composition = self._get_composition(atoms)
-        mask = clf.mask.astype(np.float64)
+        feature_list = self._encode_atoms(atoms)
         g2 = self.get_indexed_slices(atoms)
-        feature_list = {
-            'positions': _bytes_feature(positions.tostring()),
-            'cells': _bytes_feature(cells.tostring()),
-            'n_atoms': _int64_feature(len(atoms)),
-            'volume': _bytes_feature(np.atleast_1d(volume).tostring()),
-            'y_true': _bytes_feature(np.atleast_1d(y_true).tostring()),
-            'mask': _bytes_feature(mask.tostring()),
-            'composition': _bytes_feature(composition.tostring()),
-        }
-        if self._forces:
-            f_true = clf.map_array(atoms.get_forces())[1:]
-            feature_list['f_true'] = _bytes_feature(f_true.tostring())
-
-        if self._stress:
-            # Convert the unit of the stress tensor to 'eV' for simplification:
-            # 1 eV/Angstrom**3 = 160.21766208 GPa
-            # 1 GPa = 10 kbar
-            # reduced_stress (eV) = stress * volume
-            virial = atoms.get_stress(voigt=True) * volume
-            total_pressure = virial[:3].mean()
-            feature_list['reduced_stress'] = _bytes_feature(virial.tostring())
-            feature_list['reduced_total_pressure'] = _bytes_feature(
-                np.atleast_1d(total_pressure).tostring())
-
         feature_list.update(self._encode_g2_indexed_slices(g2))
-
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))
 

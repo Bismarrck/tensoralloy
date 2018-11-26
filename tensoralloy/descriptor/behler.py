@@ -430,6 +430,13 @@ class BatchSymmetryFunction(SymmetryFunction):
         """
         return self._nijk_max
 
+    @property
+    def max_occurs(self):
+        """
+        Return the maximum occurance of each type of element.
+        """
+        return self._max_occurs
+
     @staticmethod
     def _get_pbc_displacements(shift, cells):
         """

@@ -5,6 +5,9 @@ This module defines the abstract class of all atomic descriptors.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
+import abc
+from collections import Counter
 from typing import List
 
 from tensoralloy.misc import AttributeDict
@@ -13,7 +16,37 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class AtomicDescriptor:
+class AtomicDescriptorInterface(abc.ABC):
+    """
+    The required interafces for all atomic descriptor classes.
+    """
+
+    @property
+    @abc.abstractmethod
+    def elements(self):
+        """
+        Return a list of str as the ordered unique elements.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def cutoff(self):
+        """
+        Return the cutoff radius.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def max_occurs(self) -> Counter:
+        """
+        Return the maximum occurance of each type of element.
+        """
+        pass
+
+
+class AtomicDescriptor(AtomicDescriptorInterface):
     """
     The base class for all kinds of atomic descriptors.
     """
@@ -50,6 +83,13 @@ class AtomicDescriptor:
         non-periodic molecules some Ops can be ignored.
         """
         return self._periodic
+
+    @property
+    def max_occurs(self):
+        """
+        There is no restriction for the occurances of an element.
+        """
+        return {el: np.inf for el in self._elements}
 
     @staticmethod
     def _get_pbc_displacements(shift, cells):
