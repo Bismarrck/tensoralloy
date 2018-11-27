@@ -21,14 +21,14 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["SymmetryFunction", "BatchSymmetryFunction", "compute_dimension"]
 
 
-def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
+def compute_dimension(all_kbody_terms: List[str], n_etas, n_betas, n_gammas,
                       n_zetas):
     """
     Compute the total dimension of the feature vector.
 
     Parameters
     ----------
-    kbody_terms : List[str]
+    all_kbody_terms : List[str]
         A list of str as all k-body terms.
     n_etas : int
         The number of `eta` for radial functions.
@@ -49,7 +49,7 @@ def compute_dimension(kbody_terms: List[str], n_etas, n_betas, n_gammas,
     """
     total_dim = 0
     kbody_sizes = []
-    for kbody_term in kbody_terms:
+    for kbody_term in all_kbody_terms:
         k = len(get_elements_from_kbody_term(kbody_term))
         if k == 2:
             n = n_etas
@@ -95,18 +95,20 @@ class SymmetryFunction(AtomicDescriptor):
             can only proceed non-periodic molecules.
 
         """
-        kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=k_max)
-        ndim, kbody_sizes = compute_dimension(kbody_terms, len(eta), len(beta),
-                                              len(gamma), len(zeta))
+        all_kbody_terms, kbody_terms, elements = get_kbody_terms(
+            elements, k_max=k_max)
+        ndim, kbody_sizes = compute_dimension(
+            all_kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
 
         super(SymmetryFunction, self).__init__(rc, elements, periodic=periodic)
 
         self._k_max = k_max
-        self._mapping = mapping
         self._kbody_terms = kbody_terms
+        self._all_kbody_terms = all_kbody_terms
         self._kbody_sizes = kbody_sizes
         self._ndim = ndim
-        self._kbody_index = {key: kbody_terms.index(key) for key in kbody_terms}
+        self._kbody_index = {kbody_term: all_kbody_terms.index(kbody_term)
+                             for kbody_term in all_kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
         self._eta = np.asarray(eta)
         self._gamma = np.asarray(gamma)
@@ -131,9 +133,17 @@ class SymmetryFunction(AtomicDescriptor):
         return self._ndim
 
     @property
-    def kbody_terms(self) -> List[str]:
+    def all_kbody_terms(self) -> List[str]:
         """
         A list of str as the ordered k-body terms.
+        """
+        return self._all_kbody_terms
+    
+    @property
+    def kbody_terms(self) -> Dict[str, List[str]]:
+        """
+        A dict of (element, kbody_terms) as the k-body terms for each type of
+        elements.
         """
         return self._kbody_terms
 

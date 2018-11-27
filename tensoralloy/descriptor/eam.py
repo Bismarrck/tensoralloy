@@ -38,19 +38,35 @@ class EAM(AtomicDescriptor):
             A list of str as the ordered elements.
 
         """
-        kbody_terms, mapping, elements = get_kbody_terms(elements, k_max=2)
+        all_kbody_terms, kbody_terms, elements = \
+            get_kbody_terms(elements, k_max=2)
         kbody_index = {}
-        for kbody_term in kbody_terms:
+        for kbody_term in all_kbody_terms:
             center = get_elements_from_kbody_term(kbody_term)[0]
-            kbody_index[kbody_term] = mapping[center].index(kbody_term)
+            kbody_index[kbody_term] = kbody_terms[center].index(kbody_term)
 
         super(EAM, self).__init__(rc=rc, elements=elements, periodic=True)
 
         self._k_max = 2
-        self._mapping = mapping
         self._kbody_terms = kbody_terms
-        self._max_n_terms = max(map(len, mapping.values()))
+        self._all_kbody_terms = all_kbody_terms
+        self._max_n_terms = max(map(len, kbody_terms.values()))
         self._kbody_index = kbody_index
+
+    @property
+    def all_kbody_terms(self) -> List[str]:
+        """
+        A list of str as the ordered k-body terms.
+        """
+        return self._all_kbody_terms
+
+    @property
+    def kbody_terms(self) -> Dict[str, List[str]]:
+        """
+        A dict of (element, kbody_terms) as the k-body terms for each type of
+        elements.
+        """
+        return self._kbody_terms
 
     def _get_g_shape(self, placeholders):
         """

@@ -215,14 +215,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                     indexk = transformer.inplace_map_index(atomk, True, True)
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
-                    term = '{}{}'.format(prefix, suffix)
+                    kbody_term = '{}{}'.format(prefix, suffix)
                     ij[count] = atomi, atomj
                     ik[count] = atomi, atomk
                     jk[count] = atomj, atomk
                     ij_shift[count] = vectors[atomi][j]
                     ik_shift[count] = vectors[atomi][k]
                     jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self._kbody_index[term]
+                    index = self._kbody_index[kbody_term]
                     v2g_map[count, 0] = atomi
                     v2g_map[count, 1] = self._offsets[index]
                     count += 1
@@ -423,14 +423,14 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     indexk = transformer.inplace_map_index(atomk, True, True)
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
-                    term = '{}{}'.format(prefix, suffix)
+                    kbody_term = '{}{}'.format(prefix, suffix)
                     ij[count] = atomi, atomj
                     ik[count] = atomi, atomk
                     jk[count] = atomj, atomk
                     ij_shift[count] = vectors[atomi][j]
                     ik_shift[count] = vectors[atomi][k]
                     jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self._kbody_index[term]
+                    index = self._kbody_index[kbody_term]
                     v2g_map[count, 1] = atomi
                     v2g_map[count, 2] = self._offsets[index]
                     count += 1
@@ -727,7 +727,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         weights = {}
         for element in self._elements:
-            kbody_terms = self._mapping[element]
+            kbody_terms = self._kbody_terms[element]
             values = []
             for kbody_term in kbody_terms:
                 if len(get_elements_from_kbody_term(kbody_term)) == 2:

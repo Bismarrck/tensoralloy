@@ -506,17 +506,17 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
     Compute the symmetry function descriptors for unit tests.
     """
     symbols = atoms.get_chemical_symbols()
-    kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
+    all_kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
     total_dim, kbody_sizes = compute_dimension(
-        kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
+        all_kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
         Defaults.n_zetas)
 
     with tf.Graph().as_default():
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell, tf.float64, name='cell')
         rmap = legacy_build_radial_v2g_map(atoms, rc, Defaults.n_etas,
-                                           kbody_terms, kbody_sizes)
-        amap = legacy_build_angular_v2g_map(atoms, rmap, kbody_terms,
+                                           all_kbody_terms, kbody_sizes)
+        amap = legacy_build_angular_v2g_map(atoms, rmap, all_kbody_terms,
                                             kbody_sizes)
         gr = radial_function(R, rc, rmap.v2g_map, cell, Defaults.eta,
                              rmap.ilist, rmap.jlist, rmap.Slist, total_dim)
@@ -528,7 +528,7 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
         with tf.Session() as sess:
             results = sess.run(g)
 
-        return results, kbody_terms, kbody_sizes
+        return results, all_kbody_terms, kbody_sizes
 
 
 def test_monoatomic_molecule():
@@ -625,7 +625,7 @@ def test_manybody_k():
     eps = 1e-8
     max_occurs = Counter(symbols)
     elements = sorted(max_occurs.keys())
-    ref, ref_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc)
+    ref, ref_all_kbody_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc)
     ref = ref[[3, 4, 0, 1, 2]]
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
@@ -636,8 +636,8 @@ def test_manybody_k():
             with tf.Session() as sess:
                 values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
             columns = []
-            for i, ref_term in enumerate(ref_terms):
-                if ref_term in sf.kbody_terms:
+            for i, ref_term in enumerate(ref_all_kbody_terms):
+                if ref_term in sf.all_kbody_terms:
                     columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
             assert_less((values[1:] - ref[:, columns]).max(), eps)
 
@@ -679,11 +679,11 @@ def _compute_qm7m_descriptors_legacy(rc):
     """
     batch_size = len(qm7m.trajectory)
     n_atoms = sum(qm7m.max_occurs.values())
-    kbody_terms, mapping, elements = get_kbody_terms(
+    all_kbody_terms, kbody_terms, elements = get_kbody_terms(
         list(qm7m.max_occurs.keys()), k_max=3
     )
     total_dim, kbody_sizes = compute_dimension(
-        kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
+        all_kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
         Defaults.n_zetas)
     element_offsets = np.insert(
         np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
@@ -691,19 +691,20 @@ def _compute_qm7m_descriptors_legacy(rc):
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, n_atoms + 1, total_dim))
     for i, atoms in enumerate(qm7m.trajectory):
-        g, local_terms, local_sizes = legacy_symmetry_function(atoms, rc)
+        g, local_all_body_terms, local_sizes = \
+            legacy_symmetry_function(atoms, rc)
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
         row = Counter()
         for k, atom in enumerate(atoms):
-            atom_kbody_terms = mapping[atom.symbol]
+            atom_kbody_terms = kbody_terms[atom.symbol]
             j = row[atom.symbol] + element_offsets[elements.index(atom.symbol)]
             for term in atom_kbody_terms:
-                if term not in local_terms:
+                if term not in local_all_body_terms:
                     continue
-                idx = kbody_terms.index(term)
+                idx = all_kbody_terms.index(term)
                 istart = offsets[idx]
                 istop = istart + kbody_sizes[idx]
-                idx = local_terms.index(term)
+                idx = local_all_body_terms.index(term)
                 lstart = local_offsets[idx]
                 lstop = lstart + local_sizes[idx]
                 targets[i, j + 1, istart: istop] = g[k, lstart: lstop]
