@@ -65,6 +65,7 @@ class EamNN(BasicNN):
         activation_fn = get_activation_fn(self._activation)
         outputs = []
         with tf.name_scope("Phi"):
+            half = tf.constant(0.5, dtype=tf.float64, name='half')
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(element):
                     # Convert `x` to a 5D tensor.
@@ -77,8 +78,8 @@ class EamNN(BasicNN):
                                              verbose=verbose)
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
-                    y = tf.reduce_sum(y, axis=(2, 3, 4), keepdims=False,
-                                      name='atomic')
+                    y = tf.reduce_sum(y, axis=(2, 3, 4), keepdims=False)
+                    y = tf.multiply(y, half, name='atomic')
                     if verbose:
                         log_tensor(y)
                     outputs.append(y)
