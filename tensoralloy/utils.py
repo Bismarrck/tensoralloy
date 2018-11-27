@@ -8,7 +8,7 @@ import numpy as np
 import logging
 from itertools import chain
 from logging.config import dictConfig
-from typing import List
+from typing import List, Dict, Tuple
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -60,24 +60,26 @@ def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     return atoms
 
 
-def get_kbody_terms(elements: List[str], k_max=3):
+def get_kbody_terms(elements: List[str], k_max=3) -> Tuple[List[str],
+                                                           Dict[str, List[str]],
+                                                           List[str]]:
     """
     Given a list of unique elements, construct all possible k-body terms and the
     dict mapping terms to each type of element.
 
     Parameters
     ----------
-    elements : list
-        A list of unique elements.
+    elements : List[str]
+        A list of str as the ordered unique elements.
     k_max : int
         The maximum k for the many-body expansion.
 
     Returns
     -------
-    terms : List[str]
+    all_terms : List[str]
         A list of str as all k-body terms.
-    mapping : dict
-        A dict mapping k-body terms to each type of element.
+    kbody_terms : Dict[str, List[str]]
+        A dict of (element, terms) mapping k-body terms to each type of element.
     elements : List[str]
         A list of str as the ordered unique elements.
 
@@ -85,29 +87,30 @@ def get_kbody_terms(elements: List[str], k_max=3):
     elements = sorted(list(set(elements)))
     n = len(elements)
     k_max = max(k_max, 1)
-    mapping = {}
+    kbody_terms = {}
     for i in range(n):
-        term = "{}{}".format(elements[i], elements[i])
-        mapping[elements[i]] = [term]
+        kbody_term = "{}{}".format(elements[i], elements[i])
+        kbody_terms[elements[i]] = [kbody_term]
     if k_max >= 2:
         for i in range(n):
             for j in range(n):
                 if i == j:
                     continue
-                term = "{}{}".format(elements[i], elements[j])
-                mapping[elements[i]].append(term)
+                kbody_term = "{}{}".format(elements[i], elements[j])
+                kbody_terms[elements[i]].append(kbody_term)
     if k_max >= 3:
         for i in range(n):
             center = elements[i]
             for j in range(n):
                 for k in range(j, n):
                     suffix = "".join(sorted([elements[j], elements[k]]))
-                    term = "{}{}".format(center, suffix)
-                    mapping[elements[i]].append(term)
+                    kbody_term = "{}{}".format(center, suffix)
+                    kbody_terms[elements[i]].append(kbody_term)
     if k_max >= 4:
         raise ValueError("`k_max>=4` is not supported yet!")
-    terms = list(chain(*[mapping[element] for element in elements]))
-    return terms, mapping, elements
+    all_terms = [
+        x for x in chain(*[kbody_terms[element] for element in elements])]
+    return all_terms, kbody_terms, elements
 
 
 def set_logging_configs(logfile="logfile"):
