@@ -28,7 +28,7 @@ class EamNN(BasicNN):
         """
         super(EamNN, self).__init__(*args, **kwargs)
 
-        self._symmetric = symmetric
+        self._symmetric = symmetric and len(self._elements) > 1
 
     @property
     def symmetric(self):
