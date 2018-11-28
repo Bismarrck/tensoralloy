@@ -151,10 +151,15 @@ class ConfigParser(configparser.ConfigParser):
             self[section].getboolean('total_pressure', False), False)
         total_pressure = self._dataset.stress and total_pressure
 
+        if self._dataset.descriptor == 'eam':
+            attr = 'all_kbody_terms'
+        else:
+            attr = 'elements'
+
         hidden_sizes = {}
-        for element in self._dataset.transformer.elements:
-            hidden_sizes[element] = self[section].getints(
-                element, Defaults.hidden_sizes)
+        for key in getattr(self._dataset.transformer, attr):
+            hidden_sizes[key] = self[section].getints(
+                key, Defaults.hidden_sizes)
 
         return {'elements': self._dataset.transformer.elements,
                 'hidden_sizes': hidden_sizes,
