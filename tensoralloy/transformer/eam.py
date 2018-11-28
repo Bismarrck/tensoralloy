@@ -95,8 +95,8 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         jlist = clf.inplace_map_index(jlist)
         shift = np.asarray(Slist, dtype=np.float64)
 
-        v2g_map[:, 1] = ilist
-        v2g_map[:, 2] = tlist
+        v2g_map[:, 1] = tlist
+        v2g_map[:, 2] = ilist
         counters = {}
         for index in range(nij):
             atomi = ilist[index]

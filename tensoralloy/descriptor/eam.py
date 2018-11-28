@@ -72,7 +72,7 @@ class EAM(AtomicDescriptor):
         """
         Return the shape of the descriptor matrix.
         """
-        return [placeholders.n_atoms, self._max_n_terms, placeholders.nnl_max]
+        return [self._max_n_terms, placeholders.n_atoms, placeholders.nnl_max]
 
     def _get_v2g_map(self, placeholders, **kwargs):
         """
@@ -91,7 +91,7 @@ class EAM(AtomicDescriptor):
         """
         Return the axis to rowwise split `g`.
         """
-        return 0
+        return 1
 
     def _split_descriptors(self, g, placeholders) -> Dict[str, tf.Tensor]:
         """
@@ -188,7 +188,7 @@ class BatchEAM(EAM):
         """
         Return the shape of the descriptor matrix.
         """
-        return [self._batch_size, self._max_n_atoms, self._max_n_terms,
+        return [self._batch_size, self._max_n_terms, self._max_n_atoms,
                 self._nnl_max]
 
     def _get_v2g_map_batch_indexing_matrix(self):
@@ -216,7 +216,7 @@ class BatchEAM(EAM):
         """
         Return the axis to rowwise split `g`.
         """
-        return 1
+        return 2
 
     def _get_v2g_map(self, placeholders, **kwargs):
         """
