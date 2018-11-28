@@ -28,11 +28,6 @@ class EamNN(BasicNN):
         """
         super(EamNN, self).__init__(*args, **kwargs)
 
-        all_kbody_terms, kbody_terms, _ = get_kbody_terms(
-            self._elements, k_max=2)
-
-        self._kbody_terms = kbody_terms
-        self._all_kbody_terms = all_kbody_terms
         self._symmetric = symmetric
 
     @property
@@ -50,6 +45,12 @@ class EamNN(BasicNN):
         return self._all_kbody_terms
 
     def _convert_to_dict(self, hidden_sizes):
+        all_kbody_terms, kbody_terms, _ = get_kbody_terms(
+            self._elements, k_max=2)
+
+        self._kbody_terms = kbody_terms
+        self._all_kbody_terms = all_kbody_terms
+
         results = {}
         for element in self._all_kbody_terms:
             if isinstance(hidden_sizes, dict):
@@ -111,7 +112,7 @@ class EamNN(BasicNN):
             for kbody_term, xi in partitions.items():
                 with tf.variable_scope(kbody_term):
                     # Convert `x` to a 5D tensor.
-                    x = tf.expand_dims(xi, axis=-1, name=f'g{kbody_term}')
+                    x = tf.expand_dims(xi, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
                     hidden_sizes = self._hidden_sizes[kbody_term]
