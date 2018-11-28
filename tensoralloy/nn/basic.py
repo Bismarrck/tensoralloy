@@ -5,6 +5,7 @@ This module defines the basic neural network for this project.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
 from os.path import join
 from typing import List, Dict
@@ -32,9 +33,9 @@ class BasicNN:
         ----------
         elements : List[str]
             A list of str as the ordered elements.
-        hidden_sizes : List[int] or Dict[str, List[int]]
-            A list of int or a dict of (str, list of int) as the sizes of the
-            hidden layers.
+        hidden_sizes : int or List[int] or Dict[str, List[int]] or array_like
+            A list of int or a dict of (str, list of int) or an int as the sizes
+            of the hidden layers.
         activation : str
             The name of the activation function to use.
         forces : bool
@@ -104,9 +105,17 @@ class BasicNN:
         """
         Convert `hidden_sizes` to a dict if needed.
         """
-        if isinstance(hidden_sizes, dict):
-            return hidden_sizes
-        return {element: hidden_sizes for element in self._elements}
+        results = {}
+        for element in self._elements:
+            if isinstance(hidden_sizes, dict):
+                sizes = np.asarray(
+                    hidden_sizes.get(element, Defaults.hidden_sizes),
+                    dtype=np.int)
+            else:
+                sizes = np.atleast_1d(hidden_sizes).astype(np.int)
+            assert (sizes > 0).all()
+            results[element] = sizes.tolist()
+        return results
 
     def _get_energy(self, outputs, features, verbose=True):
         """
