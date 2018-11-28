@@ -13,7 +13,7 @@ from sklearn.model_selection import ParameterGrid
 from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.misc import Defaults, AttributeDict
-from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -95,20 +95,15 @@ class SymmetryFunction(AtomicDescriptor):
             can only proceed non-periodic molecules.
 
         """
-        all_kbody_terms, kbody_terms, elements = get_kbody_terms(
-            elements, k_max=k_max)
+        super(SymmetryFunction, self).__init__(rc, elements, k_max, periodic)
+
         ndim, kbody_sizes = compute_dimension(
-            all_kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
+            self._all_kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
 
-        super(SymmetryFunction, self).__init__(rc, elements, periodic=periodic)
-
-        self._k_max = k_max
-        self._kbody_terms = kbody_terms
-        self._all_kbody_terms = all_kbody_terms
         self._kbody_sizes = kbody_sizes
         self._ndim = ndim
-        self._kbody_index = {kbody_term: all_kbody_terms.index(kbody_term)
-                             for kbody_term in all_kbody_terms}
+        self._kbody_index = {kbody_term: self._all_kbody_terms.index(kbody_term)
+                             for kbody_term in self._all_kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
         self._eta = np.asarray(eta)
         self._gamma = np.asarray(gamma)
@@ -119,33 +114,11 @@ class SymmetryFunction(AtomicDescriptor):
                                               'zeta': self._zeta})
 
     @property
-    def k_max(self):
-        """
-        Return the maximum k for the many-body expansion scheme.
-        """
-        return self._k_max
-
-    @property
     def ndim(self):
         """
         Return the total dimension of an atom descriptor vector.
         """
         return self._ndim
-
-    @property
-    def all_kbody_terms(self) -> List[str]:
-        """
-        A list of str as the ordered k-body terms.
-        """
-        return self._all_kbody_terms
-    
-    @property
-    def kbody_terms(self) -> Dict[str, List[str]]:
-        """
-        A dict of (element, kbody_terms) as the k-body terms for each type of
-        elements.
-        """
-        return self._kbody_terms
 
     @property
     def kbody_sizes(self) -> List[int]:

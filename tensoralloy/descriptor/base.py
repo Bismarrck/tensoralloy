@@ -8,8 +8,9 @@ import tensorflow as tf
 import numpy as np
 import abc
 from collections import Counter
-from typing import List
+from typing import List, Dict
 
+from tensoralloy.utils import get_kbody_terms
 from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
@@ -45,6 +46,31 @@ class AtomicDescriptorInterface(abc.ABC):
         """
         pass
 
+    @property
+    @abc.abstractmethod
+    def k_max(self) -> int:
+        """
+        Return the maximum k for the many-body expansion scheme.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def all_kbody_terms(self) -> List[str]:
+        """
+        A list of str as the ordered k-body terms.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def kbody_terms(self) -> Dict[str, List[str]]:
+        """
+        A dict of (element, kbody_terms) as the k-body terms for each type of
+        elements.
+        """
+        pass
+
 
 class AtomicDescriptor(AtomicDescriptorInterface):
     """
@@ -53,12 +79,18 @@ class AtomicDescriptor(AtomicDescriptorInterface):
 
     gather_fn = staticmethod(tf.gather)
 
-    def __init__(self, rc, elements: List[str], periodic=True):
+    def __init__(self, rc, elements: List[str], k_max, periodic=True):
         """
         Initialization method.
         """
+        all_kbody_terms, kbody_terms, elements = \
+            get_kbody_terms(elements, k_max)
+
         self._rc = rc
-        self._elements = sorted(elements)
+        self._k_max = k_max
+        self._all_kbody_terms = all_kbody_terms
+        self._kbody_terms = kbody_terms
+        self._elements = elements
         self._n_elements = len(elements)
         self._periodic = periodic
 
@@ -90,6 +122,28 @@ class AtomicDescriptor(AtomicDescriptorInterface):
         There is no restriction for the occurances of an element.
         """
         return {el: np.inf for el in self._elements}
+
+    @property
+    def k_max(self):
+        """
+        Return the maximum k for the many-body expansion scheme.
+        """
+        return self._k_max
+
+    @property
+    def all_kbody_terms(self):
+        """
+        A list of str as the ordered k-body terms.
+        """
+        return self._all_kbody_terms
+
+    @property
+    def kbody_terms(self):
+        """
+        A dict of (element, kbody_terms) as the k-body terms for each type of
+        elements.
+        """
+        return self._kbody_terms
 
     @staticmethod
     def _get_pbc_displacements(shift, cells):
