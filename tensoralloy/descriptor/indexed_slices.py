@@ -148,6 +148,7 @@ class IndexTransformer:
         """
         return self._mask
 
+    # FIXME: the index here should start from one. This may be confusing.
     def inplace_map_index(self, index_or_indices, reverse=False,
                           exclude_extra=False):
         """
@@ -156,7 +157,8 @@ class IndexTransformer:
         Parameters
         ----------
         index_or_indices : int or List[int] or array_like
-            An atom index or a list of indices.
+            An atom index or a list of indices. One must be aware that indices
+            here start from one!
         reverse : bool, optional
             If True, the indices will be mapped to the local reference from the
             global reference.
