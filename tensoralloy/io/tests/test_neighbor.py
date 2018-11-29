@@ -6,7 +6,9 @@ from __future__ import print_function, absolute_import
 
 import nose
 from nose.tools import assert_equal
+from ase.db import connect
 
+from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.io.read import read
 
@@ -35,24 +37,21 @@ def test_find_sizes():
     """
     Test the function `_find_sizes`.
     """
-    from tensoralloy.io.neighbor import _find_sizes
-    from ase.db import connect
-
     db = connect('test_files/qm7m/qm7m.db')
 
     atoms = db.get_atoms('id=2')
-    nij, nijk, nnl = _find_sizes(atoms, 6.5, 2)
+    nij, nijk, nnl = find_neighbor_sizes(atoms, 6.5, 2)
     assert_equal(nij, 20)
     assert_equal(nijk, 0)
     assert_equal(nnl, 4)
 
     atoms = db.get_atoms('id=3')
-    nij, nijk, nnl = _find_sizes(atoms, 6.5, 3)
+    nij, nijk, nnl = find_neighbor_sizes(atoms, 6.5, 3)
     assert_equal(nij, 56)
     assert_equal(nijk, 168)
     assert_equal(nnl, 6)
 
-    nij, nijk, nnl = _find_sizes(atoms, 6.5, 1)
+    nij, nijk, nnl = find_neighbor_sizes(atoms, 6.5, 1)
     assert_equal(nij, 32)  # 2 C-C + 5 x 6 H-H = 32
     assert_equal(nijk, 0)
     assert_equal(nnl, 5)

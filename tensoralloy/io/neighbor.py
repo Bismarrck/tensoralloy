@@ -1,8 +1,11 @@
+# coding=utf-8
+"""
+This module defines functions to detect the limits of the neighbor lists.
+"""
 from __future__ import print_function, absolute_import
 
-from collections import Counter
-
 import numpy as np
+from collections import Counter
 from ase.db.sqlite import SQLite3Database
 from ase.neighborlist import neighbor_list
 from joblib import Parallel, delayed
@@ -23,7 +26,7 @@ def convert_rc_to_key(rc):
     return "{:.2f}".format(round(rc, 4))
 
 
-def _find_sizes(atoms, rc, k_max):
+def find_neighbor_sizes(atoms, rc, k_max):
     """
     A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
     """
@@ -88,8 +91,8 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
 
     """
 
-    def _find(aid):
-        return _find_sizes(database.get_atoms(f'id={aid}'), rc, k_max)
+    def _find_wrapper(aid):
+        return find_neighbor_sizes(database.get_atoms(f'id={aid}'), rc, k_max)
 
     if verbose:
         print('Start finding neighbors for rc = {} and k_max = {}. This may '
@@ -97,7 +100,7 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
 
     verb_level = 5 if verbose else 0
     results = Parallel(n_jobs=n_jobs, verbose=verb_level)(
-        delayed(_find)(jid) for jid in range(1, len(database) + 1)
+        delayed(_find_wrapper)(jid) for jid in range(1, len(database) + 1)
     )
 
     nij_max, nijk_max, nnl_max = np.asarray(
