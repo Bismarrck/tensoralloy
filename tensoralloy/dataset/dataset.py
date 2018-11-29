@@ -401,8 +401,9 @@ class Dataset:
                 batch = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
                     shuffle=shuffle)
-            splits = self._transformer.get_graph_from_batch(batch, batch_size)
-            features = AttributeDict(descriptors=splits,
+            ops = self._transformer.get_descriptor_ops_from_batch(
+                batch, batch_size)
+            features = AttributeDict(descriptors=ops,
                                      positions=batch.positions,
                                      n_atoms=batch.n_atoms,
                                      cells=batch.cells,
