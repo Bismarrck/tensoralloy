@@ -109,19 +109,25 @@ class EamNN(BasicNN):
         outputs = []
         with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
-            for kbody_term, xi in partitions.items():
+            for kbody_term, (xi, mi) in partitions.items():
                 with tf.variable_scope(kbody_term):
                     # Convert `x` to a 5D tensor.
                     x = tf.expand_dims(xi, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
+
                     hidden_sizes = self._hidden_sizes[kbody_term]
                     y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
                                              verbose=verbose)
+
+                    # Apply the value mask
+                    y = tf.multiply(y, mi, name='masked')
+
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
                     y = tf.reduce_sum(y, axis=(2, 3, 4), keepdims=False)
                     y = tf.multiply(y, half, name='atomic')
+
                     if verbose:
                         log_tensor(y)
                     outputs.append(y)
@@ -134,7 +140,7 @@ class EamNN(BasicNN):
         activation_fn = get_activation_fn(self._activation)
         outputs = []
         with tf.name_scope("Embed"):
-            for kbody_term, xi in partitions.items():
+            for kbody_term, (xi, mi) in partitions.items():
                 hidden_sizes = self._hidden_sizes[kbody_term]
                 with tf.variable_scope(kbody_term):
                     with tf.variable_scope("Rho"):
@@ -143,11 +149,16 @@ class EamNN(BasicNN):
                             log_tensor(x)
                         y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
                                                  verbose=verbose)
+                        # Apply the mask to rho.
+                        y = tf.multiply(y, mi, name='masked')
+
                         rho = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
                         if verbose:
                             log_tensor(rho)
                     with tf.variable_scope("F"):
                         rho = tf.expand_dims(rho, axis=-1, name='rho')
+                        if verbose:
+                            log_tensor(rho)
                         y = self._get_1x1conv_nn(
                             rho, activation_fn, hidden_sizes, verbose=verbose)
                         embed = tf.reduce_sum(y, axis=(2, 3), name='embed')
@@ -162,27 +173,34 @@ class EamNN(BasicNN):
         of unique k-body terms. If `self.symmetric` is False, `Np` is equal to
         `N**2` where N is the number of elements. If `self.symmetric` is True,
         `Np` will be `N * (N + 1) / 2`.
+
+        Returns
+        -------
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict. The keys are unique kbody terms and values are tuples of
+            (gi, mi) where `gi` represents the descriptors and `mi` is the value
+            mask.
+
         """
         partitions = AttributeDict()
 
         with tf.name_scope("Partition"):
             for element in self._elements:
                 kbody_terms = self._kbody_terms[element]
-                blocks = tf.split(features.descriptors[element],
-                                  num_or_size_splits=len(kbody_terms),
-                                  axis=1)
-                for i, block in enumerate(blocks):
+                g, mask = features.descriptors[element]
+                num = len(kbody_terms)
+                glists = tf.split(g, num_or_size_splits=num, axis=1)
+                mlists = tf.split(mask, num_or_size_splits=num, axis=1)
+                for i, (gi, mi) in enumerate(zip(glists, mlists)):
                     kbody_term = kbody_terms[i]
                     if self._symmetric:
-                        symmetric_term = ''.join(
+                        kbody_term = ''.join(
                             sorted(get_elements_from_kbody_term(kbody_term)))
-                        if symmetric_term not in partitions:
-                            partitions[symmetric_term] = block
-                        else:
-                            partitions[symmetric_term] = tf.concat(
-                                (partitions[symmetric_term], block), axis=2)
-                    else:
-                        partitions[kbody_term] = block
+                        if kbody_term in partitions:
+                            _gi, _mi = partitions[kbody_term]
+                            gi = tf.concat((_gi, gi), axis=2)
+                            mi = tf.concat((_mi, mi), axis=2)
+                    partitions[kbody_term] = (gi, mi)
             return partitions
 
     def _build_nn(self, features: AttributeDict, verbose=False):
