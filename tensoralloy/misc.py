@@ -4,15 +4,12 @@ This module defines miscellaneous functions and vars.
 """
 from __future__ import print_function, absolute_import
 
-from collections import Counter
-
 import numpy as np
 from unittest import SkipTest
 from os.path import dirname, isdir, join
 from os import makedirs
 
-from ase import Atoms
-from ase.io import read
+from tensoralloy.test_utils import qm7m
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -150,40 +147,3 @@ def brange(start, stop, batch_size):
         istop = min(istart + batch_size, stop)
         yield istart, istop
         istart = istop
-
-
-# Pd3O2
-Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
-              cell=np.array([[7.78, 0., 0.],
-                             [0., 5.50129076, 0.],
-                             [0., 0., 15.37532269]]),
-              positions=np.array([[3.89, 0., 8.37532269],
-                                  [0., 2.75064538, 8.37532269],
-                                  [3.89, 2.75064538, 8.37532269],
-                                  [5.835, 1.37532269, 8.5],
-                                  [5.835, 7.12596807, 8.]]))
-
-# A permutation of Pd3O2
-Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
-                pbc=np.array([True, True, False], dtype=bool),
-                cell=np.array([[7.78, 0., 0.],
-                               [0., 5.50129076, 0.],
-                               [0., 0., 15.37532269]]),
-                positions=np.array([[3.89, 0., 8.37532269],
-                                    [0., 2.75064538, 8.37532269],
-                                    [5.835, 1.37532269, 8.5],
-                                    [5.835, 7.12596807, 8.],
-                                    [3.89, 2.75064538, 8.37532269]]))
-
-qm7m = AttributeDict(
-    max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
-    nij_max=198,
-    nijk_max=1217,
-    trajectory=read(join(test_dir(), 'qm7m', 'qm7m.xyz'),
-                    index=':', format='xyz'),
-)
-
-for _atoms in qm7m.trajectory:
-    # Setting the boundary cell is important because `neighbor_list` may give
-    # totally different results.
-    _atoms.set_cell(np.eye(3) * 20.0)
