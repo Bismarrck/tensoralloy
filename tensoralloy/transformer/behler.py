@@ -641,9 +641,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptor_op_from_batch(self,
-                                     batch: AttributeDict,
-                                     batch_size: int) -> tf.Tensor:
+    def get_descriptor_ops_from_batch(self,
+                                      batch: AttributeDict,
+                                      batch_size: int) -> Dict[str, tf.Tensor]:
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -692,9 +692,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         Returns
         -------
-        g : tf.Tensor
-            The tensor of the computed symmetry function descriptors for the
-            given batch of examples.
+        ops : Dict[str, tf.Tensor]
+            A dict of (element, g) where `element` is the symbol of an element
+            and `g` is the Op to compute its atomic descriptors.
 
         """
         self._batch_size = batch_size
@@ -720,7 +720,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     ij=batch.ij_shift, ik=batch.ik_shift, jk=batch.jk_shift,),
                 v2g_map=batch.av2g,
             )
-        return self.build_graph(inputs)
+        return self.build_graph(inputs, split=True)
 
     def get_descriptor_normalization_weights(self, method):
         """

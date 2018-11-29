@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import abc
 from collections import Counter
-from typing import Dict
+from typing import Dict, Union
 from ase import Atoms
 
 from tensoralloy.descriptor import IndexTransformer, G2IndexedSlices
@@ -237,12 +237,17 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
         pass
 
     @abc.abstractmethod
-    def get_descriptor_op_from_batch(self,
-                                     batch: AttributeDict,
-                                     batch_size: int):
+    def get_descriptor_ops_from_batch(self, batch: AttributeDict,
+                                      batch_size: int) -> Dict:
         """
         Return the tensorflow graph for computing atomic descriptors from an
         input batch.
+
+        Returns
+        -------
+        ops : AttributeDict
+            A dict.
+
         """
         pass
 
