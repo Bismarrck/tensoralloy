@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from typing import Dict
+from typing import Dict, Tuple
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
@@ -73,7 +73,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         Return the indexed slices.
         """
-        v2g_map = np.zeros((self._nij_max, 4), dtype=np.int32)
+        v2g_map = np.zeros((self._nij_max, 5), dtype=np.int32)
         tlist = np.zeros(self._nij_max, dtype=np.int32)
 
         symbols = atoms.get_chemical_symbols()
@@ -104,6 +104,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 counters[atomi] = Counter()
             v2g_map[index, 3] = counters[atomi][tlist[index]]
             counters[atomi][tlist[index]] += 1
+        v2g_map[:, 4] = ilist > 0
 
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
@@ -189,11 +190,11 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         with tf.name_scope("G2"):
             indices = tf.decode_raw(example['g2.indices'], tf.int32)
-            indices.set_shape([self._nij_max * 6])
+            indices.set_shape([self._nij_max * 7])
             indices = tf.reshape(
-                indices, [self._nij_max, 6], name='g2.indices')
+                indices, [self._nij_max, 7], name='g2.indices')
             v2g_map, ilist, jlist = tf.split(
-                indices, [4, 1, 1], axis=1, name='splits')
+                indices, [5, 1, 1], axis=1, name='splits')
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
@@ -247,7 +248,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_graph_from_batch(self, batch: AttributeDict, batch_size: int):
+    def get_descriptor_ops_from_batch(self,
+                                      batch: AttributeDict,
+                                      batch_size: int):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -274,7 +277,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
             * 'shift': float64, [batch_size, nij_max, 3]
-            * 'rv2g': int32, [batch_size, nij_max, 3]
+            * 'rv2g': int32, [batch_size, nij_max, 5]
 
             If `self.stress` is `True`, the following keys are provided:
 
@@ -286,9 +289,10 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         Returns
         -------
-        g : tf.Tensor
-            The tensor of the computed symmetry function descriptors for the
-            given batch of examples.
+        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict of (element, (g, mask)) where `element` is the symbol of the
+            element, `g` is the Op to compute atomic descriptors and `mask` is
+            the Op to compute value masks.
 
         """
         self._batch_size = batch_size
@@ -301,7 +305,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         inputs.cells = batch.cells
         inputs.volume = batch.volume
 
-        return self.build_graph(inputs)
+        return self.build_graph(inputs, split=True)
 
     def get_descriptor_normalization_weights(self, method):
         """

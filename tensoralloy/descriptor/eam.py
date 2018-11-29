@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.descriptor.base import AtomicDescriptor
@@ -59,7 +59,10 @@ class EAM(AtomicDescriptor):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
-        return tf.identity(placeholders.v2g_map, name='v2g_map')
+        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=1)
+        v2g_map = tf.identity(splits[0], name='v2g_map')
+        v2g_mask = tf.identity(splits[1], name='v2g_mask')
+        return v2g_map, v2g_mask
 
     def _get_row_split_sizes(self, placeholders):
         """
@@ -74,16 +77,19 @@ class EAM(AtomicDescriptor):
         """
         return 1
 
-    def _split_descriptors(self, g, placeholders) -> Dict[str, tf.Tensor]:
+    def _split_descriptors(self, g, mask, placeholders) \
+            -> Dict[str, Tuple[tf.Tensor, tf.Tensor]]:
         """
         Split the descriptors into `N_element` subsets.
         """
         with tf.name_scope("Split"):
             row_split_sizes = self._get_row_split_sizes(placeholders)
             row_split_axis = self._get_row_split_axis()
-            splits = tf.split(
+            rows = tf.split(
                 g, row_split_sizes, axis=row_split_axis, name='rows')[1:]
-            return dict(zip(self._elements, splits))
+            masks = tf.split(
+                mask, row_split_sizes, axis=row_split_axis, name='masks')[1:]
+            return dict(zip(self._elements, zip(rows, masks)))
 
     def build_graph(self, placeholders: AttributeDict, split=True):
         """
@@ -97,12 +103,14 @@ class EAM(AtomicDescriptor):
                               placeholders.shift,
                               name='rij')
             shape = self._get_g_shape(placeholders)
-            v2g_map = self._get_v2g_map(placeholders)
+            v2g_map, v2g_mask = self._get_v2g_map(placeholders)
             g = tf.scatter_nd(v2g_map, r, shape, name='g')
+            mask = tf.cast(tf.scatter_nd(v2g_map, v2g_mask, shape),
+                           dtype=r.dtype, name='mask')
             if split:
-                return self._split_descriptors(g, placeholders)
+                return self._split_descriptors(g, mask, placeholders)
             else:
-                return g
+                return g, mask
 
 
 class BatchEAM(EAM):
@@ -203,5 +211,8 @@ class BatchEAM(EAM):
         """
         Return the re-indexed `v2g_map` for batch training and evaluation.
         """
+        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=1)
+        v2g_map = tf.identity(splits[0])
+        v2g_mask = tf.identity(splits[1], name='v2g_mask')
         indexing = self._get_v2g_map_batch_indexing_matrix()
-        return tf.add(placeholders.v2g_map, indexing, name='v2g_map')
+        return tf.add(v2g_map, indexing, name='v2g_map'), v2g_mask
