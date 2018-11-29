@@ -105,8 +105,9 @@ class EAM(AtomicDescriptor):
             shape = self._get_g_shape(placeholders)
             v2g_map, v2g_mask = self._get_v2g_map(placeholders)
             g = tf.scatter_nd(v2g_map, r, shape, name='g')
-            mask = tf.cast(tf.scatter_nd(v2g_map, v2g_mask, shape),
-                           dtype=r.dtype, name='mask')
+            v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
+            mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
+            mask = tf.cast(mask, dtype=r.dtype, name='mask')
             if split:
                 return self._split_descriptors(g, mask, placeholders)
             else:
@@ -211,7 +212,7 @@ class BatchEAM(EAM):
         """
         Return the re-indexed `v2g_map` for batch training and evaluation.
         """
-        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=1)
+        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=2)
         v2g_map = tf.identity(splits[0])
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         indexing = self._get_v2g_map_batch_indexing_matrix()
