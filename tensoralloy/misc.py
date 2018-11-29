@@ -47,41 +47,6 @@ class AttributeDict(dict):
 # The random seed.
 RANDOM_STATE = 611
 
-# Pd3O2
-Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
-              cell=np.array([[7.78, 0., 0.],
-                             [0., 5.50129076, 0.],
-                             [0., 0., 15.37532269]]),
-              positions=np.array([[3.89, 0., 8.37532269],
-                                  [0., 2.75064538, 8.37532269],
-                                  [3.89, 2.75064538, 8.37532269],
-                                  [5.835, 1.37532269, 8.5],
-                                  [5.835, 7.12596807, 8.]]))
-
-# A permutation of Pd3O2
-Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
-                pbc=np.array([True, True, False], dtype=bool),
-                cell=np.array([[7.78, 0., 0.],
-                               [0., 5.50129076, 0.],
-                               [0., 0., 15.37532269]]),
-                positions=np.array([[3.89, 0., 8.37532269],
-                                    [0., 2.75064538, 8.37532269],
-                                    [5.835, 1.37532269, 8.5],
-                                    [5.835, 7.12596807, 8.],
-                                    [3.89, 2.75064538, 8.37532269]]))
-
-qm7m = AttributeDict(
-    max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
-    nij_max=198,
-    nijk_max=1217,
-    trajectory=read('test_files/qm7m/qm7m.xyz', index=':', format='xyz'),
-)
-
-for _atoms in qm7m.trajectory:
-    # Setting the boundary cell is important because `neighbor_list` may give
-    # totally different results.
-    _atoms.set_cell(np.eye(3) * 20.0)
-
 
 class Defaults:
     """
@@ -151,6 +116,13 @@ def test_dir():
     return join(dirname(__file__), "..", "test_files")
 
 
+def datasets_dir():
+    """
+    Return the directory of `datasets`. Built-in datasets can be found here.
+    """
+    return join(dirname(__file__), "..", "datasets")
+
+
 def brange(start, stop, batch_size):
     """
     Range from `start` to `stop` given a batch size and return the start and
@@ -178,3 +150,40 @@ def brange(start, stop, batch_size):
         istop = min(istart + batch_size, stop)
         yield istart, istop
         istart = istop
+
+
+# Pd3O2
+Pd3O2 = Atoms(symbols='Pd3O2', pbc=np.array([True, True, False], dtype=bool),
+              cell=np.array([[7.78, 0., 0.],
+                             [0., 5.50129076, 0.],
+                             [0., 0., 15.37532269]]),
+              positions=np.array([[3.89, 0., 8.37532269],
+                                  [0., 2.75064538, 8.37532269],
+                                  [3.89, 2.75064538, 8.37532269],
+                                  [5.835, 1.37532269, 8.5],
+                                  [5.835, 7.12596807, 8.]]))
+
+# A permutation of Pd3O2
+Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
+                pbc=np.array([True, True, False], dtype=bool),
+                cell=np.array([[7.78, 0., 0.],
+                               [0., 5.50129076, 0.],
+                               [0., 0., 15.37532269]]),
+                positions=np.array([[3.89, 0., 8.37532269],
+                                    [0., 2.75064538, 8.37532269],
+                                    [5.835, 1.37532269, 8.5],
+                                    [5.835, 7.12596807, 8.],
+                                    [3.89, 2.75064538, 8.37532269]]))
+
+qm7m = AttributeDict(
+    max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
+    nij_max=198,
+    nijk_max=1217,
+    trajectory=read(join(test_dir(), 'qm7m', 'qm7m.xyz'),
+                    index=':', format='xyz'),
+)
+
+for _atoms in qm7m.trajectory:
+    # Setting the boundary cell is important because `neighbor_list` may give
+    # totally different results.
+    _atoms.set_cell(np.eye(3) * 20.0)
