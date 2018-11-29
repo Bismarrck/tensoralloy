@@ -11,7 +11,7 @@ from unittest import TestCase
 from nose.tools import assert_equal, assert_list_equal, assert_less
 
 from tensoralloy.descriptor import IndexTransformer
-from tensoralloy.transformer.tests.test_behler import Pd3O2, Pd2O2Pd
+from tensoralloy.misc import Pd3O2, Pd2O2Pd
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

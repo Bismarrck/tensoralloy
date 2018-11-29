@@ -14,10 +14,9 @@ from nose.tools import assert_less, assert_true
 from os.path import join
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer.tests.test_behler import qm7m
 from tensoralloy.descriptor.indexed_slices import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
-from tensoralloy.misc import test_dir, Defaults, AttributeDict
+from tensoralloy.misc import test_dir, Defaults, AttributeDict, qm7m
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
