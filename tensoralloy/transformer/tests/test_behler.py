@@ -25,6 +25,7 @@ from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.io.neighbor import find_neighbor_sizes
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -531,29 +532,9 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     nij_max = 0
     nijk_max = 0
     for atoms in trajectory:
-        symbols = atoms.get_chemical_symbols()
-        ilist, jlist = neighbor_list('ij', atoms, rc)
-        if k_max >= 2:
-            nij_max = max(len(ilist), nij_max)
-        else:
-            nij = 0
-            for k in range(len(ilist)):
-                if symbols[ilist[k]] == symbols[jlist[k]]:
-                   nij += 1
-            nij_max = max(nij_max, nij)
-        if k_max == 3:
-            nl = {}
-            for i, atomi in enumerate(ilist):
-                if atomi not in nl:
-                    nl[atomi] = []
-                nl[atomi].append(jlist[i])
-            ntotal = 0
-            for atomi, nlist in nl.items():
-                n = len(nlist)
-                ntotal += (n - 1 + 1) * (n - 1) // 2
-            nijk_max = max(ntotal, nijk_max)
-        else:
-            nijk_max = 0
+        nij, nijk, _ = find_neighbor_sizes(atoms, rc, k_max)
+        nij_max = max(nij_max, nij)
+        nijk_max = max(nijk, nijk_max)
     return nij_max, nijk_max
 
 
