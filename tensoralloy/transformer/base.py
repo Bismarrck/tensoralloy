@@ -237,7 +237,9 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
         pass
 
     @abc.abstractmethod
-    def get_graph_from_batch(self, batch: AttributeDict, batch_size: int):
+    def get_descriptor_op_from_batch(self,
+                                     batch: AttributeDict,
+                                     batch_size: int):
         """
         Return the tensorflow graph for computing atomic descriptors from an
         input batch.

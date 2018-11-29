@@ -641,7 +641,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_graph_from_batch(self, batch: AttributeDict, batch_size: int):
+    def get_descriptor_op_from_batch(self,
+                                     batch: AttributeDict,
+                                     batch_size: int) -> tf.Tensor:
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.

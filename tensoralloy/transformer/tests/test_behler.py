@@ -743,7 +743,7 @@ def test_batch_multi_elements():
         batch.cells = np.asarray(cells)
         batch.volume = volumes
 
-        g = sf.get_graph_from_batch(batch, batch_size)
+        g = sf.get_descriptor_op_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
             results = sess.run(g)
             eps = 1e-8
