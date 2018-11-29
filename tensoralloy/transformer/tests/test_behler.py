@@ -19,7 +19,8 @@ from typing import List, Union, Tuple
 from collections import Counter
 from dataclasses import dataclass
 
-from tensoralloy.misc import Defaults, AttributeDict, Pd3O2, qm7m
+from tensoralloy.misc import Defaults, AttributeDict
+from tensoralloy.test_utils import Pd3O2, qm7m
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms

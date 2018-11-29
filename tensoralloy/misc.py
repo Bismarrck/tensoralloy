@@ -9,8 +9,6 @@ from unittest import SkipTest
 from os.path import dirname, isdir, join
 from os import makedirs
 
-from tensoralloy.test_utils import qm7m
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 

@@ -16,7 +16,8 @@ from os.path import join
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.indexed_slices import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
-from tensoralloy.misc import test_dir, Defaults, AttributeDict, qm7m
+from tensoralloy.misc import test_dir, Defaults, AttributeDict
+from tensoralloy.test_utils import qm7m
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
