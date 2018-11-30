@@ -20,7 +20,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from tensoralloy.misc import Defaults, AttributeDict
-from tensoralloy.test_utils import Pd3O2, qm7m
+from tensoralloy.test_utils import Pd3O2, qm7m, assert_array_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms
@@ -513,7 +513,7 @@ def test_monoatomic_molecule():
                                      Defaults.gamma, Defaults.zeta)
     z = np.hstack((zr, za))
     g, _, _ = legacy_symmetry_function(atoms, rc=rc)
-    assert_less(np.abs(z - g).max(), 1e-8)
+    assert_array_equal(z, g)
 
 
 def test_single_structure():
@@ -560,7 +560,7 @@ def test_legacy_and_new_flexible():
             for i, atoms in enumerate(trajectory):
                 feed_dict = sf.get_feed_dict(atoms)
                 values = sess.run(g, feed_dict=feed_dict)
-                assert_less(np.abs(values['B'] - targets[i]).max(), 1e-8)
+                assert_array_equal(values['B'][0], targets[i])
 
 
 def test_manybody_k():
@@ -569,7 +569,6 @@ def test_manybody_k():
     """
     symbols = Pd3O2.get_chemical_symbols()
     rc = 6.0
-    eps = 1e-8
     max_occurs = Counter(symbols)
     elements = sorted(max_occurs.keys())
     ref, ref_all_kbody_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc)
@@ -586,7 +585,7 @@ def test_manybody_k():
             for i, ref_term in enumerate(ref_all_kbody_terms):
                 if ref_term in sf.all_kbody_terms:
                     columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-            assert_less((values[1:] - ref[:, columns]).max(), eps)
+            assert_array_equal(values[1:], ref[:, columns])
 
 
 def _merge_indexed_slices(
@@ -693,11 +692,10 @@ def test_batch_multi_elements():
         g = sf.get_descriptor_ops_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
             results = sess.run(g)
-            eps = 1e-8
 
-            assert_less(np.abs(results['C'] - targets['C']).max(), eps)
-            assert_less(np.abs(results['H'] - targets['H']).max(), eps)
-            assert_less(np.abs(results['O'] - targets['O']).max(), eps)
+            assert_array_equal(results['C'][0], targets['C'])
+            assert_array_equal(results['H'][0], targets['H'])
+            assert_array_equal(results['O'][0], targets['O'])
 
 
 def test_splits():
@@ -706,7 +704,6 @@ def test_splits():
     """
     symbols = Pd3O2.get_chemical_symbols()
     rc = 6.0
-    eps = 1e-8
     max_occurs = Counter(symbols)
     elements = sorted(max_occurs.keys())
     ref, _, _ = legacy_symmetry_function(Pd3O2, rc)
@@ -717,8 +714,8 @@ def test_splits():
         with tf.Session() as sess:
             values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
 
-        assert_less(np.abs(values['O'] - ref[3:, :20]).max(), eps)
-        assert_less(np.abs(values['Pd'] - ref[:3, 20:]).max(), eps)
+        assert_array_equal(values['O'][0], ref[3:, :20])
+        assert_array_equal(values['Pd'][0], ref[:3, 20:])
 
 
 if __name__ == "__main__":
