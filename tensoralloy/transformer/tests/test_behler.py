@@ -19,7 +19,7 @@ from typing import List, Union, Tuple
 from collections import Counter
 from dataclasses import dataclass
 
-from tensoralloy.misc import Defaults, AttributeDict, skip
+from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.test_utils import Pd3O2, qm7m, assert_array_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
@@ -563,7 +563,6 @@ def test_legacy_and_new_flexible():
                 assert_array_equal(values['B'][0], targets[i])
 
 
-@skip
 def test_manybody_k():
     """
     Test computing descriptors for different `k_max`.
@@ -579,14 +578,19 @@ def test_manybody_k():
     for k_max in (1, 2, 3):
         with tf.Graph().as_default():
             sf = SymmetryFunctionTransformer(rc, elements, k_max=k_max)
-            g = sf.get_graph(split=False)
+            g = sf.get_graph()
             with tf.Session() as sess:
                 values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
+
+            x = np.zeros((5, len(sf.all_kbody_terms) * len(Defaults.eta)))
+            x[:2, :values['O'][0].shape[1]] = values['O'][0]
+            x[2:, values['O'][0].shape[1]:] = values['Pd'][0]
+
             columns = []
             for i, ref_term in enumerate(ref_all_kbody_terms):
                 if ref_term in sf.all_kbody_terms:
                     columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-            assert_array_equal(values[1:], ref[:, columns])
+            assert_array_equal(x, ref[:, columns])
 
 
 def _merge_indexed_slices(
