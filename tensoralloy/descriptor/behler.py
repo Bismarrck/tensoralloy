@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.ops.gen_array_ops import scatter_nd_non_aliasing_add
 from collections import Counter
 from typing import List, Dict, Tuple
 from sklearn.model_selection import ParameterGrid
@@ -134,16 +135,16 @@ class SymmetryFunction(AtomicDescriptor):
         """
         return tf.constant([0, index], dtype=tf.int32, name='delta')
 
-    def _get_g2_graph_for_eta(self, index, shape, r2c, fc_r, v2g_map):
+    def _get_g2_graph_for_eta(self, values, index, r2c, fc_r, v2g_map):
         """
         Return the subgraph to compute G2 with the given `eta`.
 
         Parameters
         ----------
+        values : tf.Tensor
+            A tensor to update.
         index : int
             The index of the `eta` to use.
-        shape : Sized
-            The shape of the descriptor.
         r2c : tf.Tensor
             The `float64` tensor of `r**2 / rc**2`.
         fc_r : tf.Tensor
@@ -153,9 +154,8 @@ class SymmetryFunction(AtomicDescriptor):
 
         Returns
         -------
-        g : tf.Tensor
-            A `float64` tensor with the input `shape` as the fingerprints
-            contributed by the radial function G2 with the given `eta`.
+        values : tf.Tensor
+            A `float64` tensor. Has the same shape with `values`.
 
         """
         with tf.name_scope(f"eta{index}"):
@@ -163,7 +163,8 @@ class SymmetryFunction(AtomicDescriptor):
             delta = self._get_v2g_map_delta(index)
             v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
             v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
-            return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
+            return scatter_nd_non_aliasing_add(
+                values, v2g_map_index, v_index, f'g{index}')
 
     def _get_g_shape(self, placeholders):
         """
@@ -199,13 +200,11 @@ class SymmetryFunction(AtomicDescriptor):
 
             with tf.name_scope("features"):
                 shape = self._get_g_shape(placeholders)
-                # TODO: maybe `tf.while` can be used here
-                blocks = []
+                values = tf.zeros(shape, dtype=r.dtype, name='g')
                 for index in range(len(self._eta)):
-                    blocks.append(self._get_g2_graph_for_eta(
-                        index, shape, r2c, fc_r, v2g_map)
-                    )
-                return tf.add_n(blocks, name='g')
+                    values = self._get_g2_graph_for_eta(
+                        values, index, r2c, fc_r, v2g_map)
+                return values
 
     @staticmethod
     def _extract(_params):
@@ -215,17 +214,18 @@ class SymmetryFunction(AtomicDescriptor):
         return [tf.constant(_params[key], dtype=tf.float64, name=key)
                 for key in ('beta', 'gamma', 'zeta')]
 
-    def _get_g4_graph_for_params(self, index, shape, theta, r2c, fc_r, v2g_map):
+    def _get_g4_graph_for_params(self, values, index, theta, r2c, fc_r,
+                                 v2g_map):
         """
         Return the subgraph to compute angular descriptors with the given
         parameters set.
 
         Parameters
         ----------
+        values : tf.Tensor
+            A tensor to update.
         index : int
             The index of the `eta` to use.
-        shape : Sized
-            The shape of the descriptor.
         theta : tf.Tensor
             The `float64` tensor of `cos(theta)`.
         r2c : tf.Tensor
@@ -237,9 +237,8 @@ class SymmetryFunction(AtomicDescriptor):
 
         Returns
         -------
-        g : tf.Tensor
-            A `float64` tensor with the input `shape` as the fingerprints
-            contributed by the angular function G4 with the given parameters.
+        values : tf.Tensor
+            A `float64` tensor. Has the same shape with `values`.
 
         """
         with tf.name_scope(f"grid{index}"):
@@ -248,7 +247,8 @@ class SymmetryFunction(AtomicDescriptor):
             c = (1.0 + gamma * theta) ** zeta * 2.0 ** (1.0 - zeta)
             v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
-            return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
+            return scatter_nd_non_aliasing_add(
+                values, v2g_map_index, v_index, f'g{index}')
 
     def _get_g4_graph(self, placeholders):
         """
@@ -299,11 +299,11 @@ class SymmetryFunction(AtomicDescriptor):
 
             with tf.name_scope("features"):
                 shape = self._get_g_shape(placeholders)
-                blocks = []
+                values = tf.zeros(shape, dtype=rij.dtype, name='g')
                 for index in range(len(self._parameter_grid)):
-                    blocks.append(self._get_g4_graph_for_params(
-                        index, shape, theta, r2c, fc_r, v2g_map))
-                return tf.add_n(blocks, name='g')
+                    values = self._get_g4_graph_for_params(
+                        values, index, theta, r2c, fc_r, v2g_map)
+                return values
 
     def _get_row_split_sizes(self, placeholders):
         """
