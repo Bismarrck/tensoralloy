@@ -106,10 +106,10 @@ class EamNN(BasicNN):
         outputs = {}
         with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
-            for kbody_term, (xi, mi) in partitions.items():
+            for kbody_term, (value, mask) in partitions.items():
                 with tf.variable_scope(kbody_term):
                     # Convert `x` to a 5D tensor.
-                    x = tf.expand_dims(xi, axis=-1, name='input')
+                    x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
 
@@ -118,7 +118,7 @@ class EamNN(BasicNN):
                                              verbose=verbose)
 
                     # Apply the value mask
-                    y = tf.multiply(y, tf.expand_dims(mi, axis=-1),
+                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
 
                     # `y` here will be reduced to a 2D tensor of shape
@@ -138,17 +138,17 @@ class EamNN(BasicNN):
         activation_fn = get_activation_fn(self._activation)
         outputs = {}
         with tf.name_scope("Embed"):
-            for kbody_term, (xi, mi) in partitions.items():
+            for kbody_term, (value, mask) in partitions.items():
                 hidden_sizes = self._hidden_sizes[kbody_term]
                 with tf.variable_scope(kbody_term):
                     with tf.variable_scope("Rho"):
-                        x = tf.expand_dims(xi, axis=-1, name='input')
+                        x = tf.expand_dims(value, axis=-1, name='input')
                         if verbose:
                             log_tensor(x)
                         y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
                                                  verbose=verbose)
                         # Apply the mask to rho.
-                        y = tf.multiply(y, tf.expand_dims(mi, axis=-1),
+                        y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                         name='masked')
 
                         rho = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
@@ -227,19 +227,21 @@ class EamNN(BasicNN):
         with tf.name_scope("Partition"):
             for element in self._elements:
                 kbody_terms = self._kbody_terms[element]
-                g, mask = features.descriptors[element]
+                values, masks = features.descriptors[element]
                 num = len(kbody_terms)
-                glists = tf.split(g, num_or_size_splits=num, axis=1)
-                mlists = tf.split(mask, num_or_size_splits=num, axis=1)
-                for i, (gi, mi) in enumerate(zip(glists, mlists)):
+                glists = tf.split(values, num_or_size_splits=num, axis=1)
+                mlists = tf.split(masks, num_or_size_splits=num, axis=1)
+                for i, (value, mask) in enumerate(zip(glists, mlists)):
                     kbody_term = kbody_terms[i]
                     if self._symmetric:
                         kbody_term = ''.join(
                             sorted(get_elements_from_kbody_term(kbody_term)))
                         if kbody_term in partitions:
-                            gi = tf.concat((partitions[kbody_term][0], gi), 2)
-                            mi = tf.concat((partitions[kbody_term][1], mi), 2)
-                    partitions[kbody_term] = (gi, mi)
+                            value = tf.concat(
+                                (partitions[kbody_term][0], value), axis=2)
+                            mask = tf.concat(
+                                (partitions[kbody_term][1], mask), axis=2)
+                    partitions[kbody_term] = (value, mask)
             return partitions
 
     def _build_nn(self, features: AttributeDict, verbose=False):
