@@ -305,7 +305,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         inputs.cells = batch.cells
         inputs.volume = batch.volume
 
-        return self.build_graph(inputs, split=True)
+        return self.build_graph(inputs)
 
     def get_descriptor_normalization_weights(self, method):
         """

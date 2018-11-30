@@ -8,7 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from typing import Dict
+from typing import Dict, Tuple
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
@@ -45,13 +45,13 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         self._index_transformers = {}
         self._placeholders = AttributeDict()
 
-    def get_graph(self, **kwargs):
+    def get_graph(self):
         """
         Return the graph to compute symmetry function descriptors.
         """
         if not self._placeholders:
             self._initialize_placeholders()
-        return self.build_graph(self.placeholders, **kwargs)
+        return self.build_graph(self.placeholders)
 
     @property
     def placeholders(self) -> AttributeDict:
@@ -643,7 +643,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
     def get_descriptor_ops_from_batch(self,
                                       batch: AttributeDict,
-                                      batch_size: int) -> Dict[str, tf.Tensor]:
+                                      batch_size: int):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -692,9 +692,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         Returns
         -------
-        ops : Dict[str, tf.Tensor]
-            A dict of (element, g) where `element` is the symbol of an element
-            and `g` is the Op to compute its atomic descriptors.
+        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict of (element, (value, mask)) where `element` is a symbol,
+            `value` is the Op to compute its atomic descriptors and `mask` is a
+            `tf.no_op`.
 
         """
         self._batch_size = batch_size
@@ -720,7 +721,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     ij=batch.ij_shift, ik=batch.ik_shift, jk=batch.jk_shift,),
                 v2g_map=batch.av2g,
             )
-        return self.build_graph(inputs, split=True)
+        return self.build_graph(inputs)
 
     def get_descriptor_normalization_weights(self, method):
         """

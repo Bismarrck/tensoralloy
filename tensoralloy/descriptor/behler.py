@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.descriptor.base import AtomicDescriptor
@@ -334,7 +334,8 @@ class SymmetryFunction(AtomicDescriptor):
         """
         return 1
 
-    def _split_descriptors(self, g, placeholders) -> Dict[str, tf.Tensor]:
+    def _split_descriptors(self, g, placeholders) \
+            -> Dict[str, Tuple[tf.Tensor, tf.Tensor]]:
         """
         Split the descriptors into `N_element` subsets.
         """
@@ -358,9 +359,11 @@ class SymmetryFunction(AtomicDescriptor):
                     blocks.append(block)
             else:
                 blocks = splits
-            return dict(zip(self._elements, blocks))
+            with tf.name_scope("Mask"):
+                masks = [tf.no_op(el) for el in self._elements]
+            return dict(zip(self._elements, zip(blocks, masks)))
 
-    def build_graph(self, placeholders: AttributeDict, split=True):
+    def build_graph(self, placeholders: AttributeDict):
         """
         Get the tensorflow based computation graph of the Symmetry Function.
         """
@@ -368,10 +371,7 @@ class SymmetryFunction(AtomicDescriptor):
             g = self._get_g2_graph(placeholders)
             if self._k_max == 3:
                 g += self._get_g4_graph(placeholders)
-        if split:
-            return self._split_descriptors(g, placeholders)
-        else:
-            return g
+        return self._split_descriptors(g, placeholders)
 
 
 class BatchSymmetryFunction(SymmetryFunction):
@@ -494,11 +494,10 @@ class BatchSymmetryFunction(SymmetryFunction):
     def _get_column_split_axis():
         return 2
 
-    def build_graph(self, placeholders: AttributeDict, split=True):
+    def build_graph(self, placeholders: AttributeDict):
         """
         Build the computation graph.
         """
         if not self._batch_size:
             raise ValueError("Batch size must be set first.")
-        return super(BatchSymmetryFunction, self).build_graph(
-            placeholders, split=split)
+        return super(BatchSymmetryFunction, self).build_graph(placeholders)

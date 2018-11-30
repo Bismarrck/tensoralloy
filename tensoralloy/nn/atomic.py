@@ -54,13 +54,29 @@ class AtomicNN(BasicNN):
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of input tensors:
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is None.
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
         """
         with tf.variable_scope("ANN"):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
-            for i, element in enumerate(self._elements):
+            for element, (value, _) in features.descriptors.items():
                 with tf.variable_scope(element):
-                    x = tf.identity(features.descriptors[element], name='input')
+                    x = tf.identity(value, name='input')
                     if self._initial_normalizer_weights is not None:
                         x = self._normalizer(
                             x, self._initial_normalizer_weights[element])
@@ -84,7 +100,7 @@ class AtomicNN(BasicNN):
         outputs : List[tf.Tensor]
             A list of `tf.Tensor` as the outputs of the ANNs.
         features : AttributeDict
-            A dict of input features.
+            A dict of input tensors.
         verbose : bool
             If True, the total energy tensor will be logged.
 

@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import abc
 from collections import Counter
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.misc import AttributeDict
@@ -215,6 +215,14 @@ class AtomicDescriptor(AtomicDescriptorInterface):
     def build_graph(self, placeholders: AttributeDict):
         """
         Build the tensorflow graph for computing atomic descriptors.
+
+        Returns
+        -------
+        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict of (element, (value, mask)) where `element` is a str, value
+            is the tensor of descriptors of `element` and `mask` represents the
+            mask of `value`.
+
         """
         raise NotImplementedError(
             "This method must be overridden by a subclass!")

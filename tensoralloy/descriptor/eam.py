@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 from collections import Counter
-from typing import List, Dict, Tuple
+from typing import List
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.descriptor.base import AtomicDescriptor
@@ -77,8 +77,7 @@ class EAM(AtomicDescriptor):
         """
         return 1
 
-    def _split_descriptors(self, g, mask, placeholders) \
-            -> Dict[str, Tuple[tf.Tensor, tf.Tensor]]:
+    def _split_descriptors(self, g, mask, placeholders):
         """
         Split the descriptors into `N_element` subsets.
         """
@@ -91,9 +90,15 @@ class EAM(AtomicDescriptor):
                 mask, row_split_sizes, axis=row_split_axis, name='masks')[1:]
             return dict(zip(self._elements, zip(rows, masks)))
 
-    def build_graph(self, placeholders: AttributeDict, split=True):
+    def build_graph(self, placeholders: AttributeDict):
         """
         Get the tensorflow based computation graph of the EAM model.
+
+        Returns
+        -------
+        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict.
+        
         """
         with tf.name_scope("EAM"):
             r = self._get_rij(placeholders.positions,
@@ -108,10 +113,7 @@ class EAM(AtomicDescriptor):
             v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
             mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
             mask = tf.cast(mask, dtype=r.dtype, name='mask')
-            if split:
-                return self._split_descriptors(g, mask, placeholders)
-            else:
-                return g, mask
+            return self._split_descriptors(g, mask, placeholders)
 
 
 class BatchEAM(EAM):
