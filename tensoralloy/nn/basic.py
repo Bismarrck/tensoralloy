@@ -629,8 +629,15 @@ class BasicNN:
         Parameters
         ----------
         features : AttributeDict
-            A dict of input tensors. 'descriptors' of shape `[batch_size, N, D]`
-            and 'positions' of `[batch_size, N, 3]` are required.
+            A dict of input tensors:
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is the mask of `value`.
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
         verbose : bool
             If True, the prediction tensors will be logged.
 
@@ -671,13 +678,14 @@ class BasicNN:
         Parameters
         ----------
         features : AttributeDict
-            A dict of input tensors with three keys:
-                * 'descriptors' of shape `[batch_size, N, D]`
-                * 'positions' of `[batch_size, N, 3]`.
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is the mask of `value`.
+                * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.
+                * 'n_atoms' of dtype `int64`.'
         labels : AttributeDict
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
