@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
-from typing import List
+from typing import List, Dict
 
 from tensoralloy.misc import AttributeDict, Defaults
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
@@ -70,8 +70,8 @@ class EamNN(BasicNN):
 
         Parameters
         ----------
-        outputs : List[List[tf.Tensor], List[tf.Tensor]]
-            A tuple of `List[tf.Tensor]`.
+        outputs : List[tf.Tensor]
+            A list of `tf.Tensor` as the atomic energies from different sources.
         features : AttributeDict
             A dict of input features.
         verbose : bool
@@ -85,10 +85,7 @@ class EamNN(BasicNN):
         """
         with tf.name_scope("Energy"):
             with tf.name_scope("Atomic"):
-                values = []
-                for i, (phi, embed) in enumerate(zip(*outputs)):
-                    values.append(tf.add(phi, embed, name=self._elements[i]))
-                y_atomic = tf.concat(values, axis=1, name='atomic')
+                y_atomic = tf.add_n(outputs, name='atomic')
             shape = y_atomic.shape
             with tf.name_scope("mask"):
                 mask = tf.split(
@@ -106,7 +103,7 @@ class EamNN(BasicNN):
         Return the outputs of the pairwise interactions, `Phi(r)`.
         """
         activation_fn = get_activation_fn(self._activation)
-        outputs = []
+        outputs = {}
         with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
             for kbody_term, (xi, mi) in partitions.items():
@@ -121,24 +118,25 @@ class EamNN(BasicNN):
                                              verbose=verbose)
 
                     # Apply the value mask
-                    y = tf.multiply(y, mi, name='masked')
+                    y = tf.multiply(y, tf.expand_dims(mi, axis=-1),
+                                    name='masked')
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
-                    y = tf.reduce_sum(y, axis=(2, 3, 4), keepdims=False)
+                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
+                    y = tf.squeeze(y, axis=1)
                     y = tf.multiply(y, half, name='atomic')
-
                     if verbose:
                         log_tensor(y)
-                    outputs.append(y)
-            return outputs
+                    outputs[kbody_term] = y
+            return self._dynamic_stitch(outputs)
 
     def _build_embed_nn(self, partitions: AttributeDict, verbose=False):
         """
         Return the outputs of the embedding energy, `F(rho(r))`.
         """
         activation_fn = get_activation_fn(self._activation)
-        outputs = []
+        outputs = {}
         with tf.name_scope("Embed"):
             for kbody_term, (xi, mi) in partitions.items():
                 hidden_sizes = self._hidden_sizes[kbody_term]
@@ -150,7 +148,8 @@ class EamNN(BasicNN):
                         y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
                                                  verbose=verbose)
                         # Apply the mask to rho.
-                        y = tf.multiply(y, mi, name='masked')
+                        y = tf.multiply(y, tf.expand_dims(mi, axis=-1),
+                                        name='masked')
 
                         rho = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
                         if verbose:
@@ -161,22 +160,63 @@ class EamNN(BasicNN):
                             log_tensor(rho)
                         y = self._get_1x1conv_nn(
                             rho, activation_fn, hidden_sizes, verbose=verbose)
-                        embed = tf.reduce_sum(y, axis=(2, 3), name='embed')
+                        embed = tf.squeeze(y, axis=(1, 3), name='embed')
                         if verbose:
                             log_tensor(embed)
-                        outputs.append(embed)
-            return outputs
+                        outputs[kbody_term] = embed
+            return self._dynamic_stitch(outputs)
 
-    def _dynamic_partition(self, features: AttributeDict):
+    def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor]):
         """
-        Split the descriptors to `Np` partitions where `Np` is the total number
-        of unique k-body terms. If `self.symmetric` is False, `Np` is equal to
-        `N**2` where N is the number of elements. If `self.symmetric` is True,
-        `Np` will be `N * (N + 1) / 2`.
+        The reverse of `dynamic_partition`. Interleave the kbody-term centered
+        `outputs` of type `Dict[kbody_term, tensor]` to element centered values
+        of type `Dict[element, tensor]`.
+
+        Parameters
+        ----------
+        outputs : Dict[str, tf.Tensor]
+            A dict. The keys are unique kbody-terms and values are 2D tensors
+            with shape `[batch_size, max_n_elements]` where `max_n_elements`
+            denotes the maximum occurances of the center element of the
+            correponding kbody-term.
 
         Returns
         -------
-        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+        atomic : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the energies
+            of the real atoms.
+
+        """
+        with tf.name_scope("Stitch"):
+            stacks = {}
+            results = []
+            for kbody_term, value in outputs.items():
+                elements = get_elements_from_kbody_term(kbody_term)
+                if self._symmetric and elements[0] != elements[1]:
+                    results.append(value)
+                else:
+                    center = elements[0]
+                    if center not in stacks:
+                        stacks[center] = value
+                    else:
+                        stacks[center] += value
+            results.append(
+                tf.concat([stacks[el] for el in self._elements], axis=1))
+            return tf.add_n(results, name='sum')
+
+    def _dynamic_partition(self, features: AttributeDict):
+        """
+        Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
+        partitions where `Np` is the total number of unique k-body terms.
+
+        If `self.symmetric` is False, `Np` is equal to `N**2`.
+        If `self.symmetric` is True, `Np` will be `N * (N + 1) / 2`.
+
+        Here N denotes the total number of elements.
+
+        Returns
+        -------
+        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (gi, mi) where `gi` represents the descriptors and `mi` is the value
             mask.
@@ -197,9 +237,8 @@ class EamNN(BasicNN):
                         kbody_term = ''.join(
                             sorted(get_elements_from_kbody_term(kbody_term)))
                         if kbody_term in partitions:
-                            _gi, _mi = partitions[kbody_term]
-                            gi = tf.concat((_gi, gi), axis=2)
-                            mi = tf.concat((_mi, mi), axis=2)
+                            gi = tf.concat((partitions[kbody_term][0], gi), 2)
+                            mi = tf.concat((partitions[kbody_term][1], mi), 2)
                     partitions[kbody_term] = (gi, mi)
             return partitions
 
