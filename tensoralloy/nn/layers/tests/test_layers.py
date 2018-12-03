@@ -4,10 +4,8 @@ This module defines unit tests for the module `tensoralloy.nn.layers.layers`.
 """
 from __future__ import print_function, absolute_import
 
-import tensorflow as tf
-import numpy as np
 import nose
-from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
+from nose.tools import assert_list_equal, assert_dict_equal
 
 from ..layers import PotentialFunctionLayer, any_kbody_term
 
