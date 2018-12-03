@@ -169,6 +169,19 @@ class PotentialFunctionLayer:
     def rho(self, r: tf.Tensor, kbody_term: str):
         """
         Return the Op to compute electron density `rho(r)`.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
@@ -176,6 +189,19 @@ class PotentialFunctionLayer:
     def phi(self, r: tf.Tensor, kbody_term: str):
         """
         Return the Op to compute pairwise potential `phi(r)`.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
@@ -183,6 +209,20 @@ class PotentialFunctionLayer:
     def embed(self, rho: tf.Tensor, element: str):
         """
         Return the Op to compute the embedding energy F(rho(r)).
+
+        Parameters
+        ----------
+        rho : tf.Tensor
+            A 3D tensor of shape `[batch_size, max_n_element, 1]` where
+            `max_n_element` is the maximum occurace of `element`.
+        element : str
+            An element symbol.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
