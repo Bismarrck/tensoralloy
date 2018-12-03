@@ -180,7 +180,7 @@ class PotentialFunctionLayer:
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
 
-    def embed(self, rho: tf.Tensor, kbody_term: str):
+    def embed(self, rho: tf.Tensor, element: str):
         """
         Return the Op to compute the embedding energy F(rho(r)).
         """

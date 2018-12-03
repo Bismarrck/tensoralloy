@@ -59,7 +59,7 @@ class AgSutton90(PotentialFunctionLayer):
                 r = tf.div_no_nan(one, r, name='r_inv')
             return tf.pow(a * r, 6, name='rho')
 
-    def embed(self, rho: tf.Tensor, kbody_term: str):
+    def embed(self, rho: tf.Tensor, element: str):
         """
         The embedding function:
 

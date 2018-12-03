@@ -131,5 +131,5 @@ class AlCuZJW04(PotentialFunctionLayer):
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
                 return self._exp_func(re, fe, omega, lamda, one, name='rho')(r)
 
-    def embed(self, rho: tf.Tensor, kbody_term: str):
+    def embed(self, rho: tf.Tensor, element: str):
         pass
