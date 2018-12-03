@@ -21,7 +21,6 @@ SHARED_VARS = 'shared_variables'
 
 
 def get_variable(name,
-                 shape=None,
                  dtype=None,
                  initializer=None,
                  regularizer=None,
@@ -39,10 +38,9 @@ def get_variable(name,
         _collections.append(SHARED_VARS)
     if collections is not None:
         _collections += list(collections)
-    return tf.get_variable(name, shape=shape, dtype=dtype,
+    return tf.get_variable(name, shape=(), dtype=dtype,
                            initializer=initializer, regularizer=regularizer,
                            trainable=trainable, collections=collections,
-                           reuse=tf.AUTO_REUSE,
                            validate_shape=validate_shape)
 
 
@@ -127,17 +125,38 @@ class PotentialFunctionLayer:
         _any = any_kbody_term in self._allowed_kbody_terms
         return _in or _any
 
-    def _get_var(self, parameter, dtype, kbody_term, shared=False):
+    def _check_kbody_term(self, kbody_term):
         """
-        A helper function to initialize a new `tf.Variable`.
+        Convert `kbody_term` to `any_kbody_term` if needed.
         """
         if kbody_term not in self._params:
             if any_kbody_term in self._params:
                 kbody_term = any_kbody_term
+        return kbody_term
+
+    def _is_trainable(self, parameter, kbody_term):
+        """
+        Return True if the parameter is trainable.
+        """
+        kbody_term = self._check_kbody_term(kbody_term)
+        if kbody_term not in self._fixed:
+            return True
+        elif parameter not in self._fixed[kbody_term]:
+            return True
+        return False
+
+    def _get_var(self, parameter, dtype, kbody_term, shared=False):
+        """
+        A helper function to initialize a new `tf.Variable`.
+        """
+        kbody_term = self._check_kbody_term(kbody_term)
+
         shared_key = f"{kbody_term}.{parameter}"
-        if shared and shared in self._shared_vars:
-            return self._shared_vars[shared_key]
-        trainable = parameter in self._fixed[kbody_term]
+        if shared:
+            if shared_key in self._shared_vars:
+                return self._shared_vars[shared_key]
+
+        trainable = self._is_trainable(parameter, kbody_term)
         var = get_variable(name=parameter, dtype=dtype,
                            initializer=tf.constant_initializer(
                                value=self._params[kbody_term][parameter],
@@ -264,9 +283,8 @@ class AlCuZJW04(PotentialFunctionLayer):
 
             """
             r_re = tf.div(r, re)
-            r_re_1 = r_re - one
-            upper = a * tf.exp(-b * r_re_1)
-            lower = one + tf.pow(re - c, 20)
+            upper = a * tf.exp(-b * (r_re - one))
+            lower = one + tf.pow(r_re - c, 20)
             return tf.div(upper, lower, name=name)
         return func
 
@@ -291,8 +309,9 @@ class AlCuZJW04(PotentialFunctionLayer):
         for Al-Cu where `\alpha` and `\beta` denotes 'Al' or 'Cu'.
 
         """
-        if kbody_term in ['AlAl', 'CuCu']:
-            with tf.variable_scope("ZJW04"):
+        if kbody_term in ('AlAl', 'CuCu'):
+            element = get_elements_from_kbody_term(kbody_term)[0]
+            with tf.variable_scope(f"ZJW04/Phi/{element}"):
                 re = self._get_var('re', r.dtype, kbody_term, shared=True)
                 A = self._get_var('A', r.dtype, kbody_term, shared=True)
                 B = self._get_var('B', r.dtype, kbody_term, shared=True)
@@ -306,14 +325,16 @@ class AlCuZJW04(PotentialFunctionLayer):
                     self._exp_func(re, B, omega, lamda, one, name='B')(r),
                     name='phi')
         else:
-            phi_al = self.phi(r, 'AlAl')
-            phi_cu = self.phi(r, 'CuCu')
-            rho_al = self.rho(r, 'AlAl')
-            rho_cu = self.rho(r, 'CuCu')
+            with tf.name_scope('AlAl'):
+                phi_al = self.phi(r, 'AlAl')
+                rho_al = self.rho(r, 'AlAl')
+            with tf.name_scope("CuCu"):
+                phi_cu = self.phi(r, 'CuCu')
+                rho_cu = self.rho(r, 'CuCu')
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             return tf.multiply(half,
-                               tf.add(tf.div_no_nan(rho_al, rho_cu) * phi_cu,
-                                      tf.div_no_nan(rho_cu, rho_al) * phi_al),
+                               tf.add(tf.div(rho_al, rho_cu) * phi_cu,
+                                      tf.div(rho_cu, rho_al) * phi_al),
                                name='phi')
 
     def rho(self, r: tf.Tensor, kbody_term: str, **kwargs):
@@ -323,12 +344,14 @@ class AlCuZJW04(PotentialFunctionLayer):
         if kbody_term == 'AlCu':
             split_sizes = kwargs['split_sizes']
             r_al, r_cu = tf.split(r, num_or_size_splits=split_sizes, axis=2)
-            rho_al = self.rho(r_al, 'AlAl')
-            rho_cu = self.rho(r_cu, 'CuCu')
+            with tf.name_scope("AlAl"):
+                rho_al = self.rho(r_al, 'AlAl')
+            with tf.name_scope("CuCu"):
+                rho_cu = self.rho(r_cu, 'CuCu')
             return tf.concat((rho_al, rho_cu), axis=2, name='rho')
         else:
             element = get_elements_from_kbody_term(kbody_term)[0]
-            with tf.variable_scope(f"ZJW04_{element}"):
+            with tf.variable_scope(f"ZJW04/Rho/{element}"):
                 re = self._get_var('re', r.dtype, kbody_term, shared=True)
                 fe = self._get_var('fe', r.dtype, kbody_term, shared=True)
                 omega = self._get_var('omega', r.dtype, kbody_term, shared=True)
