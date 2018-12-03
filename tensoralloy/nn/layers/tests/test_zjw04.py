@@ -273,5 +273,34 @@ def test_rho_ab():
         assert_array_equal(results, ref)
 
 
+def test_embed():
+    """
+    Test the embedding function `AlCuZJW04.embed`.
+    """
+    rho = np.linspace(0.0, 20.0, num=201, endpoint=True)
+    ref_al = np.asarray([ATSIM.embed.Al(rho[i]) for i in range(len(rho))])
+    ref_cu = np.asarray([ATSIM.embed.Cu(rho[i]) for i in range(len(rho))])
+
+    with tf.Graph().as_default():
+
+        rho = tf.convert_to_tensor(rho, name='rho')
+
+        layer = AlCuZJW04()
+
+        with tf.name_scope("Embed"):
+
+            with tf.variable_scope("Al"):
+                al_op = layer.embed(rho, "Al")
+            with tf.variable_scope("Cu"):
+                cu_op = layer.embed(rho, "Cu")
+
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                results = sess.run([al_op, cu_op])
+
+        assert_array_equal(results[0], ref_al)
+        assert_array_equal(results[1], ref_cu)
+
+
 if __name__ == "__main__":
     nose.run()
