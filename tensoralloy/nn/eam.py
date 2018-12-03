@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from typing import List, Dict
+from collections import Counter
 
 from tensoralloy.misc import AttributeDict, Defaults
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
@@ -63,15 +64,16 @@ class EamNN(BasicNN):
             results[element] = sizes.tolist()
         return results
 
-    def _get_energy(self, outputs: (List[tf.Tensor], List[tf.Tensor]),
-                    features: AttributeDict, verbose=True):
+    def _get_energy(self, outputs: List[tf.Tensor], features: AttributeDict,
+                    verbose=True):
         """
         Return the Op to compute total energy of nn-EAM.
 
         Parameters
         ----------
-        outputs : List[tf.Tensor]
-            A list of `tf.Tensor` as the atomic energies from different sources.
+        outputs : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
+            atomic energies.
         features : AttributeDict
             A dict of input features.
         verbose : bool
@@ -84,8 +86,7 @@ class EamNN(BasicNN):
 
         """
         with tf.name_scope("Energy"):
-            with tf.name_scope("Atomic"):
-                y_atomic = tf.add_n(outputs, name='atomic')
+            y_atomic = tf.identity(outputs, name='atomic')
             shape = y_atomic.shape
             with tf.name_scope("mask"):
                 mask = tf.split(
@@ -131,40 +132,70 @@ class EamNN(BasicNN):
                     outputs[kbody_term] = y
             return self._dynamic_stitch(outputs)
 
-    def _build_embed_nn(self, partitions: AttributeDict, verbose=False):
+    def _build_rho_nn(self, partitions: AttributeDict, verbose=False):
         """
-        Return the outputs of the embedding energy, `F(rho(r))`.
+        Return the outputs of the electron densities, `rho(r)`.
         """
         activation_fn = get_activation_fn(self._activation)
         outputs = {}
-        with tf.name_scope("Embed"):
+        with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 hidden_sizes = self._hidden_sizes[kbody_term]
                 with tf.variable_scope(kbody_term):
-                    with tf.variable_scope("Rho"):
-                        x = tf.expand_dims(value, axis=-1, name='input')
-                        if verbose:
-                            log_tensor(x)
-                        y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
-                                                 verbose=verbose)
-                        # Apply the mask to rho.
-                        y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
-                                        name='masked')
+                    x = tf.expand_dims(value, axis=-1, name='input')
+                    if verbose:
+                        log_tensor(x)
+                    y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
+                                             verbose=verbose)
+                    # Apply the mask to rho.
+                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                                    name='masked')
 
-                        rho = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                        if verbose:
-                            log_tensor(rho)
-                    with tf.variable_scope("F"):
-                        rho = tf.expand_dims(rho, axis=-1, name='rho')
-                        if verbose:
-                            log_tensor(rho)
-                        y = self._get_1x1conv_nn(
-                            rho, activation_fn, hidden_sizes, verbose=verbose)
-                        embed = tf.squeeze(y, axis=(1, 3), name='embed')
-                        if verbose:
-                            log_tensor(embed)
-                        outputs[kbody_term] = embed
+                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
+                    rho = tf.squeeze(y, axis=1, name='rho')
+                    if verbose:
+                        log_tensor(rho)
+                    outputs[kbody_term] = rho
             return self._dynamic_stitch(outputs)
+
+    def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
+                        verbose=True):
+        """
+        Return the embedding energy, `F(rho)`.
+
+        Parameters
+        ----------
+        rho : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the electron
+            density of each atom.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
+
+        Returns
+        -------
+        embed : tf.Tensor
+            The embedding energy. Has the same shape with `rho`.
+
+        """
+        activation_fn = get_activation_fn(self._activation)
+        split_sizes = [max_occurs[el] for el in self._elements]
+
+        with tf.name_scope("Embed"):
+            splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
+            values = []
+            for i, element in enumerate(self._elements):
+                hidden_sizes = self._hidden_sizes[f"{element}{element}"]
+                with tf.variable_scope(element):
+                    x = tf.expand_dims(splits[i], axis=-1, name=element)
+                    if verbose:
+                        log_tensor(x)
+                    y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
+                                             verbose=verbose)
+                    embed = tf.squeeze(y, axis=2, name='atomic')
+                    if verbose:
+                        log_tensor(embed)
+                    values.append(embed)
+            return tf.concat(values, axis=1)
 
     def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor]):
         """
@@ -197,12 +228,16 @@ class EamNN(BasicNN):
                 else:
                     center = elements[0]
                     if center not in stacks:
-                        stacks[center] = value
+                        stacks[center] = [value]
                     else:
-                        stacks[center] += value
+                        stacks[center].append(value)
             results.append(
-                tf.concat([stacks[el] for el in self._elements], axis=1))
-            return tf.add_n(results, name='sum')
+                tf.concat([tf.add_n(stacks[el], name=el)
+                           for el in self._elements], axis=1))
+            if not self._symmetric:
+                return tf.identity(results[0], name='sum')
+            else:
+                return tf.add_n(results, name='sum')
 
     def _dynamic_partition(self, features: AttributeDict):
         """
@@ -220,14 +255,18 @@ class EamNN(BasicNN):
             A dict. The keys are unique kbody terms and values are tuples of
             (gi, mi) where `gi` represents the descriptors and `mi` is the value
             mask.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
 
         """
         partitions = AttributeDict()
+        max_occurs = {}
 
         with tf.name_scope("Partition"):
             for element in self._elements:
                 kbody_terms = self._kbody_terms[element]
                 values, masks = features.descriptors[element]
+                max_occurs[element] = values.shape[2].value
                 num = len(kbody_terms)
                 glists = tf.split(values, num_or_size_splits=num, axis=1)
                 mlists = tf.split(masks, num_or_size_splits=num, axis=1)
@@ -242,16 +281,18 @@ class EamNN(BasicNN):
                             mask = tf.concat(
                                 (partitions[kbody_term][1], mask), axis=2)
                     partitions[kbody_term] = (value, mask)
-            return partitions
+            return partitions, Counter(max_occurs)
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
         Return the nn-EAM model.
         """
         with tf.name_scope("nnEAM"):
-            partitions = self._dynamic_partition(features)
-            outputs = (
-                self._build_phi_nn(partitions, verbose=verbose),
-                self._build_embed_nn(partitions, verbose=verbose)
-            )
-            return outputs
+            partitions, max_occurs = self._dynamic_partition(features)
+
+            rho = self._build_rho_nn(partitions, verbose=verbose)
+            embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
+            phi = self._build_phi_nn(partitions, verbose=verbose)
+
+            y = tf.add(phi, embed, name='atomic')
+            return y

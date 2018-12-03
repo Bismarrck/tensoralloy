@@ -146,8 +146,12 @@ def test_dynamic_partition():
         symm_nn = EamNN(elements=data.elements, symmetric=True, forces=False)
 
         with tf.Session() as sess:
-            results = sess.run(nn._dynamic_partition(data.features))
+            partitions_op, max_occurs = nn._dynamic_partition(data.features)
+            results = sess.run(partitions_op)
 
+            assert_equal(len(max_occurs), 2)
+            assert_equal(max_occurs['Al'], data.max_n_al)
+            assert_equal(max_occurs['Cu'], data.max_n_cu)
             assert_equal(len(results), 4)
             assert_array_equal(results['AlAl'][0], data.g_al[:, [0]])
             assert_array_equal(results['AlCu'][0], data.g_al[:, [1]])
@@ -159,7 +163,8 @@ def test_dynamic_partition():
             assert_array_equal(results['CuCu'][1], data.m_cu[:, [0]])
             assert_array_equal(results['CuAl'][1], data.m_cu[:, [1]])
 
-            results = sess.run(symm_nn._dynamic_partition(data.features))
+            partitions_op, _ = symm_nn._dynamic_partition(data.features)
+            results = sess.run(partitions_op)
 
             assert_equal(len(results), 3)
             assert_array_equal(results['AlAl'][0], data.g_al[:, [0]])
