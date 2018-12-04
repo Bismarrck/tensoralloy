@@ -6,3 +6,9 @@ from .zjw04 import AlCuZJW04
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+available_layers = {
+    'sutton90': AgSutton90,
+    'zjw04': AlCuZJW04
+}
