@@ -8,11 +8,13 @@ import tensorflow as tf
 import numpy as np
 from typing import List, Dict
 from collections import Counter
+from functools import partial
 
 from tensoralloy.misc import AttributeDict, Defaults, safe_select
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
+from tensoralloy.nn.layers import available_layers
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -27,10 +29,9 @@ class EamNN(BasicNN):
         """
         Initialization method.
         """
+        self._symmetric = symmetric
         super(EamNN, self).__init__(*args, **kwargs)
-
-        self._custom_layers = safe_select(custom_layers, {})
-        self._symmetric = symmetric and len(self._elements) > 1
+        self._layers = self._setup_layers(custom_layers)
 
     @property
     def symmetric(self):
@@ -40,21 +41,34 @@ class EamNN(BasicNN):
         return self._symmetric
 
     @property
-    def all_kbody_terms(self):
+    def unique_kbody_terms(self):
         """
-        Return a list of str as all the k-body terms for this model.
+        Return a list of str as all the unique k-body terms for this model.
         """
-        return self._all_kbody_terms
+        return self._unique_kbody_terms
 
     def _get_hidden_sizes(self, hidden_sizes):
         all_kbody_terms, kbody_terms, _ = get_kbody_terms(
             self._elements, k_max=2)
 
+        if self._symmetric:
+            unique_kbody_terms = []
+            for kbody_term in all_kbody_terms:
+                elements = get_elements_from_kbody_term(kbody_term)
+                if elements[0] == elements[1]:
+                    unique_kbody_terms.append(kbody_term)
+                else:
+                    unique_kbody_term = ''.join(sorted(elements))
+                    if unique_kbody_term not in unique_kbody_terms:
+                        unique_kbody_terms.append(unique_kbody_term)
+        else:
+            unique_kbody_terms = all_kbody_terms
+
         self._kbody_terms = kbody_terms
-        self._all_kbody_terms = all_kbody_terms
+        self._unique_kbody_terms = unique_kbody_terms
 
         results = {}
-        for element in self._all_kbody_terms:
+        for element in self._unique_kbody_terms:
             if isinstance(hidden_sizes, dict):
                 sizes = np.asarray(
                     hidden_sizes.get(element, Defaults.hidden_sizes),
@@ -64,6 +78,91 @@ class EamNN(BasicNN):
             assert (sizes > 0).all()
             results[element] = sizes.tolist()
         return results
+
+    @property
+    def layers(self):
+        """
+        Return the layers.
+        """
+        return self._layers
+
+    def _setup_layers(self, custom_layers=None):
+        """
+        Setup the layers for nn-EAM.
+        """
+
+        def _check_avail(name: str):
+            name = name.lower()
+            if name == "nn" or name in available_layers:
+                return True
+            else:
+                return False
+
+        layers = {el: "nn" for el in self._elements}
+        layers.update({kbody_term: {"rho": "nn", "phi": "nn"}
+                       for kbody_term in self._unique_kbody_terms})
+
+        custom_layers = safe_select(custom_layers, {})
+
+        for element in self._elements:
+            if element in custom_layers:
+                embed = custom_layers[element]
+                assert _check_avail(embed)
+                layers[element] = embed
+
+        for kbody_term in self._unique_kbody_terms:
+            if kbody_term in custom_layers:
+                rho = custom_layers[kbody_term]['rho']
+                phi = custom_layers[kbody_term]['phi']
+                assert _check_avail(rho)
+                assert _check_avail(phi)
+                layers[kbody_term]['rho'] = rho
+                layers[kbody_term]['phi'] = phi
+
+        return layers
+
+    def _get_nn_fn(self, kbody_term, verbose=False):
+        """
+        Return a layer function of `f(x)` where `f` is a 1x1 CNN.
+        """
+        activation_fn = get_activation_fn(self._activation)
+        hidden_sizes = self._hidden_sizes[kbody_term]
+        return partial(self._get_1x1conv_nn, activation_fn=activation_fn,
+                       hidden_sizes=hidden_sizes, verbose=verbose)
+
+    def _get_embed_fn(self, element: str, verbose=False):
+        """
+        Return the embedding function of `name` for `element`.
+        """
+        name = self._layers[element]
+        if name == 'nn':
+            kbody_term = f"{element}{element}"
+            return self._get_nn_fn(kbody_term, verbose=verbose)
+        else:
+            return partial(available_layers[name].embed, element=element)
+
+    def _get_rho_fn(self, kbody_term: str, split_sizes, verbose=False):
+        """
+        Return the electron density function of `name` for the given k-body
+        term.
+        """
+        name = self._layers[kbody_term]['rho']
+        if name == 'nn':
+            return self._get_nn_fn(kbody_term, verbose=verbose)
+        else:
+            return partial(available_layers[name].rho, kbody_term=kbody_term,
+                           split_sizes=split_sizes)
+
+    def _get_phi_fn(self, kbody_term: str, verbose=False):
+        """
+        Return the pairwise potential function of `name` for the given k-body
+        term.
+        """
+        name = self._layers[kbody_term]['phi']
+        if name == 'nn':
+            return self._get_nn_fn(kbody_term, verbose=verbose)
+        else:
+            return partial(available_layers[name].phi, kbody_term=kbody_term)
 
     def _get_energy(self, outputs: List[tf.Tensor], features: AttributeDict,
                     verbose=True):
@@ -104,7 +203,6 @@ class EamNN(BasicNN):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
         """
-        activation_fn = get_activation_fn(self._activation)
         outputs = {}
         with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
@@ -114,11 +212,9 @@ class EamNN(BasicNN):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
-
-                    hidden_sizes = self._hidden_sizes[kbody_term]
-                    y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
-                                             verbose=verbose)
-
+                    # Apply the `phi` function on `x`
+                    comput = self._get_phi_fn(kbody_term, verbose=verbose)
+                    y = comput(x)
                     # Apply the value mask
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
@@ -133,21 +229,23 @@ class EamNN(BasicNN):
                     outputs[kbody_term] = y
             return self._dynamic_stitch(outputs)
 
-    def _build_rho_nn(self, partitions: AttributeDict, verbose=False):
+    def _build_rho_nn(self, partitions: AttributeDict, max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
         """
-        activation_fn = get_activation_fn(self._activation)
         outputs = {}
+        split_sizes = [max_occurs[el] for el in self._elements]
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
-                hidden_sizes = self._hidden_sizes[kbody_term]
                 with tf.variable_scope(kbody_term):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
-                    y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
-                                             verbose=verbose)
+                    # Apply the `rho` function on `x`
+                    comput = self._get_rho_fn(
+                        kbody_term, split_sizes=split_sizes, verbose=verbose)
+                    y = comput(x)
                     # Apply the mask to rho.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
@@ -178,20 +276,19 @@ class EamNN(BasicNN):
             The embedding energy. Has the same shape with `rho`.
 
         """
-        activation_fn = get_activation_fn(self._activation)
         split_sizes = [max_occurs[el] for el in self._elements]
 
         with tf.name_scope("Embed"):
             splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
             values = []
             for i, element in enumerate(self._elements):
-                hidden_sizes = self._hidden_sizes[f"{element}{element}"]
                 with tf.variable_scope(element):
                     x = tf.expand_dims(splits[i], axis=-1, name=element)
                     if verbose:
                         log_tensor(x)
-                    y = self._get_1x1conv_nn(x, activation_fn, hidden_sizes,
-                                             verbose=verbose)
+                    # Apply the embedding function on `x`
+                    comput = self._get_embed_fn(element, verbose=verbose)
+                    y = comput(x)
                     embed = tf.squeeze(y, axis=2, name='atomic')
                     if verbose:
                         log_tensor(embed)
@@ -291,7 +388,7 @@ class EamNN(BasicNN):
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(features)
 
-            rho = self._build_rho_nn(partitions, verbose=verbose)
+            rho = self._build_rho_nn(partitions, max_occurs, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
             phi = self._build_phi_nn(partitions, verbose=verbose)
 

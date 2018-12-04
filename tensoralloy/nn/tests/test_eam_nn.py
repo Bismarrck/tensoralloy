@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import nose
 from nose.tools import assert_equal, assert_list_equal, assert_tuple_equal
+from nose.tools import assert_dict_equal
 
 from ..eam import EamNN
 from tensoralloy.misc import AttributeDict
@@ -85,6 +86,8 @@ def test_inference():
         nn = EamNN(elements=data.elements, hidden_sizes=8, symmetric=False,
                    forces=False)
 
+        assert_equal(len(nn.unique_kbody_terms), 4)
+
         predictions = nn.build(data.features, verbose=True)
         assert_list_equal(
             predictions.energy.shape.as_list(), [data.batch_size, ])
@@ -100,6 +103,8 @@ def test_symmetric_inference():
 
         nn = EamNN(elements=data.elements, hidden_sizes=8, symmetric=True,
                    forces=False)
+
+        assert_equal(len(nn.unique_kbody_terms), 3)
 
         predictions = nn.build(data.features, verbose=True)
         assert_list_equal(
@@ -179,6 +184,28 @@ def test_dynamic_partition():
             assert_array_equal(results['AlCu'][1],
                                np.concatenate((data.m_al[:, [1]],
                                                data.m_cu[:, [1]]), 2))
+
+
+def test_custom_layers():
+    """
+    Test setting layers of `EamNN`.
+    """
+    with tf.Graph().as_default():
+
+        data = TestData()
+        custom_layers = {
+            'AlCu': {'rho': 'nn', 'phi': 'zjw04'},
+            'CuCu': {'rho': 'zjw04', 'phi': 'zjw04'},
+        }
+        nn = EamNN(elements=data.elements, symmetric=True, forces=False,
+                   custom_layers=custom_layers)
+
+        assert_dict_equal(nn.layers,
+                          {'AlAl': {'rho': 'nn', 'phi': 'nn'},
+                           'CuCu': {'rho': 'zjw04', 'phi': 'zjw04'},
+                           'AlCu': {'rho': 'nn', 'phi': 'zjw04'},
+                           'Al': 'nn',
+                           'Cu': 'nn'})
 
 
 if __name__ == "__main__":

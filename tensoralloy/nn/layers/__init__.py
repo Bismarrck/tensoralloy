@@ -9,6 +9,6 @@ __email__ = 'Bismarrck@me.com'
 
 
 available_layers = {
-    'sutton90': AgSutton90,
-    'zjw04': AlCuZJW04
+    'sutton90': AgSutton90(),
+    'zjw04': AlCuZJW04()
 }
