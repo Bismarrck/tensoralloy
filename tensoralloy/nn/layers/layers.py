@@ -166,7 +166,9 @@ class PotentialFunctionLayer:
             self._shared_vars[shared_key] = var
         return var
 
-    def rho(self, r: tf.Tensor, kbody_term: str, split_sizes: List[int]):
+    def rho(self, r: tf.Tensor,
+            kbody_term: str,
+            split_sizes: Union[List[int], None]):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -176,7 +178,7 @@ class PotentialFunctionLayer:
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
-        split_sizes : List[int], optional
+        split_sizes : List[int] or None
             A list of int to split `r` into `N_el` subsets at `axis=2` where
             `N_el` is the number of elements. This may be None.
 

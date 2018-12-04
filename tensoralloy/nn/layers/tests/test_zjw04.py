@@ -193,9 +193,9 @@ def test_rho_phi_aa():
 
         with tf.name_scope("Rho"):
             with tf.variable_scope("AlAl"):
-                rho_al_op = layer.rho(r, 'AlAl')
+                rho_al_op = layer.rho(r, 'AlAl', None)
             with tf.variable_scope("CuCu"):
-                rho_cu_op = layer.rho(r, 'CuCu')
+                rho_cu_op = layer.rho(r, 'CuCu', None)
 
         with tf.name_scope("Phi"):
             with tf.variable_scope("AlAl"):
