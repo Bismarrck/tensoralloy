@@ -50,7 +50,7 @@ class BasicNN:
 
         """
         self._elements = elements
-        self._hidden_sizes = self._convert_to_dict(
+        self._hidden_sizes = self._get_hidden_sizes(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation = safe_select(activation, Defaults.activation)
         self._forces = forces
@@ -101,7 +101,7 @@ class BasicNN:
         """
         return self._l2_weight
 
-    def _convert_to_dict(self, hidden_sizes):
+    def _get_hidden_sizes(self, hidden_sizes):
         """
         Convert `hidden_sizes` to a dict if needed.
         """

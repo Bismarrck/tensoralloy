@@ -9,7 +9,7 @@ import numpy as np
 from typing import List, Dict
 from collections import Counter
 
-from tensoralloy.misc import AttributeDict, Defaults
+from tensoralloy.misc import AttributeDict, Defaults, safe_select
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
@@ -23,12 +23,13 @@ class EamNN(BasicNN):
     The tensorflow/CNN based implementation of the Embedded-Atom Method.
     """
 
-    def __init__(self, symmetric=False, *args, **kwargs):
+    def __init__(self, symmetric=False, custom_layers=None, *args, **kwargs):
         """
         Initialization method.
         """
         super(EamNN, self).__init__(*args, **kwargs)
 
+        self._custom_layers = safe_select(custom_layers, {})
         self._symmetric = symmetric and len(self._elements) > 1
 
     @property
@@ -45,7 +46,7 @@ class EamNN(BasicNN):
         """
         return self._all_kbody_terms
 
-    def _convert_to_dict(self, hidden_sizes):
+    def _get_hidden_sizes(self, hidden_sizes):
         all_kbody_terms, kbody_terms, _ = get_kbody_terms(
             self._elements, k_max=2)
 
