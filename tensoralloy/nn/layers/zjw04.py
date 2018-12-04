@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from tensorflow.python.ops.gen_array_ops import scatter_nd_non_aliasing_add
+from typing import List
 
 from tensoralloy.nn.layers.layers import PotentialFunctionLayer
 from tensoralloy.utils import get_elements_from_kbody_term
@@ -112,12 +113,11 @@ class AlCuZJW04(PotentialFunctionLayer):
                                       tf.div(rho_cu, rho_al) * phi_al),
                                name='phi')
 
-    def rho(self, r: tf.Tensor, kbody_term: str, **kwargs):
+    def rho(self, r: tf.Tensor, kbody_term: str, split_sizes: List[int]):
         """
         The electron density function rho(r).
         """
         if kbody_term == 'AlCu':
-            split_sizes = kwargs['split_sizes']
             r_al, r_cu = tf.split(r, num_or_size_splits=split_sizes, axis=2)
             with tf.name_scope("AlAl"):
                 rho_al = self.rho(r_al, 'AlAl')

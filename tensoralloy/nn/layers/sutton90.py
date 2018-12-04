@@ -45,7 +45,7 @@ class AgSutton90(PotentialFunctionLayer):
                 r = tf.div_no_nan(one, r, name='r_inv')
             return tf.pow(b * r, 12, name='phi')
 
-    def rho(self, r: tf.Tensor, kbody_term: str):
+    def rho(self, r: tf.Tensor, kbody_term: str, **kwargs):
         """
         The electron density function:
 
