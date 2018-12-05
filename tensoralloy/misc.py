@@ -6,7 +6,8 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 from unittest import SkipTest
-from os.path import dirname, isdir, join
+from os.path import dirname, isdir, join, abspath
+
 from os import makedirs
 
 __author__ = 'Xin Chen'
@@ -104,18 +105,24 @@ def check_path(path):
     return path
 
 
-def test_dir():
+def test_dir(absolute=False):
     """
     Return the directory of `test_files`.
     """
-    return join(dirname(__file__), "..", "test_files")
+    path = join(dirname(__file__), "..", "test_files")
+    if absolute:
+        path = abspath(path)
+    return path
 
 
-def datasets_dir():
+def datasets_dir(absolute=False):
     """
     Return the directory of `datasets`. Built-in datasets can be found here.
     """
-    return join(dirname(__file__), "..", "datasets")
+    path = join(dirname(__file__), "..", "datasets")
+    if absolute:
+        path = abspath(path)
+    return path
 
 
 def brange(start, stop, batch_size):
