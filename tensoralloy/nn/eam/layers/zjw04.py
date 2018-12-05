@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.python.ops.gen_array_ops import scatter_nd_non_aliasing_add
 from typing import List
 
-from tensoralloy.nn.layers.layers import PotentialFunctionLayer
+from tensoralloy.nn.eam.layers.layers import PotentialFunctionLayer
 from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'

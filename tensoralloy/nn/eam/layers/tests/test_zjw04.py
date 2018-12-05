@@ -16,7 +16,7 @@ import math
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
-from tensoralloy.nn.layers.zjw04 import AlCuZJW04
+from tensoralloy.nn.eam.layers.zjw04 import AlCuZJW04
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

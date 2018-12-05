@@ -17,7 +17,7 @@ from nose.tools import assert_almost_equal
 from nose import with_setup
 
 from tensoralloy.transformer import BatchEAMTransformer
-from tensoralloy.nn.eam import EamNN
+from tensoralloy.nn.eam.alloy import EamNN
 from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.misc import AttributeDict, test_dir
 

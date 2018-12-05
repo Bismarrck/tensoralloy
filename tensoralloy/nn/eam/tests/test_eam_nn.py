@@ -10,7 +10,7 @@ import nose
 from nose.tools import assert_equal, assert_list_equal, assert_tuple_equal
 from nose.tools import assert_dict_equal
 
-from ..eam import EamNN
+from ..alloy import EamNN
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
 

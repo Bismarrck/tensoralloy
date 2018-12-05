@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines the neural network based implementation of the EAM model.
+This module defines the EAM/Alloy model.
 """
 from __future__ import print_function, absolute_import
 
@@ -14,6 +14,7 @@ from tensoralloy.misc import Defaults, safe_select, AttributeDict
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
+from tensoralloy.nn.eam.layers import available_layers
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
