@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from typing import List, Dict, Union
+from abc import ABC
 
 from tensoralloy.misc import safe_select
 
@@ -43,10 +44,10 @@ def get_variable(name,
                            validate_shape=validate_shape)
 
 
-class PotentialFunctionLayer:
+class EmpiricalPotential:
     """
-    A `PotentialFunctionLayer` represents a tensorflow based implemetation of a
-    classical potential function.
+    An `EmpiricalPotential` represents a tensorflow based implemetation of an
+    empirical EAM potential.
     """
 
     # The default parameters and (initial) values. Only scalar values are
@@ -166,27 +167,9 @@ class PotentialFunctionLayer:
             self._shared_vars[shared_key] = var
         return var
 
-    def rho(self, r: tf.Tensor,
-            kbody_term: str,
-            split_sizes: Union[List[int], None]):
+    def rho(self, *args):
         """
         Return the Op to compute electron density `rho(r)`.
-
-        Parameters
-        ----------
-        r : tf.Tensor
-            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
-        kbody_term : str
-            The corresponding k-body term.
-        split_sizes : List[int] or None
-            A list of int to split `r` into `N_el` subsets at `axis=2` where
-            `N_el` is the number of elements. This may be None.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_elements]`.
-
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
@@ -222,6 +205,58 @@ class PotentialFunctionLayer:
             `max_n_element` is the maximum occurace of `element`.
         element : str
             An element symbol.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        raise NotImplementedError(
+            "This method must be overridden by its subclass!")
+
+
+class EamAlloyPotential(EmpiricalPotential, ABC):
+    """
+    This class represents an `EAM/Alloy` style empirical potential.
+    """
+
+    def rho(self, r: tf.Tensor, element: str):
+        """
+        Return the Op to compute electron density `rho(r)`.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
+        element : str
+            The corresponding element.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        raise NotImplementedError(
+            "This method must be overridden by its subclass!")
+
+
+class EamFSPotential(EmpiricalPotential, ABC):
+    """
+    This class represents an `EAM/Finnis-Sinclair` style empirical potential.
+    """
+
+    def rho(self, r: tf.Tensor, kbody_term: str):
+        """
+        Return the Op to compute electron density `rho(r)`.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
 
         Returns
         -------

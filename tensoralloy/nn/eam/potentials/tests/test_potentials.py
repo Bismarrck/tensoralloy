@@ -7,14 +7,14 @@ from __future__ import print_function, absolute_import
 import nose
 from nose.tools import assert_list_equal, assert_dict_equal
 
-from ..layers import PotentialFunctionLayer, any_kbody_term
+from ..potentials import EmpiricalPotential, any_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
 # noinspection PyAbstractClass
-class _ParamLayer(PotentialFunctionLayer):
+class _ParamLayer(EmpiricalPotential):
     """
     A layer with default parameters 'a', 'b', 'c' and 'd'.
     """
@@ -28,13 +28,13 @@ def test_layer_init():
     """
     Test the initialization of `PotentialFunctionLayer`.
     """
-    layer = PotentialFunctionLayer()
+    layer = EmpiricalPotential()
 
     assert_list_equal(layer.allowed_kbody_terms, [any_kbody_term])
     assert_dict_equal(layer.params, {any_kbody_term: {}})
     assert_dict_equal(layer.fixed, {})
 
-    layer = PotentialFunctionLayer(
+    layer = EmpiricalPotential(
         params={'AlCu': {"x": 2, "y": 3}}, fixed={'AlCu': ['x']})
 
     assert_dict_equal(layer.params, {any_kbody_term: {},

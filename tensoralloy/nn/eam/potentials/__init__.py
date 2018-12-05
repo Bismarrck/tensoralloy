@@ -8,7 +8,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-available_layers = {
+available_potentials = {
     'sutton90': AgSutton90(),
     'zjw04': AlCuZJW04()
 }
