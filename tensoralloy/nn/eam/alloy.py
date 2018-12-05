@@ -24,7 +24,7 @@ __email__ = 'Bismarrck@me.com'
 
 class EamAlloyNN(EamNN):
     """
-    The tensorflow/CNN based implementation of the Embedded-Atom Method.
+    The tensorflow based implementation of the EAM/Alloy model.
     """
 
     def __init__(self, *args, **kwargs):
@@ -188,7 +188,8 @@ class EamAlloyNN(EamNN):
 
         """
         with tf.name_scope("nnEAM"):
-            partitions, max_occurs = self._dynamic_partition(features)
+            partitions, max_occurs = self._dynamic_partition(
+                features, merge_symmetric=True)
             rho = self._build_rho_nn(features.descriptors, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
             phi = self._build_phi_nn(partitions, verbose=verbose)
