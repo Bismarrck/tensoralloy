@@ -7,244 +7,147 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from collections import Counter
-from functools import partial
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from tensoralloy.misc import Defaults, safe_select, AttributeDict
-from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
-from tensoralloy.nn.eam.layers import available_layers
+from tensoralloy.nn.utils import log_tensor
+from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.nn.eam.eam import EamNN
+from tensoralloy.nn.eam.potentials import available_potentials
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class EamNN(BasicNN):
+class EamAlloyNN(EamNN):
     """
     The tensorflow/CNN based implementation of the Embedded-Atom Method.
     """
 
-    def __init__(self, symmetric=False, custom_layers=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Initialization method.
         """
-        self._symmetric = symmetric
-        super(EamNN, self).__init__(*args, **kwargs)
-        self._layers = self._setup_layers(custom_layers)
-
-    @property
-    def symmetric(self):
-        """
-        If True, AB and BA will be considered to be equal.
-        """
-        return self._symmetric
-
-    @property
-    def unique_kbody_terms(self):
-        """
-        Return a list of str as all the unique k-body terms for this model.
-        """
-        return self._unique_kbody_terms
+        super(EamAlloyNN, self).__init__(*args, **kwargs)
 
     def _get_hidden_sizes(self, hidden_sizes):
-        all_kbody_terms, kbody_terms, _ = get_kbody_terms(
-            self._elements, k_max=2)
+        """
+        Setup the hidden layer sizes.
 
-        if self._symmetric:
-            unique_kbody_terms = []
-            for kbody_term in all_kbody_terms:
-                elements = get_elements_from_kbody_term(kbody_term)
-                if elements[0] == elements[1]:
+        Parameters
+        ----------
+        hidden_sizes : int or List[int] or Dict[str, Dict[str, List[int]]]
+            This can be an int, a list of int or a nested dict.
+
+        Returns
+        -------
+        results : Dict[str, Dict[str, int]]
+            A nested dict.
+
+        """
+        kbody_terms = get_kbody_terms(self._elements, k_max=2)[1]
+        hidden_sizes = safe_select(hidden_sizes, Defaults.hidden_sizes)
+
+        unique_kbody_terms = []
+        for element in self._elements:
+            for kbody_term in kbody_terms[element]:
+                a, b = get_elements_from_kbody_term(kbody_term)
+                if a == b:
                     unique_kbody_terms.append(kbody_term)
                 else:
-                    unique_kbody_term = ''.join(sorted(elements))
-                    if unique_kbody_term not in unique_kbody_terms:
-                        unique_kbody_terms.append(unique_kbody_term)
-        else:
-            unique_kbody_terms = all_kbody_terms
+                    ab = "".join(sorted([a, b]))
+                    if ab not in unique_kbody_terms:
+                        unique_kbody_terms.append(ab)
 
-        self._kbody_terms = kbody_terms
         self._unique_kbody_terms = unique_kbody_terms
+        self._kbody_terms = kbody_terms
 
         results = {}
-        for element in self._unique_kbody_terms:
+
+        def _safe_update(section):
             if isinstance(hidden_sizes, dict):
-                sizes = np.asarray(
-                    hidden_sizes.get(element, Defaults.hidden_sizes),
-                    dtype=np.int)
+                if section in hidden_sizes:
+                    results[section].update(hidden_sizes[section])
             else:
-                sizes = np.atleast_1d(hidden_sizes).astype(np.int)
-            assert (sizes > 0).all()
-            results[element] = sizes.tolist()
+                value = np.atleast_1d(hidden_sizes).tolist()
+                for key in results[section]:
+                    results[section][key] = value
+
+        for element in self._elements:
+            results[element] = {'rho': Defaults.hidden_sizes,
+                                'embed': Defaults.hidden_sizes}
+            _safe_update(element)
+
+        for kbody_term in unique_kbody_terms:
+            results[kbody_term] = {'phi': Defaults.hidden_sizes}
+            _safe_update(kbody_term)
+
         return results
 
-    @property
-    def layers(self):
-        """
-        Return the layers.
-        """
-        return self._layers
-
-    def _setup_layers(self, custom_layers=None):
+    def _setup_potentials(self, custom_potentials=None):
         """
         Setup the layers for nn-EAM.
         """
 
         def _check_avail(name: str):
             name = name.lower()
-            if name == "nn" or name in available_layers:
+            if name == "nn" or name in available_potentials:
                 return True
             else:
                 return False
 
-        layers = {el: "nn" for el in self._elements}
-        layers.update({kbody_term: {"rho": "nn", "phi": "nn"}
-                       for kbody_term in self._unique_kbody_terms})
+        potentials = {el: {"rho": "nn", "embed": "nn"} for el in self._elements}
+        potentials.update({kbody_term: {"phi": "nn"}
+                           for kbody_term in self._unique_kbody_terms})
 
-        custom_layers = safe_select(custom_layers, {})
+        custom_potentials = safe_select(custom_potentials, {})
+
+        def _safe_update(section, key):
+            if key in custom_potentials[section]:
+                value = custom_potentials[section][key]
+                assert _check_avail(value)
+                potentials[section][key] = value
 
         for element in self._elements:
-            if element in custom_layers:
-                embed = custom_layers[element]
-                assert _check_avail(embed)
-                layers[element] = embed
+            if element in custom_potentials:
+                _safe_update(element, 'rho')
+                _safe_update(element, 'embed')
 
         for kbody_term in self._unique_kbody_terms:
-            if kbody_term in custom_layers:
-                rho = custom_layers[kbody_term]['rho']
-                phi = custom_layers[kbody_term]['phi']
-                assert _check_avail(rho)
-                assert _check_avail(phi)
-                layers[kbody_term]['rho'] = rho
-                layers[kbody_term]['phi'] = phi
+            if kbody_term in custom_potentials:
+                _safe_update(kbody_term, 'phi')
 
-        return layers
+        return potentials
 
-    def _get_nn_fn(self, kbody_term, verbose=False):
+    def _build_rho_nn(self, descriptors: AttributeDict, verbose=False):
         """
-        Return a layer function of `f(x)` where `f` is a 1x1 CNN.
-        """
-        activation_fn = get_activation_fn(self._activation)
-        hidden_sizes = self._hidden_sizes[kbody_term]
-        return partial(self._get_1x1conv_nn, activation_fn=activation_fn,
-                       hidden_sizes=hidden_sizes, verbose=verbose)
-
-    def _get_embed_fn(self, element: str, verbose=False):
-        """
-        Return the embedding function of `name` for `element`.
-        """
-        name = self._layers[element]
-        if name == 'nn':
-            kbody_term = f"{element}{element}"
-            return self._get_nn_fn(kbody_term, verbose=verbose)
-        else:
-            return partial(available_layers[name].embed, element=element)
-
-    def _get_rho_fn(self, kbody_term: str, split_sizes, verbose=False):
-        """
-        Return the electron density function of `name` for the given k-body
-        term.
-        """
-        name = self._layers[kbody_term]['rho']
-        if name == 'nn':
-            return self._get_nn_fn(kbody_term, verbose=verbose)
-        else:
-            return partial(available_layers[name].rho, kbody_term=kbody_term,
-                           split_sizes=split_sizes)
-
-    def _get_phi_fn(self, kbody_term: str, verbose=False):
-        """
-        Return the pairwise potential function of `name` for the given k-body
-        term.
-        """
-        name = self._layers[kbody_term]['phi']
-        if name == 'nn':
-            return self._get_nn_fn(kbody_term, verbose=verbose)
-        else:
-            return partial(available_layers[name].phi, kbody_term=kbody_term)
-
-    def _get_energy(self, outputs: List[tf.Tensor], features: AttributeDict,
-                    verbose=True):
-        """
-        Return the Op to compute total energy of nn-EAM.
+        Return the outputs of the electron densities, `rho(r)`.
 
         Parameters
         ----------
-        outputs : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
-            atomic energies.
-        features : AttributeDict
-            A dict of input features.
+        descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict. The keys are elements and values are tuples of (value, mask)
+            where where `value` represents the descriptors and `mask` is
+            the value mask. Both `value` and `mask` are 4D tensors of shape
+            `[batch_size, max_n_terms, max_n_element, nnl]`.
         verbose : bool
-            If True, the total energy tensor will be logged.
+            If True, key tensors will be logged.
 
         Returns
         -------
-        energy : tf.Tensor
-            The total energy tensor.
+        rho : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_atoms - 1]`.
 
-        """
-        with tf.name_scope("Energy"):
-            y_atomic = tf.identity(outputs, name='atomic')
-            shape = y_atomic.shape
-            with tf.name_scope("mask"):
-                mask = tf.split(
-                    features.mask, [1, -1], axis=1, name='split')[1]
-                y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_mask.set_shape(shape)
-            energy = tf.reduce_sum(
-                y_mask, axis=1, keepdims=False, name='energy')
-            if verbose:
-                log_tensor(energy)
-            return energy
-
-    def _build_phi_nn(self, partitions: AttributeDict, verbose=False):
-        """
-        Return the outputs of the pairwise interactions, `Phi(r)`.
         """
         outputs = {}
-        with tf.name_scope("Phi"):
-            half = tf.constant(0.5, dtype=tf.float64, name='half')
-            for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(kbody_term):
-                    # Convert `x` to a 5D tensor.
-                    x = tf.expand_dims(value, axis=-1, name='input')
-                    if verbose:
-                        log_tensor(x)
-                    # Apply the `phi` function on `x`
-                    comput = self._get_phi_fn(kbody_term, verbose=verbose)
-                    y = comput(x)
-                    # Apply the value mask
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
-                                    name='masked')
-
-                    # `y` here will be reduced to a 2D tensor of shape
-                    # `[batch_size, max_n_atoms]`
-                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                    y = tf.squeeze(y, axis=1)
-                    y = tf.multiply(y, half, name='atomic')
-                    if verbose:
-                        log_tensor(y)
-                    outputs[kbody_term] = y
-            return self._dynamic_stitch(outputs)
-
-    def _build_rho_nn(self, partitions: AttributeDict, max_occurs: Counter,
-                      verbose=False):
-        """
-        Return the outputs of the electron densities, `rho(r)`.
-        """
-        outputs = {}
-        split_sizes = [max_occurs[el] for el in self._elements]
         with tf.name_scope("Rho"):
-            for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(kbody_term):
+            for element, (value, mask) in descriptors.items():
+                with tf.variable_scope(element):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
                     # Apply the `rho` function on `x`
-                    comput = self._get_rho_fn(
-                        kbody_term, split_sizes=split_sizes, verbose=verbose)
+                    comput = self._get_rho_fn(element, verbose=verbose)
                     y = comput(x)
                     # Apply the mask to rho.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
@@ -254,153 +157,38 @@ class EamNN(BasicNN):
                     rho = tf.squeeze(y, axis=1, name='rho')
                     if verbose:
                         log_tensor(rho)
-                    outputs[kbody_term] = rho
+                    outputs[element] = rho
             return self._dynamic_stitch(outputs)
-
-    def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
-                        verbose=True):
-        """
-        Return the embedding energy, `F(rho)`.
-
-        Parameters
-        ----------
-        rho : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the electron
-            density of each atom.
-        max_occurs : Counter
-            The maximum occurance of each type of element.
-
-        Returns
-        -------
-        embed : tf.Tensor
-            The embedding energy. Has the same shape with `rho`.
-
-        """
-        split_sizes = [max_occurs[el] for el in self._elements]
-
-        with tf.name_scope("Embed"):
-            splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
-            values = []
-            for i, element in enumerate(self._elements):
-                with tf.variable_scope(element):
-                    x = tf.expand_dims(splits[i], axis=-1, name=element)
-                    if verbose:
-                        log_tensor(x)
-                    # Apply the embedding function on `x`
-                    comput = self._get_embed_fn(element, verbose=verbose)
-                    y = comput(x)
-                    embed = tf.squeeze(y, axis=2, name='atomic')
-                    if verbose:
-                        log_tensor(embed)
-                    values.append(embed)
-            return tf.concat(values, axis=1)
-
-    def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor]):
-        """
-        The reverse of `dynamic_partition`. Interleave the kbody-term centered
-        `outputs` of type `Dict[kbody_term, tensor]` to element centered values
-        of type `Dict[element, tensor]`.
-
-        Parameters
-        ----------
-        outputs : Dict[str, tf.Tensor]
-            A dict. The keys are unique kbody-terms and values are 2D tensors
-            with shape `[batch_size, max_n_elements]` where `max_n_elements`
-            denotes the maximum occurance of the center element of the
-            corresponding kbody-term.
-
-        Returns
-        -------
-        atomic : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the energies
-            of the real atoms.
-
-        """
-        with tf.name_scope("Stitch"):
-            stacks = {}
-            results = []
-            for kbody_term, value in outputs.items():
-                elements = get_elements_from_kbody_term(kbody_term)
-                if self._symmetric and elements[0] != elements[1]:
-                    results.append(value)
-                else:
-                    center = elements[0]
-                    if center not in stacks:
-                        stacks[center] = [value]
-                    else:
-                        stacks[center].append(value)
-            results.append(
-                tf.concat([tf.add_n(stacks[el], name=el)
-                           for el in self._elements], axis=1))
-            if not self._symmetric:
-                return tf.identity(results[0], name='sum')
-            else:
-                return tf.add_n(results, name='sum')
-
-    def _dynamic_partition(self, features: AttributeDict):
-        """
-        Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
-        partitions where `Np` is the total number of unique k-body terms.
-
-        If `self.symmetric` is False, `Np` is equal to `N**2`.
-        If `self.symmetric` is True, `Np` will be `N * (N + 1) / 2`.
-
-        Here N denotes the total number of elements.
-
-        Parameters
-        ----------
-        features : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are elements and values are tuples of (value, mask)
-            where where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, max_n_terms, max_n_element, nnl]`.
-
-        Returns
-        -------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are unique kbody terms and values are tuples of
-            (value, mask) where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, 1, max_n_element, nnl]`.
-        max_occurs : Counter
-            The maximum occurance of each type of element.
-
-        """
-        partitions = AttributeDict()
-        max_occurs = {}
-
-        with tf.name_scope("Partition"):
-            for element in self._elements:
-                kbody_terms = self._kbody_terms[element]
-                values, masks = features.descriptors[element]
-                max_occurs[element] = values.shape[2].value
-                num = len(kbody_terms)
-                glists = tf.split(values, num_or_size_splits=num, axis=1)
-                mlists = tf.split(masks, num_or_size_splits=num, axis=1)
-                for i, (value, mask) in enumerate(zip(glists, mlists)):
-                    kbody_term = kbody_terms[i]
-                    if self._symmetric:
-                        kbody_term = ''.join(
-                            sorted(get_elements_from_kbody_term(kbody_term)))
-                        if kbody_term in partitions:
-                            value = tf.concat(
-                                (partitions[kbody_term][0], value), axis=2)
-                            mask = tf.concat(
-                                (partitions[kbody_term][1], mask), axis=2)
-                    partitions[kbody_term] = (value, mask)
-            return partitions, Counter(max_occurs)
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
-        Return the nn-EAM model.
+        Return the EAM/Alloy model.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of tensors:
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is the mask of `value`.
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
+            atomic energies.
+
         """
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(features)
-
-            rho = self._build_rho_nn(partitions, max_occurs, verbose=verbose)
+            rho = self._build_rho_nn(features.descriptors, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
             phi = self._build_phi_nn(partitions, verbose=verbose)
-
             y = tf.add(phi, embed, name='atomic')
             return y
 
