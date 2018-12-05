@@ -6,8 +6,11 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+from datetime import datetime
+from ase import data
 from collections import Counter
 from typing import List, Dict, Tuple
+from atsim.potentials import Potential, EAMPotential, writeSetFL
 
 from tensoralloy.misc import Defaults, safe_select, AttributeDict
 from tensoralloy.nn.utils import log_tensor
@@ -129,7 +132,7 @@ class EamAlloyNN(EamNN):
             A dict. The keys are elements and values are tuples of (value, mask)
             where where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, max_n_terms, max_n_element, nnl]`.
+            `[batch_size, max_n_terms, 1, nnl]`.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -192,13 +195,31 @@ class EamAlloyNN(EamNN):
             y = tf.add(phi, embed, name='atomic')
             return y
 
-    def export(self, save_path: str, outdir: str, nr: int, dr: float, nrho: int,
-               drho: float):
+    def export(self, checkpoint_path: str, setfl: str, nr: int, dr: float,
+               nrho: int, drho: float):
         """
-        Export to setfl potential files.
+        Export this EAM/Alloy model to a setfl potential file for LAMMPS.
+
+        Parameters
+        ----------
+        checkpoint_path : str
+            The tensorflow checkpoint file to restore.
+        setfl : str
+            The setfl file to write.
+        nr : int
+            The number of `r` used to describe density and pair potentials.
+        dr : float
+            The delta `r` used for tabulating density and pair potentials.
+        nrho : int
+            The number of `rho` used to describe embedding functions.
+        drho : float
+            The delta `rho` used for tabulating embedding functions.
+
         """
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
                       reps=len(self._elements))
+        r = np.arange(0.0, nr * dr, nr).reshape((1, 1, 1, -1))
+
         max_occurs = Counter({el: nrho for el in self._elements})
 
         with tf.Graph().as_default():
@@ -207,12 +228,87 @@ class EamAlloyNN(EamNN):
             with tf.name_scope("Values"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
+                descriptors = AttributeDict()
+                for element in self._elements:
+                    value = tf.convert_to_tensor(r, name=f'r{element}')
+                    mask = tf.ones_like(value, name=f'm{element}')
+                    descriptors[element] = (value, mask)
+
+                partitions = AttributeDict()
+                for kbody_term in self._unique_kbody_terms:
+                    value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
+                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    partitions[kbody_term] = (value, mask)
+
             sess = tf.Session()
             with sess:
-                saver.restore(sess, save_path)
+                saver.restore(sess, checkpoint_path)
 
-                op = self._build_embed_nn(rho, max_occurs=max_occurs)
-                results = sess.run(op)
+                embed = self._build_embed_nn(rho, max_occurs=max_occurs)
+                rho = self._build_rho_nn(descriptors)
+                phi = self._build_phi_nn(partitions)
 
-                def make_embed(_rho, array: np.ndarray):
-                    return array[int(round(_rho / drho, 6))]
+                results = AttributeDict(sess.run(
+                    {'embed': embed, 'rho': rho, 'phi': phi}))
+
+                def make_density(_element):
+                    """
+                    Return the density function for `element`.
+                    """
+                    base = nr * self._elements.index(_element)
+
+                    def _func(_r):
+                        """ Return `rho(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        return results.rho[base + idx]
+                    return _func
+
+                def make_embed(_element):
+                    """
+                    Return the embedding energy function for `element`.
+                    """
+                    base = nr * self._elements.index(_element)
+
+                    def _func(_rho):
+                        """ Return `F(rho)` for the given `rho`. """
+                        idx = int(round(_rho / drho, 6))
+                        return results.embed[base + idx]
+                    return _func
+
+                def make_pairwise(_kbody_term):
+                    """
+                    Return the embedding energy function for `element`.
+                    """
+                    base = nr * self._unique_kbody_terms.index(_kbody_term)
+
+                    def _func(_r):
+                        """ Return `phi(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        return results.phi[base + idx]
+                    return _func
+
+            eam_potentials = []
+            for element in self._elements:
+                number = data.atomic_numbers[element]
+                mass = data.atomic_masses[element]
+                potential = EAMPotential(element, number, mass,
+                                         make_embed(element),
+                                         make_density(element))
+                eam_potentials.append(potential)
+
+            pair_potentials = []
+            for kbody_term in self._unique_kbody_terms:
+                a, b = get_elements_from_kbody_term(kbody_term)
+                potential = Potential(a, b, make_pairwise(kbody_term))
+                pair_potentials.append(potential)
+
+            comments = [
+                "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
+                    datetime.today()),
+                "LAMMPS setfl format",
+                "Conversion by TensorAlloy"
+            ]
+
+            with open(setfl, 'wb') as fp:
+                writeSetFL(nrho, drho, nr, dr, eam_potentials, pair_potentials,
+                           out=fp, comments=comments)
