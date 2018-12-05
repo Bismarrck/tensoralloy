@@ -678,6 +678,7 @@ class BasicNN:
         Parameters
         ----------
         features : AttributeDict
+            A dict of tensors:
                 * 'descriptors', a dict of (element, (value, mask)) where
                   `element` represents the symbol of an element, `value` is the
                   descriptors of `element` and `mask` is the mask of `value`.
