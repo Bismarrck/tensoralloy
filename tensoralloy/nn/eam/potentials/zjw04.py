@@ -7,16 +7,15 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from tensorflow.python.ops.gen_array_ops import scatter_nd_non_aliasing_add
-from typing import List
 
-from tensoralloy.nn.eam.layers.layers import PotentialFunctionLayer
+from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class AlCuZJW04(PotentialFunctionLayer):
+class AlCuZJW04(EamAlloyPotential):
     """
     The Al-Cu potential proposed by Zhou et al. at 2004.
 
@@ -27,7 +26,7 @@ class AlCuZJW04(PotentialFunctionLayer):
     """
 
     defaults = {
-        'AlAl': {
+        'Al': {
             're': 2.863924, 'fe': 1.403115, 'A': 0.314873, 'B': 0.365551,
             'kappa': 0.379846, 'lamda': 0.759692, 'gamma': 6.613165,
             'omega': 3.527021, 'F0': -2.83, 'F1': 0.0, 'F2': 0.622245,
@@ -35,7 +34,7 @@ class AlCuZJW04(PotentialFunctionLayer):
             'Fn1': -0.301435, 'Fn2': 1.258562, 'Fn3': -1.247604,
             'rho_e': 20.418205, 'rho_s': 23.195740,
         },
-        'CuCu': {
+        'Cu': {
             're': 2.556162, 'fe': 1.554485, 'A': 0.396620, 'B': 0.548085,
             'kappa': 0.308782, 'lamda': 0.756515, 'gamma': 8.127620,
             'omega': 4.334731, 'F0': -2.19, 'F1': 0.0, 'F2': 0.561830,
@@ -46,8 +45,7 @@ class AlCuZJW04(PotentialFunctionLayer):
     }
 
     def __init__(self):
-        super(AlCuZJW04, self).__init__(
-            allowed_kbody_terms=['AlAl', 'AlCu', 'CuCu'])
+        super(AlCuZJW04, self).__init__()
 
     @staticmethod
     def _exp_func(re, a, b, c, one, name=None):
@@ -66,35 +64,31 @@ class AlCuZJW04(PotentialFunctionLayer):
 
     def phi(self, r: tf.Tensor, kbody_term: str):
         """
-        The pairwise potential function:
+        The pairwise potential function.
 
-            phi(r) = \frac{
-                A\exp{[-\gamma(r_{ij}/r_{e} - 1)]}}{
-                1 + (r_{ij}/r_{e} - \kappa)^{20}} - \frac{
-                B\exp{[-\omega(r_{ij}/r_{e} - 1)]}}{
-                1 + (r_{ij}/r_{e} - \lambda)^{20}
-            }
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
 
-        for AlAl, CuCu and:
-
-            phi(r) = \frac{1}{2}\left[
-                \frac{\rho_{\beta}(r)}{\rho_{\alpha}(r)}\phi_{\alpha\alpha}(r) +
-                \frac{\rho_{\alpha}(r)}{\rho_{\beta}(r)}\phi_{\beta\beta}(r)
-            \right]
-
-        for Al-Cu where `\alpha` and `\beta` denotes 'Al' or 'Cu'.
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
         if kbody_term in ('AlAl', 'CuCu'):
             element = get_elements_from_kbody_term(kbody_term)[0]
             with tf.variable_scope(f"ZJW04/Phi/{element}"):
-                re = self._get_var('re', r.dtype, kbody_term, shared=True)
-                A = self._get_var('A', r.dtype, kbody_term, shared=True)
-                B = self._get_var('B', r.dtype, kbody_term, shared=True)
-                gamma = self._get_var('gamma', r.dtype, kbody_term, shared=True)
-                omega = self._get_var('omega', r.dtype, kbody_term, shared=True)
-                kappa = self._get_var('kappa', r.dtype, kbody_term, shared=True)
-                lamda = self._get_var('lamda', r.dtype, kbody_term, shared=True)
+                re = self._get_var('re', r.dtype, element, shared=True)
+                A = self._get_var('A', r.dtype, element, shared=True)
+                B = self._get_var('B', r.dtype, element, shared=True)
+                gamma = self._get_var('gamma', r.dtype, element, shared=True)
+                omega = self._get_var('omega', r.dtype, element, shared=True)
+                kappa = self._get_var('kappa', r.dtype, element, shared=True)
+                lamda = self._get_var('lamda', r.dtype, element, shared=True)
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
                 return tf.subtract(
                     self._exp_func(re, A, gamma, kappa, one, name='A')(r),
@@ -103,30 +97,26 @@ class AlCuZJW04(PotentialFunctionLayer):
         else:
             with tf.name_scope('AlAl'):
                 phi_al = self.phi(r, 'AlAl')
-                rho_al = self.rho(r, 'AlAl', None)
+                rho_al = self.rho(r, 'Al')
             with tf.name_scope("CuCu"):
                 phi_cu = self.phi(r, 'CuCu')
-                rho_cu = self.rho(r, 'CuCu', None)
+                rho_cu = self.rho(r, 'Cu')
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             return tf.multiply(half,
                                tf.add(tf.div(rho_al, rho_cu) * phi_cu,
                                       tf.div(rho_cu, rho_al) * phi_al),
                                name='phi')
 
-    def rho(self, r: tf.Tensor, kbody_term: str, split_sizes):
+    def rho(self, r: tf.Tensor, element: str):
         """
         The electron density function rho(r).
 
         Parameters
         ----------
         r : tf.Tensor
-            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
-        kbody_term : str
-            The corresponding k-body term.
-        split_sizes : List[int] or None
-            A list of int to split `r` into `N_el` subsets at `axis=2` where
-            `N_el` is the number of elements. This should not be None for A-B
-            type k-body terms.
+            A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
+        element : str
+            The corresponding element.
 
         Returns
         -------
@@ -134,23 +124,13 @@ class AlCuZJW04(PotentialFunctionLayer):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        if kbody_term == 'AlCu':
-            assert split_sizes is not None
-            r_al, r_cu = tf.split(r, num_or_size_splits=split_sizes, axis=2)
-            with tf.name_scope("AlAl"):
-                rho_al = self.rho(r_al, 'AlAl', None)
-            with tf.name_scope("CuCu"):
-                rho_cu = self.rho(r_cu, 'CuCu', None)
-            return tf.concat((rho_al, rho_cu), axis=2, name='rho')
-        else:
-            element = get_elements_from_kbody_term(kbody_term)[0]
-            with tf.variable_scope(f"ZJW04/Rho/{element}"):
-                re = self._get_var('re', r.dtype, kbody_term, shared=True)
-                fe = self._get_var('fe', r.dtype, kbody_term, shared=True)
-                omega = self._get_var('omega', r.dtype, kbody_term, shared=True)
-                lamda = self._get_var('lamda', r.dtype, kbody_term, shared=True)
-                one = tf.constant(1.0, dtype=r.dtype, name='one')
-                return self._exp_func(re, fe, omega, lamda, one, name='rho')(r)
+        with tf.variable_scope(f"ZJW04/Rho/{element}"):
+            re = self._get_var('re', r.dtype, element, shared=True)
+            fe = self._get_var('fe', r.dtype, element, shared=True)
+            omega = self._get_var('omega', r.dtype, element, shared=True)
+            lamda = self._get_var('lamda', r.dtype, element, shared=True)
+            one = tf.constant(1.0, dtype=r.dtype, name='one')
+            return self._exp_func(re, fe, omega, lamda, one, name='rho')(r)
 
     def embed(self, rho: tf.Tensor, element: str):
         """
@@ -170,26 +150,25 @@ class AlCuZJW04(PotentialFunctionLayer):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        kbody_term = f"{element}{element}"
         dtype = rho.dtype
 
         with tf.variable_scope(f"ZJW04/Embed/{element}"):
-            Fn0 = self._get_var('Fn0', dtype, kbody_term, shared=True)
-            Fn1 = self._get_var('Fn1', dtype, kbody_term, shared=True)
-            Fn2 = self._get_var('Fn2', dtype, kbody_term, shared=True)
-            Fn3 = self._get_var('Fn3', dtype, kbody_term, shared=True)
-            F0 = self._get_var('F0', dtype, kbody_term, shared=True)
-            F1 = self._get_var('F1', dtype, kbody_term, shared=True)
-            F2 = self._get_var('F2', dtype, kbody_term, shared=True)
-            F3 = self._get_var('F3', dtype, kbody_term, shared=True)
-            eta = self._get_var('eta', dtype, kbody_term, shared=True)
-            rho_e = self._get_var('rho_e', dtype, kbody_term, shared=True)
-            rho_s = self._get_var('rho_s', dtype, kbody_term, shared=True)
-            Fe = self._get_var('Fe', dtype, kbody_term, shared=True)
+            Fn0 = self._get_var('Fn0', dtype, element, shared=True)
+            Fn1 = self._get_var('Fn1', dtype, element, shared=True)
+            Fn2 = self._get_var('Fn2', dtype, element, shared=True)
+            Fn3 = self._get_var('Fn3', dtype, element, shared=True)
+            F0 = self._get_var('F0', dtype, element, shared=True)
+            F1 = self._get_var('F1', dtype, element, shared=True)
+            F2 = self._get_var('F2', dtype, element, shared=True)
+            F3 = self._get_var('F3', dtype, element, shared=True)
+            eta = self._get_var('eta', dtype, element, shared=True)
+            rho_e = self._get_var('rho_e', dtype, element, shared=True)
+            rho_s = self._get_var('rho_s', dtype, element, shared=True)
+            Fe = self._get_var('Fe', dtype, element, shared=True)
             rho_n = tf.convert_to_tensor(
-                self._params[kbody_term]['rho_e'] * 0.85, dtype, name='rho_n')
+                self._params[element]['rho_e'] * 0.85, dtype, name='rho_n')
             rho_0 = tf.convert_to_tensor(
-                self._params[kbody_term]['rho_e'] * 1.15, dtype, name='rho_0')
+                self._params[element]['rho_e'] * 1.15, dtype, name='rho_0')
             one = tf.constant(1.0, dtype, name='one')
 
             def embed1(_rho):

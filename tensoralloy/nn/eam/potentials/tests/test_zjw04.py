@@ -16,7 +16,7 @@ import math
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
-from tensoralloy.nn.eam.layers.zjw04 import AlCuZJW04
+from tensoralloy.nn.eam.potentials.zjw04 import AlCuZJW04
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -193,9 +193,9 @@ def test_rho_phi_aa():
 
         with tf.name_scope("Rho"):
             with tf.variable_scope("AlAl"):
-                rho_al_op = layer.rho(r, 'AlAl', None)
+                rho_al_op = layer.rho(r, 'Al')
             with tf.variable_scope("CuCu"):
-                rho_cu_op = layer.rho(r, 'CuCu', None)
+                rho_cu_op = layer.rho(r, 'Cu')
 
         with tf.name_scope("Phi"):
             with tf.variable_scope("AlAl"):
@@ -229,42 +229,6 @@ def test_phi_ab():
         with tf.name_scope("Phi"):
             with tf.variable_scope("AlCu"):
                 op = layer.phi(r, 'AlCu')
-
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            results = sess.run(op)
-
-        assert_array_equal(results, ref)
-
-
-def test_rho_ab():
-    """
-    Test the function `AlCuZJW04.rho` for r_{AB}.
-    """
-    shape = (5, 1, 5, 2, 1)
-    max_n_al = 2
-    max_n_cu = 3
-    split_sizes = [max_n_al, max_n_cu]
-    r = np.linspace(0.0, 5.0, num=50, endpoint=False).reshape(shape)
-    ref = np.zeros_like(r)
-    it = np.nditer(r, flags=['multi_index'])
-    with it:
-        while not it.finished:
-            if it.multi_index[2] < max_n_al:
-                ref[it.multi_index] = ATSIM.rho.Al(r[it.multi_index])
-            else:
-                ref[it.multi_index] = ATSIM.rho.Cu(r[it.multi_index])
-            it.iternext()
-
-    with tf.Graph().as_default():
-
-        r = tf.convert_to_tensor(r, name='r')
-
-        layer = AlCuZJW04()
-
-        with tf.name_scope("Rho"):
-            with tf.variable_scope("AlCu"):
-                op = layer.rho(r, 'AlCu', split_sizes=split_sizes)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
