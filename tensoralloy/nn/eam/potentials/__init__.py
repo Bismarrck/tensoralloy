@@ -1,6 +1,7 @@
 # coding=utf-8
 from __future__ import print_function, absolute_import
 
+from .potentials import EamAlloyPotential, EamFSPotential
 from .sutton90 import AgSutton90
 from .zjw04 import AlCuZJW04
 
