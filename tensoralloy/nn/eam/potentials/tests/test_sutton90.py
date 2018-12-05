@@ -17,7 +17,7 @@ from nose.tools import assert_almost_equal
 from nose import with_setup
 
 from tensoralloy.transformer import BatchEAMTransformer
-from tensoralloy.nn.eam.alloy import EamNN
+from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.misc import AttributeDict, test_dir
 
@@ -89,8 +89,9 @@ def test_eam_sutton90():
                                  mask=batch.mask,
                                  volume=batch.volume)
 
-        nn = EamNN(elements=['Ag'], custom_layers={
-            "Ag": "sutton90", "AgAg": {"rho": "sutton90", "phi": "sutton90"}})
+        nn = EamAlloyNN(elements=['Ag'], custom_potentials={
+            "Ag": {"rho": "sutton90", "embed": "sutton90"},
+            "AgAg": {"phi": "sutton90"}})
         prediction = nn.build(features, verbose=False)
 
         with tf.Session() as sess:

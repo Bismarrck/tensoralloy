@@ -7,10 +7,10 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
-from nose.tools import assert_equal, assert_list_equal, assert_tuple_equal
+from nose.tools import assert_equal, assert_tuple_equal
 from nose.tools import assert_dict_equal
 
-from ..alloy import EamNN
+from ..alloy import EamAlloyNN
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
 
@@ -75,42 +75,6 @@ class TestData:
                     tf.float64, 'y_alcu'))
 
 
-def test_inference():
-    """
-    Test the inference: `EamNN.build`.
-    """
-    with tf.Graph().as_default():
-
-        data = TestData()
-
-        nn = EamNN(elements=data.elements, hidden_sizes=8, symmetric=False,
-                   forces=False)
-
-        assert_equal(len(nn.unique_kbody_terms), 4)
-
-        predictions = nn.build(data.features, verbose=True)
-        assert_list_equal(
-            predictions.energy.shape.as_list(), [data.batch_size, ])
-
-
-def test_symmetric_inference():
-    """
-    Test the inference of the symmetric nn-EAM.
-    """
-    with tf.Graph().as_default():
-
-        data = TestData()
-
-        nn = EamNN(elements=data.elements, hidden_sizes=8, symmetric=True,
-                   forces=False)
-
-        assert_equal(len(nn.unique_kbody_terms), 3)
-
-        predictions = nn.build(data.features, verbose=True)
-        assert_list_equal(
-            predictions.energy.shape.as_list(), [data.batch_size, ])
-
-
 def test_dynamic_stitch():
     """
     Test the method `EamNN._dynamic_stitch`.
@@ -119,11 +83,11 @@ def test_dynamic_stitch():
 
         data = TestData()
 
-        nn = EamNN(elements=data.elements, symmetric=False, forces=False)
-        symm_nn = EamNN(elements=data.elements, symmetric=True, forces=False)
+        nn = EamAlloyNN(elements=data.elements, forces=False)
 
-        op = nn._dynamic_stitch(data.atomic_splits)
-        symm_op = symm_nn._dynamic_stitch(data.symmetric_atomic_splits)
+        op = nn._dynamic_stitch(data.atomic_splits, symmetric=False)
+        symm_op = nn._dynamic_stitch(data.symmetric_atomic_splits,
+                                     symmetric=True)
 
         ref = np.concatenate((data.y_alal + data.y_alcu,
                               data.y_cucu + data.y_cual),
@@ -147,11 +111,11 @@ def test_dynamic_partition():
 
         data = TestData()
 
-        nn = EamNN(elements=data.elements, symmetric=False, forces=False)
-        symm_nn = EamNN(elements=data.elements, symmetric=True, forces=False)
+        nn = EamAlloyNN(elements=data.elements, forces=False)
 
         with tf.Session() as sess:
-            partitions_op, max_occurs = nn._dynamic_partition(data.features)
+            partitions_op, max_occurs = nn._dynamic_partition(
+                data.features, merge_symmetric=False)
             results = sess.run(partitions_op)
 
             assert_equal(len(max_occurs), 2)
@@ -168,7 +132,8 @@ def test_dynamic_partition():
             assert_array_equal(results['CuCu'][1], data.m_cu[:, [0]])
             assert_array_equal(results['CuAl'][1], data.m_cu[:, [1]])
 
-            partitions_op, _ = symm_nn._dynamic_partition(data.features)
+            partitions_op, _ = nn._dynamic_partition(
+                data.features, merge_symmetric=True)
             results = sess.run(partitions_op)
 
             assert_equal(len(results), 3)
@@ -186,26 +151,26 @@ def test_dynamic_partition():
                                                data.m_cu[:, [1]]), 2))
 
 
-def test_custom_layers():
+def test_custom_potentials():
     """
     Test setting layers of `EamNN`.
     """
     with tf.Graph().as_default():
 
         data = TestData()
-        custom_layers = {
-            'AlCu': {'rho': 'nn', 'phi': 'zjw04'},
-            'CuCu': {'rho': 'zjw04', 'phi': 'zjw04'},
+        custom_potentials = {
+            'AlCu': {'phi': 'zjw04'},
+            'Al': {'rho': 'zjw04'},
+            'CuCu': {'phi': 'zjw04'},
         }
-        nn = EamNN(elements=data.elements, symmetric=True, forces=False,
-                   custom_layers=custom_layers)
-
-        assert_dict_equal(nn.layers,
-                          {'AlAl': {'rho': 'nn', 'phi': 'nn'},
-                           'CuCu': {'rho': 'zjw04', 'phi': 'zjw04'},
-                           'AlCu': {'rho': 'nn', 'phi': 'zjw04'},
-                           'Al': 'nn',
-                           'Cu': 'nn'})
+        nn = EamAlloyNN(elements=data.elements,
+                        custom_potentials=custom_potentials)
+        assert_dict_equal(nn.potentials,
+                          {'AlAl': {'phi': 'nn'},
+                           'CuCu': {'phi': 'zjw04'},
+                           'AlCu': {'phi': 'zjw04'},
+                           'Al': {'rho': 'zjw04', 'embed': 'nn'},
+                           'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
 if __name__ == "__main__":
