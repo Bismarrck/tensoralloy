@@ -156,18 +156,27 @@ class EamNN(BasicNN):
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, 1, max_n_element, nnl]`.
+            `[batch_size, 1 + delta, max_n_element, nnl]`. `delta` will be zero
+            if the corresponding kbody term has only one type of atom; otherwise
+            `delta` will be one.
         verbose : bool
             If True, key tensors will be logged.
 
         Returns
         -------
-        result : tf.Tensor
+        atomic : tf.Tensor
             A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the energies
             of the real atoms.
+        values : Dict[str, tf.Tensor]
+            A dict. The corresponding value tensors before `reduce_sum` for
+            `partitions`. Each value of `values` is a 5D tensor of shape
+            `[batch_size, 1 + delta, max_n_element, nnl, 1]`. `delta` will be
+            zero if the corresponding kbody term has only one type of atom;
+            otherwise `delta` will be one.
 
         """
         outputs = {}
+        values = {}
         with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
             for kbody_term, (value, mask) in partitions.items():
@@ -185,13 +194,14 @@ class EamNN(BasicNN):
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
+                    values[kbody_term] = y
                     y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
                     y = tf.squeeze(y, axis=1)
                     y = tf.multiply(y, half, name='atomic')
                     if verbose:
                         log_tensor(y)
                     outputs[kbody_term] = y
-            return self._dynamic_stitch(outputs, symmetric=True)
+            return self._dynamic_stitch(outputs, symmetric=True), values
 
     def _build_rho_nn(self, values: AttributeDict, verbose=False):
         """
@@ -267,7 +277,9 @@ class EamNN(BasicNN):
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, 1, max_n_element, nnl]`.
+            `[batch_size, 1 + delta, max_n_element, nnl]`. `delta` will be zero
+            if the corresponding kbody term has only one type of atom; otherwise
+            `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
 
