@@ -148,9 +148,9 @@ class EamAlloyNN(EamNN):
         """
         outputs = {}
         values = {}
-        with tf.name_scope("Rho"):
+        with tf.name_scope("Rho") as scope:
             for element, (value, mask) in descriptors.items():
-                with tf.variable_scope(element):
+                with tf.variable_scope(f'{scope}/{element}'):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)

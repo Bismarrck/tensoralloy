@@ -34,7 +34,14 @@ class EamNN(BasicNN):
 
         super(EamNN, self).__init__(*args, **kwargs)
 
+        # Setup the potentials
         self._potentials = self._setup_potentials(custom_potentials)
+
+        # Initialize these empirical functions.
+        self._empirical_functions = {
+            key: cls() for key, cls in available_potentials.items()}
+
+        # Asserts
         assert self._kbody_terms and self._unique_kbody_terms
 
     @property
@@ -79,7 +86,8 @@ class EamNN(BasicNN):
         if name == 'nn':
             return self._get_nn_fn(element, 'embed', verbose=verbose)
         else:
-            return partial(available_potentials[name].embed, element=element)
+            return partial(self._empirical_functions[name].embed,
+                           element=element)
 
     def _get_rho_fn(self, element_or_kbody_term: str, verbose=False):
         """
@@ -91,14 +99,14 @@ class EamNN(BasicNN):
             return self._get_nn_fn(
                 element_or_kbody_term, 'rho', verbose=verbose)
         else:
-            obj = available_potentials[name]
-            if isinstance(obj, EamAlloyPotential):
-                return partial(obj.rho, element=element_or_kbody_term)
-            elif isinstance(obj, EamFSPotential):
-                return partial(obj.rho, kbody_term=element_or_kbody_term)
+            pot = self._empirical_functions[name]
+            if isinstance(pot, EamAlloyPotential):
+                return partial(pot.rho, element=element_or_kbody_term)
+            elif isinstance(pot, EamFSPotential):
+                return partial(pot.rho, kbody_term=element_or_kbody_term)
             else:
                 raise ValueError(
-                    f"Unknown EAM potential: {obj.__class__.__name__}")
+                    f"Unknown EAM potential: {pot.__class__.__name__}")
 
     def _get_phi_fn(self, kbody_term: str, verbose=False):
         """
@@ -109,7 +117,8 @@ class EamNN(BasicNN):
         if name == 'nn':
             return self._get_nn_fn(kbody_term, 'phi', verbose=verbose)
         else:
-            return partial(available_potentials[name].phi, kbody_term=kbody_term)
+            return partial(self._empirical_functions[name].phi,
+                           kbody_term=kbody_term)
 
     def _get_energy(self, outputs: List[tf.Tensor], features: AttributeDict,
                     verbose=True):
@@ -177,10 +186,10 @@ class EamNN(BasicNN):
         """
         outputs = {}
         values = {}
-        with tf.name_scope("Phi"):
+        with tf.name_scope("Phi") as scope:
             half = tf.constant(0.5, dtype=tf.float64, name='half')
             for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(kbody_term):
+                with tf.variable_scope(f"{scope}/{kbody_term}"):
                     # Convert `x` to a 5D tensor.
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
@@ -233,11 +242,11 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
-        with tf.name_scope("Embed"):
+        with tf.name_scope("Embed") as scope:
             splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
             values = []
             for i, element in enumerate(self._elements):
-                with tf.variable_scope(element):
+                with tf.variable_scope(f"{scope}/{element}"):
                     x = tf.expand_dims(splits[i], axis=-1, name=element)
                     if verbose:
                         log_tensor(x)
