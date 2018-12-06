@@ -217,7 +217,7 @@ def test_export_setfl_teardown():
 @with_setup(teardown=test_export_setfl_teardown)
 def test_export_setfl():
     """
-    Test export eam/alloy model of AlCuZJW04 to a setfl file.
+    Test exporting eam/alloy model of AlCuZJW04 to a setfl file.
     """
     nn = EamAlloyNN(
         elements=['Al', 'Cu'],
@@ -246,7 +246,7 @@ def test_export_setfl():
 @skip
 def test_export_setfl_from_ckpt():
     """
-    Test export eam/alloy model by loading variables from a checkpoint.
+    Test exporting eam/alloy model by loading variables from a checkpoint.
     # TODO: to be implemented
     """
     pass
