@@ -8,12 +8,12 @@ import tensorflow as tf
 import numpy as np
 import nose
 from nose.tools import assert_equal, assert_tuple_equal
-from nose.tools import assert_dict_equal, with_setup
+from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
 from os import remove
 
 from ..alloy import EamAlloyNN
-from tensoralloy.misc import AttributeDict, test_dir
+from tensoralloy.misc import AttributeDict, test_dir, skip
 from tensoralloy.test_utils import assert_array_equal
 
 __author__ = 'Xin Chen'
@@ -175,6 +175,37 @@ def test_custom_potentials():
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
+def test_inference():
+    """
+    Test the inference of `EamAlloyNN` with mixed potentials.
+    """
+    with tf.Graph().as_default():
+
+        data = Data()
+        batch_size = data.batch_size
+        max_n_atoms = data.max_n_atoms
+
+        nn = EamAlloyNN(elements=data.elements,
+                        custom_potentials={
+                            'Cu': {'rho': 'zjw04', 'embed': 'nn'},
+                            'AlCu': {'phi': 'zjw04'}})
+
+        with tf.name_scope("Inference"):
+            partitions, max_occurs = nn._dynamic_partition(
+                data.features, merge_symmetric=True)
+            rho, _ = nn._build_rho_nn(data.descriptors, verbose=False)
+            embed = nn._build_embed_nn(rho, max_occurs, verbose=False)
+            phi, _ = nn._build_phi_nn(partitions, verbose=False)
+            y = tf.add(phi, embed, name='atomic')
+
+        assert_dict_equal(max_occurs, {'Al': data.max_n_al,
+                                       'Cu': data.max_n_cu})
+        assert_list_equal(rho.shape.as_list(), [batch_size, max_n_atoms - 1])
+        assert_list_equal(embed.shape.as_list(), [batch_size, max_n_atoms - 1])
+        assert_list_equal(phi.shape.as_list(), [batch_size, max_n_atoms - 1])
+        assert_list_equal(y.shape.as_list(), [batch_size, max_n_atoms - 1])
+
+
 def test_export_setfl_teardown():
     """
     Remove the generated setfl file.
@@ -186,7 +217,7 @@ def test_export_setfl_teardown():
 @with_setup(teardown=test_export_setfl_teardown)
 def test_export_setfl():
     """
-    Test export the eam/alloy model of AlCuZJW04 to a setfl file.
+    Test export eam/alloy model of AlCuZJW04 to a setfl file.
     """
     nn = EamAlloyNN(
         elements=['Al', 'Cu'],
@@ -210,6 +241,15 @@ def test_export_setfl():
                 continue
             ref.append(float(line.strip()))
     assert_array_equal(np.asarray(out), np.asarray(ref))
+
+
+@skip
+def test_export_setfl_from_ckpt():
+    """
+    Test export eam/alloy model by loading variables from a checkpoint.
+    # TODO: to be implemented
+    """
+    pass
 
 
 if __name__ == "__main__":
