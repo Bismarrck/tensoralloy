@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+from typing import List
 
 from tensoralloy.nn.eam.potentials import EamFSPotential
 
@@ -28,6 +29,101 @@ class AlFeMsah11(EamFSPotential):
     def __init__(self):
         super(AlFeMsah11, self).__init__()
 
+    @staticmethod
+    def _pairwise_func(lowcuts: np.ndarray, highcuts: np.ndarray,
+                       c1: np.ndarray, c2: np.ndarray, coef: List[np.ndarray]):
+        """
+        Construct a pairwise function, phi(r), using the given parameters.
+        """
+        nfuncs = len(lowcuts)
+        assert nfuncs == len(highcuts)
+        assert nfuncs == len(coef) + 2
+
+        def _poly(factors: np.ndarray, lowcut: float, highcut: float,
+                  orders: np.ndarray):
+            """
+            A helper function to construct polynomial potentials.
+            """
+            def _func(r: tf.Tensor):
+                lc = tf.convert_to_tensor(lowcut, name=f'lowcut')
+                hc = tf.convert_to_tensor(highcut, name=f'highcut')
+                idx = tf.where(
+                    tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
+                x = tf.gather_nd(r, idx)
+                shape = r.shape
+                values = []
+                for i in range(len(factors)):
+                    factor = tf.convert_to_tensor(factors[i], name=f'c{i}')
+                    order = tf.convert_to_tensor(orders[i], name=f'k{i}')
+                    y = factor * tf.pow(highcut - x, order)
+                    values.append(y)
+                return tf.scatter_nd(idx, tf.add_n(values), shape, name='poly')
+            return _func
+
+        def _first(factors: np.ndarray, lowcut: float, highcut: float):
+            """
+            A helper function to construct the first potential term.
+            """
+            assert len(factors) % 2 == 1
+
+            def _func(r: tf.Tensor):
+                lc = tf.convert_to_tensor(lowcut, name=f'lowcut')
+                hc = tf.convert_to_tensor(highcut, name=f'highcut')
+                idx = tf.where(
+                    tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
+                x = tf.gather_nd(r, idx)
+                shape = r.shape
+                b = factors[1::2]
+                c = factors[2::2]
+                scale = tf.div(tf.convert_to_tensor(factors[0]), x)
+                values = []
+                for i in range(len(factors) // 2):
+                    bi = tf.convert_to_tensor(b[i])
+                    ci = tf.convert_to_tensor(c[i])
+                    values.append(bi * tf.exp(ci * x))
+                y = scale * tf.add_n(values)
+                return tf.scatter_nd(idx, y, shape, name='first')
+            return _func
+
+        def _second(factors: np.ndarray, lowcut: float, highcut: float):
+            """
+            A helper function to construct the second potential term.
+            """
+            assert len(factors) == 4
+
+            def _func(r):
+                lc = tf.convert_to_tensor(lowcut, name=f'lowcut')
+                hc = tf.convert_to_tensor(highcut, name=f'highcut')
+                idx = tf.where(
+                    tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
+                x = tf.gather_nd(r, idx)
+                shape = r.shape
+                c0 = tf.convert_to_tensor(factors[0])
+                values = []
+                for i in range(1, 4):
+                    ci = tf.convert_to_tensor(factors[i])
+                    values.append(ci * tf.pow(x, i))
+                y = tf.exp(tf.add_n(values) + c0)
+                return tf.scatter_nd(idx, y, shape, name='second')
+            return _func
+
+        def _phi(r):
+            with tf.name_scope("First"):
+                y1 = _first(
+                    factors=c1, lowcut=lowcuts[0], highcut=highcuts[0])(r)
+            with tf.name_scope("Second"):
+                y2 = _second(
+                    factors=c2, lowcut=lowcuts[1], highcut=highcuts[1])(r)
+
+            values = [y1, y2]
+            for i in range(2, nfuncs):
+                with tf.name_scope(f"Poly{i}"):
+                    yi = _poly(factors=coef[i - 2][:, 0], lowcut=lowcuts[i],
+                               highcut=highcuts[i], orders=coef[i - 2][:, 1])(r)
+                    values.append(yi)
+            return tf.add_n(values, name='phi')
+        return _phi
+
     def phi(self, r: tf.Tensor, kbody_term: str):
         """
         The pairwise potential function.
@@ -45,7 +141,110 @@ class AlFeMsah11(EamFSPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        pass
+        with tf.name_scope("Mash11/Phi") as scope:
+            with tf.variable_scope(f"{scope}/{kbody_term}"):
+                if kbody_term == 'AlAl':
+                    highcuts = np.asarray([1.60, 2.25, 3.2, 4.8, 6.5])
+                    lowcuts = np.asarray([1e-8, 1.6, 2.25, 2.25, 2.25])
+                    c1 = np.asarray([
+                        2433.5591473227,
+                        0.1818, -22.713109144730,
+                        0.5099, -6.6883008584622,
+                        0.2802, -2.8597223982536,
+                        0.02817, -1.4309258761180,
+                    ])
+                    c2 = np.asarray([
+                        6.0801330531321, -2.3092752322555,
+                        0.042696494305190, -0.07952189194038])
+                    coef = [
+                        np.asarray([
+                            [17.222548257633, 4.0],
+                            [-13.838795389103, 5.0],
+                            [26.724085544227, 6.0],
+                            [-4.8730831082596, 7.0],
+                            [0.26111775221382, 8.0],
+                        ]),
+                        np.asarray([
+                            [-1.8864362756631, 4.0],
+                            [2.4323070821980, 5.0],
+                            [-4.0022263154653, 6.0],
+                            [1.3937173764119, 7.0],
+                            [-0.31993486318965, 8.0],
+                        ]),
+                        np.asarray([
+                            [0.30601966016455, 4.0],
+                            [-0.63945082587403, 5.0],
+                            [0.54057725028875, 6.0],
+                            [-0.21210673993915, 7.0],
+                            [0.03201431888287, 8.0],
+                        ])
+                    ]
+                elif kbody_term == 'FeFe':
+                    highcuts = np.asarray([1.0, 2.05, 2.2, 2.3, 2.4,
+                                           2.5, 2.6, 2.7, 2.8, 3.0,
+                                           3.3, 3.7, 4.2, 4.7, 5.3])
+                    lowcuts = np.asarray([1e-8, 1.0, 2.05, 2.05, 2.05,
+                                          2.05, 2.05, 2.05, 2.05, 2.05,
+                                          2.05, 2.05, 2.05, 2.05, 2.05])
+                    c1 = np.asarray([
+                        9734.2365892908,
+                        0.1818, -28.616724320005,
+                        0.5099, -8.4267310396064,
+                        0.2802, -3.6030244464156,
+                        0.02817, -1.8028536321603,
+                    ])
+                    c2 = np.asarray([
+                        7.4122709384068, -0.64180690713367,
+                        -2.6043547961722, 0.62625393931230
+                    ])
+                    coef = [
+                        np.asarray([[-27.444805994228, 3.0]]),
+                        np.asarray([[15.738054058489, 3.0]]),
+                        np.asarray([[2.2077118733936, 3.0]]),
+                        np.asarray([[-2.4989799053251, 3.0]]),
+                        np.asarray([[4.2099676494795, 3.0]]),
+                        np.asarray([[-0.77361294129713, 3.0]]),
+                        np.asarray([[0.80656414937789, 3.0]]),
+                        np.asarray([[-2.3194358924605, 3.0]]),
+                        np.asarray([[2.6577406128280, 3.0]]),
+                        np.asarray([[-1.0260416933564, 3.0]]),
+                        np.asarray([[0.35018615891957, 3.0]]),
+                        np.asarray([[-0.058531821042271, 3.0]]),
+                        np.asarray([[-0.0030458824556234, 3.0]]),
+                    ]
+                else:
+                    highcuts = np.asarray([1.2, 2.2, 3.2, 6.2])
+                    lowcuts = np.asarray([1e-8, 1.2, 2.2, 2.2])
+                    c1 = np.asarray([
+                        4867.1182946454,
+                        0.1818, -25.834107666296,
+                        0.5099, -7.6073373918597,
+                        0.2802, -3.2526756183596,
+                        0.02817, -1.6275487829767,
+                    ])
+                    c2 = np.asarray([
+                        6.6167846784367, -1.5208197629514,
+                        -0.73055022396300, -0.03879272494264,
+                    ])
+                    coef = [
+                        np.asarray([
+                            [-4.148701943924, 4.0],
+                            [5.6697481153271, 5.0],
+                            [-1.7835153896441, 6.0],
+                            [-3.3886912738827, 7.0],
+                            [1.9720627768230, 8.0],
+                        ]),
+                        np.asarray([
+                            [0.094200713038410, 4.0],
+                            [-0.16163849208165, 5.0],
+                            [0.10154590006100, 6.0],
+                            [-0.027624717063181, 7.0],
+                            [0.0027505576632627, 8.0],
+                        ])
+                    ]
+                comput = self._pairwise_func(lowcuts, highcuts, c1, c2, coef)
+                return comput(r)
+
 
     def rho(self, r: tf.Tensor, kbody_term: str):
         """

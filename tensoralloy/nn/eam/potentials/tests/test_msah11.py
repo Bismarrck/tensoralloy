@@ -222,6 +222,9 @@ def test_msah11():
     rho_alal = np.asarray([atsim_density_alal(x) for x in r])
     rho_fefe = np.asarray([atsim_density_fefe(x) for x in r])
     rho_alfe = np.asarray([atsim_density_alfe(x) for x in r])
+    phi_alal = np.asarray([atsim_pairwise_alal(x) for x in r])
+    phi_fefe = np.asarray([atsim_pairwise_fefe(x) for x in r])
+    phi_alfe = np.asarray([atsim_pairwise_alfe(x) for x in r])
 
     with tf.Graph().as_default():
 
@@ -235,16 +238,23 @@ def test_msah11():
         rho_alal_op = pot.rho(r, kbody_term='AlAl')
         rho_fefe_op = pot.rho(r, kbody_term='FeFe')
         rho_alfe_op = pot.rho(r, kbody_term='AlFe')
+        phi_alal_op = pot.phi(r, kbody_term='AlAl')
+        phi_fefe_op = pot.phi(r, kbody_term='FeFe')
+        phi_alfe_op = pot.phi(r, kbody_term='AlFe')
 
         with tf.Session() as sess:
             embed_vals = sess.run([embed_al_op, embed_fe_op])
             rho_vals = sess.run([rho_alal_op, rho_fefe_op, rho_alfe_op])
+            phi_vals = sess.run([phi_alal_op, phi_fefe_op, phi_alfe_op])
 
         assert_array_equal(embed_vals[0], embed_al)
         assert_array_equal(embed_vals[1], embed_fe)
         assert_array_equal(rho_vals[0], rho_alal)
         assert_array_equal(rho_vals[1], rho_fefe)
         assert_array_equal(rho_vals[2], rho_alfe)
+        assert_array_equal(phi_vals[0], phi_alal)
+        assert_array_equal(phi_vals[1], phi_fefe)
+        assert_array_equal(phi_vals[2], phi_alfe)
 
 
 if __name__ == "__main__":
