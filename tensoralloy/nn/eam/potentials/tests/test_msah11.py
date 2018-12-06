@@ -218,20 +218,33 @@ def test_msah11():
     embed_al = np.asarray([atsim_embed_al(x) for x in rho])
     embed_fe = np.asarray([atsim_embed_fe(x) for x in rho])
 
+    r = np.linspace(0.0, 10.0, num=101, endpoint=True)
+    rho_alal = np.asarray([atsim_density_alal(x) for x in r])
+    rho_fefe = np.asarray([atsim_density_fefe(x) for x in r])
+    rho_alfe = np.asarray([atsim_density_alfe(x) for x in r])
+
     with tf.Graph().as_default():
 
         with tf.name_scope("Inputs"):
             rho = tf.convert_to_tensor(rho, name='rho')
+            r = tf.convert_to_tensor(r, name='r')
 
         pot = AlFeMsah11()
         embed_al_op = pot.embed(rho, element='Al')
         embed_fe_op = pot.embed(rho, element='Fe')
+        rho_alal_op = pot.rho(r, kbody_term='AlAl')
+        rho_fefe_op = pot.rho(r, kbody_term='FeFe')
+        rho_alfe_op = pot.rho(r, kbody_term='AlFe')
 
         with tf.Session() as sess:
             embed_vals = sess.run([embed_al_op, embed_fe_op])
+            rho_vals = sess.run([rho_alal_op, rho_fefe_op, rho_alfe_op])
 
         assert_array_equal(embed_vals[0], embed_al)
         assert_array_equal(embed_vals[1], embed_fe)
+        assert_array_equal(rho_vals[0], rho_alal)
+        assert_array_equal(rho_vals[1], rho_fefe)
+        assert_array_equal(rho_vals[2], rho_alfe)
 
 
 if __name__ == "__main__":
