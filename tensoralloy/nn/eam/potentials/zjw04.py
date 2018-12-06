@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines the empirical potentials of Al-Cu proposed by Zhou et al. at
+This module defines the empirical potential of Al-Cu proposed by Zhou et al. at
 2004.
 """
 from __future__ import print_function, absolute_import
