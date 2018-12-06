@@ -368,10 +368,27 @@ class EamNN(BasicNN):
         raise NotImplementedError(
             "This method must be overridden by its subclass")
 
-    def export(self, save_path: str, outdir: str, nr: int, dr: float, nrho: int,
-               drho: float):
+    def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
+               checkpoint_path=None):
         """
-        Export to a LAMMPS `eam/alloy` or `eam/fs` potential file.
+        Export this model to an `eam/alloy` or an `eam/fs` potential file.
+
+        Parameters
+        ----------
+        setfl : str
+            The setfl file to write.
+        nr : int
+            The number of `r` used to describe density and pair potentials.
+        dr : float
+            The delta `r` used for tabulating density and pair potentials.
+        nrho : int
+            The number of `rho` used to describe embedding functions.
+        drho : float
+            The delta `rho` used for tabulating embedding functions.
+        checkpoint_path : str or None
+            The tensorflow checkpoint file to restore. If None, the default
+            (or initital) parameters will be used.
+
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass")
