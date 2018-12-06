@@ -8,17 +8,19 @@ import tensorflow as tf
 import numpy as np
 import nose
 from nose.tools import assert_equal, assert_tuple_equal
-from nose.tools import assert_dict_equal
+from nose.tools import assert_dict_equal, with_setup
+from os.path import join, exists
+from os import remove
 
 from ..alloy import EamAlloyNN
-from tensoralloy.misc import AttributeDict
+from tensoralloy.misc import AttributeDict, test_dir
 from tensoralloy.test_utils import assert_array_equal
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class TestData:
+class Data:
     """
     A private data container for unit tests of this module.
     """
@@ -81,7 +83,7 @@ def test_dynamic_stitch():
     """
     with tf.Graph().as_default():
 
-        data = TestData()
+        data = Data()
 
         nn = EamAlloyNN(elements=data.elements, forces=False)
 
@@ -109,7 +111,7 @@ def test_dynamic_partition():
     """
     with tf.Graph().as_default():
 
-        data = TestData()
+        data = Data()
 
         nn = EamAlloyNN(elements=data.elements, forces=False)
 
@@ -157,7 +159,7 @@ def test_custom_potentials():
     """
     with tf.Graph().as_default():
 
-        data = TestData()
+        data = Data()
         custom_potentials = {
             'AlCu': {'phi': 'zjw04'},
             'Al': {'rho': 'zjw04'},
@@ -171,6 +173,43 @@ def test_custom_potentials():
                            'AlCu': {'phi': 'zjw04'},
                            'Al': {'rho': 'zjw04', 'embed': 'nn'},
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
+
+
+def test_export_setfl_teardown():
+    """
+    Remove the generated setfl file.
+    """
+    if exists('AlCu.alloy.eam'):
+        remove('AlCu.alloy.eam')
+
+
+@with_setup(teardown=test_export_setfl_teardown)
+def test_export_setfl():
+    """
+    Test export the eam/alloy model of AlCuZJW04 to a setfl file.
+    """
+    nn = EamAlloyNN(
+        elements=['Al', 'Cu'],
+        custom_potentials={'Al': {'rho': 'zjw04', 'embed': 'zjw04'},
+                           'Cu': {'rho': 'zjw04', 'embed': 'zjw04'},
+                           'AlAl': {'phi': 'zjw04'},
+                           'AlCu': {'phi': 'zjw04'},
+                           'CuCu': {'phi': 'zjw04'}})
+    nn.export('AlCu.alloy.eam', nr=2000, dr=0.003, nrho=2000, drho=0.05)
+
+    with open('AlCu.alloy.eam') as fp:
+        out = []
+        for i, line in enumerate(fp):
+            if i < 6 or i == 4006:
+                continue
+            out.append(float(line.strip()))
+    with open(join(test_dir(), 'lammps', 'Zhou_AlCu.setfl')) as fp:
+        ref = []
+        for i, line in enumerate(fp):
+            if i < 6 or i == 4006:
+                continue
+            ref.append(float(line.strip()))
+    assert_array_equal(np.asarray(out), np.asarray(ref))
 
 
 if __name__ == "__main__":
