@@ -130,19 +130,24 @@ class EamAlloyNN(EamNN):
         ----------
         descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are elements and values are tuples of (value, mask)
-            where where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, max_n_terms, 1, nnl]`.
+            where where `value` represents the interatomic distances and `mask`
+            is the value mask. Both `value` and `mask` are 4D tensors of shape
+            `[batch_size, max_n_terms, max_n_element, nnl]`.
         verbose : bool
             If True, key tensors will be logged.
 
         Returns
         -------
-        rho : tf.Tensor
+        atomic : tf.Tensor
             A 2D tensor of shape `[batch_size, max_n_atoms - 1]`.
+        values : Dict[str, tf.Tensor]
+            The corresponding value tensor of each element of `descriptors`.
+            Each value tensor is a 5D tensor of shape
+            `[batch_size, max_n_terms, max_n_element, nnl, 1]`.
 
         """
         outputs = {}
+        values = {}
         with tf.name_scope("Rho"):
             for element, (value, mask) in descriptors.items():
                 with tf.variable_scope(element):
@@ -155,13 +160,15 @@ class EamAlloyNN(EamNN):
                     # Apply the mask to rho.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
-
-                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                    rho = tf.squeeze(y, axis=1, name='rho')
+                    values[element] = y
+                    rho = tf.reduce_sum(y, axis=(1, 3, 4), keepdims=False,
+                                        name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[element] = rho
-            return self._dynamic_stitch(outputs)
+            rho = tf.concat([outputs[el] for el in self._elements],
+                            axis=1, name='atomic')
+            return rho, values
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
@@ -190,21 +197,19 @@ class EamAlloyNN(EamNN):
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=True)
-            rho = self._build_rho_nn(features.descriptors, verbose=verbose)
+            rho, _ = self._build_rho_nn(features.descriptors, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
-            phi = self._build_phi_nn(partitions, verbose=verbose)
+            phi, _ = self._build_phi_nn(partitions, verbose=verbose)
             y = tf.add(phi, embed, name='atomic')
             return y
 
-    def export(self, checkpoint_path: str, setfl: str, nr: int, dr: float,
-               nrho: int, drho: float):
+    def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
+               checkpoint_path=None):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
 
         Parameters
         ----------
-        checkpoint_path : str
-            The tensorflow checkpoint file to restore.
         setfl : str
             The setfl file to write.
         nr : int
@@ -215,18 +220,21 @@ class EamAlloyNN(EamNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
+        checkpoint_path : str or None
+            The tensorflow checkpoint file to restore. If None, the default
+            (or initital) parameters will be used.
 
         """
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
                       reps=len(self._elements))
-        r = np.arange(0.0, nr * dr, nr).reshape((1, 1, 1, -1))
+        rho = np.atleast_2d(rho)
+        r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
 
         max_occurs = Counter({el: nrho for el in self._elements})
 
         with tf.Graph().as_default():
-            saver = tf.train.Saver()
 
-            with tf.name_scope("Values"):
+            with tf.name_scope("Inputs"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
                 descriptors = AttributeDict()
@@ -237,17 +245,28 @@ class EamAlloyNN(EamNN):
 
                 partitions = AttributeDict()
                 for kbody_term in self._unique_kbody_terms:
-                    value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
-                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    a, b = get_elements_from_kbody_term(kbody_term)
+                    if a == b:
+                        value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
+                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    else:
+                        rr = np.concatenate((r, r), axis=2)
+                        value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
+                        mask = tf.ones_like(value, name=f'm{kbody_term}')
                     partitions[kbody_term] = (value, mask)
+
+            with tf.name_scope("Model"):
+                embed = self._build_embed_nn(rho, max_occurs=max_occurs)
+                _, rho = self._build_rho_nn(descriptors)
+                _, phi = self._build_phi_nn(partitions)
 
             sess = tf.Session()
             with sess:
-                saver.restore(sess, checkpoint_path)
-
-                embed = self._build_embed_nn(rho, max_occurs=max_occurs)
-                rho = self._build_rho_nn(descriptors)
-                phi = self._build_phi_nn(partitions)
+                if checkpoint_path is not None:
+                    saver = tf.train.Saver()
+                    saver.restore(sess, checkpoint_path)
+                else:
+                    tf.global_variables_initializer().run()
 
                 results = AttributeDict(sess.run(
                     {'embed': embed, 'rho': rho, 'phi': phi}))
@@ -256,12 +275,10 @@ class EamAlloyNN(EamNN):
                     """
                     Return the density function for `element`.
                     """
-                    base = nr * self._elements.index(_element)
-
                     def _func(_r):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results.rho[base + idx]
+                        return results.rho[_element][0, 0, 0, idx, 0]
                     return _func
 
                 def make_embed(_element):
@@ -273,25 +290,23 @@ class EamAlloyNN(EamNN):
                     def _func(_rho):
                         """ Return `F(rho)` for the given `rho`. """
                         idx = int(round(_rho / drho, 6))
-                        return results.embed[base + idx]
+                        return results.embed[0, base + idx]
                     return _func
 
                 def make_pairwise(_kbody_term):
                     """
                     Return the embedding energy function for `element`.
                     """
-                    base = nr * self._unique_kbody_terms.index(_kbody_term)
-
                     def _func(_r):
                         """ Return `phi(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results.phi[base + idx]
+                        return results.phi[_kbody_term][0, 0, 0, idx, 0]
                     return _func
 
             eam_potentials = []
             for element in self._elements:
                 number = data.atomic_numbers[element]
-                mass = data.atomic_masses[element]
+                mass = data.atomic_masses[number]
                 potential = EAMPotential(element, number, mass,
                                          make_embed(element),
                                          make_density(element))
@@ -307,7 +322,7 @@ class EamAlloyNN(EamNN):
                 "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
                     datetime.today()),
                 "LAMMPS setfl format",
-                "Conversion by TensorAlloy"
+                "Conversion by TensorAlloy.nn.eam.alloy.EamAlloyNN"
             ]
 
             with open(setfl, 'wb') as fp:
