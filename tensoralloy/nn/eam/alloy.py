@@ -204,7 +204,7 @@ class EamAlloyNN(EamNN):
             return y
 
     def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
-               checkpoint_path=None):
+               checkpoint=None, lattice_constants=None, lattice_types=None):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
 
@@ -220,9 +220,13 @@ class EamAlloyNN(EamNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
-        checkpoint_path : str or None
+        checkpoint : str or None
             The tensorflow checkpoint file to restore. If None, the default
             (or initital) parameters will be used.
+        lattice_constants : Dict[str, float] or None
+            The lattice constant for each type of element.
+        lattice_types : Dict[str, str] or None
+            The lattice type, e.g 'fcc', for each type of element.
 
         """
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
@@ -262,9 +266,9 @@ class EamAlloyNN(EamNN):
 
             sess = tf.Session()
             with sess:
-                if checkpoint_path is not None:
+                if checkpoint is not None:
                     saver = tf.train.Saver()
-                    saver.restore(sess, checkpoint_path)
+                    saver.restore(sess, checkpoint)
                 else:
                     tf.global_variables_initializer().run()
 
@@ -307,9 +311,11 @@ class EamAlloyNN(EamNN):
             for element in self._elements:
                 number = data.atomic_numbers[element]
                 mass = data.atomic_masses[number]
-                potential = EAMPotential(element, number, mass,
-                                         make_embed(element),
-                                         make_density(element))
+                potential = EAMPotential(
+                    element, number, mass, make_embed(element),
+                    make_density(element),
+                    latticeConstant=lattice_constants.get(element, 0.0),
+                    latticeType=lattice_types.get(element, 'fcc'))
                 eam_potentials.append(potential)
 
             pair_potentials = []

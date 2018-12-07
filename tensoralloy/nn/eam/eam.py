@@ -369,7 +369,7 @@ class EamNN(BasicNN):
             "This method must be overridden by its subclass")
 
     def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
-               checkpoint_path=None):
+               checkpoint=None, lattice_constants=None, lattice_types=None):
         """
         Export this model to an `eam/alloy` or an `eam/fs` potential file.
 
@@ -385,9 +385,13 @@ class EamNN(BasicNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
-        checkpoint_path : str or None
+        checkpoint : str or None
             The tensorflow checkpoint file to restore. If None, the default
             (or initital) parameters will be used.
+        lattice_constants : Dict[str, float] or None
+            The lattice constant for each type of element.
+        lattice_types : Dict[str, str] or None
+            The lattice type, e.g 'fcc', for each type of element.
 
         """
         raise NotImplementedError(
