@@ -4,7 +4,7 @@
 * Contact: Bismarrck@me.com
 
 **TensorAlloy** is a TensorFlow based machine learning framework for metal 
-alloys. **TensorAlloy** builds direct computational graphs from atomic positions 
+alloys. **TensorAlloy** builds direct computation graph from atomic positions 
 to total energy:
 
 Thus, atomic forces and the virial stress tensor can be derived by the 
@@ -27,6 +27,7 @@ the 3x3 cell tensor.
 * scipy
 * numpy
 * ase>=3.15.0
+* atsim.potentials==0.2.1
 
 Anaconda3 can install above packages without pain. For performance reason 
 natively compiled TensorFlow, with all CPU features (SSE, AVX, etc.) enabled, is 
