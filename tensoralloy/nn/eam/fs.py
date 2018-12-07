@@ -7,7 +7,10 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from collections import Counter
-from typing import Dict
+from datetime import datetime
+from ase.data import atomic_masses, atomic_numbers
+from atsim.potentials import writeSetFLFinnisSinclair, Potential, EAMPotential
+from typing import Dict, List
 
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
@@ -29,6 +32,13 @@ class EamFsNN(EamNN):
         Initialization method.
         """
         super(EamFsNN, self).__init__(*args, **kwargs)
+
+    @property
+    def all_kbody_terms(self) -> List[str]:
+        """
+        Return a list of str as all the ordered k-body terms.
+        """
+        return self._all_kbody_terms
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -211,15 +221,13 @@ class EamFsNN(EamNN):
             y = tf.add(phi, embed, name='atomic')
             return y
 
-    def export(self, checkpoint_path: str, setfl: str, nr: int, dr: float,
-               nrho: int, drho: float):
+    def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
+               checkpoint=None, lattice_constants=None, lattice_types=None):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
 
         Parameters
         ----------
-        checkpoint_path : str
-            The tensorflow checkpoint file to restore.
         setfl : str
             The setfl file to write.
         nr : int
@@ -230,10 +238,124 @@ class EamFsNN(EamNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
+        checkpoint : str
+            The tensorflow checkpoint file to restore.
+        lattice_constants : Dict[str, float] or None
+            The lattice constant for each type of element.
+        lattice_types : Dict[str, str] or None
+            The lattice type, e.g 'fcc', for each type of element.
 
         """
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
                       reps=len(self._elements))
-        r = np.arange(0.0, nr * dr, nr).reshape((1, 1, 1, -1))
-
+        rho = np.atleast_2d(rho)
+        r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
         max_occurs = Counter({el: nrho for el in self._elements})
+        lattice_constants = safe_select(lattice_constants, {})
+        lattice_types = safe_select(lattice_types, {})
+
+        with tf.Graph().as_default():
+
+            with tf.name_scope("Inputs"):
+                rho = tf.convert_to_tensor(rho, name='rho')
+
+                partitions = AttributeDict()
+                symmetric_partitions = AttributeDict()
+                for kbody_term in self._all_kbody_terms:
+                    value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
+                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    partitions[kbody_term] = (value, mask)
+                    a, b = get_elements_from_kbody_term(kbody_term)
+                    if a == b:
+                        symmetric_partitions[kbody_term] = (value, mask)
+                    elif kbody_term in self._unique_kbody_terms:
+                        rr = np.concatenate((r, r), axis=2)
+                        value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
+                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                        symmetric_partitions[kbody_term] = (value, mask)
+
+            with tf.name_scope("Model"):
+                embed = self._build_embed_nn(
+                    rho, max_occurs=max_occurs, verbose=False)
+                _, rho_vals = self._build_rho_nn(
+                    partitions, verbose=False)
+                _, phi_vals = self._build_phi_nn(
+                    symmetric_partitions, verbose=False)
+
+            sess = tf.Session()
+            with sess:
+                if checkpoint is not None:
+                    saver = tf.train.Saver()
+                    saver.restore(sess, checkpoint)
+                else:
+                    tf.global_variables_initializer().run()
+
+                results = AttributeDict(sess.run(
+                    {'embed': embed, 'rho': rho_vals, 'phi': phi_vals}))
+
+                def make_density(_kbody_term):
+                    """
+                    Return the density function rho(r) for `element`.
+                    """
+                    def _func(_r):
+                        """ Return `rho(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        return results.rho[_kbody_term][0, 0, 0, idx, 0]
+                    return _func
+
+                def make_embed(_element):
+                    """
+                    Return the embedding energy function F(rho) for `element`.
+                    """
+                    base = nr * self._elements.index(_element)
+
+                    def _func(_rho):
+                        """ Return `F(rho)` for the given `rho`. """
+                        idx = int(round(_rho / drho, 6))
+                        return results.embed[0, base + idx]
+                    return _func
+
+                def make_pairwise(_kbody_term):
+                    """
+                    Return the embedding energy function phi(r) for `element`.
+                    """
+                    def _func(_r):
+                        """ Return `phi(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        return results.phi[_kbody_term][0, 0, 0, idx, 0]
+                    return _func
+
+            eam_potentials = []
+            for element in self._elements:
+                number = atomic_numbers[element]
+                mass = atomic_masses[number]
+                density_potentials = {}
+                for kbody_term in self._kbody_terms[element]:
+                    specie = get_elements_from_kbody_term(kbody_term)[1]
+                    density_potentials[specie] = make_density(kbody_term)
+
+                potential = EAMPotential(
+                    element, number, mass, make_embed(element),
+                    density_potentials,
+                    latticeConstant=lattice_constants.get(element, 0.0),
+                    latticeType=lattice_types.get(element, 'fcc'),
+                )
+                eam_potentials.append(potential)
+
+            pair_potentials = []
+            for kbody_term in self._unique_kbody_terms:
+                a, b = get_elements_from_kbody_term(kbody_term)
+                potential = Potential(a, b, make_pairwise(kbody_term))
+                pair_potentials.append(potential)
+
+            comments = [
+                "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
+                    datetime.today()),
+                "LAMMPS setfl format",
+                "Conversion by TensorAlloy.nn.eam.alloy.EamAlloyNN"
+            ]
+
+            with open(setfl, 'wb') as fp:
+                writeSetFLFinnisSinclair(
+                    nrho, drho, nr, dr, eam_potentials, pair_potentials, out=fp,
+                    comments=comments)
