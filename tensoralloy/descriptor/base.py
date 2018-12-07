@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import abc
+from ase.data import chemical_symbols
 from collections import Counter
 from typing import List, Dict, Tuple
 
@@ -83,6 +84,10 @@ class AtomicDescriptor(AtomicDescriptorInterface):
         """
         Initialization method.
         """
+        for element in elements:
+            if element not in chemical_symbols:
+                raise ValueError(f"{element} is not a valid chemical symbol!")
+
         all_kbody_terms, kbody_terms, elements = \
             get_kbody_terms(elements, k_max)
 
