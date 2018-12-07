@@ -233,8 +233,9 @@ class EamAlloyNN(EamNN):
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
         r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
-
         max_occurs = Counter({el: nrho for el in self._elements})
+        lattice_constants = safe_select(lattice_constants, {})
+        lattice_types = safe_select(lattice_types, {})
 
         with tf.Graph().as_default():
 
