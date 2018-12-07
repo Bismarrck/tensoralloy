@@ -1,7 +1,11 @@
+# coding=utf-8
+"""
+This module defines the input normalizer for `AtomicNN`.
+"""
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 
 from tensoralloy.nn.utils import GraphKeys
 
