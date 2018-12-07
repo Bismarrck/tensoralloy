@@ -61,6 +61,9 @@ class AtomicResNN(AtomicNN):
         """
         with tf.name_scope("Energy"):
 
+            ndims = features.composition.shape.ndims
+            axis = ndims - 1
+
             with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
                 if self._atomic_static_energy is None:
                     values = np.ones(len(self._elements), dtype=np.float64)
@@ -70,8 +73,12 @@ class AtomicResNN(AtomicNN):
                         dtype=np.float64)
                 initializer = tf.constant_initializer(values, dtype=tf.float64)
                 x = tf.identity(features.composition, name='input')
+                if ndims == 1:
+                    x = tf.expand_dims(x, axis=0, name='1to2')
+                if x.shape[1].value is None:
+                    x.set_shape([x.shape[0], len(self._elements)])
                 z = tf.get_variable("weights",
-                                    shape=(len(self._elements)),
+                                    shape=len(self._elements),
                                     dtype=tf.float64,
                                     trainable=True,
                                     collections=[
@@ -81,18 +88,23 @@ class AtomicResNN(AtomicNN):
                                         tf.GraphKeys.GLOBAL_VARIABLES],
                                     initializer=initializer)
                 xz = tf.multiply(x, z, name='xz')
-                y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
-                                         name='static')
+                if ndims == 1:
+                    y_static = tf.reduce_sum(xz, keepdims=False, name='static')
+                else:
+                    y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
+                                             name='static')
                 if verbose:
                     log_tensor(y_static)
 
             with tf.name_scope("Residual"):
                 y_atomic = tf.concat(outputs, axis=1, name='atomic')
                 with tf.name_scope("mask"):
+                    if ndims == 1:
+                        y_atomic = tf.squeeze(y_atomic, axis=0)
                     mask = tf.split(
-                        features.mask, [1, -1], axis=1, name='split')[1]
+                        features.mask, [1, -1], axis=axis, name='split')[1]
                     y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_res = tf.reduce_sum(y_mask, axis=1, keepdims=False,
+                y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
                                       name='residual')
 
             energy = tf.add(y_static, y_res, name='energy')

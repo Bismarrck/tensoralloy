@@ -75,6 +75,8 @@ class AtomicNN(BasicNN):
             for element, (value, _) in features.descriptors.items():
                 with tf.variable_scope(element):
                     x = tf.identity(value, name='input')
+                    if x.shape.ndims == 2:
+                        x = tf.expand_dims(x, axis=0, name='2to3')
                     if self._initial_normalizer_weights is not None:
                         x = self._normalizer(
                             x, self._initial_normalizer_weights[element])
@@ -110,14 +112,16 @@ class AtomicNN(BasicNN):
         """
         with tf.name_scope("Energy"):
             y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-            shape = y_atomic.shape
+            ndims = features.mask.shape.ndims
+            axis = ndims - 1
             with tf.name_scope("mask"):
+                if ndims == 1:
+                    y_atomic = tf.squeeze(y_atomic, axis=0)
                 mask = tf.split(
-                    features.mask, [1, -1], axis=1, name='split')[1]
+                    features.mask, [1, -1], axis=axis, name='split')[1]
                 y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_mask.set_shape(shape)
             energy = tf.reduce_sum(
-                y_mask, axis=1, keepdims=False, name='energy')
+                y_mask, axis=axis, keepdims=False, name='energy')
             if verbose:
                 log_tensor(energy)
             return energy
