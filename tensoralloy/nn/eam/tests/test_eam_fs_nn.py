@@ -162,7 +162,7 @@ def test_export_setfl():
                 out_key_lines.append(line)
                 continue
             out.append(float(line.strip()))
-    with open(join(test_dir(), 'lammps', 'Mendelev_Al_Fe.eam.fs')) as fp:
+    with open(join(test_dir(), 'lammps', 'Mendelev_Al_Fe.fs.eam')) as fp:
         ref = []
         ref_key_lines = []
         for i, line in enumerate(fp):

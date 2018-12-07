@@ -234,7 +234,7 @@ def test_export_setfl():
             if i < 6 or i == 4006:
                 continue
             out.append(float(line.strip()))
-    with open(join(test_dir(), 'lammps', 'Zhou_AlCu.setfl')) as fp:
+    with open(join(test_dir(), 'lammps', 'Zhou_AlCu.alloy.eam')) as fp:
         ref = []
         for i, line in enumerate(fp):
             if i < 6 or i == 4006:
