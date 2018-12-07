@@ -9,7 +9,7 @@ from typing import List, Dict
 import numpy as np
 import tensorflow as tf
 
-from tensoralloy.nn.normalizer import InputNormalizer
+from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import GraphKeys, get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.misc import AttributeDict
