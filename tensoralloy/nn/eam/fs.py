@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from collections import Counter
+from typing import Dict
 
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
@@ -100,9 +101,9 @@ class EamFsNN(EamNN):
             else:
                 return False
 
-        potentials = {el: {"rho": "nn", "embed": "nn"} for el in self._elements}
-        potentials.update({kbody_term: {"phi": "nn"}
-                           for kbody_term in self._unique_kbody_terms})
+        potentials = {el: {"embed": "nn"} for el in self._elements}
+        potentials.update({kbody_term: {"phi": "nn", "rho": "nn"}
+                           for kbody_term in self._all_kbody_terms})
 
         custom_potentials = safe_select(custom_potentials, {})
 
@@ -118,8 +119,13 @@ class EamFsNN(EamNN):
 
         for kbody_term in self._all_kbody_terms:
             if kbody_term in custom_potentials:
-                _safe_update(kbody_term, 'phi')
                 _safe_update(kbody_term, 'rho')
+            if kbody_term not in self._unique_kbody_terms:
+                del potentials[kbody_term]['phi']
+
+        for kbody_term in self._unique_kbody_terms:
+            if kbody_term in custom_potentials:
+                _safe_update(kbody_term, 'phi')
 
         return potentials
 
@@ -139,11 +145,16 @@ class EamFsNN(EamNN):
 
         Returns
         -------
-        rho : tf.Tensor
+        atomic : tf.Tensor
             A 2D tensor of shape `[batch_size, max_n_atoms - 1]`.
+        values : Dict[str, tf.Tensor]
+            The corresponding value tensor of each `kbody_term` of
+            `descriptors`. Each value tensor is a 5D tensor of shape
+            `[batch_size, 1, max_n_element, nnl, 1]`.
 
         """
         outputs = {}
+        values = {}
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.variable_scope(kbody_term):
@@ -156,13 +167,13 @@ class EamFsNN(EamNN):
                     # Apply the mask to rho.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
-
-                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                    rho = tf.squeeze(y, axis=1, name='rho')
+                    values[kbody_term] = y
+                    rho = tf.reduce_sum(
+                        y, axis=(1, 3, 4), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
-            return self._dynamic_stitch(outputs, symmetric=False)
+            return self._dynamic_stitch(outputs, symmetric=False), values
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
@@ -191,12 +202,12 @@ class EamFsNN(EamNN):
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=False)
-            rho = self._build_rho_nn(partitions, verbose=verbose)
+            rho, _ = self._build_rho_nn(partitions, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
 
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=True)
-            phi = self._build_phi_nn(partitions, verbose=verbose)
+            phi, _ = self._build_phi_nn(partitions, verbose=verbose)
             y = tf.add(phi, embed, name='atomic')
             return y
 
