@@ -56,7 +56,7 @@ OS = [32, 32]
 SS = [32, 32]
 
 [opt]
-optimizer = "adam"
+method = "adam"
 learning_rate = 0.01
 decay_function = "exponential"
 decay_rate = 0.98

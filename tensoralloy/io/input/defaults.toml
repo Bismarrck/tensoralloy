@@ -39,7 +39,7 @@ drho = 0.001
 checkpoint = false
 
 [opt]
-optimizer = "adam"
+method = "adam"
 learning_rate = 0.01
 decay_function = false
 decay_rate = 0.95
@@ -49,6 +49,7 @@ staircase = false
 [train]
 restart = false
 batch_size = 50
+previous_checkpoint = false
 shuffle = true
 model_dir = "required"
 eval_dir = "required"

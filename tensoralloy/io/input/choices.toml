@@ -15,5 +15,5 @@ input_normalizer = ["linear", 'arctan']
 arch = ["EamAlloyNN", "EamFsNN"]
 
 [opt]
-optimizer = ["adam", 'rmsprop', 'adadelta']
+method = ["adam", 'rmsprop', 'adadelta']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']

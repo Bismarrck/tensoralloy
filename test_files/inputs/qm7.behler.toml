@@ -28,7 +28,7 @@ O = [64, 32]
 S = [64, 32]
 
 [opt]
-optimizer = "adam"
+method = "adam"
 learning_rate = 0.01
 decay_function = "exponential"
 decay_rate = 0.95
