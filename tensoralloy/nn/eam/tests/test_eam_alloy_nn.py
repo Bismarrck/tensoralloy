@@ -13,7 +13,7 @@ from os.path import join, exists
 from os import remove
 
 from ..alloy import EamAlloyNN
-from tensoralloy.misc import AttributeDict, test_dir, skip
+from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
 from tensoralloy.test_utils import assert_array_equal
 
 __author__ = 'Xin Chen'
@@ -153,9 +153,37 @@ def test_dynamic_partition():
                                                data.m_cu[:, [1]]), 2))
 
 
+def test_hidden_sizes():
+    """
+    Test setting hidden layer sizes of `EamAlloyNN`.
+    """
+    custom_potentials = {
+        'AlCu': {'phi': 'zjw04'},
+        'Al': {'rho': 'zjw04'},
+        'CuCu': {'phi': 'zjw04'},
+    }
+    nn = EamAlloyNN(elements=['Al', 'Cu'],
+                    hidden_sizes={'AlAl': {'phi': [128, 64]}},
+                    custom_potentials=custom_potentials)
+    assert_dict_equal(nn.potentials,
+                      {'AlAl': {'phi': 'nn'},
+                       'CuCu': {'phi': 'zjw04'},
+                       'AlCu': {'phi': 'zjw04'},
+                       'Al': {'rho': 'zjw04', 'embed': 'nn'},
+                       'Cu': {'rho': 'nn', 'embed': 'nn'}})
+    assert_equal(nn.hidden_sizes,
+                 {'AlAl': {'phi': [128, 64]},
+                  'CuCu': {'phi': Defaults.hidden_sizes},
+                  'AlCu': {'phi': Defaults.hidden_sizes},
+                  'Al': {'rho': Defaults.hidden_sizes,
+                         'embed': Defaults.hidden_sizes},
+                  'Cu': {'rho': Defaults.hidden_sizes,
+                         'embed': Defaults.hidden_sizes}})
+
+
 def test_custom_potentials():
     """
-    Test setting layers of `EamNN`.
+    Test setting layers of `EamAlloyNN`.
     """
     with tf.Graph().as_default():
 
