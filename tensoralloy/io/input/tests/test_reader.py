@@ -81,6 +81,7 @@ def test_read_configs():
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 2)
     assert_list_equal(nested_get(configs, 'nn.eam.phi.AlFe'), [32, 32])
     assert_equal(reader['nn.eam.phi.AlAl'], 'msah11')
+    assert_equal(reader['train.previous_checkpoint'], False)
 
 
 if __name__ == "__main__":

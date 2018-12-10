@@ -74,8 +74,8 @@ class InputValueError(ValueError):
         self._valid_options = valid_options
 
     def __str__(self):
-        error = f"{self._value} is not a valid option for {self._keypath}."
-        desc = f"Supported options: {', '.join(map(str, self._valid_options))}."
+        error = f"{self._value} is not a valid option for [{self._keypath}]"
+        desc = f"Supported options: {', '.join(map(str, self._valid_options))}"
         return f"{error}. {desc}"
 
 
@@ -126,7 +126,10 @@ class InputReader:
             _options = nested_get(choices, _keypath)
             if _options is not None:
                 if _val not in _options:
-                    raise InputValueError(_keypath, _val, _options)
+                    if not isinstance(_val, bool):
+                        raise InputValueError(_keypath, _val, _options)
+                    else:
+                        _val = None
             nested_set(results, _keypath, _val)
 
         def _safe_update(_keypath, required=False):
