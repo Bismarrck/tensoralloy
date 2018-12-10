@@ -1,0 +1,66 @@
+# This toml file defines the default values of the options.
+
+[dataset]
+sqlite3 = "required"
+name = "required"
+descriptor = "required"
+rc = 6.5
+k_max = 2
+tfrecords_dir = "required"
+test_size = 0.2
+
+[behler]
+eta = [0.01, 0.1, 0.5, 1.0, 4.0]
+beta = [0.005]
+gamma = [1.0, -1.0]
+zeta = [4.0]
+
+[nn]
+activation = "leaky_relu"
+l2_weight = 0.01
+forces = true
+stress = false
+total_pressure = false
+
+[nn.atomic]
+arch = "AtomicNN"
+input_normalizer = "linear"
+
+[nn.atomic.layers]
+
+[nn.eam]
+arch = "EamAlloyNN"
+
+[nn.eam.export]
+nr = 10000
+dr = 0.00065
+nrho = 10000
+drho = 0.001
+checkpoint = false
+
+#[nn.eam.export.lattice.constant]
+#[nn.eam.export.lattice.type]
+#[nn.eam.rho]
+#[nn.eam.embed]
+#[nn.eam.phi]
+
+[opt]
+optimizer = "adam"
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.95
+decay_steps = 1000
+staircase = false
+
+[train]
+restart = false
+batch_size = 50
+shuffle = true
+model_dir = "required"
+eval_dir = "required"
+max_checkpoints_to_keep = 20
+train_steps = 10000
+eval_steps = 1000
+summary_steps = 100
+log_steps = 100
+profile_steps = 2000
