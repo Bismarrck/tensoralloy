@@ -34,6 +34,10 @@ def test_hidden_sizes():
     assert_dict_equal(nn.hidden_sizes, {'Al': [32, 16],
                                         'Cu': Defaults.hidden_sizes})
 
+    nn = BasicNN(elements, hidden_sizes={'Al': [32, 32]})
+    assert_dict_equal(nn.hidden_sizes, {'Al': [32, 32],
+                                        'Cu': Defaults.hidden_sizes})
+
 
 if __name__ == "__main__":
     nose.run()
