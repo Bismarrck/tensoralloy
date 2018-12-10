@@ -186,10 +186,10 @@ class EamNN(BasicNN):
         """
         outputs = {}
         values = {}
-        with tf.name_scope("Phi") as scope:
+        with tf.name_scope("Phi"):
             half = tf.constant(0.5, dtype=tf.float64, name='half')
             for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(f"{scope}/{kbody_term}"):
+                with tf.variable_scope(f"{kbody_term}/Phi"):
                     # Convert `x` to a 5D tensor.
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
@@ -242,11 +242,11 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
-        with tf.name_scope("Embed") as scope:
+        with tf.name_scope("Embed"):
             splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
             values = []
             for i, element in enumerate(self._elements):
-                with tf.variable_scope(f"{scope}/{element}"):
+                with tf.variable_scope(f"{element}/Embed"):
                     x = tf.expand_dims(splits[i], axis=-1, name=element)
                     if verbose:
                         log_tensor(x)

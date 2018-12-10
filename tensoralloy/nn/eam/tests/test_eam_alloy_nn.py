@@ -221,9 +221,9 @@ def test_inference():
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
                 data.features, merge_symmetric=True)
-            rho, _ = nn._build_rho_nn(data.descriptors, verbose=False)
-            embed = nn._build_embed_nn(rho, max_occurs, verbose=False)
-            phi, _ = nn._build_phi_nn(partitions, verbose=False)
+            rho, _ = nn._build_rho_nn(data.descriptors, verbose=True)
+            embed = nn._build_embed_nn(rho, max_occurs, verbose=True)
+            phi, _ = nn._build_phi_nn(partitions, verbose=True)
             y = tf.add(phi, embed, name='atomic')
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,
