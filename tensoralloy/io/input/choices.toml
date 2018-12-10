@@ -1,0 +1,19 @@
+# This toml file defines the default values of the options.
+
+[dataset]
+descriptor = ['eam', 'behler']
+k_max = [1, 2, 3]
+
+[nn]
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'sigmoid', 'linear']
+
+[nn.atomic]
+arch = ["AtomicResNN", 'AtomicNN']
+input_normalizer = ["linear", 'arctan']
+
+[nn.eam]
+arch = ["EamAlloyNN", "EamFsNN"]
+
+[opt]
+optimizer = ["adam", 'rmsprop', 'adadelta']
+decay_function = ["exponential", 'inverse_time', 'natural_exp']
