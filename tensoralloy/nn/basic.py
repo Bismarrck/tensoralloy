@@ -25,7 +25,8 @@ class BasicNN:
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 forces=False, stress=False, total_pressure=False, l2_weight=0):
+                 energy=True, forces=False, stress=False, total_pressure=False,
+                 l2_weight=0.0):
         """
         Initialization method.
 
@@ -38,25 +39,39 @@ class BasicNN:
             of the hidden layers.
         activation : str
             The name of the activation function to use.
+        energy : bool
+            If True, the loss of total energy will be minimized.
         forces : bool
-            If True, atomic forces will be calculated and trained..
+            If True, the loss of atomic forces will be minimized..
         stress : bool
-            If True, the reduced stress tensor will be calculated and trained.
+            If True, the loss of reduced stress will be minimized.
         total_pressure : bool
-            If True, the reduced total pressure will be calculated and trained.
-            This option will suppress `stress`.
+            If True, the loss of reduced total pressure will be minimized. This
+            option will suppress `stress`.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
+
+        Notes
+        -----
+        At least one of `energy`, `forces`, `stress` or `total_pressure` must be
+        True.
 
         """
         self._elements = elements
         self._hidden_sizes = self._get_hidden_sizes(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation = safe_select(activation, Defaults.activation)
+        self._l2_weight = max(l2_weight, 0.0)
+
+        if not any([energy, forces, stress, total_pressure]):
+            raise ValueError("At least one of `energy`, `forces`, `stress` or "
+                             "`total_pressure` must be True.")
+
+        # TODO: make `total energy` an optional training target.
+        self._energy = energy
         self._forces = forces
         self._stress = stress
         self._total_pressure = total_pressure
-        self._l2_weight = max(l2_weight, 0.0)
 
     @property
     def elements(self):
