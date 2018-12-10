@@ -5,8 +5,9 @@ This module is used to train the model
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import shutil
 from argparse import ArgumentParser
-from os.path import join
+from os.path import join, exists, dirname
 from ase.db import connect
 from typing import Union
 
@@ -72,8 +73,37 @@ class TrainingManager:
         hparams = AttributeDict(
             train=AttributeDict(self._reader['train']),
             opt=AttributeDict(self._reader['opt']))
+
         if not hparams.opt.decay_function:
             hparams.opt.decay_function = None
+        if not hparams.train.previous_checkpoint:
+            hparams.train.previous_checkpoint = None
+
+        if self._dataset.test_size % hparams.train.batch_size != 0:
+            eval_batch_size = next(
+                x for x in range(hparams.train.batch_size, 0, -1)
+                if self._dataset.test_size % x == 0)
+            print(f"Warning: batch_size is reduced to {eval_batch_size} "
+                  f"for evaluation")
+        else:
+            eval_batch_size = hparams.train.batch_size
+        hparams.train.eval_batch_size = eval_batch_size
+
+        deleted = []
+        if not hparams.train.restart:
+            if exists(hparams.train.model_dir):
+                shutil.rmtree(hparams.train.model_dir)
+                deleted.append(hparams.train.model_dir)
+            if exists(hparams.train.eval_dir):
+                shutil.rmtree(hparams.train.eval_dir)
+                deleted.append(hparams.train.eval_dir)
+
+        if hparams.train.restart and hparams.train.previous_checkpoint:
+            if dirname(hparams.train.previous_checkpoint) in deleted:
+                print(f"Warning: {hparams.train.previous_checkpoint} "
+                      f"was already deleted")
+                hparams.train.previous_checkpoint = None
+
         return hparams
 
     def _get_atomic_nn(self, kwargs: dict) -> AtomicNN:
@@ -144,7 +174,7 @@ class TrainingManager:
         stress = self._reader['nn.stress']
         total_pressure = self._reader['nn.total_pressure']
         activation = self._reader['nn.activation']
-        kwargs = {'elemenets': elements, 'l2_weight': l2_weight,
+        kwargs = {'elements': elements, 'l2_weight': l2_weight,
                   'forces': forces, 'stress': stress,
                   'total_pressure': total_pressure,
                   'activation': activation}
