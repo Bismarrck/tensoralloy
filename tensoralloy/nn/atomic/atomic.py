@@ -5,7 +5,11 @@ This module defines various atomic neural networks.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-from typing import List, Dict
+import shutil
+from tensorflow.python.tools import freeze_graph
+from tensorflow.python.framework import graph_io
+from typing import List, Dict, Callable
+from os.path import dirname, join
 
 from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
@@ -125,3 +129,80 @@ class AtomicNN(BasicNN):
             if verbose:
                 log_tensor(energy)
             return energy
+
+    def export(self, input_fn: Callable, output_graph_path, checkpoint=None,
+               keep_tmp_files=True):
+        """
+        Freeze the graph and export the model to a pb file.
+
+        Parameters
+        ----------
+        input_fn : Callable
+            A `Callable` function to return (features, labels) for mode
+            `tf.estimator.Estimator.ModeKeys.PREDICT`.
+            `labels` should be None as it will not be used and `features` should
+            be a dict:
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is the mask of `value`.
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+        output_graph_path : str
+            The name of the output graph file.
+        checkpoint : str or None
+            The tensorflow checkpoint file to restore or None.
+        keep_tmp_files : bool
+            If False, the intermediate files will be deleted.
+
+        """
+
+        graph = tf.Graph()
+
+        logdir = join(dirname(output_graph_path), 'export')
+        input_graph_name = 'input_graph.pb'
+        saved_model_ckpt = join(logdir, 'saved_model')
+        saved_model_meta = f"{saved_model_ckpt}.meta"
+
+        with graph.as_default():
+            features, _ = input_fn()
+            predictions = self.build(features)
+
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                saver = tf.train.Saver()
+                if checkpoint is not None:
+                    saver.restore(sess, checkpoint)
+                checkpoint_path = saver.save(
+                    sess, saved_model_ckpt, global_step=0)
+                graph_io.write_graph(graph_or_graph_def=graph,
+                                     logdir=logdir,
+                                     name=input_graph_name)
+
+            input_graph_path = join(logdir, input_graph_name)
+            input_saver_def_path = ""
+            input_binary = False
+            restore_op_name = "save/restore_all"
+            filename_tensor_name = "save/Const:0"
+            clear_devices = True
+            input_meta_graph = saved_model_meta
+
+            output_node_names = []
+            for tensor in predictions.values():
+                output_node_names.append(tensor.op.name)
+
+            for node in graph.as_graph_def().node:
+                name = node.name
+                if name.startswith('Placeholders/'):
+                    output_node_names.append(name)
+
+            freeze_graph.freeze_graph(
+                input_graph_path, input_saver_def_path, input_binary,
+                checkpoint_path, ",".join(output_node_names), restore_op_name,
+                filename_tensor_name, output_graph_path, clear_devices, "", "",
+                input_meta_graph)
+
+        if not keep_tmp_files:
+            shutil.rmtree(logdir)
