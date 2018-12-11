@@ -723,5 +723,28 @@ def test_splits():
         assert_array_equal(values['Pd'][0], ref[:3, 20:])
 
 
+def test_as_dict():
+    """
+    Test the method `SymmetryFunctionTransformer.as_dict`.
+    """
+    symbols = Pd3O2.get_chemical_symbols()
+    rc = 6.0
+    max_occurs = Counter(symbols)
+    elements = sorted(max_occurs.keys())
+
+    with tf.Graph().as_default():
+        old = SymmetryFunctionTransformer(rc, elements, k_max=3)
+        new = SymmetryFunctionTransformer(**old.as_dict())
+
+        with tf.Session() as sess:
+            old_vals = sess.run(
+                old.get_graph(), feed_dict=old.get_feed_dict(Pd3O2))
+            new_vals = sess.run(
+                new.get_graph(), feed_dict=new.get_feed_dict(Pd3O2))
+
+        assert_array_equal(old_vals['O'][0], new_vals['O'][0])
+        assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])
+
+
 if __name__ == "__main__":
     nose.run()
