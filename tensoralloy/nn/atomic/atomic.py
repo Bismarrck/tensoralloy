@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import shutil
+import json
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from typing import List, Dict, Callable
@@ -130,18 +131,17 @@ class AtomicNN(BasicNN):
                 log_tensor(energy)
             return energy
 
-    def export(self, input_fn: Callable, output_graph_path, checkpoint=None,
-               keep_tmp_files=True):
+    def export(self, features_and_params_fn: Callable, output_graph_path: str,
+               checkpoint=None, keep_tmp_files=True):
         """
         Freeze the graph and export the model to a pb file.
 
         Parameters
         ----------
-        input_fn : Callable
-            A `Callable` function to return (features, labels) for mode
-            `tf.estimator.Estimator.ModeKeys.PREDICT`.
-            `labels` should be None as it will not be used and `features` should
-            be a dict:
+        features_and_params_fn : Callable
+            A `Callable` function to return (features, params).
+
+            `features` should be a dict:
                 * 'descriptors', a dict of (element, (value, mask)) where
                   `element` represents the symbol of an element, `value` is the
                   descriptors of `element` and `mask` is the mask of `value`.
@@ -150,6 +150,8 @@ class AtomicNN(BasicNN):
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+            `params` should be a JSON dict returned by `Descriptor.as_dict`.
+
         output_graph_path : str
             The name of the output graph file.
         checkpoint : str or None
@@ -167,8 +169,14 @@ class AtomicNN(BasicNN):
         saved_model_meta = f"{saved_model_ckpt}.meta"
 
         with graph.as_default():
-            features, _ = input_fn()
+
+            features, params = features_and_params_fn()
             predictions = self.build(features)
+
+            # Encode the JSON dict into the graph.
+            with tf.name_scope("Transformer/"):
+                transformer_params = tf.constant(
+                    json.dumps(params), name='params')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -189,7 +197,8 @@ class AtomicNN(BasicNN):
             clear_devices = True
             input_meta_graph = saved_model_meta
 
-            output_node_names = []
+            output_node_names = [transformer_params.op.name]
+
             for tensor in predictions.values():
                 output_node_names.append(tensor.op.name)
 
