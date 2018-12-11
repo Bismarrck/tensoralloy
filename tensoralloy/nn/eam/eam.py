@@ -56,6 +56,14 @@ class EamNN(BasicNN):
             "This method must be overridden by its subclass")
 
     @property
+    def tag(self) -> str:
+        """
+        Return a str ('alloy' or 'fs') as the tag of this class.
+        """
+        raise NotImplementedError(
+            "This property must be overridden by its subclass")
+
+    @property
     def potentials(self):
         """
         Return the layers.

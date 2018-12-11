@@ -40,6 +40,11 @@ class EamFsNN(EamNN):
         """
         return self._all_kbody_terms
 
+    @property
+    def tag(self):
+        """ Return the tag. """
+        return "fs"
+
     def _get_hidden_sizes(self, hidden_sizes):
         """
         Setup the hidden layer sizes.

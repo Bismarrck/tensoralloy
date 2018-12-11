@@ -33,6 +33,11 @@ class EamAlloyNN(EamNN):
         """
         super(EamAlloyNN, self).__init__(*args, **kwargs)
 
+    @property
+    def tag(self):
+        """ Return the tag. """
+        return "alloy"
+
     def _get_hidden_sizes(self, hidden_sizes):
         """
         Setup the hidden layer sizes.
