@@ -53,6 +53,16 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             self._initialize_placeholders()
         return self.build_graph(self.placeholders)
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        d = {'rc': self._rc, 'elements': self._elements, 'k_max': self._k_max,
+             'periodic': self._periodic, 'eta': self._eta.tolist(),
+             'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
+             'beta': self._beta.tolist()}
+        return d
+
     @property
     def placeholders(self) -> AttributeDict:
         """

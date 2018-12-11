@@ -47,6 +47,13 @@ class DescriptorTransformer(AtomicDescriptorInterface):
         """
         pass
 
+    @abc.abstractmethod
+    def as_dict(self) -> Dict:
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        pass
+
 
 def bytes_feature(value):
     """
