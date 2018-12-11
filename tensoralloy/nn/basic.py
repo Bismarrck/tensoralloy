@@ -145,9 +145,11 @@ class BasicNN:
         """
         with tf.name_scope("Forces"):
             dEdR = tf.gradients(energy, positions, name='dEdR')[0]
+            # Setup the splitting axis. `energy` may be a 1D vector or a scalar.
+            axis = energy.shape.ndims
             # Please remember: f = -dE/dR
             forces = tf.negative(
-                tf.split(dEdR, [1, -1], axis=1, name='split')[1],
+                tf.split(dEdR, [1, -1], axis=axis, name='split')[1],
                 name='forces')
             if verbose:
                 log_tensor(forces)
@@ -159,39 +161,44 @@ class BasicNN:
         Return the Op to compute the reduced stress tensor `-0.5 * dE/dh @ h`
         where `h` is a column-major cell tensor.
         """
-        with tf.name_scope("Stress"):
+        with tf.name_scope("Full"):
             factor = tf.constant(-0.5, dtype=tf.float64, name='factor')
             dEdhT = tf.gradients(energy, cells)[0]
             # The cell tensor `h` in text books is column-major while in ASE
             # is row-major. So the Voigt indices and the matrix multiplication
             # below are transposed.
-            stress = tf.einsum('ijk,ikl->ijl', cells, dEdhT)
-            stress = tf.multiply(factor, stress)
+            if cells.shape.ndims == 2:
+                stress = tf.matmul(cells, dEdhT)
+            else:
+                stress = tf.einsum('ijk,ikl->ijl', cells, dEdhT)
+            stress = tf.multiply(factor, stress, name='full')
             return stress
 
     def _get_reduced_stress(self, energy, cells, verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
-        with tf.name_scope("VoigtStress"):
+        with tf.name_scope("Stress"):
             stress = self._get_reduced_full_stress_tensor(energy, cells)
+            ndims = stress.shape.ndims
             with tf.name_scope("Voigt"):
                 voigt = tf.convert_to_tensor(
                     [[0, 0], [1, 1], [2, 2], [1, 2], [2, 0], [1, 0]],
                     dtype=tf.int32, name='voigt')
-                batch_size = cells.shape[0].value or energy.shape[0].value
-                if batch_size is None:
-                    raise ValueError("The batch size cannot be inferred.")
-                voigt = tf.tile(
-                    tf.reshape(voigt, [1, 6, 2]), (batch_size, 1, 1))
-                indices = tf.tile(tf.reshape(
-                    tf.range(batch_size), [batch_size, 1, 1]),
-                    [1, 6, 1])
-                voigt = tf.concat((indices, voigt), axis=2, name='indices')
-            stress = tf.gather_nd(stress, voigt, name='stress')
-            if verbose:
-                log_tensor(stress)
-            return stress
+                if ndims == 3:
+                    batch_size = cells.shape[0].value or energy.shape[0].value
+                    if batch_size is None:
+                        raise ValueError("The batch size cannot be inferred.")
+                    voigt = tf.tile(
+                        tf.reshape(voigt, [1, 6, 2]), (batch_size, 1, 1))
+                    indices = tf.tile(tf.reshape(
+                        tf.range(batch_size), [batch_size, 1, 1]),
+                        [1, 6, 1])
+                    voigt = tf.concat((indices, voigt), axis=2, name='indices')
+                stress = tf.gather_nd(stress, voigt, name='stress')
+                if verbose:
+                    log_tensor(stress)
+                return stress
 
     def _get_reduced_total_pressure(self, energy, cells, verbose=True):
         """

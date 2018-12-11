@@ -121,7 +121,7 @@ def test_export_to_pb():
         return features, None
 
     nn = AtomicNN(elements=['Ni'], hidden_sizes={'Ni': [64, 32]},
-                  activation='leaky_relu', forces=False, stress=False,
+                  activation='leaky_relu', forces=True, stress=True,
                   total_pressure=False, normalizer=None)
     nn.export(input_fn,
               output_graph_path=output_graph_path,
