@@ -124,7 +124,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
             if self._k_max == 3:
                 self._placeholders.g4 = AttributeDict(
-                    v2g_map=_int_2d(2, 'g2.v2g_map'),
+                    v2g_map=_int_2d(2, 'g4.v2g_map'),
                     ij=AttributeDict(ilist=_int_1d('g4.ij.ilist'),
                                      jlist=_int_1d('g4.ij.jlist')),
                     ik=AttributeDict(ilist=_int_1d('g4.ik.ilist'),
