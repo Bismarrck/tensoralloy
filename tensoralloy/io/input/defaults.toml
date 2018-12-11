@@ -36,7 +36,6 @@ nr = 10000
 dr = 0.00065
 nrho = 10000
 drho = 0.001
-checkpoint = false
 
 [opt]
 method = "adam"
