@@ -64,25 +64,38 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Initialize the placeholders.
         """
-        with tf.name_scope("Placeholders"):
+        graph = tf.get_default_graph()
+
+        # Make sure the all placeholder ops are placed under the absolute path
+        # of 'Placeholders/'. Placeholder ops can be recovered from graph
+        # directly.
+        with tf.name_scope("Placeholders/"):
+
+            def _get_or_create(dtype, shape, name):
+                try:
+                    return graph.get_tensor_by_name(f'Placeholders/{name}:0')
+                except KeyError:
+                    return tf.placeholder(dtype, shape, name)
+                except Exception as excp:
+                    raise excp
 
             def _double(name):
-                return tf.placeholder(tf.float64, (), name)
+                return _get_or_create(tf.float64, (), name)
 
             def _double_1d(name):
-                return tf.placeholder(tf.float64, (None, ), name)
+                return _get_or_create(tf.float64, (None, ), name)
 
             def _double_2d(d1, name, d0=None):
-                return tf.placeholder(tf.float64, (d0, d1), name)
+                return _get_or_create(tf.float64, (d0, d1), name)
 
             def _int(name):
-                return tf.placeholder(tf.int32, (), name)
+                return _get_or_create(tf.int32, (), name)
 
             def _int_1d(name, d0=None):
-                return tf.placeholder(tf.int32, (d0, ), name)
+                return _get_or_create(tf.int32, (d0, ), name)
 
             def _int_2d(d1, name, d0=None):
-                return tf.placeholder(tf.int32, (d0, d1), name)
+                return _get_or_create(tf.int32, (d0, d1), name)
 
             self._placeholders.positions = _double_2d(3, 'positions')
             self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
