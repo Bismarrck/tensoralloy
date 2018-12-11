@@ -8,7 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import tensorflow as tf
 import nose
-from nose.tools import assert_less
+from nose.tools import assert_less, assert_equal
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
@@ -734,7 +734,12 @@ def test_as_dict():
 
     with tf.Graph().as_default():
         old = SymmetryFunctionTransformer(rc, elements, k_max=3)
-        new = SymmetryFunctionTransformer(**old.as_dict())
+
+        params = old.as_dict()
+        cls = params.pop('class')
+        assert_equal(cls, "SymmetryFunctionTransformer")
+
+        new = SymmetryFunctionTransformer(**params)
 
         with tf.Session() as sess:
             old_vals = sess.run(

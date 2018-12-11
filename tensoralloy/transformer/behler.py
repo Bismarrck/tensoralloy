@@ -57,7 +57,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Return a JSON serializable dict representation of this transformer.
         """
-        d = {'rc': self._rc, 'elements': self._elements, 'k_max': self._k_max,
+        d = {'class': self.__class__.__name__, 'rc': self._rc,
+             'elements': self._elements, 'k_max': self._k_max,
              'periodic': self._periodic, 'eta': self._eta.tolist(),
              'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
              'beta': self._beta.tolist()}
