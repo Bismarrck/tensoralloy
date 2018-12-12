@@ -28,6 +28,7 @@ the 3x3 cell tensor.
 * numpy
 * ase>=3.15.0
 * atsim.potentials==0.2.1
+* matplotlib>=2.1.0
 
 Anaconda3 can install above packages without pain. For performance reason 
 natively compiled TensorFlow, with all CPU features (SSE, AVX, etc.) enabled, is 
