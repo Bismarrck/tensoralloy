@@ -291,8 +291,11 @@ def test_export_setfl_teardown():
     """
     Remove the generated setfl file.
     """
-    if exists('AlCu.alloy.eam'):
-        remove('AlCu.alloy.eam')
+    for afile in ('AlCu.alloy.eam',
+                  'Al.embed.png', 'Cu.embed.png', 'Al.rho.png', 'Cu.rho.png',
+                  'AlCu.phi.png', 'AlAl.phi.png', 'CuCu.phi.png'):
+        if exists(afile):
+            remove(afile)
 
 
 @with_setup(teardown=test_export_setfl_teardown)

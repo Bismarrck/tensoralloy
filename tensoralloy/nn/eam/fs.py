@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from collections import Counter
+from os.path import join, dirname
 from datetime import datetime
 from ase.data import atomic_masses, atomic_numbers
 from atsim.potentials import writeSetFLFinnisSinclair, Potential, EAMPotential
@@ -15,7 +16,7 @@ from typing import Dict, List
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.nn.eam.eam import EamNN
+from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
 
 __author__ = 'Xin Chen'
@@ -255,6 +256,7 @@ class EamFsNN(EamNN):
             The lattice type, e.g 'fcc', for each type of element.
 
         """
+        outdir = dirname(setfl)
         elements = self._elements
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
                       reps=len(elements))
@@ -342,24 +344,46 @@ class EamFsNN(EamNN):
             for element in self._elements:
                 number = atomic_numbers[element]
                 mass = atomic_masses[number]
+                embed_fn = make_embed(element)
                 density_potentials = {}
                 for kbody_term in self._kbody_terms[element]:
                     specie = get_elements_from_kbody_term(kbody_term)[1]
-                    density_potentials[specie] = make_density(kbody_term)
+                    density_fn = make_density(kbody_term)
+                    density_potentials[specie] = density_fn
+
+                    plot_potential(nr, dr, density_fn,
+                                   filename=join(outdir,
+                                                 f"{kbody_term}.rho.png"),
+                                   xlabel=r"$r (\AA)$",
+                                   ylabel=r"$\mathbf{\rho}(r)$ (eV)",
+                                   title=r"$\mathbf{\rho}(r)$ of " + kbody_term)
 
                 potential = EAMPotential(
-                    element, number, mass, make_embed(element),
+                    element, number, mass, embed_fn,
                     density_potentials,
                     latticeConstant=lattice_constants.get(element, 0.0),
                     latticeType=lattice_types.get(element, 'fcc'),
                 )
                 eam_potentials.append(potential)
 
+                plot_potential(nrho, drho, embed_fn,
+                               filename=join(outdir, f"{element}.embed.png"),
+                               xlabel=r"$\rho$",
+                               ylabel=r"$\mathbf{F}(\rho)$ (eV)",
+                               title=r"$\mathbf{F}(\rho)$ of " + element)
+
             pair_potentials = []
             for kbody_term in self._unique_kbody_terms:
                 a, b = get_elements_from_kbody_term(kbody_term)
-                potential = Potential(a, b, make_pairwise(kbody_term))
+                pairwise_fn = make_pairwise(kbody_term)
+                potential = Potential(a, b, pairwise_fn)
                 pair_potentials.append(potential)
+
+                plot_potential(nr, dr, pairwise_fn,
+                               filename=join(outdir, f"{kbody_term}.phi.png"),
+                               xlabel=r"$r (\AA)$",
+                               ylabel=r"$\mathbf{\phi}(r)$ (eV)",
+                               title=r"$\mathbf{\phi}(r)$ of " + kbody_term)
 
             comments = [
                 "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
