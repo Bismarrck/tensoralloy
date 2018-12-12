@@ -21,8 +21,7 @@ __email__ = 'Bismarrck@me.com'
 
 class DescriptorTransformer(AtomicDescriptorInterface):
     """
-    This interface class defines the required methods for atomic descriptor
-    transformers.
+    This class represents atomic descriptor transformers for runtime prediction.
     """
 
     @property
@@ -78,8 +77,8 @@ def int64_feature(value):
 
 class BatchDescriptorTransformer(AtomicDescriptorInterface):
     """
-    This interface class defines the required methods for atomic descriptor
-    transformers.
+    This class represents atomic descriptor transformers for batch training and
+    evaluation.
     """
 
     def __init__(self):
@@ -125,6 +124,13 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
     def max_occurs(self) -> Counter:
         """
         Return the maximum occurance of each type of element.
+        """
+        pass
+
+    @abc.abstractmethod
+    def as_runtime_transformer(self) -> DescriptorTransformer:
+        """
+        Return a corresponding `DescriptorTransformer`.
         """
         pass
 

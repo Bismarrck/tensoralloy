@@ -69,6 +69,13 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         return self._stress
 
+    def as_runtime_transformer(self):
+        """
+        This method is temporarily disabled as `EamTransformer` is neither
+        implemented nor needed.
+        """
+        raise NotImplementedError("`EamTransformer` is not implemented yet")
+
     def get_indexed_slices(self, atoms: Atoms):
         """
         Return the indexed slices.

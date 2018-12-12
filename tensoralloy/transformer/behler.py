@@ -367,6 +367,15 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         return self._stress
 
+    def as_runtime_transformer(self):
+        """
+        Return the corresponding `SymmetryFunctionTransformer`.
+        """
+        return SymmetryFunctionTransformer(
+            rc=self._rc, elements=self._elements, eta=self._eta,
+            beta=self._beta, gamma=self._gamma, zeta=self._zeta,
+            k_max=self._k_max, periodic=self._periodic)
+
     def get_g2_indexed_slices(self, atoms: Atoms):
         """
         Return the indexed slices for the radial function G2.
