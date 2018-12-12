@@ -186,7 +186,7 @@ def log_tensor(tensor: tf.Tensor):
     """
     dimensions = ",".join(["{:6d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
-    tf.logging.info("{:<40s} : [{}]".format(tensor.op.name, dimensions))
+    tf.logging.info("{:<48s} : [{}]".format(tensor.op.name, dimensions))
 
 
 def msra_initializer(dtype=tf.float64, seed=Defaults.seed):

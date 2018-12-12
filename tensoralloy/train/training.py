@@ -94,9 +94,13 @@ class TrainingManager:
             if exists(hparams.train.model_dir):
                 shutil.rmtree(hparams.train.model_dir)
                 deleted.append(hparams.train.model_dir)
+            else:
+                tf.gfile.MakeDirs(hparams.train.model_dir)
             if exists(hparams.train.eval_dir):
                 shutil.rmtree(hparams.train.eval_dir)
                 deleted.append(hparams.train.eval_dir)
+            else:
+                tf.gfile.MakeDirs(hparams.train.eval_dir)
 
         if hparams.train.restart and hparams.train.previous_checkpoint:
             if dirname(hparams.train.previous_checkpoint) in deleted:
@@ -142,7 +146,10 @@ class TrainingManager:
         custom_potentials = {}
 
         for pot in ('rho', 'embed', 'phi'):
-            for key in self._reader[f'nn.eam.{pot}'].keys():
+            keypath = f'nn.eam.{pot}'
+            if self._reader[keypath] is None:
+                continue
+            for key in self._reader[keypath].keys():
                 value = self._reader[f'nn.eam.{pot}.{key}']
                 if value is None:
                     continue
