@@ -5,9 +5,11 @@ This module defines the basic EAM-NN model.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
+from matplotlib import pyplot as plt
 from collections import Counter
 from functools import partial
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.nn.basic import BasicNN
@@ -18,6 +20,48 @@ from tensoralloy.nn.eam.potentials import EamFSPotential, EamAlloyPotential
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def plot_potential(nx: int, dx: float, func: Callable, filename: str,
+                   xlabel=None, ylabel=None, title=None):
+    """
+    Plot an empirical or NN potential.
+
+    Parameters
+    ----------
+    nx : int
+        The number of points.
+    dx : float
+        The gap of two adjacent points.
+    func : Callable
+        The function to compute f(x).
+    filename : str
+        The name of the output image.
+    xlabel : str
+        The label of X axis.
+    ylabel : str
+        The label of Y axis.
+    title : str
+        The title of the figure.
+
+    """
+    fig = plt.figure(1, figsize=[6, 6])
+
+    x = np.arange(0.0, nx * dx, dx)
+    y = [func(xi) for xi in x]
+
+    plt.plot(x, y, 'r-', linewidth=0.8)
+
+    if title:
+        plt.title(title, fontsize=15, fontname='arial')
+    if xlabel:
+        plt.xlabel(xlabel, fontsize=13, fontname='arial')
+    if ylabel:
+        plt.ylabel(ylabel, fontsize=13, fontname='arial')
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
+    plt.close(fig)
 
 
 class EamNN(BasicNN):
