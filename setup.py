@@ -16,13 +16,15 @@ if sys.version_info < (3, 7):
     sys.exit('Python < 3.7 is not supported')
 
 
-setup(
-    name="tensoralloy",
-    author=__author__,
-    author_email=__email__,
-    version=__version__,
-    description="Tensor-graph based machine learning framework for alloys.",
-    packages=find_packages(),
-    include_package_data=False,
-    python_requires=">=3.7",
-)
+if __name__ == "__main__":
+
+    setup(
+        name="tensoralloy",
+        author=__author__,
+        author_email=__email__,
+        version=__version__,
+        description="Tensor-graph based machine learning framework for alloys.",
+        packages=find_packages(),
+        include_package_data=False,
+        python_requires=">=3.7",
+    )

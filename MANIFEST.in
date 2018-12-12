@@ -1,0 +1,5 @@
+global-include *.so
+global-exclude *.py
+global-exclude *.c
+include setup.py
+include tensoralloy/descriptor/indexed_slices.py
