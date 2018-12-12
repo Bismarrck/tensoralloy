@@ -163,7 +163,8 @@ class EamNN(BasicNN):
                 log_tensor(energy)
             return energy
 
-    def _build_phi_nn(self, partitions: AttributeDict, verbose=False):
+    def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -176,6 +177,8 @@ class EamNN(BasicNN):
             `[batch_size, 1 + delta, max_n_element, nnl]`. `delta` will be zero
             if the corresponding kbody term has only one type of atom; otherwise
             `delta` will be one.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -218,9 +221,11 @@ class EamNN(BasicNN):
                     if verbose:
                         log_tensor(y)
                     outputs[kbody_term] = y
-            return self._dynamic_stitch(outputs, symmetric=True), values
+            atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
+            return atomic, values
 
-    def _build_rho_nn(self, values: AttributeDict, verbose=False):
+    def _build_rho_nn(self, values: AttributeDict, max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
         """
@@ -325,7 +330,8 @@ class EamNN(BasicNN):
                     partitions[kbody_term] = (value, mask)
             return partitions, Counter(max_occurs)
 
-    def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor], symmetric=False):
+    def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor],
+                        max_occurs: Counter, symmetric=False):
         """
         The reverse of `dynamic_partition`. Interleave the kbody-term centered
         `outputs` of type `Dict[kbody_term, tensor]` to element centered values
@@ -338,8 +344,10 @@ class EamNN(BasicNN):
             with shape `[batch_size, max_n_elements]` where `max_n_elements`
             denotes the maximum occurance of the center element of the
             corresponding kbody-term.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
         symmetric : bool
-            This should be True if symmetric tensors were splitted before.
+            This should be True if kbody terms all symmetric.
 
         Returns
         -------
@@ -349,25 +357,20 @@ class EamNN(BasicNN):
 
         """
         with tf.name_scope("Stitch"):
-            stacks = {}
-            results = []
+            stacks: Dict = {}
             for kbody_term, value in outputs.items():
-                elements = get_elements_from_kbody_term(kbody_term)
-                if symmetric and elements[0] != elements[1]:
-                    results.append(value)
+                center, other = get_elements_from_kbody_term(kbody_term)
+                if symmetric and center != other:
+                    sizes = [max_occurs[center], max_occurs[other]]
+                    splits = tf.split(
+                        value, sizes, axis=1, name=f'splits/{center}{other}')
+                    stacks[center] = stacks.get(center, []) + [splits[0]]
+                    stacks[other] = stacks.get(other, []) + [splits[1]]
                 else:
-                    center = elements[0]
-                    if center not in stacks:
-                        stacks[center] = [value]
-                    else:
-                        stacks[center].append(value)
-            results.append(
-                tf.concat([tf.add_n(stacks[el], name=el)
-                           for el in self._elements], axis=1))
-            if not symmetric:
-                return tf.identity(results[0], name='sum')
-            else:
-                return tf.add_n(results, name='sum')
+                    stacks[center] = stacks.get(center, []) + [value]
+            return tf.concat(
+                [tf.add_n(stacks[el], name=el) for el in self._elements],
+                axis=1, name='sum')
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """

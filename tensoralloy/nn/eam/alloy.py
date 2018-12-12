@@ -127,7 +127,8 @@ class EamAlloyNN(EamNN):
 
         return potentials
 
-    def _build_rho_nn(self, descriptors: AttributeDict, verbose=False):
+    def _build_rho_nn(self, descriptors: AttributeDict, max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
 
@@ -138,6 +139,9 @@ class EamAlloyNN(EamNN):
             where where `value` represents the interatomic distances and `mask`
             is the value mask. Both `value` and `mask` are 4D tensors of shape
             `[batch_size, max_n_terms, max_n_element, nnl]`.
+        max_occurs : Counter
+            The maximum occurance of each type of element. This arg is not
+            needed here.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -202,9 +206,10 @@ class EamAlloyNN(EamNN):
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=True)
-            rho, _ = self._build_rho_nn(features.descriptors, verbose=verbose)
+            rho, _ = self._build_rho_nn(features.descriptors, max_occurs,
+                                        verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
-            phi, _ = self._build_phi_nn(partitions, verbose=verbose)
+            phi, _ = self._build_phi_nn(partitions, max_occurs, verbose=verbose)
             y = tf.add(phi, embed, name='atomic')
             return y
 
@@ -238,7 +243,7 @@ class EamAlloyNN(EamNN):
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
         r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
-        max_occurs = Counter({el: nrho for el in self._elements})
+        elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
 
@@ -266,9 +271,12 @@ class EamAlloyNN(EamNN):
                     partitions[kbody_term] = (value, mask)
 
             with tf.name_scope("Model"):
-                embed = self._build_embed_nn(rho, max_occurs=max_occurs)
-                _, rho = self._build_rho_nn(descriptors)
-                _, phi = self._build_phi_nn(partitions)
+                embed = self._build_embed_nn(
+                    rho, max_occurs=Counter({el: nrho for el in elements}))
+                _, rho = self._build_rho_nn(
+                    descriptors, max_occurs=Counter({el: 1 for el in elements}))
+                _, phi = self._build_phi_nn(
+                    partitions, max_occurs=Counter({el: 1 for el in elements}))
 
             sess = tf.Session()
             with sess:

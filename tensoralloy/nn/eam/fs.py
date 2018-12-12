@@ -144,7 +144,8 @@ class EamFsNN(EamNN):
 
         return potentials
 
-    def _build_rho_nn(self, partitions: AttributeDict, verbose=False):
+    def _build_rho_nn(self, partitions: AttributeDict, max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
 
@@ -155,6 +156,8 @@ class EamFsNN(EamNN):
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
             `[batch_size, 1, max_n_element, nnl]`.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -188,7 +191,8 @@ class EamFsNN(EamNN):
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
-            return self._dynamic_stitch(outputs, symmetric=False), values
+            atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
+            return atomic, values
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """
@@ -217,12 +221,12 @@ class EamFsNN(EamNN):
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=False)
-            rho, _ = self._build_rho_nn(partitions, verbose=verbose)
+            rho, _ = self._build_rho_nn(partitions, max_occurs, verbose=verbose)
             embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
 
             partitions, max_occurs = self._dynamic_partition(
                 features, merge_symmetric=True)
-            phi, _ = self._build_phi_nn(partitions, verbose=verbose)
+            phi, _ = self._build_phi_nn(partitions, max_occurs, verbose=verbose)
             y = tf.add(phi, embed, name='atomic')
             return y
 
@@ -251,11 +255,11 @@ class EamFsNN(EamNN):
             The lattice type, e.g 'fcc', for each type of element.
 
         """
+        elements = self._elements
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
-                      reps=len(self._elements))
+                      reps=len(elements))
         rho = np.atleast_2d(rho)
         r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
-        max_occurs = Counter({el: nrho for el in self._elements})
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
 
@@ -281,11 +285,15 @@ class EamFsNN(EamNN):
 
             with tf.name_scope("Model"):
                 embed = self._build_embed_nn(
-                    rho, max_occurs=max_occurs, verbose=False)
+                    rho, max_occurs=Counter({el: nrho for el in elements}),
+                    verbose=False)
                 _, rho_vals = self._build_rho_nn(
-                    partitions, verbose=False)
+                    partitions, max_occurs=Counter({el: 1 for el in elements}),
+                    verbose=False)
                 _, phi_vals = self._build_phi_nn(
-                    symmetric_partitions, verbose=False)
+                    symmetric_partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    verbose=False)
 
             sess = tf.Session()
             with sess:

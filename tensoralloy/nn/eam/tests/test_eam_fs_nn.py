@@ -87,12 +87,14 @@ def test_inference():
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
                 data.features, merge_symmetric=False)
-            rho, rho_values = nn._build_rho_nn(partitions, verbose=False)
+            rho, rho_values = nn._build_rho_nn(partitions, max_occurs,
+                                               verbose=False)
             embed = nn._build_embed_nn(rho, max_occurs, verbose=False)
 
             partitions, max_occurs = nn._dynamic_partition(
                 data.features, merge_symmetric=True)
-            phi, phi_values = nn._build_phi_nn(partitions, verbose=False)
+            phi, phi_values = nn._build_phi_nn(partitions, max_occurs,
+                                               verbose=False)
             y = tf.add(phi, embed, name='atomic')
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,

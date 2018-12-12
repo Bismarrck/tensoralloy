@@ -11,6 +11,7 @@ from nose.tools import assert_equal, assert_tuple_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
 from os import remove
+from collections import Counter
 
 from ..alloy import EamAlloyNN
 from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
@@ -20,7 +21,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class Data:
+class AlCuData:
     """
     A private data container for unit tests of this module.
     """
@@ -34,6 +35,7 @@ class Data:
         self.max_n_al = 5
         self.max_n_cu = 7
         self.max_n_atoms = self.max_n_al + self.max_n_cu + 1
+        self.max_occurs = Counter({'Al': self.max_n_al, 'Cu': self.max_n_cu})
         self.nnl = 10
         self.elements = sorted(['Cu', 'Al'])
 
@@ -77,18 +79,19 @@ class Data:
                     tf.float64, 'y_alcu'))
 
 
-def test_dynamic_stitch():
+def test_dynamic_stitch_2el():
     """
-    Test the method `EamNN._dynamic_stitch`.
+    Test the method `EamNN._dynamic_stitch` with two types of element.
     """
     with tf.Graph().as_default():
 
-        data = Data()
+        data = AlCuData()
+        max_occurs = data.max_occurs
 
         nn = EamAlloyNN(elements=data.elements, forces=False)
 
-        op = nn._dynamic_stitch(data.atomic_splits, symmetric=False)
-        symm_op = nn._dynamic_stitch(data.symmetric_atomic_splits,
+        op = nn._dynamic_stitch(data.atomic_splits, max_occurs, symmetric=False)
+        symm_op = nn._dynamic_stitch(data.symmetric_atomic_splits, max_occurs,
                                      symmetric=True)
 
         ref = np.concatenate((data.y_alal + data.y_alcu,
@@ -105,13 +108,62 @@ def test_dynamic_stitch():
             assert_array_equal(results[1], ref)
 
 
+def test_dynamic_stitch_3el():
+    """
+    Test the method `EamNN._dynamic_stitch` with three types of element.
+    """
+    with tf.Graph().as_default():
+
+        batch_size = 10
+        max_n_al = 5
+        max_n_cu = 7
+        max_n_mg = 6
+        max_occurs = Counter({'Al': max_n_al, 'Mg': max_n_mg, 'Cu': max_n_cu})
+
+        y_alal = np.random.randn(batch_size, max_n_al)
+        y_alcu = np.random.randn(batch_size, max_n_al)
+        y_almg = np.random.randn(batch_size, max_n_al)
+        y_cual = np.random.randn(batch_size, max_n_cu)
+        y_cucu = np.random.randn(batch_size, max_n_cu)
+        y_cumg = np.random.randn(batch_size, max_n_cu)
+        y_mgal = np.random.randn(batch_size, max_n_mg)
+        y_mgcu = np.random.randn(batch_size, max_n_mg)
+        y_mgmg = np.random.randn(batch_size, max_n_mg)
+
+        symmetric_partitions = AttributeDict(
+            AlAl=tf.convert_to_tensor(y_alal, tf.float64, 'y_alal'),
+            MgMg=tf.convert_to_tensor(y_mgmg, tf.float64, 'y_mgmg'),
+            CuCu=tf.convert_to_tensor(y_cucu, tf.float64, 'y_cucu'),
+            AlCu=tf.convert_to_tensor(
+                np.concatenate((y_alcu, y_cual), axis=1), name='y_alcu'),
+            AlMg=tf.convert_to_tensor(
+                np.concatenate((y_almg, y_mgal), axis=1), name='y_almg'),
+            CuMg=tf.convert_to_tensor(
+                np.concatenate((y_cumg, y_mgcu), axis=1), name='y_cumg'),
+        )
+
+        nn = EamAlloyNN(elements=['Al', 'Cu', 'Mg'])
+        op = nn._dynamic_stitch(
+            symmetric_partitions, max_occurs, symmetric=True)
+
+        ref = np.concatenate(
+            (y_alal + y_alcu + y_almg,
+             y_cual + y_cucu + y_cumg,
+             y_mgal + y_mgcu + y_mgmg),
+            axis=1)
+
+        with tf.Session() as sess:
+            results = sess.run(op)
+            assert_array_equal(results, ref)
+
+
 def test_dynamic_partition():
     """
     Test the method `EamNN._dynamic_partition`.
     """
     with tf.Graph().as_default():
 
-        data = Data()
+        data = AlCuData()
 
         nn = EamAlloyNN(elements=data.elements, forces=False)
 
@@ -187,7 +239,7 @@ def test_custom_potentials():
     """
     with tf.Graph().as_default():
 
-        data = Data()
+        data = AlCuData()
         custom_potentials = {
             'AlCu': {'phi': 'zjw04'},
             'Al': {'rho': 'zjw04'},
@@ -209,7 +261,7 @@ def test_inference():
     """
     with tf.Graph().as_default():
 
-        data = Data()
+        data = AlCuData()
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
 
@@ -221,9 +273,10 @@ def test_inference():
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
                 data.features, merge_symmetric=True)
-            rho, _ = nn._build_rho_nn(data.descriptors, verbose=True)
+            rho, _ = nn._build_rho_nn(data.descriptors, max_occurs,
+                                      verbose=True)
             embed = nn._build_embed_nn(rho, max_occurs, verbose=True)
-            phi, _ = nn._build_phi_nn(partitions, verbose=True)
+            phi, _ = nn._build_phi_nn(partitions, max_occurs, verbose=True)
             y = tf.add(phi, embed, name='atomic')
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,
