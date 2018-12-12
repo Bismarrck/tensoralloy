@@ -33,3 +33,10 @@ the 3x3 cell tensor.
 Anaconda3 can install above packages without pain. For performance reason 
 natively compiled TensorFlow, with all CPU features (SSE, AVX, etc.) enabled, is 
 strongly recommended. 
+
+## 2. Compilation
+
+Run the bash script [`build_dist.sh`](./build_dist.sh) to compile this package. 
+An **egg** file, `tensoralloy-1.0.0-py3.7-{platform-identifier}.egg`, will be 
+generated under `dist`. This egg can be installed with 
+[`easy_install`](https://setuptools.readthedocs.io/en/latest/easy_install.html).
