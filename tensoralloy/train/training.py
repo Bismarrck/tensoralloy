@@ -257,11 +257,50 @@ class TrainingManager:
             )
             tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
-    def export(self):
+    def export(self, checkpoint=None):
         """
         Export the trained model.
         """
-        raise NotImplementedError("To be implemented!")
+        if checkpoint is None:
+            checkpoint = tf.train.latest_checkpoint(
+                self._hparams.train.model_dir)
+
+        if isinstance(self._nn, AtomicNN):
+            output_graph_path = join(self._hparams.train.model_dir,
+                                     f'{self._dataset.name}.pb')
+
+            input_fn = self._dataset.input_fn_for_prediction()
+
+            self._nn.export(features_and_params_fn=input_fn,
+                            output_graph_path=output_graph_path,
+                            checkpoint=checkpoint,
+                            keep_tmp_files=False)
+        else:
+            kwargs = self._reader['nn.eam.export']
+
+            if 'lattice' in kwargs:
+                lattice = kwargs.pop('lattice')
+                lattice_constants = lattice.get('constant', {})
+                lattice_types = lattice.get('type', {})
+            else:
+                lattice_constants = None
+                lattice_types = None
+
+            output_setfl = join(self._hparams.train.model_dir,
+                                f'{self._dataset.name}.{self._nn.tag}.eam')
+
+            self._nn.export(output_setfl, checkpoint=checkpoint,
+                            lattice_constants=lattice_constants,
+                            lattice_types=lattice_types, **kwargs)
+
+
+def main(input_file: str):
+    """
+    The main function.
+    """
+    manager = TrainingManager(input_file)
+    manager.train_and_evaluate()
+    manager.export()
 
 
 if __name__ == "__main__":
@@ -272,5 +311,4 @@ if __name__ == "__main__":
         type=str,
         help="A cfg file to read."
     )
-    manager = TrainingManager(parser.parse_args().filename)
-    manager.train_and_evaluate()
+    main(parser.parse_args().filename)
