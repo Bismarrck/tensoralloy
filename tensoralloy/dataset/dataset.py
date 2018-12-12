@@ -10,7 +10,7 @@ import sys
 import time
 from multiprocessing import cpu_count
 from os.path import join, splitext, basename
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.data import shuffle_and_repeat
@@ -396,7 +396,22 @@ class Dataset:
         """
         Return a Callable input function for `tf.estimator.Estimator`.
         """
-        def _input_fn():
+
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            return self.input_fn_for_prediction()
+
+        def _input_fn() -> Tuple[AttributeDict, AttributeDict]:
+            """
+            The input function for `tf.estimator.Estimator`.
+
+            Returns
+            -------
+            features : AttributeDict
+                A dict of input features.
+            labels : AttributeDict
+                A dict of labels.
+
+            """
             with tf.name_scope("Dataset"):
                 batch = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
@@ -417,6 +432,37 @@ class Dataset:
                 labels['reduced_stress'] = batch.reduced_stress
                 labels['reduced_total_pressure'] = batch.reduced_total_pressure
             return features, labels
+
+        return _input_fn
+
+    def input_fn_for_prediction(self):
+        """
+        Return the input function, without any args, for runtime prediction.
+        """
+        def _input_fn() -> Tuple[AttributeDict, dict]:
+            """
+            The input function.
+
+            Returns
+            -------
+            features : AttributeDict
+                A dict of input feature placeholders.
+            params : dict
+                A JSON serializable dict representation of the runtime
+                descriptor transformer.
+
+            """
+            clf = self._transformer.as_runtime_transformer()
+            descriptors = clf.get_graph()
+            placeholders = AttributeDict(clf.placeholders)
+            features = AttributeDict(descriptors=descriptors,
+                                     positions=placeholders.positions,
+                                     n_atoms=placeholders.n_atoms,
+                                     cells=placeholders.cells,
+                                     composition=placeholders.composition,
+                                     mask=placeholders.mask,
+                                     volume=placeholders.volume)
+            return features, clf.as_dict()
 
         return _input_fn
 
