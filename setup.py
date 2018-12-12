@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import sys
 from setuptools import setup, find_packages
 
-__version__ = "2018.11.26"
+__version__ = "1.0.0"
 __author__ = "Xin Chen"
 __email__ = "Bismarrck@me.com"
 
@@ -22,6 +22,7 @@ setup(
     author_email=__email__,
     version=__version__,
     description="Tensor-graph based machine learning framework for alloys.",
-    packages=find_packages(exclude=['examples', 'doc']),
-    include_package_data=True,
+    packages=find_packages(),
+    include_package_data=False,
+    python_requires=">=3.7",
 )
