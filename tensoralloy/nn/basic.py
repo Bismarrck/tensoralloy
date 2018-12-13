@@ -19,14 +19,17 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+available_properties = ('energy', 'forces', 'stress', 'total_pressure')
+
+
 class BasicNN:
     """
     The base neural network class.
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 energy=True, forces=False, stress=False, total_pressure=False,
-                 l2_weight=0.0):
+                 l2_weight=0.0, minimize_properties=('energy', 'forces'),
+                 predict_properties=('energy', 'forces')):
         """
         Initialization method.
 
@@ -39,15 +42,13 @@ class BasicNN:
             of the hidden layers.
         activation : str
             The name of the activation function to use.
-        energy : bool
-            If True, the loss of total energy will be minimized.
-        forces : bool
-            If True, the loss of atomic forces will be minimized..
-        stress : bool
-            If True, the loss of reduced stress will be minimized.
-        total_pressure : bool
-            If True, the loss of reduced total pressure will be minimized. This
-            option will suppress `stress`.
+        minimize_properties : List[str]
+            A list of str as the properties to minimize. Avaibale properties
+            are: 'energy', 'forces', 'stress' and 'total_pressure'. For each
+            property, its RMSE loss will be minimized.
+        predict_properties : List[str]
+            A list of str as the properties to predict. The corresponding
+            tensorflow Op will be inferred. 'energy' will always be predicted.
         l2_weight : float
             The weight of the L2 regularization. If zero, L2 will be disabled.
 
@@ -63,15 +64,20 @@ class BasicNN:
         self._activation = safe_select(activation, Defaults.activation)
         self._l2_weight = max(l2_weight, 0.0)
 
-        if not any([energy, forces, stress, total_pressure]):
-            raise ValueError("At least one of `energy`, `forces`, `stress` or "
-                             "`total_pressure` must be True.")
+        if len(minimize_properties) == 0:
+            raise ValueError("At least one property should be minimized.")
+        for prop in minimize_properties:
+            if prop not in available_properties:
+                raise ValueError(f"{prop} is not a valid property.")
+        for prop in predict_properties:
+            if prop not in available_properties:
+                raise ValueError(f"{prop} is not a valid property.")
 
-        # TODO: make `total energy` an optional training target.
-        self._energy = energy
-        self._forces = forces
-        self._stress = stress
-        self._total_pressure = total_pressure
+        self._minimize_properties = list(minimize_properties)
+        self._predict_properties = list(predict_properties)
+
+        if 'energy' not in self._predict_properties:
+            self._predict_properties.append('energy')
 
     @property
     def elements(self):
@@ -88,26 +94,18 @@ class BasicNN:
         return self._hidden_sizes
 
     @property
-    def forces(self):
+    def minimize_properties(self) -> List[str]:
         """
-        Return True if atomic forces will be calculated.
+        Return a list of str as the properties to minimize.
         """
-        return self._forces
+        return self._minimize_properties
 
     @property
-    def reduced_stress(self):
+    def predict_properties(self) -> List[str]:
         """
-        Return True if the reduced stress tensor, dE/dC, will be calculated.
+        Return a list of str as the properties to predict.
         """
-        return self._stress
-
-    @property
-    def reduced_total_pressure(self):
-        """
-        Return True if the reduced total pressure (eV), Trace(virial)/3.0, will
-        be calculated.
-        """
-        return self._total_pressure
+        return self._predict_properties
 
     @property
     def l2_weight(self):
@@ -307,13 +305,13 @@ class BasicNN:
             losses = AttributeDict()
             losses.energy = _get_loss('energy', 'y', 'Energy')
 
-            if self._forces:
+            if 'forces' in self._minimize_properties:
                 losses.forces = _get_loss('forces', 'f', 'Forces', add_eps=True)
 
-            if self._total_pressure:
+            if 'total_pressure' in self._minimize_properties:
                 losses.reduced_total_pressure = _get_loss(
                     'reduced_total_pressure', 'p', 'Pressure', add_eps=True)
-            elif self._stress:
+            elif 'stress' in self._minimize_properties:
                 losses.reduced_stress = _get_loss(
                     'reduced_stress', 's', 'Stress', add_eps=True)
 
@@ -383,36 +381,38 @@ class BasicNN:
             collections = []
 
             with tf.name_scope("Energy"):
-                grads_and_vars = optimizer.compute_gradients(losses.energy)
+                energy_grads_and_vars = optimizer.compute_gradients(
+                    losses.energy)
                 self.add_grads_and_vars_summary(
-                    grads_and_vars, 'energy', GraphKeys.ENERGY_GRADIENTS)
-                collections.append(grads_and_vars)
+                    energy_grads_and_vars, 'energy', GraphKeys.ENERGY_GRADIENTS)
+                if 'energy' in self._minimize_properties:
+                    collections.append(energy_grads_and_vars)
 
-            if self._forces:
+            if 'forces' in self._minimize_properties:
                 with tf.name_scope("Forces"):
                     grads_and_vars = optimizer.compute_gradients(losses.forces)
                     self._add_gradients_cos_dist_summary(
-                        collections[0], grads_and_vars)
+                        energy_grads_and_vars, grads_and_vars)
                     self.add_grads_and_vars_summary(
                         grads_and_vars, 'forces', GraphKeys.FORCES_GRADIENTS)
                     collections.append(grads_and_vars)
 
-            if self._total_pressure:
+            if 'total_pressure' in self._minimize_properties:
                 with tf.name_scope("Pressure"):
                     grads_and_vars = optimizer.compute_gradients(
                         losses.reduced_total_pressure)
                     self._add_gradients_cos_dist_summary(
-                        collections[0], grads_and_vars)
+                        energy_grads_and_vars, grads_and_vars)
                     self.add_grads_and_vars_summary(
                         grads_and_vars, 'pressure', GraphKeys.STRESS_GRADIENTS)
                     collections.append(grads_and_vars)
 
-            elif self._stress:
+            elif 'stress' in self._minimize_properties:
                 with tf.name_scope("Stress"):
                     grads_and_vars = optimizer.compute_gradients(
                         losses.reduced_stress)
                     self._add_gradients_cos_dist_summary(
-                        collections[0], grads_and_vars)
+                        energy_grads_and_vars, grads_and_vars)
                     self.add_grads_and_vars_summary(
                         grads_and_vars, 'stress', GraphKeys.STRESS_GRADIENTS)
                     collections.append(grads_and_vars)
@@ -545,23 +545,23 @@ class BasicNN:
                 metrics.update(
                     _get_metric('energy', 'y', cast_to_per_atom=True))
 
-            if self._forces:
+            if 'forces' in self._minimize_properties:
                 metrics.update(_get_metric(
                     'forces', 'f', cast_to_per_atom=False))
 
-            if self._total_pressure:
+            if 'total_pressure' in self._minimize_properties:
                 metrics.update(_get_metric(
                     'reduced_total_pressure', 'p', cast_to_per_atom=False))
 
-            elif self._stress:
+            elif 'stress' in self._minimize_properties:
                 metrics.update(_get_metric(
                     'reduced_stress', 's', cast_to_per_atom=False))
 
             return metrics
 
     @staticmethod
-    def _get_1x1conv_nn(x, activation_fn, hidden_sizes, verbose=False,
-                        **kwargs):
+    def _get_1x1conv_nn(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
+                        verbose=False, **kwargs):
         """
         A helper function to construct a 1x1 convolutional neural network.
 
@@ -574,6 +574,8 @@ class BasicNN:
             The activation function.
         hidden_sizes : List[int]
             The size of the hidden layers.
+        verbose : bool
+            If True, key tensors will be logged.
 
         Returns
         -------
@@ -637,11 +639,11 @@ class BasicNN:
         assert 'volume' in features
 
         assert 'energy' in labels
-        if self._forces:
+        if 'forces' in self._minimize_properties:
             assert 'forces' in labels
-        if self._total_pressure:
+        if 'total_pressure' in self._minimize_properties:
             assert 'reduced_total_pressure' in labels
-        if self._stress:
+        if 'stress' in self._minimize_properties:
             assert 'reduced_stress' in labels
 
     def build(self, features: AttributeDict, verbose=True):
@@ -678,15 +680,15 @@ class BasicNN:
             predictions.energy = self._get_energy(
                 outputs, features, verbose=verbose)
 
-            if self._forces:
+            if 'forces' in self._predict_properties:
                 predictions.forces = self._get_forces(
                     predictions.energy, features.positions, verbose=verbose)
 
-            if self._total_pressure:
+            if 'total_pressure' in self._predict_properties:
                 predictions.reduced_total_pressure = \
                     self._get_reduced_total_pressure(
                         predictions.energy, features.cells, verbose=verbose)
-            elif self._stress:
+            elif 'stress' in self._predict_properties:
                 predictions.reduced_stress = self._get_reduced_stress(
                     predictions.energy, features.cells, verbose=verbose)
 

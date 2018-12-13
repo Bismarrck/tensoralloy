@@ -88,7 +88,8 @@ def test_dynamic_stitch_2el():
         data = AlCuData()
         max_occurs = data.max_occurs
 
-        nn = EamAlloyNN(elements=data.elements, forces=False)
+        nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
+                        predict_properties=['energy'])
 
         op = nn._dynamic_stitch(data.atomic_splits, max_occurs, symmetric=False)
         symm_op = nn._dynamic_stitch(data.symmetric_atomic_splits, max_occurs,
@@ -165,7 +166,8 @@ def test_dynamic_partition():
 
         data = AlCuData()
 
-        nn = EamAlloyNN(elements=data.elements, forces=False)
+        nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
+                        predict_properties=['energy'])
 
         with tf.Session() as sess:
             partitions_op, max_occurs = nn._dynamic_partition(

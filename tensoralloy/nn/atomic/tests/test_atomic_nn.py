@@ -39,7 +39,9 @@ def test_inference():
         g_al = np.random.randn(batch_size, max_n_al, ndim)
         g_cu = np.random.randn(batch_size, max_n_cu, ndim)
 
-        nn = AtomicNN(elements, hidden_sizes, activation='tanh', forces=False)
+        nn = AtomicNN(elements, hidden_sizes, activation='tanh',
+                      minimize_properties=['energy', ],
+                      predict_properties=['energy', ])
 
         with tf.name_scope("Inputs"):
 
@@ -79,7 +81,7 @@ def test_inference_from_transformer():
                                  composition=placeholders.composition,
                                  mask=placeholders.mask,
                                  volume=placeholders.volume)
-        nn = AtomicResNN(clf.elements, forces=True)
+        nn = AtomicResNN(clf.elements, predict_properties=['energy', 'forces'])
         prediction = nn.build(features)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
@@ -121,8 +123,9 @@ def test_export_to_pb():
         return features, None
 
     nn = AtomicNN(elements=['Ni'], hidden_sizes={'Ni': [64, 32]},
-                  activation='leaky_relu', forces=True, stress=True,
-                  total_pressure=False, normalizer=None)
+                  activation='leaky_relu',
+                  predict_properties=['energy', 'forces', 'stress'],
+                  normalizer=None)
     nn.export(input_fn,
               output_graph_path=output_graph_path,
               checkpoint=checkpoint_path,

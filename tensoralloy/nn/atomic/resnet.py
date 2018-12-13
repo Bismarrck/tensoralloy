@@ -35,16 +35,16 @@ class AtomicResNN(AtomicNN):
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 l2_weight=0., forces=False, stress=False, total_pressure=False,
-                 normalizer='linear', normalization_weights=None,
-                 atomic_static_energy=None):
+                 l2_weight=0.0, minimize_properties=('energy', 'forces'),
+                 predict_properties=('energy', 'forces'), normalizer='linear',
+                 normalization_weights=None, atomic_static_energy=None):
         """
         Initialization method.
         """
         super(AtomicResNN, self).__init__(
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
-            l2_weight=l2_weight, forces=forces, stress=stress,
-            total_pressure=total_pressure, normalizer=normalizer,
+            l2_weight=l2_weight, minimize_properties=minimize_properties,
+            predict_properties=predict_properties, normalizer=normalizer,
             normalization_weights=normalization_weights)
         self._atomic_static_energy = atomic_static_energy
 
