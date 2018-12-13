@@ -177,13 +177,12 @@ class TrainingManager:
         """
         elements = self._dataset.transformer.elements
         l2_weight = self._reader['nn.l2_weight']
-        forces = self._reader['nn.forces']
-        stress = self._reader['nn.stress']
-        total_pressure = self._reader['nn.total_pressure']
+        minimize_properties = self._reader['nn.minimize']
+        predict_properties = self._reader['nn.predict']
         activation = self._reader['nn.activation']
         kwargs = {'elements': elements, 'l2_weight': l2_weight,
-                  'forces': forces, 'stress': stress,
-                  'total_pressure': total_pressure,
+                  'minimize_properties': minimize_properties,
+                  'predict_properties': predict_properties,
                   'activation': activation}
         if self._reader['dataset.descriptor'] == 'behler':
             return self._get_atomic_nn(kwargs)

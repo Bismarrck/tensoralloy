@@ -10,9 +10,6 @@ test_size = 1000
 [nn]
 activation = "leaky_relu"
 l2_weight = 0.01
-forces = true
-stress = false
-total_pressure = false
 
 [nn.eam]
 arch = "EamAlloyNN"

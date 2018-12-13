@@ -16,9 +16,8 @@ zeta = [4.0]
 [nn]
 activation = "leaky_relu"
 l2_weight = 0.01
-forces = true
-stress = false
-total_pressure = false
+minimize = ['energy']
+predict = ['energy', 'forces']
 
 [nn.atomic.layers]
 C = [64, 32]

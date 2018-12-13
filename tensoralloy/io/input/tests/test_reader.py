@@ -60,6 +60,8 @@ def test_read_configs():
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.C'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.H'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.N'), [64, 32])
+    assert_list_equal(reader['nn.minimize'], ['energy'])
+    assert_list_equal(reader['nn.predict'], ['energy', 'forces'])
 
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
     configs = reader.configs
