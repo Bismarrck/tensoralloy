@@ -28,7 +28,7 @@ class BasicNN:
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 l2_weight=0.0, minimize_properties=('energy', 'forces'),
+                 loss_weights=None, minimize_properties=('energy', 'forces'),
                  predict_properties=('energy', 'forces')):
         """
         Initialization method.
@@ -49,8 +49,9 @@ class BasicNN:
         predict_properties : List[str]
             A list of str as the properties to predict. The corresponding
             tensorflow Op will be inferred. 'energy' will always be predicted.
-        l2_weight : float
-            The weight of the L2 regularization. If zero, L2 will be disabled.
+        loss_weights : AttributeDict or None
+            The weights of the losses. Available keys are 'energy', 'forces',
+            'stress', 'total_pressure' and 'l2'. If None, all will be set to 1.
 
         Notes
         -----
@@ -58,21 +59,46 @@ class BasicNN:
         True.
 
         """
+
+        class PropertyError(ValueError):
+            """
+            This error shall be raised if the given property is not valid.
+            """
+            def __init__(self, name):
+                super(PropertyError, self).__init__()
+                self._name = name
+
+            def __str__(self):
+                return f"{self._name} is not a valid property."
+
         self._elements = elements
         self._hidden_sizes = self._get_hidden_sizes(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation = safe_select(activation, Defaults.activation)
-        self._l2_weight = max(l2_weight, 0.0)
 
         if len(minimize_properties) == 0:
             raise ValueError("At least one property should be minimized.")
         for prop in minimize_properties:
             if prop not in available_properties:
-                raise ValueError(f"{prop} is not a valid property.")
+                raise PropertyError(prop)
         for prop in predict_properties:
             if prop not in available_properties:
-                raise ValueError(f"{prop} is not a valid property.")
+                raise PropertyError(prop)
 
+        if loss_weights is None:
+            loss_weights = AttributeDict(
+                {prop: 1.0 for prop in minimize_properties})
+            loss_weights.l2 = 0.0
+        else:
+            for prop, val in loss_weights.items():
+                if prop != 'l2' and prop not in available_properties:
+                    raise PropertyError(prop)
+                loss_weights[prop] = max(val, 0.0)
+            for prop in minimize_properties:
+                if prop not in loss_weights:
+                    loss_weights[prop] = 1.0
+
+        self._loss_weights = loss_weights
         self._minimize_properties = list(minimize_properties)
         self._predict_properties = list(predict_properties)
 
@@ -108,11 +134,11 @@ class BasicNN:
         return self._predict_properties
 
     @property
-    def l2_weight(self):
+    def loss_weights(self):
         """
-        Return the weight of the L2 loss.
+        Return the weights of the loss terms.
         """
-        return self._l2_weight
+        return self._loss_weights
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -232,7 +258,7 @@ class BasicNN:
                 tf.add_to_collection('l2_losses', l2)
             l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
             weight = tf.convert_to_tensor(
-                self._l2_weight, dtype=tf.float64, name='weight')
+                self._loss_weights.l2, dtype=tf.float64, name='weight')
             l2 = tf.multiply(l2_loss, weight, name='l2')
             tf.summary.scalar(l2.op.name + '/summary', l2,
                               collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -315,7 +341,7 @@ class BasicNN:
                 losses.reduced_stress = _get_loss(
                     'reduced_stress', 's', 'Stress', add_eps=True)
 
-            if self._l2_weight > 0.0:
+            if self._loss_weights.l2 > 0.0:
                 losses.l2 = self.add_l2_penalty()
 
         return tf.add_n(list(losses.values()), name='loss'), losses

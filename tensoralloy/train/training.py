@@ -180,7 +180,8 @@ class TrainingManager:
         minimize_properties = self._reader['nn.minimize']
         predict_properties = self._reader['nn.predict']
         activation = self._reader['nn.activation']
-        kwargs = {'elements': elements, 'l2_weight': l2_weight,
+        kwargs = {'elements': elements,
+                  'loss_weights': AttributeDict(l2=l2_weight),
                   'minimize_properties': minimize_properties,
                   'predict_properties': predict_properties,
                   'activation': activation}

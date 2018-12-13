@@ -27,7 +27,7 @@ class AtomicNN(BasicNN):
     """
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 l2_weight=0.0, minimize_properties=('energy', 'forces'),
+                 loss_weights=None, minimize_properties=('energy', 'forces'),
                  predict_properties=('energy', 'forces'), normalizer=None,
                  normalization_weights=None):
         """
@@ -43,7 +43,7 @@ class AtomicNN(BasicNN):
         """
         super(AtomicNN, self).__init__(
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
-            l2_weight=l2_weight, minimize_properties=minimize_properties,
+            loss_weights=loss_weights, minimize_properties=minimize_properties,
             predict_properties=predict_properties)
         self._initial_normalizer_weights = normalization_weights
         self._normalizer = InputNormalizer(method=normalizer)
