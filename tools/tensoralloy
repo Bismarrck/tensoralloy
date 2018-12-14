@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+# coding=utf-8
+"""
+An executable script for running experiments.
+"""
+from __future__ import print_function, absolute_import
+
+import argparse
+
+import tensoralloy.io.read
+import tensoralloy.train.training
+
+__author__ = 'Xin Chen'
+__email__ = 'Bismarrck@me.com'
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+
+    subparsers = parser.add_subparsers(
+        title="Commands",
+        metavar='Build a database or run an experiment.'
+    )
+
+    subparser = subparsers.add_parser(
+        'build',
+        help="Build a sqlite3 database from a extxyz file."
+    )
+    tensoralloy.io.read.config_parser(subparser)
+    subparser.set_defaults(func=tensoralloy.io.read.main)
+
+    subparser = subparsers.add_parser(
+        'launch',
+        help="Run an experiment."
+    )
+    tensoralloy.train.training.config_parser(subparser)
+    subparser.set_defaults(func=tensoralloy.train.training.main)
+
+    args = parser.parse_args()
+    args.func(args)

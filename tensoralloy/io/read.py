@@ -12,7 +12,7 @@ from os.path import splitext
 from ase.db import connect
 from ase.db.sqlite import SQLite3Database
 from ase.io.extxyz import read_xyz
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 from tensoralloy.io.units import get_conversion_units
 
@@ -178,9 +178,10 @@ def read(filename, units=None, num_examples=None, verbose=True):
         raise ValueError("Unknown file type: {}".format(file_type))
 
 
-if __name__ == "__main__":
-
-    parser = ArgumentParser()
+def config_parser(parser: ArgumentParser):
+    """
+    Return an `ArgumentParser` for executing this module directly.
+    """
     parser.add_argument(
         'filename',
         type=str,
@@ -214,10 +215,21 @@ if __name__ == "__main__":
         choices=['GPa', 'kbar'],
         help='The unit of the stress tensors in the file.',
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main(args: Namespace):
+    """
+    The main function.
+    """
     read(args.filename,
          units={'energy': args.energy_unit,
                 'forces': args.forces_unit,
                 'stress': args.stress_unit},
          num_examples=args.num_examples,
          verbose=True)
+
+
+if __name__ == "__main__":
+
+    main(config_parser(ArgumentParser()).parse_args())

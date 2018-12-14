@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import shutil
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from os.path import join, exists, dirname
 from ase.db import connect
 from typing import Union
@@ -301,21 +301,27 @@ class TrainingManager:
                             lattice_types=lattice_types, **kwargs)
 
 
-def main(input_file: str):
+def main(args: Namespace):
     """
     The main function.
     """
-    manager = TrainingManager(input_file)
+    manager = TrainingManager(args.filename)
     manager.train_and_evaluate()
     manager.export()
 
 
-if __name__ == "__main__":
-
-    parser = ArgumentParser()
+def config_parser(parser: ArgumentParser):
+    """
+    Setup the `ArgumentParser`.
+    """
     parser.add_argument(
         'filename',
         type=str,
         help="A cfg file to read."
     )
-    main(parser.parse_args().filename)
+    return parser
+
+
+if __name__ == "__main__":
+
+    main(config_parser(ArgumentParser()).parse_args().filename)
