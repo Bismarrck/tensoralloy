@@ -156,11 +156,11 @@ class TrainingManager:
                 if isinstance(value, str):
                     if value not in available_potentials:
                         raise ValueError(f"The empirical potential "
-                                         f"[{pot}.{key}] is not available")
-                    nested_set(custom_potentials, f'{pot}.{key}', 'nn')
+                                         f"[{pot}.{value}] is not available")
+                    nested_set(custom_potentials, f'{key}.{pot}', 'nn')
                 else:
-                    nested_set(hidden_sizes, f'{pot}.{key}', value)
-                    nested_set(custom_potentials, f'{pot}.{key}', 'nn')
+                    nested_set(hidden_sizes, f'{key}.{pot}', value)
+                    nested_set(custom_potentials, f'{key}.{pot}', 'nn')
 
         kwargs.update(dict(hidden_sizes=hidden_sizes,
                            custom_potentials=custom_potentials))
