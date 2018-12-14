@@ -97,5 +97,30 @@ def test():
         assert_array_equal(ref['mask'][:, :, 1: 3, :], mask_c)
 
 
+def test_encode_atoms():
+    """
+    Test the method `BatchEAMTransformer.encode`.
+    """
+    db = connect(join(datasets_dir(), 'Ni.db'))
+    atoms = db.get_atoms('id=1')
+    max_occurs = Counter({'Ni': 1})
+    rc = 6.5
+    nij_max = db.metadata['neighbors']['2']['6.50']['nij_max']
+    nnl_max = db.metadata['neighbors']['2']['6.50']['nnl_max']
+
+    with tf.Graph().as_default():
+        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
+                                  nnl_max=nnl_max, stress=True)
+        protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
+        example = clf.decode_protobuf(protobuf)
+
+        with tf.Session() as sess:
+            results = sess.run(example)
+
+        assert_array_equal(
+            atoms.get_stress(voigt=True) * atoms.get_volume(),
+            results['reduced_stress'])
+
+
 if __name__ == "__main__":
     nose.run()

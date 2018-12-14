@@ -198,6 +198,29 @@ class BasicNN:
             stress = tf.multiply(factor, stress, name='full')
             return stress
 
+    @staticmethod
+    def _convert_to_voigt_stress(stress, batch_size, verbose=False):
+        """
+        Convert a 3x3 stress tensor or a Nx3x3 stress tensors to corresponding
+        Voigt form(s).
+        """
+        ndims = stress.shape.ndims
+        with tf.name_scope("Voigt"):
+            voigt = tf.convert_to_tensor(
+                [[0, 0], [1, 1], [2, 2], [1, 2], [2, 0], [1, 0]],
+                dtype=tf.int32, name='voigt')
+            if ndims == 3:
+                voigt = tf.tile(
+                    tf.reshape(voigt, [1, 6, 2]), (batch_size, 1, 1))
+                indices = tf.tile(tf.reshape(
+                    tf.range(batch_size), [batch_size, 1, 1]),
+                    [1, 6, 1])
+                voigt = tf.concat((indices, voigt), axis=2, name='indices')
+            stress = tf.gather_nd(stress, voigt, name='stress')
+            if verbose:
+                log_tensor(stress)
+            return stress
+
     def _get_reduced_stress(self, energy, cells, verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
@@ -205,24 +228,11 @@ class BasicNN:
         with tf.name_scope("Stress"):
             stress = self._get_reduced_full_stress_tensor(energy, cells)
             ndims = stress.shape.ndims
-            with tf.name_scope("Voigt"):
-                voigt = tf.convert_to_tensor(
-                    [[0, 0], [1, 1], [2, 2], [1, 2], [2, 0], [1, 0]],
-                    dtype=tf.int32, name='voigt')
-                if ndims == 3:
-                    batch_size = cells.shape[0].value or energy.shape[0].value
-                    if batch_size is None:
-                        raise ValueError("The batch size cannot be inferred.")
-                    voigt = tf.tile(
-                        tf.reshape(voigt, [1, 6, 2]), (batch_size, 1, 1))
-                    indices = tf.tile(tf.reshape(
-                        tf.range(batch_size), [batch_size, 1, 1]),
-                        [1, 6, 1])
-                    voigt = tf.concat((indices, voigt), axis=2, name='indices')
-                stress = tf.gather_nd(stress, voigt, name='stress')
-                if verbose:
-                    log_tensor(stress)
-                return stress
+            batch_size = cells.shape[0].value or energy.shape[0].value
+            if ndims == 3 and batch_size is None:
+                raise ValueError("The batch size cannot be inferred.")
+            return self._convert_to_voigt_stress(
+                stress, batch_size, verbose=verbose)
 
     def _get_reduced_total_pressure(self, energy, cells, verbose=True):
         """
@@ -301,13 +311,13 @@ class BasicNN:
 
         """
 
-        def _get_loss(source: str, tag: str, scope: str, add_eps=False):
+        def _get_loss(_property: str, tag: str, scope: str, add_eps=False):
             """
             Return the loss tensor for the `source`.
             """
             with tf.name_scope(scope):
-                x = getattr(labels, source)
-                y = getattr(predictions, source)
+                x = getattr(labels, _property)
+                y = getattr(predictions, _property)
                 mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse')
                 if add_eps:
                     # Add a very small 'eps' to the mean squared error to make
@@ -336,10 +346,10 @@ class BasicNN:
 
             if 'total_pressure' in self._minimize_properties:
                 losses.reduced_total_pressure = _get_loss(
-                    'reduced_total_pressure', 'p', 'Pressure', add_eps=True)
+                    'reduced_total_pressure', 'p', 'Pressure', add_eps=False)
             elif 'stress' in self._minimize_properties:
                 losses.reduced_stress = _get_loss(
-                    'reduced_stress', 's', 'Stress', add_eps=True)
+                    'reduced_stress', 's', 'Stress', add_eps=False)
 
             if self._loss_weights.l2 > 0.0:
                 losses.l2 = self.add_l2_penalty()
@@ -550,9 +560,9 @@ class BasicNN:
                           y=tf.cast(n_atoms, tf.float64, name='cast'),
                           name=metric.op.name + '_atom')
 
-        def _get_metric(source, tag, cast_to_per_atom=False):
-            x = getattr(labels, source)
-            y = getattr(predictions, source)
+        def _get_metric(_property, tag, cast_to_per_atom=False):
+            x = getattr(labels, _property)
+            y = getattr(predictions, _property)
             if cast_to_per_atom:
                 x = _per_atom_metric_fn(x)
                 y = _per_atom_metric_fn(y)
