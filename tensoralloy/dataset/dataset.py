@@ -435,7 +435,7 @@ class Dataset:
 
         return _input_fn
 
-    def input_fn_for_prediction(self):
+    def input_fn_for_prediction(self, predict_properties=('energy', 'forces')):
         """
         Return the input function, without any args, for runtime prediction.
         """
@@ -453,6 +453,8 @@ class Dataset:
 
             """
             clf = self._transformer.as_runtime_transformer()
+            params = clf.as_dict()
+            params.update({'predict_properties': predict_properties})
             descriptors = clf.get_graph()
             placeholders = AttributeDict(clf.placeholders)
             features = AttributeDict(descriptors=descriptors,
@@ -462,7 +464,7 @@ class Dataset:
                                      composition=placeholders.composition,
                                      mask=placeholders.mask,
                                      volume=placeholders.volume)
-            return features, clf.as_dict()
+            return features, params
 
         return _input_fn
 

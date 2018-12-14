@@ -76,6 +76,10 @@ class TensorAlloyCalculator(Calculator):
             cls = params.pop('class')
         else:
             cls = 'SymmetryFunctionTransformer'
+        if 'predict_properties' in params:
+            self._predict_properties = params.pop('predict_properties')
+        else:
+            self._predict_properties = []
         if cls == 'SymmetryFunctionTransformer':
             return SymmetryFunctionTransformer(**params)
         else:
@@ -86,11 +90,23 @@ class TensorAlloyCalculator(Calculator):
         Return a dict of output Ops.
         """
         graph = self._graph
-        return {
-            'energy': graph.get_tensor_by_name('Output/Energy/energy:0'),
-            'forces': graph.get_tensor_by_name('Output/Forces/forces:0'),
-            'stress': graph.get_tensor_by_name('Output/Stress/Voigt/stress:0')
+        props_and_names = {
+            'energy': 'Output/Energy/energy:0',
+            'forces': 'Output/Forces/forces:0',
+            'stress': 'Output/Stress/Voigt/stress:0',
+            'total_pressure': 'Output/Pressure/pressure:0'
         }
+        ops = {}
+        for prop, name in props_and_names.items():
+            try:
+                ops[prop] = graph.get_tensor_by_name(name)
+            except KeyError:
+                continue
+        if not self._predict_properties:
+            self._predict_properties = list(ops.keys())
+        else:
+            assert set(self._predict_properties) == set(ops.keys())
+        return ops
 
     def calculate(self, atoms=None, properties=('energy', 'forces'), *args):
         """

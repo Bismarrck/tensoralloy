@@ -276,7 +276,8 @@ class TrainingManager:
             output_graph_path = join(self._hparams.train.model_dir,
                                      f'{self._dataset.name}.pb')
 
-            input_fn = self._dataset.input_fn_for_prediction()
+            input_fn = self._dataset.input_fn_for_prediction(
+                predict_properties=self._reader['nn.predict'])
 
             self._nn.export(features_and_params_fn=input_fn,
                             output_graph_path=output_graph_path,
