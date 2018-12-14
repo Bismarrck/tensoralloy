@@ -12,8 +12,8 @@ __author__ = "Xin Chen"
 __email__ = "Bismarrck@me.com"
 
 
-if sys.version_info < (3, 7):
-    sys.exit('Python < 3.7 is not supported')
+if sys.version_info < (3, 6, 5):
+    sys.exit('Python < 3.6.5 is not supported')
 
 
 if __name__ == "__main__":
@@ -26,5 +26,5 @@ if __name__ == "__main__":
         description="Tensor-graph based machine learning framework for alloys.",
         packages=find_packages(),
         include_package_data=False,
-        python_requires=">=3.7",
+        python_requires=">=3.6.5",
     )

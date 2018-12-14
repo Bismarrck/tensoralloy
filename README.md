@@ -21,7 +21,7 @@ the 3x3 cell tensor.
 
 ## 1. Requirements
 
-* Python>=3.7.0
+* Python>=3.6.5
 * TensorFlow>=1.11
 * scikit-learn
 * scipy

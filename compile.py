@@ -95,5 +95,5 @@ setup(
     description="Tensor-graph based machine learning framework for alloys.",
     packages=packages,
     include_package_data=False,
-    python_requires=">=3.7",
+    python_requires=">=3.6.5",
 )
