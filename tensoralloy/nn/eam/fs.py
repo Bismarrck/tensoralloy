@@ -396,3 +396,5 @@ class EamFsNN(EamNN):
                 writeSetFLFinnisSinclair(
                     nrho, drho, nr, dr, eam_potentials, pair_potentials, out=fp,
                     comments=comments)
+
+            tf.logging.info(f"Model exported to {setfl}")

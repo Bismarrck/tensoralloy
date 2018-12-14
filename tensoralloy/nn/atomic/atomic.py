@@ -216,3 +216,5 @@ class AtomicNN(BasicNN):
 
         if not keep_tmp_files:
             shutil.rmtree(logdir)
+
+        tf.logging.info(f"Model exported to {output_graph_path}")
