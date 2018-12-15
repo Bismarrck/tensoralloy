@@ -17,7 +17,11 @@ __all__ = ["G2IndexedSlices", "G4IndexedSlices", "IndexTransformer"]
 
 
 # Backward compatibility
-if sys.version_info < (3, 7, 0):
+if sys.version_info < (3, 6):
+
+    raise Exception("Python < 3.6 is not supported")
+
+elif sys.version_info < (3, 7):
 
     from collections import namedtuple
 
