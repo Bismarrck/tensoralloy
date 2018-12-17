@@ -31,7 +31,7 @@ if __name__ == "__main__":
     subparser.set_defaults(func=tensoralloy.io.read.main)
 
     subparser = subparsers.add_parser(
-        'launch',
+        'run',
         help="Run an experiment."
     )
     tensoralloy.train.training.config_parser(subparser)
