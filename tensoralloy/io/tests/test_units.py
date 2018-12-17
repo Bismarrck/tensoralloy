@@ -26,6 +26,11 @@ def test_unit_conversion():
     assert_almost_equal(to_eV, (kcal / mol * Hartree / eV) / eV)
     assert_almost_equal(to_GPa, 0.1)
 
+    _, _, to_GPa = get_conversion_units({
+        'stress': 'kbar',
+    })
+    assert_almost_equal(to_GPa, 0.1)
+
     xyzfile = 'test_files/examples.extxyz'
     database = read(xyzfile, verbose=False,
                     units={'energy': 'kcal/mol'})

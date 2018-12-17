@@ -51,7 +51,7 @@ def get_conversion_units(units: Dict[str, str]) -> (float, float, float):
                     break
             return total
         else:
-            return getattr(ase.units, comb)
+            return _parse_unit(comb)
 
     eV = ase.units.eV
     Angstrom = ase.units.Angstrom
