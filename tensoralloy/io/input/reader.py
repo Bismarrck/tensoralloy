@@ -158,9 +158,9 @@ class InputReader:
             _safe_update("nn.atomic.input_normalizer")
 
             layers = nested_get(configs, 'nn.atomic.layers')
-            assert isinstance(layers, dict)
-            for key, val in layers.items():
-                nested_set(results, f'nn.atomic.layers.{key}', val)
+            if isinstance(layers, dict):
+                for key, val in layers.items():
+                    nested_set(results, f'nn.atomic.layers.{key}', val)
 
             if 'eam' in results['nn']:
                 del results['nn']['eam']
