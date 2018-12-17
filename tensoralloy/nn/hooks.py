@@ -111,6 +111,7 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
                 self._timer.update_last_triggered_step(global_step)
             if elapsed_time is not None:
                 steps_per_sec = elapsed_steps / elapsed_time
+                steps_per_min = steps_per_sec * 60.0
                 self._step_train_time += elapsed_time
                 self._total_steps += elapsed_steps
 
@@ -119,6 +120,7 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
                 current_examples_per_sec = steps_per_sec * self._batch_size
                 # Average examples/sec followed by current examples/sec
                 tf.logging.info(
-                    '%s: %6.1f (%6.1f), step = %7d', 'Average examples/sec',
-                    average_examples_per_sec, current_examples_per_sec,
-                    self._total_steps)
+                    '%s: %6.1f (%6.1f), step = %7d, %s: %8.1f',
+                    'Average examples/sec', average_examples_per_sec,
+                    current_examples_per_sec, self._total_steps,
+                    'steps/minute', steps_per_min)
