@@ -106,8 +106,12 @@ class AtomicResNN(AtomicNN):
                     y_mask = tf.multiply(y_atomic, mask, name='mask')
                 y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
                                       name='residual')
+                if verbose:
+                    log_tensor(y_res)
 
             energy = tf.add(y_static, y_res, name='energy')
+            if verbose:
+                log_tensor(energy)
 
             with tf.name_scope("Ratio"):
                 ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
