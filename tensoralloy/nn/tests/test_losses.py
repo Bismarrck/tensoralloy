@@ -10,7 +10,7 @@ import nose
 from nose.tools import assert_less
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from ..losses import norm_loss, rmse_loss, mae_loss
+from .._losses import norm_loss, rmse_loss, mae_loss
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
