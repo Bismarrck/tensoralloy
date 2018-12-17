@@ -15,11 +15,16 @@ from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 
+from ._losses import rmse_loss, mae_loss
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
 available_properties = ('energy', 'forces', 'stress', 'total_pressure')
+
+
+# TODO: fix RMSE and MAE of `forces` in evaluation.
 
 
 class BasicNN:
@@ -276,7 +281,7 @@ class BasicNN:
             tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
             return l2
 
-    def get_total_loss(self, predictions, labels):
+    def get_total_loss(self, predictions, labels, compositions):
         """
         Get the total loss tensor.
 
@@ -300,6 +305,8 @@ class BasicNN:
                   `self.reduced_stress and not self.reduced_total_pressure`.
                 * 'reduced_total_pressure' of shape `[batch_size, ]` is required
                   if `self.reduced_total_pressure == True`.
+        compositions : tf.Tensor
+            A 2D tensor of shape `[batch_size, n_elements]`.
 
         Returns
         -------
@@ -311,23 +318,23 @@ class BasicNN:
 
         """
 
-        def _get_loss(_property: str, tag: str, scope: str, add_eps=False):
+        def _get_loss(_property: str, tag: str, name: str,
+                      use_compositions=False, add_eps=False):
             """
             Return the loss tensor for the `source`.
             """
-            with tf.name_scope(scope):
+            with tf.name_scope(name):
                 x = getattr(labels, _property)
                 y = getattr(predictions, _property)
-                mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse')
-                if add_eps:
-                    # Add a very small 'eps' to the mean squared error to make
-                    # sure `mse` is always greater than zero. Otherwise NaN may
-                    # occur at `Sqrt_Grad`.
-                    with tf.name_scope("safe_sqrt"):
-                        eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
-                        mse = tf.add(mse, eps)
-                loss = tf.sqrt(mse, name=f"{tag}_rmse")
-                mae = tf.reduce_mean(tf.abs(x - y), name=f"{tag}_mae")
+                if use_compositions:
+                    _compositions = compositions
+                else:
+                    _compositions = None
+                loss = rmse_loss(
+                    x, y, compositions=_compositions, name=f"{tag}_rmse",
+                    add_eps=add_eps)
+                mae = mae_loss(
+                    x, y, compositions=_compositions, name=f"{tag}_mae")
 
                 tf.summary.scalar(loss.op.name + '/summary', loss,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
@@ -342,7 +349,8 @@ class BasicNN:
             losses.energy = _get_loss('energy', 'y', 'Energy')
 
             if 'forces' in self._minimize_properties:
-                losses.forces = _get_loss('forces', 'f', 'Forces', add_eps=True)
+                losses.forces = _get_loss('forces', 'f', 'Forces', add_eps=True,
+                                          use_compositions=True)
 
             if 'total_pressure' in self._minimize_properties:
                 losses.reduced_total_pressure = _get_loss(
@@ -673,6 +681,7 @@ class BasicNN:
         assert 'mask' in features
         assert 'n_atoms' in features
         assert 'volume' in features
+        assert 'composition' in features
 
         assert 'energy' in labels
         if 'forces' in self._minimize_properties:
@@ -696,6 +705,7 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
+                * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
         verbose : bool
@@ -745,6 +755,7 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
+                * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
         labels : AttributeDict
@@ -779,7 +790,8 @@ class BasicNN:
             return tf.estimator.EstimatorSpec(mode=mode,
                                               predictions=predictions)
 
-        total_loss, losses = self.get_total_loss(predictions, labels)
+        total_loss, losses = self.get_total_loss(
+            predictions, labels, features.composition)
         train_op = self.get_train_op(losses=losses, hparams=params)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
