@@ -83,12 +83,18 @@ class BasicNN:
 
         if len(minimize_properties) == 0:
             raise ValueError("At least one property should be minimized.")
+
         for prop in minimize_properties:
             if prop not in available_properties:
                 raise PropertyError(prop)
+            if prop not in predict_properties:
+                predict_properties.append(prop)
+
         for prop in predict_properties:
             if prop not in available_properties:
                 raise PropertyError(prop)
+        if 'energy' not in predict_properties:
+            predict_properties.append('energy')
 
         if loss_weights is None:
             loss_weights = AttributeDict(
@@ -106,9 +112,6 @@ class BasicNN:
         self._loss_weights = loss_weights
         self._minimize_properties = list(minimize_properties)
         self._predict_properties = list(predict_properties)
-
-        if 'energy' not in self._predict_properties:
-            self._predict_properties.append('energy')
 
     @property
     def elements(self):
