@@ -416,6 +416,10 @@ class Dataset:
                 batch = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
                     shuffle=shuffle)
+                for batch_of_tensors in batch.values():
+                    shape = batch_of_tensors.shape.as_list()
+                    if shape[0] is None:
+                        batch_of_tensors.set_shape([batch_size] + shape[1:])
             ops = self._transformer.get_descriptor_ops_from_batch(
                 batch, batch_size)
             features = AttributeDict(descriptors=ops,
@@ -486,8 +490,8 @@ class Dataset:
 
         Returns
         -------
-        next_batch : DataGroup
-            A tuple of Tensors.
+        next_batch : AttributeDict
+            A dict of tensors.
 
         """
         with tf.device('/cpu:0'):
