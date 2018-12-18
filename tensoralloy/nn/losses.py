@@ -88,8 +88,8 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
         assert labels.shape.ndims == 3 and labels.shape[2].value == 3
         assert predictions.shape.ndims == 3 and predictions.shape[2].value == 3
         mse = tf.reduce_mean(
-            tf.squared_difference(labels, predictions), name='mse')
-        mae = tf.reduce_mean(tf.abs(labels - predictions), name='mae')
+            tf.squared_difference(labels, predictions), name='raw_mse')
+        mae = tf.reduce_mean(tf.abs(labels - predictions), name='raw_mae')
         with tf.name_scope("Safe"):
             # Add a very small 'eps' to the mean squared error to make
             # sure `mse` is always greater than zero. Otherwise NaN may
@@ -102,8 +102,8 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
                 labels.shape[1].value, dtype=labels.dtype, name='n_max')
             one = tf.constant(1.0, dtype=tf.float64, name='one')
             weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
-            mse = tf.multiply(mse, weight, name='mse')
-            mae = tf.multiply(mae, weight, name='mae')
+        mse = tf.multiply(mse, weight, name='mse')
+        mae = tf.multiply(mae, weight, name='mae')
         loss = tf.sqrt(mse, name='rmse')
         if collections is not None:
             tf.add_to_collections(collections, loss)

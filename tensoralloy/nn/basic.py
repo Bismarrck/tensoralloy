@@ -23,9 +23,6 @@ __email__ = 'Bismarrck@me.com'
 available_properties = ('energy', 'forces', 'stress', 'total_pressure')
 
 
-# TODO: fix RMSE and MAE of `forces` in evaluation.
-
-
 class BasicNN:
     """
     The base neural network class.
@@ -293,20 +290,20 @@ class BasicNN:
             A dict of tensors as the predictions.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
-                  `self.forces == True`.
-                * 'reduced_stress' of shape `[batch_size, 6]` is required if
-                  `self.stress == True`.
-                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
-                  if `self.reduced_total_pressure == True`.
+                  'forces' should be minimized.
+                * 'stress' of shape `[batch_size, 6]` is required if
+                  'stress' should be minimized.
+                * 'total_pressure' of shape `[batch_size, ]` is required if
+                  'total_pressure' should be minimized.
         labels : AttributeDict
-            A dict of label tensors as the desired regression targets.
+            A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
-                  `self.forces == True`.
-                * 'reduced_stress' of shape `[batch_size, 6]` is required if
-                  `self.reduced_stress and not self.reduced_total_pressure`.
-                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
-                  if `self.reduced_total_pressure == True`.
+                  'forces' should be minimized.
+                * 'stress' of shape `[batch_size, 6]` is required if
+                  'stress' should be minimized.
+                * 'total_pressure' of shape `[batch_size, ]` is required if
+                  'total_pressure' should be minimized.
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
 
@@ -334,13 +331,13 @@ class BasicNN:
                     n_atoms=n_atoms, collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses.reduced_total_pressure = get_total_pressure_loss(
+                losses.total_pressure = get_total_pressure_loss(
                     labels=labels.reduced_total_pressure,
                     predictions=predictions.reduced_total_pressure,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
-                losses.reduced_stress = get_stress_loss(
+                losses.stress = get_stress_loss(
                     labels=labels.reduced_stress,
                     predictions=predictions.reduced_stress,
                     collections=collections)
@@ -533,7 +530,7 @@ class BasicNN:
                 hooks.append(logging_tensor_hook)
         return hooks
 
-    def get_eval_metrics_ops(self, predictions, labels, n_atoms=None):
+    def get_eval_metrics_ops(self, predictions, labels, n_atoms):
         """
         Return a dict of Ops as the evaluation metrics.
 
@@ -547,49 +544,64 @@ class BasicNN:
             * 'reduced_total_pressure' of shape `[batch_size, ]` is required if
               `self.reduced_total_pressure == True`.
 
-        `n_atoms` is an optional `int32` tensor with shape `[batch_size, ]`,
-        representing the number of atoms in each structure. If give, per-atom
-        metrics will be evaluated.
+        `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
+        the number of atoms in each structure.
 
         """
-
-        def _per_atom_metric_fn(metric: tf.Tensor):
-            return tf.div(x=metric,
-                          y=tf.cast(n_atoms, tf.float64, name='cast'),
-                          name=metric.op.name + '_atom')
-
-        def _get_metric(_property, tag, cast_to_per_atom=False):
-            x = getattr(labels, _property)
-            y = getattr(predictions, _property)
-            if cast_to_per_atom:
-                x = _per_atom_metric_fn(x)
-                y = _per_atom_metric_fn(y)
-                suffix = '_atom'
-            else:
-                suffix = ''
-            return {
-                f"{tag}_rmse{suffix}": tf.metrics.root_mean_squared_error(x, y),
-                f"{tag}_mae{suffix}": tf.metrics.mean_absolute_error(x, y)
-            }
-
         with tf.name_scope("Metrics"):
 
-            metrics = _get_metric('energy', 'y', cast_to_per_atom=False)
-            if n_atoms is not None:
-                metrics.update(
-                    _get_metric('energy', 'y', cast_to_per_atom=True))
+            metrics = {}
+
+            n_atoms = tf.cast(n_atoms, labels.energy.dtype, name='n_atoms')
+
+            with tf.name_scope("Energy"):
+                x = labels.energy
+                y = predictions.energy
+                xn = labels.energy / n_atoms
+                yn = predictions.energy / n_atoms
+                ops_dict = {
+                    'Energy/mae': tf.metrics.mean_absolute_error(x, y),
+                    'Energy/rmse': tf.metrics.mean_squared_error(x, y),
+                    'Energy/mae/atom': tf.metrics.mean_absolute_error(xn, yn),
+                    'Energy/rmse/atom': tf.metrics.mean_squared_error(xn, yn),
+                }
+                metrics.update(ops_dict)
 
             if 'forces' in self._minimize_properties:
-                metrics.update(_get_metric(
-                    'forces', 'f', cast_to_per_atom=False))
+                with tf.name_scope("Forces"):
+                    x = labels.forces
+                    y = predictions.forces
+                    with tf.name_scope("Scale"):
+                        n_max = tf.convert_to_tensor(
+                            x.shape[1].value, dtype=x.dtype, name='n_max')
+                        one = tf.constant(1.0, dtype=tf.float64, name='one')
+                        weight = tf.div(one, tf.reduce_mean(n_atoms / n_max),
+                                        name='weight')
+                        x = tf.multiply(weight, x)
+                        y = tf.multiply(weight, y)
+                    ops_dict = {
+                        'Forces/mae': tf.metrics.mean_absolute_error(x, y),
+                        'Forces/rmse': tf.metrics.mean_squared_error(x, y),
+                    }
+                    metrics.update(ops_dict)
 
             if 'total_pressure' in self._minimize_properties:
-                metrics.update(_get_metric(
-                    'reduced_total_pressure', 'p', cast_to_per_atom=False))
+                with tf.name_scope("Pressure"):
+                    x = labels.total_pressure
+                    y = predictions.total_pressure
+                    ops_dict = {
+                        'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
+                        'Pressure/rmse': tf.metrics.mean_squared_error(x, y)}
+                    metrics.update(ops_dict)
 
             elif 'stress' in self._minimize_properties:
-                metrics.update(_get_metric(
-                    'reduced_stress', 's', cast_to_per_atom=False))
+                with tf.name_scope("Stress"):
+                    x = labels.stress
+                    y = predictions.stress
+                    ops_dict = {
+                        'Stress/mae': tf.metrics.mean_absolute_error(x, y),
+                        'Stress/rmse': tf.metrics.mean_squared_error(x, y)}
+                    metrics.update(ops_dict)
 
             return metrics
 
@@ -720,11 +732,11 @@ class BasicNN:
                     predictions.energy, features.positions, verbose=verbose)
 
             if 'total_pressure' in self._predict_properties:
-                predictions.reduced_total_pressure = \
+                predictions.total_pressure = \
                     self._get_reduced_total_pressure(
                         predictions.energy, features.cells, verbose=verbose)
             elif 'stress' in self._predict_properties:
-                predictions.reduced_stress = self._get_reduced_stress(
+                predictions.stress = self._get_reduced_stress(
                     predictions.energy, features.cells, verbose=verbose)
 
             return predictions
@@ -751,11 +763,11 @@ class BasicNN:
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, N, 3]` is required if
-                  `self.forces == True`.
-                * 'reduced_stress' of shape `[batch_size, 6]` is required if
-                  `self.reduced_stress and not self.reduced_total_pressure`.
-                * 'reduced_total_pressure' of shape `[batch_size, ]` is required
-                  if `self.reduced_total_pressure == True`.
+                  'forces' should be minimized.
+                * 'stress' of shape `[batch_size, 6]` is required if
+                  'stress' should be minimized.
+                * 'total_pressure' of shape `[batch_size, ]` is required if
+                  'total_pressure' should be minimized.
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.

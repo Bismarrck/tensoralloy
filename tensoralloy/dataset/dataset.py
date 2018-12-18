@@ -429,8 +429,8 @@ class Dataset:
             if self._forces:
                 labels['forces'] = batch.f_true
             if self._stress:
-                labels['reduced_stress'] = batch.reduced_stress
-                labels['reduced_total_pressure'] = batch.reduced_total_pressure
+                labels['stress'] = batch.reduced_stress
+                labels['total_pressure'] = batch.reduced_total_pressure
             return features, labels
 
         return _input_fn
