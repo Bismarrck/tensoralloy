@@ -147,6 +147,9 @@ class InputReader:
                     continue
                 _safe_update(f"{section}.{key}", val == 'required')
 
+        if nested_get(results, 'dataset.name').find("-") >= 0:
+            raise ValueError("'-' is not allowed in 'dataset.name'.")
+
         descriptor = nested_get(configs, 'dataset.descriptor')
 
         if descriptor == 'behler':
