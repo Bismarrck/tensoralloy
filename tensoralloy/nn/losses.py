@@ -11,6 +11,10 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+__all__ = ["get_energy_loss", "get_forces_loss", "get_stress_loss",
+           "get_total_pressure_loss"]
+
+
 def _get_loss(x: tf.Tensor, y: tf.Tensor, collections=None):
     """
     Return the RMSE loss tensor. The MAE loss will also be calculated. Both RMSE
@@ -18,7 +22,7 @@ def _get_loss(x: tf.Tensor, y: tf.Tensor, collections=None):
     """
     mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse')
     mae = tf.reduce_mean(tf.abs(x - y), name='mae')
-    loss = tf.sqrt(mse, name='loss')
+    loss = tf.sqrt(mse, name='rmse')
     if collections is not None:
         tf.add_to_collections(collections, loss)
         tf.add_to_collections(collections, mae)
@@ -48,8 +52,8 @@ def get_energy_loss(labels, predictions, n_atoms, collections=None):
 
     """
     with tf.name_scope("Energy"):
-        tf.assert_rank(labels, 1)
-        tf.assert_rank(predictions, 1)
+        assert labels.shape.ndims == 1
+        assert predictions.shape.ndims == 1
         n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
         x = tf.div(labels, n_atoms)
         y = tf.div(predictions, n_atoms)
@@ -81,10 +85,8 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
 
     """
     with tf.name_scope("Forces"):
-        tf.assert_rank(labels, 3)
-        tf.assert_rank(predictions, 3)
-        tf.assert_equal(labels.shape[2].value, 3)
-        tf.assert_equal(predictions.shape[2].value, 3)
+        assert labels.shape.ndims == 3 and labels.shape[2].value == 3
+        assert predictions.shape.ndims == 3 and predictions.shape[2].value == 3
         mse = tf.reduce_mean(
             tf.squared_difference(labels, predictions), name='mse')
         mae = tf.reduce_mean(tf.abs(labels - predictions), name='mae')
@@ -102,7 +104,7 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
             weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
             mse = tf.multiply(mse, weight, name='mse')
             mae = tf.multiply(mae, weight, name='mae')
-        loss = tf.sqrt(mse, name='loss')
+        loss = tf.sqrt(mse, name='rmse')
         if collections is not None:
             tf.add_to_collections(collections, loss)
             tf.add_to_collections(collections, mae)
@@ -129,10 +131,8 @@ def get_stress_loss(labels, predictions, collections=None):
 
     """
     with tf.name_scope("Stress"):
-        tf.assert_rank(labels, 2)
-        tf.assert_rank(predictions, 2)
-        tf.assert_equal(labels.shape[1].value, 6)
-        tf.assert_equal(predictions.shape[1].value, 6)
+        assert labels.shape.ndims == 2 and labels.shape[1].value == 6
+        assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
         return _get_loss(labels, predictions, collections)
 
 
@@ -157,6 +157,6 @@ def get_total_pressure_loss(labels, predictions, collections=None):
 
     """
     with tf.name_scope("Pressure"):
-        tf.assert_rank(labels, 1)
-        tf.assert_rank(predictions, 1)
+        assert labels.shape.ndims == 1
+        assert predictions.shape.ndims == 1
         return _get_loss(labels, predictions, collections)

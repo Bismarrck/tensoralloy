@@ -10,7 +10,7 @@ import nose
 from nose.tools import assert_less, assert_equal
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from .._losses import get_energy_loss, get_forces_loss, get_stress_loss
+from ..losses import get_energy_loss, get_forces_loss, get_stress_loss
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

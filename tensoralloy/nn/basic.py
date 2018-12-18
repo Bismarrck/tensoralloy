@@ -14,8 +14,7 @@ from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
 from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
-
-from ._losses import rmse_loss, mae_loss
+from .losses import *
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -284,7 +283,7 @@ class BasicNN:
             tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
             return l2
 
-    def get_total_loss(self, predictions, labels, compositions):
+    def get_total_loss(self, predictions, labels, n_atoms):
         """
         Get the total loss tensor.
 
@@ -308,62 +307,50 @@ class BasicNN:
                   `self.reduced_stress and not self.reduced_total_pressure`.
                 * 'reduced_total_pressure' of shape `[batch_size, ]` is required
                   if `self.reduced_total_pressure == True`.
-        compositions : tf.Tensor
-            A 2D tensor of shape `[batch_size, n_elements]`.
+        n_atoms : tf.Tensor
+            A `int64` tensor of shape `[batch_size, ]`.
 
         Returns
         -------
-        loss : tf.Tensor
+        total_loss : tf.Tensor
             A `float64` tensor as the total loss.
         losses : AttributeDict
             A dict. The loss tensor for energy, forces and reduced stress or
             reduced total pressure.
 
         """
-
-        def _get_loss(_property: str, tag: str, name: str,
-                      use_compositions=False, add_eps=False):
-            """
-            Return the loss tensor for the `source`.
-            """
-            with tf.name_scope(name):
-                x = getattr(labels, _property)
-                y = getattr(predictions, _property)
-                if use_compositions:
-                    _compositions = compositions
-                else:
-                    _compositions = None
-                loss = rmse_loss(
-                    x, y, compositions=_compositions, name=f"{tag}_rmse",
-                    add_eps=add_eps)
-                mae = mae_loss(
-                    x, y, compositions=_compositions, name=f"{tag}_mae")
-
-                tf.summary.scalar(loss.op.name + '/summary', loss,
-                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
-
-                return loss
-
         with tf.name_scope("Loss"):
 
+            collections = [GraphKeys.TRAIN_METRICS]
+
             losses = AttributeDict()
-            losses.energy = _get_loss('energy', 'y', 'Energy')
+            losses.energy = get_energy_loss(
+                labels=labels.energy, predictions=predictions.energy,
+                n_atoms=n_atoms, collections=collections)
 
             if 'forces' in self._minimize_properties:
-                losses.forces = _get_loss('forces', 'f', 'Forces', add_eps=True,
-                                          use_compositions=True)
+                losses.forces = get_forces_loss(
+                    labels=labels.forces, predictions=predictions.forces,
+                    n_atoms=n_atoms, collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses.reduced_total_pressure = _get_loss(
-                    'reduced_total_pressure', 'p', 'Pressure', add_eps=False)
+                losses.reduced_total_pressure = get_total_pressure_loss(
+                    labels=labels.reduced_total_pressure,
+                    predictions=predictions.reduced_total_pressure,
+                    collections=collections)
+
             elif 'stress' in self._minimize_properties:
-                losses.reduced_stress = _get_loss(
-                    'reduced_stress', 's', 'Stress', add_eps=False)
+                losses.reduced_stress = get_stress_loss(
+                    labels=labels.reduced_stress,
+                    predictions=predictions.reduced_stress,
+                    collections=collections)
 
             if self._loss_weights.l2 > 0.0:
                 losses.l2 = self.add_l2_penalty()
+
+            for loss_tensor in losses.values():
+                tf.summary.scalar(loss_tensor.op.name + '/summary', loss_tensor,
+                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
 
         return tf.add_n(list(losses.values()), name='loss'), losses
 
@@ -684,7 +671,6 @@ class BasicNN:
         assert 'mask' in features
         assert 'n_atoms' in features
         assert 'volume' in features
-        assert 'composition' in features
 
         assert 'energy' in labels
         if 'forces' in self._minimize_properties:
@@ -793,8 +779,9 @@ class BasicNN:
             return tf.estimator.EstimatorSpec(mode=mode,
                                               predictions=predictions)
 
-        total_loss, losses = self.get_total_loss(
-            predictions, labels, features.composition)
+        total_loss, losses = self.get_total_loss(predictions=predictions,
+                                                 labels=labels,
+                                                 n_atoms=features.n_atoms)
         train_op = self.get_train_op(losses=losses, hparams=params)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
