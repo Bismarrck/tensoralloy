@@ -7,62 +7,57 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
-from nose.tools import assert_less
+from nose.tools import assert_less, assert_equal
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from .._losses import norm_loss, rmse_loss, mae_loss
+from .._losses import get_energy_loss, get_forces_loss, get_stress_loss
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def test_norm_loss():
+def test_energy_loss():
     """
-    Test the function `norm_loss`.
+    Test the function `get_energy_loss`.
     """
-    compositions = np.asarray([[5], [6], [4], [8], [8], [5]])
-    x = np.random.rand(6, 8, 3)
-    y = np.random.rand(6, 8, 3)
+    x = np.random.uniform(0.0, 3.0, size=(6, ))
+    y = np.random.uniform(0.0, 3.0, size=(6, ))
+    n = np.random.randint(1, 5, size=(6, ))
 
-    for i in range(len(x)):
-        x[i, compositions[i, 0]:] = 0.0
-        y[i, compositions[i, 0]:] = 0.0
-    x[5] = 0.0
-
-    values = []
-    for i in range(6):
-        for j in range(compositions[i, 0]):
-            a = np.linalg.norm(x[i, j])
-            if a < 0.01:
-                values.append(np.linalg.norm(y[i, j]))
-            else:
-                b = np.linalg.norm(x[i, j] - y[i, j])
-                values.append(b / a)
-    ref = np.mean(values)
+    y_rmse = np.sqrt(mean_squared_error(x / n, y / n))
+    y_mae = mean_absolute_error(x / n, y / n)
 
     with tf.Graph().as_default():
-        loss = norm_loss(x, y, compositions, name='loss')
+
+        x = tf.convert_to_tensor(x)
+        y = tf.convert_to_tensor(y)
+        n = tf.convert_to_tensor(n)
+
+        rmse = get_energy_loss(x, y, n, collections=['UnitTest'])
+        assert_equal(len(tf.get_collection('UnitTest')), 2)
+
+        mae = tf.get_default_graph().get_tensor_by_name('Energy/mae:0')
+
         with tf.Session() as sess:
-            pred = sess.run(loss)
-            assert_less(ref - pred, 1e-8)
+            assert_less(y_rmse - sess.run(rmse), 1e-8)
+            assert_less(y_mae - sess.run(mae), 1e-8)
 
 
-def test_rmse_and_mae_losses():
+def test_forces_loss():
     """
-    Test the functions `rmse_loss` and `mae_loss` with `compositions`.
+    Test the function `get_forces_loss`.
     """
     x = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
-    x[5] = 0.0
     y = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
+    n_atoms = np.asarray([5, 6, 4, 8, 5, 3])
+    x[5] = 0.0
     y[5] = 0.0
-    compositions = np.asarray([[5], [6], [4], [8], [5], [3]])
 
     mae_values = []
     rmse_values = []
 
     for i in range(len(x)):
-        n = compositions[i, 0]
-        for j in range(n):
+        for j in range(n_atoms[i]):
             mae_values.append(np.abs(x[i, j] - y[i, j]))
             rmse_values.append(np.square(x[i, j] - y[i, j]))
 
@@ -71,33 +66,34 @@ def test_rmse_and_mae_losses():
 
     with tf.Graph().as_default():
 
-        mae = mae_loss(x, y, compositions=compositions, name='mae')
-        rmse = rmse_loss(x, y, compositions=compositions, name='rmse')
+        x = tf.convert_to_tensor(x)
+        y = tf.convert_to_tensor(y)
+        n_atoms = tf.convert_to_tensor(n_atoms)
+
+        rmse = get_forces_loss(x, y, n_atoms, collections=['UnitTest'])
+        mae = tf.get_default_graph().get_tensor_by_name('Forces/Scale/mae:0')
 
         with tf.Session() as sess:
             assert_less(y_mae - sess.run(mae), 1e-8)
             assert_less(y_rmse - sess.run(rmse), 1e-8)
 
 
-def test_normal_rmse_and_mae_losses():
+def test_stress_loss():
     """
-    Test the functions `rmse_loss` and `mae_loss` without `compositions`.
+    Test the function `get_stress_loss`.
     """
-    x = np.random.uniform(0.0, 3.0, size=(6, 8))
-    x[5] = 0.0
-    y = np.random.uniform(0.0, 3.0, size=(6, 8))
-    y[5] = 0.0
+    x = np.random.uniform(0.0, 3.0, size=(6, 6))
+    y = np.random.uniform(0.0, 3.0, size=(6, 6))
 
-    y_mae = mean_absolute_error(x, y)
     y_rmse = np.sqrt(mean_squared_error(x, y))
 
     with tf.Graph().as_default():
+        x = tf.convert_to_tensor(x)
+        y = tf.convert_to_tensor(y)
 
-        mae = mae_loss(x, y, name='mae')
-        rmse = rmse_loss(x, y, name='rmse')
+        rmse = get_stress_loss(x, y)
 
         with tf.Session() as sess:
-            assert_less(y_mae - sess.run(mae), 1e-8)
             assert_less(y_rmse - sess.run(rmse), 1e-8)
 
 
