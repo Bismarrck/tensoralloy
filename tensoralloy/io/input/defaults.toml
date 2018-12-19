@@ -6,6 +6,7 @@ name = "required"
 descriptor = "required"
 rc = 6.5
 k_max = 2
+serial = false
 tfrecords_dir = "required"
 test_size = 0.2
 

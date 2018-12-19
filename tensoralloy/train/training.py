@@ -195,13 +195,15 @@ class TrainingManager:
         name = self._reader['dataset.name']
         rc = self._reader['dataset.rc']
         k_max = self._reader['dataset.k_max']
+        serial = self._reader['dataset.serial']
 
         if descriptor == 'behler':
             kwargs = self._reader['behler']
         else:
             kwargs = {}
         dataset = Dataset(database=database, descriptor=descriptor,
-                          name=name, k_max=k_max, rc=rc, **kwargs)
+                          name=name, k_max=k_max, rc=rc, serial=serial,
+                          **kwargs)
 
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
