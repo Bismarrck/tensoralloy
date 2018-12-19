@@ -71,7 +71,7 @@ def test_forces_loss():
         n_atoms = tf.convert_to_tensor(n_atoms)
 
         rmse = get_forces_loss(x, y, n_atoms, collections=['UnitTest'])
-        mae = tf.get_default_graph().get_tensor_by_name('Forces/Scale/mae:0')
+        mae = tf.get_default_graph().get_tensor_by_name('Forces/mae:0')
 
         with tf.Session() as sess:
             assert_less(y_mae - sess.run(mae), 1e-8)
