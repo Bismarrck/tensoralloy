@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import shutil
 from argparse import ArgumentParser, Namespace
-from os.path import join, exists, dirname
+from os.path import join, exists, dirname, basename
 from ase.db import connect
 from typing import Union
 
@@ -44,6 +44,10 @@ class TrainingManager:
         self._dataset = self._get_dataset()
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()
+
+        shutil.copyfile(
+            input_file,
+            join(self._hparams.train.model_dir, basename(input_file)))
 
     @property
     def nn(self) -> BasicNN:
@@ -94,8 +98,9 @@ class TrainingManager:
             if exists(hparams.train.model_dir):
                 shutil.rmtree(hparams.train.model_dir)
                 deleted.append(hparams.train.model_dir)
-            else:
-                tf.gfile.MakeDirs(hparams.train.model_dir)
+
+        if not exists(hparams.train.model_dir):
+            tf.gfile.MakeDirs(hparams.train.model_dir)
 
         if hparams.train.restart and hparams.train.previous_checkpoint:
             if dirname(hparams.train.previous_checkpoint) in deleted:
