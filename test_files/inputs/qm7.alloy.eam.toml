@@ -64,7 +64,6 @@ restart = false
 batch_size = 50
 shuffle = true
 model_dir = "experiments/qm7-eam/train"
-eval_dir = "experiments/qm7-eam/eval"
 max_checkpoints_to_keep = 20
 train_steps = 10000
 eval_steps = 1000

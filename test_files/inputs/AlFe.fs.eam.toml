@@ -41,4 +41,3 @@ FeFe = "msah11"
 
 [train]
 model_dir = "experiments/AlFe/fs/train"
-eval_dir = "experiments/AlFe/fs/eval"

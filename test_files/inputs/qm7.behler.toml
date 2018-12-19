@@ -39,7 +39,6 @@ restart = true
 batch_size = 25
 shuffle = true
 model_dir = "experiments/qm7-k3/train"
-eval_dir = "experiments/qm7-k3/eval"
 max_checkpoints_to_keep = 20
 train_steps = 100000
 eval_steps = 1000

@@ -96,11 +96,6 @@ class TrainingManager:
                 deleted.append(hparams.train.model_dir)
             else:
                 tf.gfile.MakeDirs(hparams.train.model_dir)
-            if exists(hparams.train.eval_dir):
-                shutil.rmtree(hparams.train.eval_dir)
-                deleted.append(hparams.train.eval_dir)
-            else:
-                tf.gfile.MakeDirs(hparams.train.eval_dir)
 
         if hparams.train.restart and hparams.train.previous_checkpoint:
             if dirname(hparams.train.previous_checkpoint) in deleted:
