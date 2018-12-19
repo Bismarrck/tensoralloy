@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import sys
 from setuptools import setup, find_packages
 
-__version__ = "1.0.0"
+__version__ = "1.0"
 __author__ = "Xin Chen"
 __email__ = "Bismarrck@me.com"
 
