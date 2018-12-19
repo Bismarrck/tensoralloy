@@ -7,7 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
-from os.path import join
 from typing import List, Dict
 
 from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
@@ -273,12 +272,7 @@ class BasicNN:
             l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
             weight = tf.convert_to_tensor(
                 self._loss_weights.l2, dtype=tf.float64, name='weight')
-            l2 = tf.multiply(l2_loss, weight, name='l2')
-            tf.summary.scalar(l2.op.name + '/summary', l2,
-                              collections=[GraphKeys.TRAIN_SUMMARY, ])
-
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, l2)
-            return l2
+            return tf.multiply(l2_loss, weight, name='l2')
 
     def get_total_loss(self, predictions, labels, n_atoms):
         """
@@ -508,7 +502,7 @@ class BasicNN:
                 with tf.name_scope("Profile"):
                     profiler_hook = tf.train.ProfilerHook(
                         save_steps=hparams.train.profile_steps,
-                        output_dir=join(hparams.train.model_dir, 'profile'),
+                        output_dir=f"{hparams.train.model_dir}-profile",
                         show_memory=True)
                 hooks.append(profiler_hook)
 
