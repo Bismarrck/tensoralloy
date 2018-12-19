@@ -338,9 +338,10 @@ class BasicNN:
 
             if self._loss_weights.l2 > 0.0:
                 losses.l2 = self.add_l2_penalty()
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, losses.l2)
 
-            for loss_tensor in losses.values():
-                tf.summary.scalar(loss_tensor.op.name + '/summary', loss_tensor,
+            for tensor in losses.values():
+                tf.summary.scalar(tensor.op.name + '/summary', tensor,
                                   collections=[GraphKeys.TRAIN_SUMMARY, ])
 
         return tf.add_n(list(losses.values()), name='loss'), losses
