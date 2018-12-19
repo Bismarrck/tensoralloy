@@ -296,20 +296,31 @@ class Dataset:
 
             tic = time.time()
 
-            for istart, istop in brange(0, num_examples, batch_size):
-                trajectory = []
-                for atoms_id in indices[istart: istop]:
-                    trajectory.append(self._database.get_atoms(id=atoms_id))
-                examples = Parallel(n_jobs=n_cpus)(
-                    delayed(self._transformer.encode)(atoms)
-                    for atoms in trajectory
-                )
-                for example in examples:
+            if not self._serial:
+                for istart, istop in brange(0, num_examples, batch_size):
+                    trajectory = []
+                    for atoms_id in indices[istart: istop]:
+                        trajectory.append(self._database.get_atoms(id=atoms_id))
+                    examples = Parallel(n_jobs=n_cpus)(
+                        delayed(self._transformer.encode)(atoms)
+                        for atoms in trajectory
+                    )
+                    for example in examples:
+                        writer.write(example.SerializeToString())
+                        if verbose:
+                            speed = istop / (time.time() - tic)
+                            sys.stdout.write(
+                                logstr.format(istop, num_examples, speed))
+            else:
+                for index, atoms_id in enumerate(indices):
+                    atoms = self._database.get_atoms(id=atoms_id)
+                    example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
-                    if verbose:
-                        speed = istop / (time.time() - tic)
+                    if index and index % 10 == 0 and verbose:
+                        speed = (index + 1) / (time.time() - tic)
                         sys.stdout.write(
-                            logstr.format(istop, num_examples, speed))
+                            logstr.format(index + 1, num_examples, speed))
+
             if verbose:
                 print("")
                 print("Done.")
