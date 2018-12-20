@@ -10,3 +10,4 @@ toml==0.10.0
 matplotlib>=2.1.0
 cython>=0.28.0
 pymatgen>=2018.11
+wheel
