@@ -280,8 +280,8 @@ class Dataset:
             num_examples = len(indices)
 
             if not self._serial:
-                batch_size = cpu_count() * 50
-                n_cpus = cpu_count()
+                n_cpus = min(cpu_count(), 16)
+                batch_size = n_cpus * 10
             else:
                 batch_size = 1
                 n_cpus = 1
