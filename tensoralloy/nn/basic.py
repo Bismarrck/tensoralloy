@@ -306,8 +306,8 @@ class BasicNN:
         total_loss : tf.Tensor
             A `float64` tensor as the total loss.
         losses : AttributeDict
-            A dict. The loss tensor for energy, forces and reduced stress or
-            reduced total pressure.
+            A dict. The loss tensor for energy, forces and stress or total
+            pressure.
 
         """
         with tf.name_scope("Loss"):
@@ -326,14 +326,14 @@ class BasicNN:
 
             if 'total_pressure' in self._minimize_properties:
                 losses.total_pressure = get_total_pressure_loss(
-                    labels=labels.reduced_total_pressure,
-                    predictions=predictions.reduced_total_pressure,
+                    labels=labels.total_pressure,
+                    predictions=predictions.total_pressure,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
                 losses.stress = get_stress_loss(
-                    labels=labels.reduced_stress,
-                    predictions=predictions.reduced_stress,
+                    labels=labels.stress,
+                    predictions=predictions.stress,
                     collections=collections)
 
             if self._loss_weights.l2 > 0.0:
@@ -426,7 +426,7 @@ class BasicNN:
             if 'total_pressure' in self._minimize_properties:
                 with tf.name_scope("Pressure"):
                     grads_and_vars = optimizer.compute_gradients(
-                        losses.reduced_total_pressure)
+                        losses.total_pressure)
                     self._add_gradients_cos_dist_summary(
                         energy_grads_and_vars, grads_and_vars)
                     self.add_grads_and_vars_summary(
@@ -435,8 +435,7 @@ class BasicNN:
 
             elif 'stress' in self._minimize_properties:
                 with tf.name_scope("Stress"):
-                    grads_and_vars = optimizer.compute_gradients(
-                        losses.reduced_stress)
+                    grads_and_vars = optimizer.compute_gradients(losses.stress)
                     self._add_gradients_cos_dist_summary(
                         energy_grads_and_vars, grads_and_vars)
                     self.add_grads_and_vars_summary(
@@ -533,11 +532,11 @@ class BasicNN:
         required:
             * 'energy' of shape `[batch_size, ]` is required.
             * 'forces' of shape `[batch_size, N, 3]` is required if
-              `self.forces == True`.
-            * 'reduced_stress' of shape `[batch_size, 6]` is required if
-              `self.reduced_stress and not self.reduced_total_pressure`.
-            * 'reduced_total_pressure' of shape `[batch_size, ]` is required if
-              `self.reduced_total_pressure == True`.
+              'forces' should be minimized.
+            * 'stress' of shape `[batch_size, 6]` is required if
+              'stress' should be minimized.
+            * 'total_pressure' of shape `[batch_size, ]` is required if
+              'total_pressure' should be minimized.
 
         `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
         the number of atoms in each structure.
@@ -679,13 +678,8 @@ class BasicNN:
         assert 'n_atoms' in features
         assert 'volume' in features
 
-        assert 'energy' in labels
-        if 'forces' in self._minimize_properties:
-            assert 'forces' in labels
-        if 'total_pressure' in self._minimize_properties:
-            assert 'reduced_total_pressure' in labels
-        if 'stress' in self._minimize_properties:
-            assert 'reduced_stress' in labels
+        for prop in self._minimize_properties:
+            assert prop in labels
 
     def build(self, features: AttributeDict, verbose=True):
         """
