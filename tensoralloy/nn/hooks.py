@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+import shutil
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
@@ -13,6 +14,29 @@ from tensorflow.python.training import training_util
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+class ProfilerHook(basic_session_run_hooks.ProfilerHook):
+    """
+    A modified implementation of `ProfilerHook`.
+    """
+
+    def __init__(self,
+                 save_steps=None,
+                 save_secs=None,
+                 output_dir="",
+                 show_dataflow=True,
+                 show_memory=False):
+        """
+        Initialization method.
+        """
+        super(ProfilerHook, self).__init__(
+            save_steps=save_steps, save_secs=save_secs, output_dir=output_dir,
+            show_dataflow=show_dataflow, show_memory=show_memory)
+
+        if tf.gfile.Exists(output_dir):
+            shutil.rmtree(output_dir)
+        tf.gfile.MakeDirs(output_dir)
 
 
 class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):

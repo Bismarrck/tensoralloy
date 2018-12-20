@@ -11,9 +11,9 @@ from typing import List, Dict
 
 from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
 from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
-from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from .losses import *
+from .hooks import ExamplesPerSecondHook, LoggingTensorHook, ProfilerHook
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -501,7 +501,7 @@ class BasicNN:
 
             if hparams.train.profile_steps:
                 with tf.name_scope("Profile"):
-                    profiler_hook = tf.train.ProfilerHook(
+                    profiler_hook = ProfilerHook(
                         save_steps=hparams.train.profile_steps,
                         output_dir=f"{hparams.train.model_dir}-profile",
                         show_memory=True)
