@@ -35,7 +35,7 @@ class ProfilerHook(basic_session_run_hooks.ProfilerHook):
             show_dataflow=show_dataflow, show_memory=show_memory)
 
         if tf.gfile.Exists(output_dir):
-            shutil.rmtree(output_dir)
+            shutil.rmtree(output_dir, ignore_errors=True)
         tf.gfile.MakeDirs(output_dir)
 
 

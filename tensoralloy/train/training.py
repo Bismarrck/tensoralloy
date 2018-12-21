@@ -96,7 +96,7 @@ class TrainingManager:
         deleted = []
         if not hparams.train.restart:
             if exists(hparams.train.model_dir):
-                shutil.rmtree(hparams.train.model_dir)
+                shutil.rmtree(hparams.train.model_dir, ignore_errors=True)
                 deleted.append(hparams.train.model_dir)
 
         if not exists(hparams.train.model_dir):
