@@ -316,7 +316,7 @@ class Dataset:
                     atoms = self._database.get_atoms(id=atoms_id)
                     example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
-                    if index and index % 10 == 0 and verbose:
+                    if (index + 1) % 10 == 0 and verbose:
                         speed = (index + 1) / (time.time() - tic)
                         sys.stdout.write(
                             logstr.format(index + 1, num_examples, speed))
