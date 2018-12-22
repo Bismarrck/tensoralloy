@@ -23,6 +23,7 @@ from tensoralloy.misc import AttributeDict
 from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
+from tensoralloy.dataset.utils import should_be_serial
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -67,9 +68,16 @@ class Dataset:
         self._rc = rc
         self._files = {}
         self._file_sizes = {}
-        self._serial = serial
         self._forces = False
         self._stress = False
+
+        if should_be_serial():
+            self._serial = False
+            tf.logging.info(
+                'Warning: glibc < 2.17, set `Dataset` to serial mode.')
+        else:
+            self._serial = serial
+
         self._read_database(**kwargs)
 
     @property
