@@ -188,7 +188,7 @@ def config_parser(parser: ArgumentParser):
         help="Specify the xyz or extxyz file to read.",
     )
     parser.add_argument(
-        '-n', '--num-examples',
+        '--num-examples',
         default=None,
         type=int,
         help="Set the maximum number of examples to read."
