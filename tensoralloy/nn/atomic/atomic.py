@@ -215,6 +215,6 @@ class AtomicNN(BasicNN):
                 input_meta_graph)
 
         if not keep_tmp_files:
-            shutil.rmtree(logdir)
+            shutil.rmtree(logdir, ignore_errors=True)
 
         tf.logging.info(f"Model exported to {output_graph_path}")

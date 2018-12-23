@@ -4,6 +4,7 @@ name = "AlFe"
 descriptor = "eam"
 rc = 6.5
 k_max = 2
+serial = true
 tfrecords_dir = "experiments/AlFe/fs"
 test_size = 1000
 
@@ -36,7 +37,7 @@ Fe = "msah11"
 
 [nn.eam.phi]
 AlAl = "msah11"
-AlFe = [32, 32]
+FeAl = [32, 32]
 FeFe = "msah11"
 
 [train]

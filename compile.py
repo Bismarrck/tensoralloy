@@ -12,15 +12,20 @@ from distutils.core import setup
 from distutils.cmd import Command
 from setuptools import find_packages
 from distutils.extension import Extension
-from Cython.Distutils import build_ext
+from Cython.Distutils.build_ext import new_build_ext as build_ext
 
 from setup import __version__
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+
 # `cython (<=0.29.1)` can not handle `dataclass` or `nametuple` correctly.
-avoid_to_cythonize = ['tensoralloy/descriptor/indexed_slices.py']
+avoid_to_cythonize = [
+    'tensoralloy/descriptor/indexed_slices.py',
+    'tensoralloy/descriptor/cutoff.py',
+    'tensoralloy/cli.py',
+]
 ext_modules = []
 files_to_delete = []
 packages = []
@@ -85,8 +90,8 @@ class CleanExt(Command):
 setup(
     name='tensoralloy',
     cmdclass={
-        'build_ext': build_ext,
         'clean_ext': CleanExt,
+        'build_ext': build_ext
     },
     ext_modules=ext_modules,
     author=__author__,
@@ -94,6 +99,7 @@ setup(
     version=__version__,
     description="Tensor-graph based machine learning framework for alloys.",
     packages=packages,
+    entry_points={'console_scripts': ['tensoralloy=tensoralloy.cli:main']},
     include_package_data=False,
     python_requires=">=3.6.5",
 )

@@ -6,7 +6,6 @@ This module defines the empirical potential of Al-Cu proposed by Zhou et al. at
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-from tensorflow.python.ops.gen_array_ops import scatter_nd_non_aliasing_add
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.utils import get_elements_from_kbody_term
@@ -207,11 +206,9 @@ class AlCuZJW04(EamAlloyPotential):
                                            tf.less(rho, rho_0)), name='idx2')
             idx3 = tf.where(tf.greater_equal(rho, rho_0), name='idx3')
 
-            embed = tf.zeros(shape=shape, dtype=dtype, name='y')
-            embed = scatter_nd_non_aliasing_add(
-                embed, idx1, embed1(tf.gather_nd(rho, idx1)), name='y1')
-            embed = scatter_nd_non_aliasing_add(
-                embed, idx2, embed2(tf.gather_nd(rho, idx2)), name='y2')
-            embed = scatter_nd_non_aliasing_add(
-                embed, idx3, embed3(tf.gather_nd(rho, idx3)), name='y3')
-            return embed
+            values = [
+                tf.scatter_nd(idx1, embed1(tf.gather_nd(rho, idx1)), shape),
+                tf.scatter_nd(idx2, embed2(tf.gather_nd(rho, idx2)), shape),
+                tf.scatter_nd(idx3, embed3(tf.gather_nd(rho, idx3)), shape),
+            ]
+            return tf.add_n(values, name='embed')

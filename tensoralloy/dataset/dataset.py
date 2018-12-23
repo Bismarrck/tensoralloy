@@ -23,6 +23,7 @@ from tensoralloy.misc import AttributeDict
 from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
+from tensoralloy.dataset.utils import should_be_serial
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -67,9 +68,16 @@ class Dataset:
         self._rc = rc
         self._files = {}
         self._file_sizes = {}
-        self._serial = serial
         self._forces = False
         self._stress = False
+
+        if should_be_serial():
+            self._serial = False
+            tf.logging.info(
+                'Warning: glibc < 2.17, set `Dataset` to serial mode.')
+        else:
+            self._serial = serial
+
         self._read_database(**kwargs)
 
     @property
@@ -280,8 +288,8 @@ class Dataset:
             num_examples = len(indices)
 
             if not self._serial:
-                batch_size = cpu_count() * 50
-                n_cpus = cpu_count()
+                n_cpus = min(cpu_count(), 16)
+                batch_size = n_cpus * 10
             else:
                 batch_size = 1
                 n_cpus = 1
@@ -296,20 +304,31 @@ class Dataset:
 
             tic = time.time()
 
-            for istart, istop in brange(0, num_examples, batch_size):
-                trajectory = []
-                for atoms_id in indices[istart: istop]:
-                    trajectory.append(self._database.get_atoms(id=atoms_id))
-                examples = Parallel(n_jobs=n_cpus)(
-                    delayed(self._transformer.encode)(atoms)
-                    for atoms in trajectory
-                )
-                for example in examples:
+            if not self._serial:
+                for istart, istop in brange(0, num_examples, batch_size):
+                    trajectory = []
+                    for atoms_id in indices[istart: istop]:
+                        trajectory.append(self._database.get_atoms(id=atoms_id))
+                    examples = Parallel(n_jobs=n_cpus)(
+                        delayed(self._transformer.encode)(atoms)
+                        for atoms in trajectory
+                    )
+                    for example in examples:
+                        writer.write(example.SerializeToString())
+                        if verbose:
+                            speed = istop / (time.time() - tic)
+                            sys.stdout.write(
+                                logstr.format(istop, num_examples, speed))
+            else:
+                for index, atoms_id in enumerate(indices):
+                    atoms = self._database.get_atoms(id=atoms_id)
+                    example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
-                    if verbose:
-                        speed = istop / (time.time() - tic)
+                    if (index + 1) % 10 == 0 and verbose:
+                        speed = (index + 1) / (time.time() - tic)
                         sys.stdout.write(
-                            logstr.format(istop, num_examples, speed))
+                            logstr.format(index + 1, num_examples, speed))
+
             if verbose:
                 print("")
                 print("Done.")

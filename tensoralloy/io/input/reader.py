@@ -8,6 +8,8 @@ import toml
 from os.path import dirname, join
 from typing import List, Union, Any
 
+from tensoralloy.utils import get_elements_from_kbody_term
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -132,20 +134,22 @@ class InputReader:
                         _val = None
             nested_set(results, _keypath, _val)
 
-        def _safe_update(_keypath, required=False):
+        def _safe_update(_keypath, _dst=None, required=False):
             _new_val = nested_get(configs, _keypath)
             if _new_val is None:
                 if not required:
                     return
                 else:
                     raise ValueError(f"{_keypath} should be provided")
-            _safe_set(_keypath, _new_val)
+            if _dst is None:
+                _dst = _keypath
+            _safe_set(_dst, _new_val)
 
         for section in ("dataset", "nn", "opt", "train"):
             for key, val in defaults[section].items():
                 if isinstance(val, dict):
                     continue
-                _safe_update(f"{section}.{key}", val == 'required')
+                _safe_update(f"{section}.{key}", required=(val == 'required'))
 
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
@@ -186,7 +190,14 @@ class InputReader:
                 pots = nested_get(configs, f"nn.eam.{func}")
                 if isinstance(pots, dict):
                     for key in pots.keys():
-                        _safe_update(f"nn.eam.{func}.{key}")
+                        src = f"nn.eam.{func}.{key}"
+                        if func == 'phi':
+                            key = "".join(
+                                sorted(get_elements_from_kbody_term(key)))
+                            dst = f"nn.eam.{func}.{key}"
+                        else:
+                            dst = None
+                        _safe_update(src, dst)
 
             if 'behler' in results:
                 del results['behler']

@@ -50,7 +50,7 @@ def teardown():
     Delete the tmp dir.
     """
     if exists(LMP.tmp_dir):
-        rmtree(LMP.tmp_dir)
+        rmtree(LMP.tmp_dir, ignore_errors=True)
 
 
 @with_setup(teardown=teardown)

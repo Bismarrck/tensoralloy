@@ -1,5 +1,8 @@
 global-include *.so
 global-exclude *.py
-global-exclude *.c
 include setup.py
+include tensoralloy/cli.py
 include tensoralloy/descriptor/indexed_slices.py
+include tensoralloy/descriptor/cutoff.py
+include tensoralloy/io/input/choices.toml
+include tensoralloy/io/input/defaults.toml

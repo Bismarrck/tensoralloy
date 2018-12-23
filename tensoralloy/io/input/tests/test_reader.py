@@ -53,6 +53,7 @@ def test_read_configs():
     configs = reader.configs
 
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
+    assert_equal(nested_get(configs, 'dataset.serial'), False)
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
     assert_list_equal(nested_get(configs, 'behler.eta'),
                       [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0])
@@ -74,6 +75,7 @@ def test_read_configs():
     reader = InputReader(join(test_dir(), 'inputs', 'AlFe.fs.eam.toml'))
     configs = reader.configs
 
+    assert_equal(reader['dataset.serial'], True)
     assert_equal(nested_get(configs, 'train.batch_size'), 50)
     assert_equal(nested_get(configs, 'train.shuffle'), True)
     assert_equal(nested_get(configs, 'nn.activation'), 'leaky_relu')
