@@ -10,9 +10,11 @@ from tensorflow.contrib.layers import xavier_initializer
 from typing import List, Dict
 from collections import namedtuple
 
-from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
-from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
+from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.nn.utils import log_tensor
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
+
+from .ops import get_train_op
 from .losses import *
 from .hooks import ExamplesPerSecondHook, LoggingTensorHook, ProfilerHook
 
@@ -396,114 +398,6 @@ class BasicNN:
         return tf.add_n(list(losses.values()), name='loss'), losses
 
     @staticmethod
-    def add_grads_and_vars_summary(grads_and_vars, name, collection):
-        """
-        Add summary of the gradients.
-        """
-        list_of_ops = []
-        for grad, var in grads_and_vars:
-            if grad is not None:
-                norm = tf.norm(grad, name=var.op.name + "/norm")
-                list_of_ops.append(norm)
-                tf.add_to_collection(collection, grad)
-                with tf.name_scope("gradients/{}/".format(name)):
-                    tf.summary.scalar(var.op.name + "/norm", norm,
-                                      collections=[GraphKeys.TRAIN_SUMMARY, ])
-        with tf.name_scope("gradients/{}/".format(name)):
-            total_norm = tf.add_n(list_of_ops, name='sum')
-            tf.summary.scalar('total', total_norm,
-                              collections=[GraphKeys.TRAIN_SUMMARY, ])
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
-
-    @staticmethod
-    def _add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
-        """
-        Compute the cosine distance of dL(energy)/dvars and dL(target)/dvars
-        where `target` is `forces` or `stress`.
-        """
-        with tf.name_scope("CosDist"):
-            eps = tf.constant(1e-14, dtype=tf.float64)
-            for i, (grad, var) in enumerate(grads_and_vars):
-                if grad is None:
-                    continue
-                energy_grad = energy_grad_vars[i][0]
-                dot = tf.tensordot(
-                    tf.reshape(grad, (-1,)),
-                    tf.reshape(energy_grad, (-1,)), axes=1)
-                norm = tf.norm(grad) * tf.norm(energy_grad) + eps
-                cos_dist = tf.div(dot, norm, name=var.op.name + '/cos_dist')
-                tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
-
-    def get_train_op(self, losses: AttributeDict, hparams: AttributeDict):
-        """
-        Return the Op for a training step.
-        """
-        with tf.name_scope("Optimize"):
-            global_step = tf.train.get_or_create_global_step()
-            learning_rate = get_learning_rate(
-                global_step,
-                learning_rate=hparams.opt.learning_rate,
-                decay_function=hparams.opt.decay_function,
-                decay_rate=hparams.opt.decay_rate,
-                decay_steps=hparams.opt.decay_steps,
-                staircase=hparams.opt.staircase
-            )
-
-            with tf.control_dependencies(
-                    tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-                optimizer = get_optimizer(learning_rate, hparams.opt.method)
-
-            collections = []
-
-            with tf.name_scope("Energy"):
-                energy_grads_and_vars = optimizer.compute_gradients(
-                    losses.energy)
-                self.add_grads_and_vars_summary(
-                    energy_grads_and_vars, 'energy', GraphKeys.ENERGY_GRADIENTS)
-                if 'energy' in self._minimize_properties:
-                    collections.append(energy_grads_and_vars)
-
-            if 'forces' in self._minimize_properties:
-                with tf.name_scope("Forces"):
-                    grads_and_vars = optimizer.compute_gradients(losses.forces)
-                    self._add_gradients_cos_dist_summary(
-                        energy_grads_and_vars, grads_and_vars)
-                    self.add_grads_and_vars_summary(
-                        grads_and_vars, 'forces', GraphKeys.FORCES_GRADIENTS)
-                    collections.append(grads_and_vars)
-
-            if 'total_pressure' in self._minimize_properties:
-                with tf.name_scope("Pressure"):
-                    grads_and_vars = optimizer.compute_gradients(
-                        losses.total_pressure)
-                    self._add_gradients_cos_dist_summary(
-                        energy_grads_and_vars, grads_and_vars)
-                    self.add_grads_and_vars_summary(
-                        grads_and_vars, 'pressure', GraphKeys.STRESS_GRADIENTS)
-                    collections.append(grads_and_vars)
-
-            elif 'stress' in self._minimize_properties:
-                with tf.name_scope("Stress"):
-                    grads_and_vars = optimizer.compute_gradients(losses.stress)
-                    self._add_gradients_cos_dist_summary(
-                        energy_grads_and_vars, grads_and_vars)
-                    self.add_grads_and_vars_summary(
-                        grads_and_vars, 'stress', GraphKeys.STRESS_GRADIENTS)
-                    collections.append(grads_and_vars)
-
-            grads_and_vars = sum_of_grads_and_vars_collections(collections)
-            apply_gradients_op = optimizer.apply_gradients(
-                grads_and_vars, global_step=global_step)
-
-        with tf.name_scope("Average"):
-            variable_averages = tf.train.ExponentialMovingAverage(
-                Defaults.variable_moving_average_decay, global_step)
-            variables_averages_op = variable_averages.apply(
-                tf.trainable_variables())
-
-        return tf.group(apply_gradients_op, variables_averages_op)
-
-    @staticmethod
     def get_logging_tensors(key) -> Dict[str, tf.Tensor]:
         """
         Return a dict of logging tensors.
@@ -841,7 +735,8 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms)
-        train_op = self.get_train_op(losses=losses, hparams=params)
+        train_op = get_train_op(losses=losses, hparams=params,
+                                minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
             training_hooks = self.get_training_hooks(hparams=params)
