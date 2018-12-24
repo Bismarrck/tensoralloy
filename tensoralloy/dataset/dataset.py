@@ -52,7 +52,7 @@ class Dataset:
             The cutoff radius.
         serial : bool
             If True, all parallel routines will be disabled.
-        kwargs : dict
+        kwargs :
             Key-value args for initializing the `BatchDescriptorTransformer` for
             the `descriptor`.
 

@@ -85,7 +85,8 @@ def test_ethanol():
 
         savedir = join(test_dir(), 'ethanol')
         database = connect(join(savedir, 'ethanol.db'))
-        dataset = Dataset(database, 'ethanol', k_max=3, serial=False)
+        dataset = Dataset(database, 'ethanol', descriptor='behler',
+                          serial=False, angular=True)
 
         assert_equal(len(dataset), 10)
         assert_true(dataset.forces)
