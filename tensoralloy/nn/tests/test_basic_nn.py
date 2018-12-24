@@ -50,7 +50,7 @@ def test_convert_to_voigt_stress():
     """
     db = connect(join(datasets_dir(), 'Ni.db'))
     nn = BasicNN(elements=['Ni'], activation='leaky_relu',
-                 minimize_properties=['stress'], predict_properties=['stress'])
+                 minimize_properties=['stress'], export_properties=['stress'])
 
     with tf.Graph().as_default():
 

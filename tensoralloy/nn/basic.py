@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.layers import xavier_initializer
 from typing import List, Dict
+from collections import namedtuple
 
 from tensoralloy.nn.utils import sum_of_grads_and_vars_collections, GraphKeys
 from tensoralloy.nn.utils import get_learning_rate, get_optimizer, log_tensor
@@ -19,7 +20,71 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-available_properties = ('energy', 'forces', 'stress', 'total_pressure')
+class _PropertyError(ValueError):
+    """
+    This error shall be raised if the given property is not valid.
+    """
+    tag = "valid"
+
+    def __init__(self, name):
+        super(_PropertyError, self).__init__()
+        self.name = name
+
+    def __str__(self):
+        return f"'{self.name}' is not a '{self.tag}' property."
+
+
+class MinimizablePropertyError(_PropertyError):
+    """
+    This error shall be raised if the given property cannot be minimized.
+    """
+    tag = "minimizable"
+
+
+class ExportablePropertyError(_PropertyError):
+    """
+    This error shall be raised if the given property cannot be exported.
+    """
+    tag = "exportable"
+
+
+# noinspection PyTypeChecker,PyArgumentList
+class Property(namedtuple('Property', ('name', 'exportable'))):
+    """
+    A property of a strucutre.
+    """
+
+    def __new__(cls, name: str, exportable: bool):
+        """
+        Initialization method.
+
+        Parameters
+        ----------
+        name : str
+            The name of this property.
+        exportable : bool
+            A boolean indicating whether this property can be exported or not.
+
+        """
+        return super(Property, cls).__new__(cls, name, exportable)
+
+    def __eq__(self, other):
+        if hasattr(other, "name"):
+            return other.name == self.name
+        else:
+            return str(other) == self.name
+
+
+available_properties = (
+    Property('energy', True),
+    Property('forces', True),
+    Property('stress', True),
+    Property('total_pressure', True)
+)
+
+exportable_properties = tuple(
+    prop for prop in available_properties if prop.exportable
+)
 
 
 class BasicNN:
@@ -29,7 +94,7 @@ class BasicNN:
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
                  loss_weights=None, minimize_properties=('energy', 'forces'),
-                 predict_properties=('energy', 'forces')):
+                 export_properties=('energy', 'forces')):
         """
         Initialization method.
 
@@ -46,9 +111,9 @@ class BasicNN:
             A list of str as the properties to minimize. Avaibale properties
             are: 'energy', 'forces', 'stress' and 'total_pressure'. For each
             property, its RMSE loss will be minimized.
-        predict_properties : List[str]
-            A list of str as the properties to predict. The corresponding
-            tensorflow Op will be inferred. 'energy' will always be predicted.
+        export_properties : List[str]
+            A list of str as the properties to infer when exporting the model.
+            'energy' will always be exported.
         loss_weights : AttributeDict or None
             The weights of the losses. Available keys are 'energy', 'forces',
             'stress', 'total_pressure' and 'l2'. If None, all will be set to 1.
@@ -59,18 +124,6 @@ class BasicNN:
         True.
 
         """
-
-        class PropertyError(ValueError):
-            """
-            This error shall be raised if the given property is not valid.
-            """
-            def __init__(self, name):
-                super(PropertyError, self).__init__()
-                self._name = name
-
-            def __str__(self):
-                return f"{self._name} is not a valid property."
-
         self._elements = elements
         self._hidden_sizes = self._get_hidden_sizes(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
@@ -81,15 +134,11 @@ class BasicNN:
 
         for prop in minimize_properties:
             if prop not in available_properties:
-                raise PropertyError(prop)
-            if prop not in predict_properties:
-                predict_properties.append(prop)
+                raise MinimizablePropertyError(prop)
 
-        for prop in predict_properties:
-            if prop not in available_properties:
-                raise PropertyError(prop)
-        if 'energy' not in predict_properties:
-            predict_properties.append('energy')
+        for prop in export_properties:
+            if prop not in exportable_properties:
+                raise ExportablePropertyError(prop)
 
         if loss_weights is None:
             loss_weights = AttributeDict(
@@ -98,7 +147,7 @@ class BasicNN:
         else:
             for prop, val in loss_weights.items():
                 if prop != 'l2' and prop not in available_properties:
-                    raise PropertyError(prop)
+                    raise MinimizablePropertyError(prop)
                 loss_weights[prop] = max(val, 0.0)
             for prop in minimize_properties:
                 if prop not in loss_weights:
@@ -106,7 +155,7 @@ class BasicNN:
 
         self._loss_weights = loss_weights
         self._minimize_properties = list(minimize_properties)
-        self._predict_properties = list(predict_properties)
+        self._export_properties = list(export_properties)
 
     @property
     def elements(self):
@@ -134,7 +183,7 @@ class BasicNN:
         """
         Return a list of str as the properties to predict.
         """
-        return self._predict_properties
+        return self._export_properties
 
     @property
     def loss_weights(self):
@@ -681,7 +730,8 @@ class BasicNN:
         for prop in self._minimize_properties:
             assert prop in labels
 
-    def build(self, features: AttributeDict, verbose=True):
+    def build(self, features: AttributeDict, mode=tf.estimator.ModeKeys.TRAIN,
+              verbose=True):
         """
         Build the atomic neural network.
 
@@ -698,6 +748,8 @@ class BasicNN:
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
 
@@ -709,6 +761,11 @@ class BasicNN:
         """
         outputs = self._build_nn(features, verbose)
 
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            properties = self._export_properties
+        else:
+            properties = self._minimize_properties
+
         with tf.name_scope("Output"):
 
             predictions = AttributeDict()
@@ -716,15 +773,15 @@ class BasicNN:
             predictions.energy = self._get_energy(
                 outputs, features, verbose=verbose)
 
-            if 'forces' in self._predict_properties:
+            if 'forces' in properties:
                 predictions.forces = self._get_forces(
                     predictions.energy, features.positions, verbose=verbose)
 
-            if 'total_pressure' in self._predict_properties:
+            if 'total_pressure' in properties:
                 predictions.total_pressure = \
                     self._get_reduced_total_pressure(
                         predictions.energy, features.cells, verbose=verbose)
-            elif 'stress' in self._predict_properties:
+            elif 'stress' in properties:
                 predictions.stress = self._get_reduced_stress(
                     predictions.energy, features.cells, verbose=verbose)
 
@@ -774,6 +831,7 @@ class BasicNN:
         self._check_keys(features, labels)
 
         predictions = self.build(features,
+                                 mode=mode,
                                  verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 
         if mode == tf.estimator.ModeKeys.PREDICT:

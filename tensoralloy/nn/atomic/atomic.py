@@ -28,7 +28,7 @@ class AtomicNN(BasicNN):
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
                  loss_weights=None, minimize_properties=('energy', 'forces'),
-                 predict_properties=('energy', 'forces'), normalizer=None,
+                 export_properties=('energy', 'forces'), normalizer=None,
                  normalization_weights=None):
         """
         Initialization method.
@@ -44,7 +44,7 @@ class AtomicNN(BasicNN):
         super(AtomicNN, self).__init__(
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
             loss_weights=loss_weights, minimize_properties=minimize_properties,
-            predict_properties=predict_properties)
+            export_properties=export_properties)
         self._initial_normalizer_weights = normalization_weights
         self._normalizer = InputNormalizer(method=normalizer)
 
@@ -172,7 +172,8 @@ class AtomicNN(BasicNN):
         with graph.as_default():
 
             features, params = features_and_params_fn()
-            predictions = self.build(features)
+            predictions = self.build(features,
+                                     mode=tf.estimator.ModeKeys.PREDICT)
 
             # Encode the JSON dict into the graph.
             with tf.name_scope("Transformer/"):

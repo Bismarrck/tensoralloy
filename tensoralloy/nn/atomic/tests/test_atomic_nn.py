@@ -41,7 +41,7 @@ def test_inference():
 
         nn = AtomicNN(elements, hidden_sizes, activation='tanh',
                       minimize_properties=['energy', ],
-                      predict_properties=['energy', ])
+                      export_properties=['energy', ])
 
         with tf.name_scope("Inputs"):
 
@@ -81,7 +81,7 @@ def test_inference_from_transformer():
                                  composition=placeholders.composition,
                                  mask=placeholders.mask,
                                  volume=placeholders.volume)
-        nn = AtomicResNN(clf.elements, predict_properties=['energy', 'forces'])
+        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'])
         prediction = nn.build(features)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
@@ -124,7 +124,7 @@ def test_export_to_pb():
 
     nn = AtomicNN(elements=['Ni'], hidden_sizes={'Ni': [64, 32]},
                   activation='leaky_relu',
-                  predict_properties=['energy', 'forces', 'stress'],
+                  export_properties=['energy', 'forces', 'stress'],
                   normalizer=None)
     nn.export(input_fn,
               output_graph_path=output_graph_path,
