@@ -70,8 +70,7 @@ def test_forces_loss():
         y = tf.convert_to_tensor(y)
         n_atoms = tf.convert_to_tensor(n_atoms)
 
-        rmse = get_forces_loss(x, y, n_atoms, collections=['UnitTest'],
-                               method='absolute')
+        rmse = get_forces_loss(x, y, n_atoms, collections=['UnitTest'])
         mae = tf.get_default_graph().get_tensor_by_name('Forces/mae:0')
 
         with tf.Session() as sess:
@@ -83,10 +82,10 @@ def test_stress_loss():
     """
     Test the function `get_stress_loss`.
     """
-    x = np.random.uniform(0.0, 3.0, size=(6, 6))
-    y = np.random.uniform(0.0, 3.0, size=(6, 6))
+    x = np.random.uniform(0.1, 3.0, size=(6, 6))
+    y = np.random.uniform(0.1, 3.0, size=(6, 6))
 
-    y_rmse = np.sqrt(mean_squared_error(x, y))
+    y_rmse = np.mean(np.linalg.norm(x - y, axis=1) / np.linalg.norm(x, axis=1))
 
     with tf.Graph().as_default():
         x = tf.convert_to_tensor(x)
