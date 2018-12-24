@@ -34,8 +34,8 @@ class Dataset:
     This class is used to manipulate data examples for this project.
     """
 
-    def __init__(self, database, name, descriptor='behler', k_max=3,
-                 rc=Defaults.rc, serial=False, **kwargs):
+    def __init__(self, database, name, descriptor='behler', rc=Defaults.rc,
+                 serial=False, **kwargs):
         """
         Initialization method.
 
@@ -57,14 +57,9 @@ class Dataset:
             the `descriptor`.
 
         """
-        assert descriptor in ('behler', 'eam')
-        if descriptor == 'eam' and k_max != 2:
-            raise ValueError("EAM requires `k_max = 2`.")
-
         self._database = database
         self._name = name
         self._descriptor = descriptor
-        self._k_max = k_max
         self._rc = rc
         self._files = {}
         self._file_sizes = {}
@@ -109,13 +104,6 @@ class Dataset:
         tensors is 'eV/Angstrom'.
         """
         return self._stress
-
-    @property
-    def k_max(self):
-        """
-        Return the maximum k for the many-body expansion scheme.
-        """
-        return self._k_max
 
     @property
     def cutoff_radius(self):
@@ -186,12 +174,12 @@ class Dataset:
         """
         return len(self._database.metadata.get('atomic_static_energy', {})) == 0
 
-    def _should_find_neighbor_sizes(self):
+    def _should_find_neighbor_sizes(self, k_max):
         """
         A helper function. Return True if `nij_max` and `nijk_max` for `k_max`
         and `rc` cannot be accessed.
         """
-        k_max = convert_k_max_to_key(self._k_max)
+        k_max = convert_k_max_to_key(k_max)
         rc = convert_rc_to_key(self._rc)
         neighbors = self._database.metadata.get('neighbors', {})
         if k_max not in neighbors:
@@ -209,11 +197,11 @@ class Dataset:
 
         return False
 
-    def _get_neighbor_sizes(self):
+    def _get_neighbor_sizes(self, k_max):
         """
         A helper function to get `nij_max`, `nijk_max` and `nnl_max`.
         """
-        k_max = convert_k_max_to_key(self._k_max)
+        k_max = convert_k_max_to_key(k_max)
         rc = convert_rc_to_key(self._rc)
         details = self._database.metadata['neighbors'][k_max][rc]
         return details['nij_max'], details['nijk_max'], details['nnl_max']
@@ -227,16 +215,21 @@ class Dataset:
         else:
             n_jobs = -1
 
-        if self._should_find_neighbor_sizes():
+        k_max = 2
+
+        if self._descriptor == 'behler' and kwargs.get('angular', False):
+            k_max = 3
+
+        if self._should_find_neighbor_sizes(k_max):
             find_neighbor_size_limits(self._database, self._rc, n_jobs=n_jobs,
-                                      k_max=self._k_max, verbose=True)
+                                      k_max=k_max, verbose=True)
 
         periodic = self._database.metadata['periodic']
         forces = self._database.metadata['forces']
         stress = self._database.metadata['stress']
         max_occurs = self._database.metadata['max_occurs']
 
-        nij_max, nijk_max, nnl_max = self._get_neighbor_sizes()
+        nij_max, nijk_max, nnl_max = self._get_neighbor_sizes(k_max)
 
         if self._descriptor == 'behler':
 
@@ -246,7 +239,7 @@ class Dataset:
             zeta = safe_select(kwargs.get('zeta', None), Defaults.zeta)
 
             transformer = BatchSymmetryFunctionTransformer(
-                rc=self._rc,  max_occurs=max_occurs, k_max=self._k_max,
+                rc=self._rc,  max_occurs=max_occurs, k_max=k_max,
                 nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
                 gamma=gamma, zeta=zeta, periodic=periodic, stress=stress,
                 forces=forces)
@@ -338,7 +331,8 @@ class Dataset:
         """
         Return a str as the signature of this dataset.
         """
-        return "k{:d}-rc{:.2f}".format(self._k_max, self._rc)
+        k_max = self._transformer.k_max
+        return "k{:d}-rc{:.2f}".format(k_max, self._rc)
 
     def to_records(self, savedir, test_size=0.2, verbose=False):
         """

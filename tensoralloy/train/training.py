@@ -178,16 +178,16 @@ class TrainingManager:
         elements = self._dataset.transformer.elements
         l2_weight = self._reader['nn.l2_weight']
         minimize_properties = self._reader['nn.minimize']
-        predict_properties = self._reader['nn.predict']
         activation = self._reader['nn.activation']
         kwargs = {'elements': elements,
                   'loss_weights': AttributeDict(l2=l2_weight),
                   'minimize_properties': minimize_properties,
-                  'predict_properties': predict_properties,
                   'activation': activation}
         if self._reader['dataset.descriptor'] == 'behler':
+            kwargs['export_properties'] = self._reader['nn.atomic.export']
             return self._get_atomic_nn(kwargs)
         else:
+            kwargs['export_properties'] = minimize_properties
             return self._get_eam_nn(kwargs)
 
 
@@ -199,16 +199,14 @@ class TrainingManager:
         database = connect(self._reader['dataset.sqlite3'])
         name = self._reader['dataset.name']
         rc = self._reader['dataset.rc']
-        k_max = self._reader['dataset.k_max']
         serial = self._reader['dataset.serial']
 
         if descriptor == 'behler':
-            kwargs = self._reader['behler']
+            kwargs = self._reader['nn.atomic.behler']
         else:
             kwargs = {}
         dataset = Dataset(database=database, descriptor=descriptor,
-                          name=name, k_max=k_max, rc=rc, serial=serial,
-                          **kwargs)
+                          name=name, rc=rc, serial=serial, **kwargs)
 
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
