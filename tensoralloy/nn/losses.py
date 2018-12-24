@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 from typing import List
+from os.path import basename
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -60,33 +61,17 @@ def get_energy_loss(labels, predictions, n_atoms, collections=None):
         return _get_loss(x, y, collections)
 
 
-def get_forces_loss(labels, predictions, n_atoms, collections=None):
+def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
+                          n_atoms: tf.Tensor):
     """
-    Return the loss tensor of the atomic forces.
+    Return the absolute RMSE as the loss of atomic forces.
 
-    Parameters
-    ----------
-    labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
-        reference forces.
-    predictions : tf.Tensor
-        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
-        predicted forces.
-    n_atoms : tf.Tensor
-        A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
-        each structure.
-    collections : List[str] or None
-        A list of str as the collections where the loss tensors should be added.
+        loss = sqrt(weight * MSE(labels, predictions))
 
-    Returns
-    -------
-    loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+    where `weight` is a scaling factor to eliminate the zero-padding effect.
 
     """
-    with tf.name_scope("Forces"):
-        assert labels.shape.ndims == 3 and labels.shape[2].value == 3
-        assert predictions.shape.ndims == 3 and predictions.shape[2].value == 3
+    with tf.name_scope("Absolute"):
         mse = tf.reduce_mean(
             tf.squared_difference(labels, predictions), name='raw_mse')
         mae = tf.reduce_mean(tf.abs(labels - predictions), name='raw_mae')
@@ -103,11 +88,77 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
             one = tf.constant(1.0, dtype=tf.float64, name='one')
             weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
         mse = tf.multiply(mse, weight, name='mse')
-        mae = tf.multiply(mae, weight, name='mae')
-        loss = tf.sqrt(mse, name='rmse')
+    mae = tf.multiply(mae, weight, name='mae')
+    loss = tf.sqrt(mse, name='rmse')
+    return loss, mae
+
+
+def _relative_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
+                          n_atoms: tf.Tensor):
+    """
+    Return the relative RMSE as the loss of atomic forces.
+    """
+    with tf.name_scope("Relative"):
+        with tf.name_scope("Safe"):
+            eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+            labels = tf.add(labels, eps, name=basename(labels.op.name))
+        diff = tf.subtract(labels, predictions, name='diff')
+        upper = tf.linalg.norm(diff, axis=2, keepdims=False, name='upper')
+        lower = tf.linalg.norm(labels, axis=2, keepdims=False, name='lower')
+        ratio = tf.div(upper, lower, name='ratio')
+        with tf.name_scope("Scale"):
+            n_reals = tf.cast(n_atoms, dtype=labels.dtype)
+            n_max = tf.convert_to_tensor(
+                labels.shape[1].value, dtype=labels.dtype, name='n_max')
+            one = tf.constant(1.0, dtype=tf.float64, name='one')
+            weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
+        loss = tf.reduce_mean(ratio, name='raw_loss')
+    loss = tf.multiply(weight, loss, name='loss')
+    return loss
+
+
+def get_forces_loss(labels, predictions, n_atoms, method='absolute',
+                    collections=None):
+    """
+    Return the loss tensor of the atomic forces.
+
+    Parameters
+    ----------
+    labels : tf.Tensor
+        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
+        reference forces.
+    predictions : tf.Tensor
+        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
+        predicted forces.
+    n_atoms : tf.Tensor
+        A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
+        each structure.
+    method : str
+        The method to calculate the loss. Implemented methods are:
+            * : 'absolute'
+            * : 'relative'
+    collections : List[str] or None
+        A list of str as the collections where the loss tensors should be added.
+
+    Returns
+    -------
+    loss : tf.Tensor
+        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+
+    """
+    with tf.name_scope("Forces"):
+        assert labels.shape.ndims == 3 and labels.shape[2].value == 3
+        assert predictions.shape.ndims == 3 and predictions.shape[2].value == 3
+        if method == 'absolute':
+            loss, mae = _absolute_forces_loss(labels, predictions, n_atoms)
+            if collections is not None:
+                tf.add_to_collections(collections, mae)
+        elif method == 'relative':
+            loss = _relative_forces_loss(labels, predictions, n_atoms)
+        else:
+            raise ValueError("")
         if collections is not None:
             tf.add_to_collections(collections, loss)
-            tf.add_to_collections(collections, mae)
         return loss
 
 
