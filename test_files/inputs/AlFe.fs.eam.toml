@@ -3,8 +3,6 @@ sqlite3 = "AlFe.db"
 name = "AlFe"
 descriptor = "eam"
 rc = 6.5
-k_max = 2
-serial = true
 tfrecords_dir = "experiments/AlFe/fs"
 test_size = 1000
 

@@ -53,16 +53,16 @@ def test_read_configs():
     configs = reader.configs
 
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
-    assert_equal(nested_get(configs, 'dataset.serial'), False)
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
-    assert_list_equal(nested_get(configs, 'behler.eta'),
+    assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
                       [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0])
+    assert_equal(nested_get(configs, 'nn.atomic.behler.angular'), True)
     assert_not_in('eam', configs['nn'])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.C'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.H'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.N'), [64, 32])
     assert_list_equal(reader['nn.minimize'], ['energy'])
-    assert_list_equal(reader['nn.predict'], ['energy', 'forces'])
+    assert_list_equal(reader['nn.atomic.export'], ['energy', 'forces'])
 
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
     configs = reader.configs
@@ -75,7 +75,6 @@ def test_read_configs():
     reader = InputReader(join(test_dir(), 'inputs', 'AlFe.fs.eam.toml'))
     configs = reader.configs
 
-    assert_equal(reader['dataset.serial'], True)
     assert_equal(nested_get(configs, 'train.batch_size'), 50)
     assert_equal(nested_get(configs, 'train.shuffle'), True)
     assert_equal(nested_get(configs, 'nn.activation'), 'leaky_relu')

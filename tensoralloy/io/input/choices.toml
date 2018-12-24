@@ -2,7 +2,6 @@
 
 [dataset]
 descriptor = ['eam', 'behler']
-k_max = [1, 2, 3]
 
 [nn]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'sigmoid', 'linear']

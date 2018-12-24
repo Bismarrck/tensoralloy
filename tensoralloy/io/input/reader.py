@@ -157,12 +157,14 @@ class InputReader:
         descriptor = nested_get(configs, 'dataset.descriptor')
 
         if descriptor == 'behler':
-            _safe_update("behler.eta")
-            _safe_update("behler.gamma")
-            _safe_update("behler.beta")
-            _safe_update("behler.zeta")
+            _safe_update("nn.atomic.behler.angular")
+            _safe_update("nn.atomic.behler.eta")
+            _safe_update("nn.atomic.behler.gamma")
+            _safe_update("nn.atomic.behler.beta")
+            _safe_update("nn.atomic.behler.zeta")
             _safe_update("nn.atomic.arch")
             _safe_update("nn.atomic.input_normalizer")
+            _safe_update("nn.atomic.export")
 
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):

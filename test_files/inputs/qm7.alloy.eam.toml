@@ -3,7 +3,6 @@ sqlite3 = "datasets/qm7.db"
 name = "qm7"
 descriptor = "eam"
 rc = 6.5
-k_max = 2
 tfrecords_dir = "experiments/qm7-eam"
 test_size = 1000
 

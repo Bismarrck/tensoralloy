@@ -3,18 +3,19 @@ sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
 descriptor = "behler"
 rc = 6.5
-k_max = 2
 tfrecords_dir = "./qm7"
 test_size = 1000
-
-[behler]
-eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]
 
 [nn]
 activation = "leaky_relu"
 l2_weight = 0.01
 minimize = ['energy']
-predict = ['energy']
+
+[nn.atomic]
+export = ['energy']
+
+[nn.atomic.behler]
+eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]
 
 [nn.atomic.layers]
 C = [64, 32]

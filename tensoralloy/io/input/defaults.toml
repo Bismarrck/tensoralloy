@@ -5,31 +5,34 @@ sqlite3 = "required"
 name = "required"
 descriptor = "required"
 rc = 6.5
-k_max = 2
-serial = false
-tfrecords_dir = "required"
+tfrecords_dir = "."
 test_size = 0.2
-
-[behler]
-eta = [0.01, 0.1, 0.5, 1.0, 4.0]
-beta = [0.005]
-gamma = [1.0, -1.0]
-zeta = [4.0]
 
 [nn]
 activation = "leaky_relu"
 l2_weight = 0.01
 minimize = ['energy', 'forces']
-predict = ['energy', 'forces']
 
 [nn.atomic]
 arch = "AtomicNN"
 input_normalizer = "linear"
+export = ['energy', 'forces']
+
+[nn.atomic.behler]
+angular = false
+eta = [0.01, 0.1, 0.5, 1.0, 4.0]
+beta = [0.005]
+gamma = [1.0, -1.0]
+zeta = [4.0]
 
 [nn.atomic.layers]
 
 [nn.eam]
 arch = "EamAlloyNN"
+
+[nn.eam.rho]
+[nn.eam.phi]
+[nn.eam.embed]
 
 [nn.eam.export]
 nr = 10000
