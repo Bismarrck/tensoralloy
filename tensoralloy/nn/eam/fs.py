@@ -28,12 +28,6 @@ class EamFsNN(EamNN):
     The tensorflow based implementation of the EAM/Finnis-Sinclair model.
     """
 
-    def __init__(self, *args, **kwargs):
-        """
-        Initialization method.
-        """
-        super(EamFsNN, self).__init__(*args, **kwargs)
-
     @property
     def all_kbody_terms(self) -> List[str]:
         """

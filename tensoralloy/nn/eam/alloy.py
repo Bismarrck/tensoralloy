@@ -28,12 +28,6 @@ class EamAlloyNN(EamNN):
     The tensorflow based implementation of the EAM/Alloy model.
     """
 
-    def __init__(self, *args, **kwargs):
-        """
-        Initialization method.
-        """
-        super(EamAlloyNN, self).__init__(*args, **kwargs)
-
     @property
     def tag(self):
         """ Return the tag. """

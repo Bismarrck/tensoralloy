@@ -69,14 +69,20 @@ class EamNN(BasicNN):
     The tensorflow/CNN based implementation of the Embedded-Atom Method.
     """
 
-    def __init__(self, custom_potentials=None, *args, **kwargs):
+    def __init__(self, elements: List[str], custom_potentials=None,
+                 hidden_sizes=None, activation=None, loss_weights=None,
+                 minimize_properties=('energy', 'forces'),
+                 export_properties=('energy', 'forces')):
         """
         Initialization method.
         """
         self._unique_kbody_terms = None
         self._kbody_terms = None
 
-        super(EamNN, self).__init__(*args, **kwargs)
+        super(EamNN, self).__init__(
+            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
+            loss_weights=loss_weights, minimize_properties=minimize_properties,
+            export_properties=export_properties)
 
         # Setup the potentials
         self._potentials = self._setup_potentials(custom_potentials)
