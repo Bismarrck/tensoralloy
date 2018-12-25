@@ -29,7 +29,7 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, collections=None):
     return loss
 
 
-def get_energy_loss(labels, predictions, n_atoms, collections=None):
+def get_energy_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     """
     Return the loss tensor of the per-atom (atomic) energy.
 
@@ -42,6 +42,8 @@ def get_energy_loss(labels, predictions, n_atoms, collections=None):
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
+    weight : float or tf.Tensor
+        The weight of the loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -57,7 +59,9 @@ def get_energy_loss(labels, predictions, n_atoms, collections=None):
         n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
         x = tf.div(labels, n_atoms)
         y = tf.div(predictions, n_atoms)
-        return _get_rmse_loss(x, y, collections)
+        loss = _get_rmse_loss(x, y, collections)
+        weight = tf.convert_to_tensor(weight, loss.dtype, name='weight')
+        return tf.multiply(loss, weight, name='weighted/loss')
 
 
 def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
@@ -92,7 +96,7 @@ def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
     return loss, mae
 
 
-def get_forces_loss(labels, predictions, n_atoms, collections=None):
+def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     """
     Return the loss tensor of the atomic forces.
 
@@ -107,6 +111,8 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
+    weight : float or tf.Tensor
+        The weight of the loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -123,7 +129,8 @@ def get_forces_loss(labels, predictions, n_atoms, collections=None):
         if collections is not None:
             tf.add_to_collections(collections, mae)
             tf.add_to_collections(collections, loss)
-        return loss
+        weight = tf.convert_to_tensor(weight, loss.dtype, name='weight')
+        return tf.multiply(loss, weight, name='weighted/loss')
 
 
 def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
@@ -143,7 +150,7 @@ def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
     return loss
 
 
-def get_stress_loss(labels, predictions, collections=None):
+def get_stress_loss(labels, predictions, weight=1.0, collections=None):
     """
     Return the relative RMSE loss of the stress.
 
@@ -153,6 +160,8 @@ def get_stress_loss(labels, predictions, collections=None):
         A `float64` tensor of shape `[batch_size, 6]` as the reference stress.
     predictions : tf.Tensor
         A `float64` tensor of shape `[batch_size, 6]` as the predicted stress.
+    weight : float or tf.Tensor
+        The weight of the loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -165,10 +174,12 @@ def get_stress_loss(labels, predictions, collections=None):
     with tf.name_scope("Stress"):
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
-        return _get_relative_rmse_loss(labels, predictions, collections)
+        loss = _get_relative_rmse_loss(labels, predictions, collections)
+        weight = tf.convert_to_tensor(weight, loss.dtype, name='weight')
+        return tf.multiply(loss, weight, name='weighted/loss')
 
 
-def get_total_pressure_loss(labels, predictions, collections=None):
+def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
     """
     Return the relative RMSE loss of the total pressure.
 
@@ -179,6 +190,8 @@ def get_total_pressure_loss(labels, predictions, collections=None):
         energies.
     predictions : tf.Tensor
         A `float64` tensor of shape `[batch_size, ]` as the predicted pressure.
+    weight : float or tf.Tensor
+        The weight of the loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -191,4 +204,6 @@ def get_total_pressure_loss(labels, predictions, collections=None):
     with tf.name_scope("Pressure"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        return _get_relative_rmse_loss(labels, predictions, collections)
+        loss = _get_relative_rmse_loss(labels, predictions, collections)
+        weight = tf.convert_to_tensor(weight, loss.dtype, name='weight')
+        return tf.multiply(loss, weight, name='weighted/loss')

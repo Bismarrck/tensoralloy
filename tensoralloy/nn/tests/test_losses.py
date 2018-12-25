@@ -70,12 +70,13 @@ def test_forces_loss():
         y = tf.convert_to_tensor(y)
         n_atoms = tf.convert_to_tensor(n_atoms)
 
-        rmse = get_forces_loss(x, y, n_atoms, collections=['UnitTest'])
+        rmse = get_forces_loss(x, y, n_atoms, weight=10.0,
+                               collections=['UnitTest'])
         mae = tf.get_default_graph().get_tensor_by_name('Forces/mae:0')
 
         with tf.Session() as sess:
             assert_less(y_mae - sess.run(mae), 1e-8)
-            assert_less(y_rmse - sess.run(rmse), 1e-8)
+            assert_less(y_rmse * 10.0 - sess.run(rmse), 1e-8)
 
 
 def test_stress_loss():
