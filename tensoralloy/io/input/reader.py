@@ -153,6 +153,8 @@ class InputReader:
 
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
+        
+        _safe_update("nn.loss.weight")
 
         descriptor = nested_get(configs, 'dataset.descriptor')
 

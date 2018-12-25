@@ -348,23 +348,27 @@ class BasicNN:
             losses = AttributeDict()
             losses.energy = get_energy_loss(
                 labels=labels.energy, predictions=predictions.energy,
-                n_atoms=n_atoms, collections=collections)
+                n_atoms=n_atoms, weight=self._loss_weights.energy,
+                collections=collections)
 
             if 'forces' in self._minimize_properties:
                 losses.forces = get_forces_loss(
                     labels=labels.forces, predictions=predictions.forces,
-                    n_atoms=n_atoms, collections=collections)
+                    n_atoms=n_atoms, weight=self._loss_weights.forces,
+                    collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
                 losses.total_pressure = get_total_pressure_loss(
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
+                    weight=self._loss_weights.total_pressure,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
                 losses.stress = get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
+                    weight=self._loss_weights.stress,
                     collections=collections)
 
             if self._loss_weights.l2 > 0.0:

@@ -176,11 +176,11 @@ class TrainingManager:
         Initialize a `BasicNN` using the configs of the input file.
         """
         elements = self._dataset.transformer.elements
-        l2_weight = self._reader['nn.l2_weight']
         minimize_properties = self._reader['nn.minimize']
         activation = self._reader['nn.activation']
+        loss_weights = AttributeDict(self._reader['nn.loss.weight'])
         kwargs = {'elements': elements,
-                  'loss_weights': AttributeDict(l2=l2_weight),
+                  'loss_weights': loss_weights,
                   'minimize_properties': minimize_properties,
                   'activation': activation}
         if self._reader['dataset.descriptor'] == 'behler':
@@ -189,7 +189,6 @@ class TrainingManager:
         else:
             kwargs['export_properties'] = minimize_properties
             return self._get_eam_nn(kwargs)
-
 
     def _get_dataset(self):
         """

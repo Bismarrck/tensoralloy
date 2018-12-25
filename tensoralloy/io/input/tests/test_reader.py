@@ -71,6 +71,8 @@ def test_read_configs():
     assert_not_in('atomic', configs['nn'])
     assert_equal(len(nested_get(configs, 'nn.eam.rho')), 5)
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 5)
+    assert_equal(reader['nn.loss.weight.l2'], 1.0)
+    assert_equal(reader['nn.loss.weight.energy'], 0.0)
 
     reader = InputReader(join(test_dir(), 'inputs', 'AlFe.fs.eam.toml'))
     configs = reader.configs

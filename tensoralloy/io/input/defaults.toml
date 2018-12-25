@@ -10,8 +10,14 @@ test_size = 0.2
 
 [nn]
 activation = "leaky_relu"
-l2_weight = 0.01
 minimize = ['energy', 'forces']
+
+[nn.loss.weights]
+l2 = 0.01
+energy = 1.0
+forces = 1.0
+stress = 1.0
+total_pressure = 1.0
 
 [nn.atomic]
 arch = "AtomicNN"
