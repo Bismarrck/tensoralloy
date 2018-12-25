@@ -20,7 +20,9 @@ __email__ = 'Bismarrck@me.com'
 
 
 def test_hidden_sizes():
-
+    """
+    Test setting hidden sizes of `BasicNN`.
+    """
     elements = sorted(['Al', 'Cu'])
 
     nn = BasicNN(elements)

@@ -123,7 +123,7 @@ def test_inference():
         assert_list_equal(y.shape.as_list(), [batch_size, max_n_atoms - 1])
 
 
-def test_export_setfl_teardown():
+def export_setfl_teardown():
     """
     Remove the generated setfl file.
     """
@@ -135,7 +135,7 @@ def test_export_setfl_teardown():
             remove(obj)
 
 
-@with_setup(teardown=test_export_setfl_teardown)
+@with_setup(teardown=export_setfl_teardown)
 def test_export_setfl():
     """
     Test exporting eam/alloy model of AlCuZJW04 to a setfl file.
