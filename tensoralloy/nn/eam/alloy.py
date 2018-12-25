@@ -14,8 +14,8 @@ from typing import List, Dict, Tuple
 from atsim.potentials import Potential, EAMPotential, writeSetFL
 
 from tensoralloy.misc import Defaults, safe_select, AttributeDict
-from tensoralloy.nn.utils import log_tensor
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.nn.utils import log_tensor, GraphKeys
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
 
@@ -27,6 +27,8 @@ class EamAlloyNN(EamNN):
     """
     The tensorflow based implementation of the EAM/Alloy model.
     """
+
+    default_collection = GraphKeys.EAM_ALLOY_NN_VARIABLES
 
     @property
     def tag(self):

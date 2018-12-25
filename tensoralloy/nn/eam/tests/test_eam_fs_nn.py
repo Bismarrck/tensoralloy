@@ -16,6 +16,7 @@ from ..fs import EamFsNN
 from tensoralloy.misc import skip, AttributeDict, test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -96,6 +97,15 @@ def test_inference():
             phi, phi_values = nn._build_phi_nn(partitions, max_occurs,
                                                verbose=False)
             y = tf.add(phi, embed, name='atomic')
+
+        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        assert_equal(len(collection), 25)
+
+        collection = tf.get_collection(GraphKeys.EAM_FS_NN_VARIABLES)
+        assert_equal(len(collection), 25)
+
+        collection = tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)
+        assert_equal(len(collection), 0)
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,
                                        'Fe': data.max_n_fe})

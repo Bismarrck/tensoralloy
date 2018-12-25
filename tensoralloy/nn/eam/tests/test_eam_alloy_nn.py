@@ -16,6 +16,7 @@ from collections import Counter
 from ..alloy import EamAlloyNN
 from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
 from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -280,6 +281,15 @@ def test_inference():
             embed = nn._build_embed_nn(rho, max_occurs, verbose=True)
             phi, _ = nn._build_phi_nn(partitions, max_occurs, verbose=True)
             y = tf.add(phi, embed, name='atomic')
+
+        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        assert_equal(len(collection), 41)
+
+        collection = tf.get_collection(GraphKeys.EAM_ALLOY_NN_VARIABLES)
+        assert_equal(len(collection), 25)
+
+        collection = tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)
+        assert_equal(len(collection), 16)
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,
                                        'Cu': data.max_n_cu})

@@ -15,7 +15,7 @@ from typing import Dict, List
 
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
-from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.utils import log_tensor, GraphKeys
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
 
@@ -27,6 +27,8 @@ class EamFsNN(EamNN):
     """
     The tensorflow based implementation of the EAM/Finnis-Sinclair model.
     """
+
+    default_collection = GraphKeys.EAM_FS_NN_VARIABLES
 
     @property
     def all_kbody_terms(self) -> List[str]:

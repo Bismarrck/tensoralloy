@@ -134,10 +134,15 @@ class EamNN(BasicNN):
         """
         activation_fn = get_activation_fn(self._activation)
         hidden_sizes = self._hidden_sizes[section][key]
+        if self.default_collection is None:
+            collections = None
+        else:
+            collections = [self.default_collection]
         return partial(convolution1x1,
                        activation_fn=activation_fn,
                        hidden_sizes=hidden_sizes,
                        l2_weight=self._loss_weights.l2,
+                       collections=collections,
                        verbose=verbose)
 
     def _get_embed_fn(self, element: str, verbose=False):

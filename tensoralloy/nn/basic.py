@@ -93,6 +93,9 @@ class BasicNN:
     The base neural network class.
     """
 
+    # The default collection for model variabls.
+    default_collection = None
+
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
                  loss_weights=None, minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces')):
