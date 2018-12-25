@@ -91,7 +91,8 @@ class AtomicNN(BasicNN):
                     if verbose:
                         log_tensor(x)
                     yi = convolution1x1(
-                        x, activation_fn, hidden_sizes, verbose=verbose)
+                        x, activation_fn, hidden_sizes,
+                        l2_weight=self._loss_weights.l2, verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')
                     if verbose:
                         log_tensor(yi)

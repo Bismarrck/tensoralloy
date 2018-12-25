@@ -302,28 +302,6 @@ class BasicNN:
                 log_tensor(total_pressure)
             return total_pressure
 
-    def add_l2_penalty(self):
-        """
-        Build a L2 penalty term.
-
-        Returns
-        -------
-        l2 : tf.Tensor
-            A `float64` tensor as the sum of L2 terms of all trainable kernel
-            variables.
-
-        """
-        with tf.name_scope("Penalty"):
-            for var in tf.trainable_variables():
-                # if 'bias' in var.op.name:
-                #     continue
-                l2 = tf.nn.l2_loss(var, name=var.op.name + "/l2")
-                tf.add_to_collection('l2_losses', l2)
-            l2_loss = tf.add_n(tf.get_collection('l2_losses'), name='l2_sum')
-            weight = tf.convert_to_tensor(
-                self._loss_weights.l2, dtype=tf.float64, name='weight')
-            return tf.multiply(l2_loss, weight, name='l2')
-
     def get_total_loss(self, predictions, labels, n_atoms):
         """
         Get the total loss tensor.
@@ -387,7 +365,8 @@ class BasicNN:
                     collections=collections)
 
             if self._loss_weights.l2 > 0.0:
-                losses.l2 = self.add_l2_penalty()
+                with tf.name_scope("L2"):
+                    losses.l2 = tf.losses.get_regularization_loss()
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, losses.l2)
 
             for tensor in losses.values():
