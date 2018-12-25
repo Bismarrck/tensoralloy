@@ -21,7 +21,10 @@ class GraphKeys:
 
     # Variable keys
     ATOMIC_NN_VARIABLES = 'atomic_nn_variables'
-    ATOMIC_RESNN_VARIABLES = 'atomic_resnn_variables'
+    ATOMIC_RES_NN_VARIABLES = 'atomic_res_nn_variables'
+    EAM_ALLOY_NN_VARIABLES = 'eam_alloy_nn_variables'
+    EAM_FS_NN_VARIABLES = 'eam_fs_nn_variables'
+    EAM_POTENTIAL_VARIABLES = 'eam_potential_variables'
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'
