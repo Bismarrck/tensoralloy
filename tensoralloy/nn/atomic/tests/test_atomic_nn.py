@@ -16,6 +16,7 @@ from ..atomic import AtomicNN
 from ..resnet import AtomicResNN
 from tensoralloy.misc import AttributeDict, test_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
+from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -39,7 +40,9 @@ def test_inference():
         g_al = np.random.randn(batch_size, max_n_al, ndim)
         g_cu = np.random.randn(batch_size, max_n_cu, ndim)
 
-        nn = AtomicNN(elements, hidden_sizes, activation='tanh',
+        nn = AtomicNN(elements, hidden_sizes,
+                      normalizer='linear',
+                      activation='tanh',
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
 
@@ -63,6 +66,12 @@ def test_inference():
 
         assert_equal(predictions.energy.shape.as_list(), [batch_size, ])
 
+        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        assert_equal(len(collection), 8)
+
+        collection = tf.get_collection(GraphKeys.ATOMIC_NN_VARIABLES)
+        assert_equal(len(collection), 8)
+
 
 def test_inference_from_transformer():
     """
@@ -81,9 +90,16 @@ def test_inference_from_transformer():
                                  composition=placeholders.composition,
                                  mask=placeholders.mask,
                                  volume=placeholders.volume)
-        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'])
+        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'],
+                         normalizer=None)
         prediction = nn.build(features)
         assert_list_equal(prediction.energy.shape.as_list(), [])
+
+        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        assert_equal(len(collection), 11)
+
+        collection = tf.get_collection(GraphKeys.ATOMIC_RES_NN_VARIABLES)
+        assert_equal(len(collection), 11)
 
 
 output_graph_path = join(

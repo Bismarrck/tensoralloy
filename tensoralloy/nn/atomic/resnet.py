@@ -34,6 +34,8 @@ class AtomicResNN(AtomicNN):
 
     """
 
+    default_collection = GraphKeys.ATOMIC_RES_NN_VARIABLES
+
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
                  loss_weights=None, minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces'), normalizer='linear',
@@ -82,7 +84,7 @@ class AtomicResNN(AtomicNN):
                                     dtype=tf.float64,
                                     trainable=True,
                                     collections=[
-                                        GraphKeys.ATOMIC_RESNN_VARIABLES,
+                                        GraphKeys.ATOMIC_RES_NN_VARIABLES,
                                         GraphKeys.TRAIN_METRICS,
                                         tf.GraphKeys.TRAINABLE_VARIABLES,
                                         tf.GraphKeys.GLOBAL_VARIABLES,

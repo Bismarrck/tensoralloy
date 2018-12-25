@@ -13,10 +13,10 @@ from typing import List, Dict, Callable
 from os.path import dirname, join
 
 from tensoralloy.nn.atomic.normalizer import InputNormalizer
-from tensoralloy.nn.utils import get_activation_fn, log_tensor
+from tensoralloy.nn.utils import get_activation_fn, log_tensor, GraphKeys
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
-from tensoralloy.misc import AttributeDict
+from tensoralloy.misc import AttributeDict, safe_select
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -26,6 +26,8 @@ class AtomicNN(BasicNN):
     """
     This class represents a general atomic neural network.
     """
+
+    default_collection = GraphKeys.ATOMIC_NN_VARIABLES
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
                  loss_weights=None, minimize_properties=('energy', 'forces'),
@@ -46,7 +48,8 @@ class AtomicNN(BasicNN):
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
             loss_weights=loss_weights, minimize_properties=minimize_properties,
             export_properties=export_properties)
-        self._initial_normalizer_weights = normalization_weights
+        self._initial_normalizer_weights = \
+            safe_select(normalization_weights, {})
         self._normalizer = InputNormalizer(method=normalizer)
 
     @property
@@ -76,6 +79,8 @@ class AtomicNN(BasicNN):
             If True, the prediction tensors will be logged.
 
         """
+        collections = [self.default_collection]
+
         with tf.variable_scope("ANN"):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
@@ -84,15 +89,20 @@ class AtomicNN(BasicNN):
                     x = tf.identity(value, name='input')
                     if x.shape.ndims == 2:
                         x = tf.expand_dims(x, axis=0, name='2to3')
-                    if self._initial_normalizer_weights is not None:
+                    if self._normalizer.enabled:
                         x = self._normalizer(
-                            x, self._initial_normalizer_weights[element])
+                            x, self._initial_normalizer_weights.get(element),
+                            collections=collections)
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
                     yi = convolution1x1(
-                        x, activation_fn, hidden_sizes,
-                        l2_weight=self._loss_weights.l2, verbose=verbose)
+                        x,
+                        activation_fn=activation_fn,
+                        hidden_sizes=hidden_sizes,
+                        l2_weight=self._loss_weights.l2,
+                        collections=collections,
+                        verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')
                     if verbose:
                         log_tensor(yi)
