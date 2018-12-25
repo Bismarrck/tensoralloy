@@ -79,7 +79,8 @@ class Conv(keras_Conv, base.Layer):
 
 
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
-                   kernel_initializer='xavier', l2_weight=0.0, verbose=False):
+                   kernel_initializer='xavier', l2_weight=0.0, collections=None,
+                   verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 
@@ -96,6 +97,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         The initialization algorithm for kernel variables.
     l2_weight : float
         The weight of the l2 regularization of kernel variables.
+    collections : List[str] or None
+        A list of str as the collections where the variables should be added.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -114,6 +117,10 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
     else:
         regularizer = None
 
+    if collections is not None:
+        assert isinstance(collections, (list, tuple, set))
+        collections = list(collections) + [tf.GraphKeys.MODEL_VARIABLES]
+
     rank = len(x.shape) - 2
 
     for j in range(len(hidden_sizes)):
@@ -124,7 +131,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                      kernel_regularizer=regularizer,
                      bias_regularizer=regularizer,
                      name=f'Conv{rank}d{j + 1}',
-                     collections=[tf.GraphKeys.MODEL_VARIABLES],
+                     collections=collections,
                      _reuse=tf.AUTO_REUSE)
         x = layer.apply(x)
         if verbose:
@@ -134,7 +141,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                  kernel_initializer=kernel_initializer,
                  kernel_regularizer=regularizer,
                  name='Output',
-                 collections=[tf.GraphKeys.MODEL_VARIABLES],
+                 collections=collections,
                  _reuse=tf.AUTO_REUSE)
     y = layer.apply(x)
     if verbose:
