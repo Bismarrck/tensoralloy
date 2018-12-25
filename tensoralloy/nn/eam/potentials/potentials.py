@@ -9,6 +9,7 @@ from typing import List, Dict
 from abc import ABC
 
 from tensoralloy.misc import safe_select
+from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,10 +29,13 @@ def get_variable(name,
     if trainable:
         _collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
     if collections is not None:
-        _collections += list(collections)
+        assert isinstance(collections, (tuple, list, set))
+        for collection in collections:
+            if collection not in _collections:
+                _collections.append(collection)
     return tf.get_variable(name, shape=(), dtype=dtype,
                            initializer=initializer, regularizer=regularizer,
-                           trainable=trainable, collections=collections,
+                           trainable=trainable, collections=_collections,
                            validate_shape=validate_shape)
 
 
@@ -120,6 +124,10 @@ class EmpiricalPotential:
                            initializer=tf.constant_initializer(
                                value=self._params[section][parameter],
                                dtype=dtype),
+                           collections=[
+                               GraphKeys.EAM_POTENTIAL_VARIABLES,
+                               tf.GraphKeys.MODEL_VARIABLES,
+                           ],
                            trainable=trainable)
         if shared:
             self._shared_vars[tag] = var

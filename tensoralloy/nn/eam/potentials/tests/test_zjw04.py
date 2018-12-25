@@ -13,10 +13,12 @@ import tensorflow as tf
 import numpy as np
 import nose
 import math
+from nose.tools import assert_equal
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.nn.eam.potentials.zjw04 import AlCuZJW04
+from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -206,6 +208,9 @@ def test_rho_phi_aa():
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             results = sess.run([rho_al_op, rho_cu_op, phi_al_op, phi_cu_op])
+
+        collection = tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)
+        assert_equal(len(collection), 16)
 
         assert_array_equal(results[0], rho_al)
         assert_array_equal(results[1], rho_cu)
