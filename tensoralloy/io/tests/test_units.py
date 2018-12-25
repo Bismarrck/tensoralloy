@@ -8,7 +8,7 @@ import nose
 from ase.units import kcal, mol, Hartree, eV
 from nose.tools import assert_almost_equal
 
-from tensoralloy.io.read import read
+from tensoralloy.io.read import read_file
 from ..units import get_conversion_units
 
 __author__ = 'Xin Chen'
@@ -32,8 +32,8 @@ def test_unit_conversion():
     assert_almost_equal(to_GPa, 0.1)
 
     xyzfile = 'test_files/examples.extxyz'
-    database = read(xyzfile, verbose=False,
-                    units={'energy': 'kcal/mol'})
+    database = read_file(xyzfile, verbose=False,
+                         units={'energy': 'kcal/mol'})
     atoms = database.get_atoms(id=2)
     thres = 1e-6
     unit = kcal / mol / eV

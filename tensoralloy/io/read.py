@@ -133,7 +133,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
     return database
 
 
-def read(filename, units=None, num_examples=None, verbose=True):
+def read_file(filename, units=None, num_examples=None, verbose=True):
     """
     Read `Atoms` objects from a file.
 
@@ -222,12 +222,12 @@ def main(args: Namespace):
     """
     The main function.
     """
-    read(args.filename,
-         units={'energy': args.energy_unit,
+    read_file(args.filename,
+              units={'energy': args.energy_unit,
                 'forces': args.forces_unit,
                 'stress': args.stress_unit},
-         num_examples=args.num_examples,
-         verbose=True)
+              num_examples=args.num_examples,
+              verbose=True)
 
 
 if __name__ == "__main__":

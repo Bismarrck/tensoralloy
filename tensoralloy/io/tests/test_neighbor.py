@@ -10,7 +10,7 @@ from ase.db import connect
 
 from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.io.neighbor import find_neighbor_size_limits
-from tensoralloy.io.read import read
+from tensoralloy.io.read import read_file
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -21,7 +21,7 @@ def test_find_neighbor_size_limits():
     Test the function `find_neighbor_size_limits`.
     """
     xyzfile = 'test_files/examples.extxyz'
-    database = read(xyzfile, verbose=False)
+    database = read_file(xyzfile, verbose=False)
 
     find_neighbor_size_limits(database, rc=6.0, k_max=3, n_jobs=1,
                               verbose=False)

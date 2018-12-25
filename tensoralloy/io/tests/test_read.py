@@ -6,7 +6,7 @@ import nose
 
 from nose.tools import assert_equal, assert_almost_equal, assert_true
 from nose.tools import assert_dict_equal
-from tensoralloy.io.read import read
+from tensoralloy.io.read import read_file
 
 
 def test_read_xyz():
@@ -14,7 +14,7 @@ def test_read_xyz():
     Test reading normal xyz files.
     """
     xyzfile = 'test_files/B28.xyz'
-    database = read(xyzfile, verbose=False, num_examples=2)
+    database = read_file(xyzfile, verbose=False, num_examples=2)
     atoms = database.get_atoms('id=2')
     assert_equal(len(database), 2)
     assert_almost_equal(atoms.positions[1, 1], 10.65007390)
@@ -27,7 +27,7 @@ def test_read_extxyz():
     Test reading ext xyz files.
     """
     xyzfile = 'test_files/examples.extxyz'
-    database = read(xyzfile, verbose=False)
+    database = read_file(xyzfile, verbose=False)
     atoms = database.get_atoms('id=2')
     thres = 1e-6
     metadata = database.metadata
