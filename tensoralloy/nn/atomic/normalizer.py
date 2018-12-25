@@ -47,12 +47,9 @@ class InputNormalizer:
                 initializer=tf.constant_initializer(values, dtype=x.dtype),
                 collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
                              tf.GraphKeys.GLOBAL_VARIABLES,
-                             GraphKeys.NORMALIZE_VARIABLES],
+                             GraphKeys.ATOMIC_NN_VARIABLES],
                 trainable=True)
-            tf.summary.histogram(
-                name=alpha.op.name + '/summary',
-                values=alpha,
-                collections=[GraphKeys.TRAIN_SUMMARY])
+            tf.summary.histogram(alpha.op.name + '/hist', alpha)
             x = tf.multiply(x, alpha, name='ax')
             if self.method == 'linear':
                 x = tf.identity(x, name='x')
@@ -61,8 +58,5 @@ class InputNormalizer:
             else:
                 raise ValueError(
                     f"Unsupported normalization method: {self.method}")
-            tf.summary.histogram(
-                name=x.op.name + '/summary',
-                values=x,
-                collections=[GraphKeys.TRAIN_SUMMARY])
+            tf.summary.histogram(x.op.name + '/hist', x)
             return x

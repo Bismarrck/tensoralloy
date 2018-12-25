@@ -19,22 +19,13 @@ class GraphKeys:
     Standard names for variable collections.
     """
 
-    # Summary keys
-    TRAIN_SUMMARY = 'train_summary'
-    EVAL_SUMMARY = 'eval_summary'
-
     # Variable keys
-    NORMALIZE_VARIABLES = 'normalize_vars'
-    STATIC_ENERGY_VARIABLES = 'static_energy_vars'
+    ATOMIC_NN_VARIABLES = 'atomic_nn_variables'
+    ATOMIC_RESNN_VARIABLES = 'atomic_resnn_variables'
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'
     EVAL_METRICS = 'eval_metrics'
-
-    # Gradient Keys
-    ENERGY_GRADIENTS = 'energy_gradients'
-    FORCES_GRADIENTS = 'forces_gradients'
-    STRESS_GRADIENTS = 'stress_gradients'
 
 
 def get_activation_fn(fn_name: str):
@@ -83,8 +74,7 @@ def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
                                      decay_steps=decay_steps,
                                      staircase=staircase,
                                      name="learning_rate")
-        tf.summary.scalar('learning_rate_at_step', learning_rate,
-                          collections=[GraphKeys.TRAIN_SUMMARY, ])
+        tf.summary.scalar('learning_rate_at_step', learning_rate)
         return learning_rate
 
 

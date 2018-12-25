@@ -82,10 +82,11 @@ class AtomicResNN(AtomicNN):
                                     dtype=tf.float64,
                                     trainable=True,
                                     collections=[
-                                        GraphKeys.STATIC_ENERGY_VARIABLES,
+                                        GraphKeys.ATOMIC_RESNN_VARIABLES,
                                         GraphKeys.TRAIN_METRICS,
                                         tf.GraphKeys.TRAINABLE_VARIABLES,
-                                        tf.GraphKeys.GLOBAL_VARIABLES],
+                                        tf.GraphKeys.GLOBAL_VARIABLES,
+                                        tf.GraphKeys.MODEL_VARIABLES],
                                     initializer=initializer)
                 xz = tf.multiply(x, z, name='xz')
                 if ndims == 1:
@@ -117,7 +118,5 @@ class AtomicResNN(AtomicNN):
                 ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
                                        name='avg')
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
-                tf.summary.scalar(ratio.op.name + '/summary', ratio,
-                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
-
+                tf.summary.scalar(ratio.op.name + '/summary', ratio)
             return energy

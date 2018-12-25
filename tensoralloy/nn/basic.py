@@ -370,8 +370,7 @@ class BasicNN:
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, losses.l2)
 
             for tensor in losses.values():
-                tf.summary.scalar(tensor.op.name + '/summary', tensor,
-                                  collections=[GraphKeys.TRAIN_SUMMARY, ])
+                tf.summary.scalar(tensor.op.name + '/summary', tensor)
 
         return tf.add_n(list(losses.values()), name='loss'), losses
 
@@ -401,8 +400,7 @@ class BasicNN:
                 summary_saver_hook = tf.train.SummarySaverHook(
                     save_steps=hparams.train.summary_steps,
                     output_dir=hparams.train.model_dir,
-                    summary_op=tf.summary.merge_all(key=GraphKeys.TRAIN_SUMMARY,
-                                                    name='merge'))
+                    summary_op=tf.summary.merge_all())
 
             with tf.name_scope("Speed"):
                 examples_per_sec_hook = ExamplesPerSecondHook(

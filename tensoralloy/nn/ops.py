@@ -68,7 +68,7 @@ def sum_of_grads_and_vars(list_of_grads_and_vars):
         return outputs
 
 
-def add_grads_and_vars_summary(grads_and_vars, name, collection):
+def add_grads_and_vars_summary(grads_and_vars, name):
     """
     Add summary of the gradients.
     """
@@ -77,14 +77,11 @@ def add_grads_and_vars_summary(grads_and_vars, name, collection):
         if grad is not None:
             norm = tf.norm(grad, name=var.op.name + "/norm")
             list_of_ops.append(norm)
-            tf.add_to_collection(collection, grad)
             with tf.name_scope("GradNorm/{}/".format(name)):
-                tf.summary.scalar(var.op.name + "/norm", norm,
-                                  collections=[utils.GraphKeys.TRAIN_SUMMARY, ])
+                tf.summary.scalar(var.op.name + "/norm", norm)
     with tf.name_scope("GradNorm/{}/".format(name)):
         total_norm = tf.add_n(list_of_ops, name='total')
-        tf.summary.scalar('total', total_norm,
-                          collections=[utils.GraphKeys.TRAIN_SUMMARY, ])
+        tf.summary.scalar('total', total_norm)
         tf.add_to_collection(utils.GraphKeys.TRAIN_METRICS, total_norm)
     return total_norm
 
@@ -104,8 +101,7 @@ def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
             tf.reshape(energy_grad, (-1,)), axes=1)
         norm = tf.norm(grad) * tf.norm(energy_grad) + eps
         cos_dist = tf.div(dot, norm, name=var.op.name + '/cos_dist')
-        tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist,
-                          collections=[utils.GraphKeys.TRAIN_SUMMARY, ])
+        tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
 
 
 def get_train_op(losses: AttributeDict, hparams: AttributeDict,
@@ -143,29 +139,20 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
             optimizer = utils.get_optimizer(learning_rate, hparams.opt.method)
 
-        collection_mapping = {
-            'energy': utils.GraphKeys.ENERGY_GRADIENTS,
-            'forces': utils.GraphKeys.FORCES_GRADIENTS,
-            'stress': utils.GraphKeys.STRESS_GRADIENTS,
-            'total_pressure': utils.GraphKeys.STRESS_GRADIENTS,
-        }
         grads_and_vars = {}
         total_norms = {}
-
-        with tf.name_scope("Histograms"):
-            for var in tf.trainable_variables():
-                tf.summary.histogram(
-                    var.op.name + '/hist2d', var,
-                    collections=[utils.GraphKeys.TRAIN_SUMMARY, ])
 
         for prop in minimize_properties:
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
                 g = optimizer.compute_gradients(losses[prop])
-                total_norm = add_grads_and_vars_summary(
-                    g, prop, collection_mapping[prop])
+                total_norm = add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
                 total_norms[prop] = total_norm
+
+        with tf.name_scope("Histogram"):
+            for var in tf.trainable_variables():
+                tf.summary.histogram(var.op.name + '/hist', var)
 
         with tf.name_scope("CosDist"):
             if 'energy' in minimize_properties:
