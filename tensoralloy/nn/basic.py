@@ -50,12 +50,12 @@ class ExportablePropertyError(_PropertyError):
 
 
 # noinspection PyTypeChecker,PyArgumentList
-class Property(namedtuple('Property', ('name', 'exportable'))):
+class Property(namedtuple('Property', ('name', 'minimizable'))):
     """
     A property of a strucutre.
     """
 
-    def __new__(cls, name: str, exportable: bool):
+    def __new__(cls, name: str, minimizable: bool):
         """
         Initialization method.
 
@@ -63,11 +63,11 @@ class Property(namedtuple('Property', ('name', 'exportable'))):
         ----------
         name : str
             The name of this property.
-        exportable : bool
-            A boolean indicating whether this property can be exported or not.
+        minimizable : bool
+            A boolean indicating whether this property can be minimized or not.
 
         """
-        return super(Property, cls).__new__(cls, name, exportable)
+        return super(Property, cls).__new__(cls, name, minimizable)
 
     def __eq__(self, other):
         if hasattr(other, "name"):
@@ -76,15 +76,16 @@ class Property(namedtuple('Property', ('name', 'exportable'))):
             return str(other) == self.name
 
 
-available_properties = (
+exportable_properties = (
     Property('energy', True),
     Property('forces', True),
     Property('stress', True),
-    Property('total_pressure', True)
+    Property('total_pressure', True),
+    Property('hessian', False),
 )
 
-exportable_properties = tuple(
-    prop for prop in available_properties if prop.exportable
+available_properties = tuple(
+    prop for prop in exportable_properties if prop.minimizable
 )
 
 
@@ -305,6 +306,21 @@ class BasicNN:
                 log_tensor(total_pressure)
             return total_pressure
 
+    @staticmethod
+    def _get_hessian(energy: tf.Tensor, positions: tf.Tensor, verbose=True):
+        """
+        Return the Op to compute the Hessian matrix:
+
+            hessian = d^2E / dR^2 = d(dE / dR) / dR
+
+        """
+        with tf.name_scope("Hessian"):
+            hessian = tf.identity(tf.hessians(energy, positions)[0],
+                                  name='hessian')
+            if verbose:
+                log_tensor(hessian)
+            return hessian
+
     def get_total_loss(self, predictions, labels, n_atoms):
         """
         Get the total loss tensor.
@@ -481,9 +497,8 @@ class BasicNN:
                 yn = predictions.energy / n_atoms
                 ops_dict = {
                     'Energy/mae': tf.metrics.mean_absolute_error(x, y),
-                    'Energy/rmse': tf.metrics.mean_squared_error(x, y),
+                    'Energy/mse': tf.metrics.mean_squared_error(x, y),
                     'Energy/mae/atom': tf.metrics.mean_absolute_error(xn, yn),
-                    'Energy/rmse/atom': tf.metrics.mean_squared_error(xn, yn),
                 }
                 metrics.update(ops_dict)
 
@@ -501,7 +516,7 @@ class BasicNN:
                         y = tf.multiply(weight, y)
                     ops_dict = {
                         'Forces/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Forces/rmse': tf.metrics.mean_squared_error(x, y),
+                        'Forces/mse': tf.metrics.mean_squared_error(x, y),
                     }
                     metrics.update(ops_dict)
 
@@ -511,7 +526,7 @@ class BasicNN:
                     y = predictions.total_pressure
                     ops_dict = {
                         'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Pressure/rmse': tf.metrics.mean_squared_error(x, y)}
+                        'Pressure/mse': tf.metrics.mean_squared_error(x, y)}
                     metrics.update(ops_dict)
 
             elif 'stress' in self._minimize_properties:
@@ -520,7 +535,7 @@ class BasicNN:
                     y = predictions.stress
                     ops_dict = {
                         'Stress/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Stress/rmse': tf.metrics.mean_squared_error(x, y)}
+                        'Stress/mse': tf.metrics.mean_squared_error(x, y)}
                     metrics.update(ops_dict)
 
             return metrics
@@ -599,6 +614,10 @@ class BasicNN:
             elif 'stress' in properties:
                 predictions.stress = self._get_reduced_stress(
                     predictions.energy, features.cells, verbose=verbose)
+
+            if 'hessian' in properties:
+                predictions.hessian = self._get_hessian(
+                    predictions.energy, features.positions, verbose=verbose)
 
             return predictions
 

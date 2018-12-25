@@ -5,6 +5,7 @@ This module defines various neural network based calculators.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 import json
 from ase import Atoms
 from ase.calculators.calculator import Calculator
@@ -14,6 +15,7 @@ from typing import List, Tuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer
+from tensoralloy.nn.basic import exportable_properties
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -24,7 +26,7 @@ class TensorAlloyCalculator(Calculator):
     ASE-Calculator for TensorAlloy derived protobuf models.
     """
 
-    implemented_properties = ['energy', 'forces', 'stress']
+    implemented_properties = [prop.name for prop in exportable_properties]
     default_parameters = {}
     nolabel = True
 
@@ -94,7 +96,8 @@ class TensorAlloyCalculator(Calculator):
             'energy': 'Output/Energy/energy:0',
             'forces': 'Output/Forces/forces:0',
             'stress': 'Output/Stress/Voigt/stress:0',
-            'total_pressure': 'Output/Pressure/pressure:0'
+            'total_pressure': 'Output/Pressure/pressure:0',
+            'hessian': 'Output/Hessian/hessian:0',
         }
         ops = {}
         for prop, name in props_and_names.items():
@@ -107,6 +110,22 @@ class TensorAlloyCalculator(Calculator):
         else:
             assert set(self._predict_properties) == set(ops.keys())
         return ops
+
+    def get_hessian(self, atoms=None):
+        """
+        Return the Hessian matrix.
+        """
+        hessian = self.get_property('hessian', atoms)
+        clf = self.transformer.get_index_transformer(atoms)
+        return clf.reverse_map_hessian(hessian)
+
+    def get_forces(self, atoms=None):
+        """
+        Return the atomic forces.
+        """
+        forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
+        clf = self.transformer.get_index_transformer(atoms)
+        return clf.map_array(forces, reverse=True)
 
     def calculate(self, atoms=None, properties=('energy', 'forces'), *args):
         """

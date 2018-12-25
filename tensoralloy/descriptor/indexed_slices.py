@@ -233,3 +233,32 @@ class IndexTransformer:
         if rank == 2:
             output = np.squeeze(output, axis=0)
         return output
+
+    def reverse_map_hessian(self, hessian: np.ndarray):
+        """
+        Transform the [Np, 3, Np, 3] Hessian matrix to [3N, 3N] where N is the
+        number of atoms (excluding the virtual atom) and Np is number of atoms
+        in the projected frame.
+        """
+        rank = np.ndim(hessian)
+        if rank != 4 or hessian.shape[1] != 3 or hessian.shape[3] != 3:
+            raise ValueError(
+                "The input array should be a 4D matrix of shape [Np, 3, Np, 3]")
+
+        indices = []
+        istart = IndexTransformer._ISTART
+        for i in range(istart, istart + len(self._symbols)):
+            indices.append(self._index_map[i])
+
+        n = len(self._symbols)
+        h = np.zeros((n * 3, n * 3))
+
+        for i in range(n):
+            for alpha in range(3):
+                for j in range(n):
+                    for beta in range(3):
+                        row = i * 3 + alpha
+                        col = j * 3 + beta
+                        h[row, col] = h[indices[i], alpha, indices[j], beta]
+
+        return h

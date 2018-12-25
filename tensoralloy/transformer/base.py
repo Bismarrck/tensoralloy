@@ -53,6 +53,13 @@ class DescriptorTransformer(AtomicDescriptorInterface):
         """
         pass
 
+    @abc.abstractmethod
+    def get_index_transformer(self, atoms: Atoms) -> IndexTransformer:
+        """
+        Return the corresponding `IndexTransformer`.
+        """
+        pass
+
 
 def bytes_feature(value):
     """
