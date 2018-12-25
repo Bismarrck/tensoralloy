@@ -276,7 +276,7 @@ class TrainingManager:
                                      f'{self._dataset.name}.pb')
 
             input_fn = self._dataset.input_fn_for_prediction(
-                predict_properties=self._reader['nn.predict'])
+                predict_properties=self._reader['nn.atomic.export'])
 
             self._nn.export(features_and_params_fn=input_fn,
                             output_graph_path=output_graph_path,
