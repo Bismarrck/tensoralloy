@@ -6,7 +6,6 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
-from tensorflow.contrib.layers import xavier_initializer
 from typing import List, Dict
 from collections import namedtuple
 
@@ -541,68 +540,6 @@ class BasicNN:
                     metrics.update(ops_dict)
 
             return metrics
-
-    @staticmethod
-    def _get_1x1conv_nn(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
-                        verbose=False, **kwargs):
-        """
-        A helper function to construct a 1x1 convolutional neural network.
-
-        Parameters
-        ----------
-        x : tf.Tensor
-            The input of the convolutional neural network. `x` must be a tensor
-            with rank 3 (conv1d), 4 (conv2d) or 5 (conv3d) of dtype `float64`.
-        activation_fn : Callable
-            The activation function.
-        hidden_sizes : List[int]
-            The size of the hidden layers.
-        verbose : bool
-            If True, key tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            The output tensor. `x` and `y` has the same rank. The last dimension
-            of `y` is 1.
-
-        """
-        kernel_initializer = kwargs.get(
-            'kernel_initializer',
-            xavier_initializer(seed=Defaults.seed, dtype=tf.float64))
-        bias_initializer = kwargs.get(
-            'bias_initializer',
-            tf.zeros_initializer(dtype=tf.float64))
-
-        rank = len(x.shape)
-        if rank == 3:
-            conv = tf.layers.conv1d
-        elif rank == 4:
-            conv = tf.layers.conv2d
-        elif rank == 5:
-            conv = tf.layers.conv3d
-        else:
-            raise ValueError(
-                f"The rank of `x` should be 3, 4 or 5 but not {rank}")
-
-        for j in range(len(hidden_sizes)):
-            x = conv(
-                inputs=x, filters=hidden_sizes[j],
-                kernel_size=1, strides=1,
-                activation=activation_fn,
-                use_bias=True,
-                reuse=tf.AUTO_REUSE,
-                kernel_initializer=kernel_initializer,
-                bias_initializer=bias_initializer,
-                name=f'{conv.__name__.capitalize()}{j + 1}')
-            if verbose:
-                log_tensor(x)
-        y = conv(inputs=x, filters=1, kernel_size=1, strides=1, use_bias=False,
-                 kernel_initializer=kernel_initializer, reuse=tf.AUTO_REUSE,
-                 name='Output')
-        if verbose:
-            log_tensor(y)
-        return y
 
     def _build_nn(self, features: AttributeDict, verbose=False):
         """

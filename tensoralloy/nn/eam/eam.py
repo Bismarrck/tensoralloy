@@ -12,9 +12,10 @@ from functools import partial
 from typing import List, Dict, Callable
 
 from tensoralloy.misc import AttributeDict
+from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.nn.eam.potentials import EamFSPotential, EamAlloyPotential
 
@@ -133,7 +134,7 @@ class EamNN(BasicNN):
         """
         activation_fn = get_activation_fn(self._activation)
         hidden_sizes = self._hidden_sizes[section][key]
-        return partial(self._get_1x1conv_nn, activation_fn=activation_fn,
+        return partial(convolution1x1, activation_fn=activation_fn,
                        hidden_sizes=hidden_sizes, verbose=verbose)
 
     def _get_embed_fn(self, element: str, verbose=False):

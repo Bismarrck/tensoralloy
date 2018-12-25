@@ -15,6 +15,7 @@ from os.path import dirname, join
 from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.basic import BasicNN
+from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.misc import AttributeDict
 
 __author__ = 'Xin Chen'
@@ -89,7 +90,7 @@ class AtomicNN(BasicNN):
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
-                    yi = self._get_1x1conv_nn(
+                    yi = convolution1x1(
                         x, activation_fn, hidden_sizes, verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')
                     if verbose:
