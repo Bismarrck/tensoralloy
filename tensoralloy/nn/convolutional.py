@@ -5,7 +5,9 @@ This module defines the 1x1 convolutional Op for `tensoralloy`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-from tensorflow.contrib.layers import xavier_initializer
+from tensorflow.contrib.layers import xavier_initializer, l2_regularizer
+from tensorflow.python.layers import base
+from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
 from typing import List
 
 from tensoralloy.misc import Defaults
@@ -24,8 +26,60 @@ _initializers = {
 }
 
 
+class Conv(keras_Conv, base.Layer):
+    """
+    `tf.keras.layers.convolutional.Conv` is an abstract nD convolution layer
+    (private, used as implementation base).
+
+    This is a modified implementation of `tf.keras.layers.convolutional.Conv`
+    whose variables can be added to selected collections.
+
+    """
+
+    def __init__(self, rank, filters, kernel_size, strides=1, padding='valid',
+                 data_format=None, dilation_rate=1, activation=None,
+                 use_bias=True, kernel_initializer='glorot_uniform',
+                 bias_initializer='zeros', kernel_regularizer=None,
+                 bias_regularizer=None, activity_regularizer=None,
+                 kernel_constraint=None, bias_constraint=None, trainable=True,
+                 name=None, collections=None, **kwargs):
+        super(Conv, self).__init__(
+            rank, filters, kernel_size, strides=strides, padding=padding,
+            data_format=data_format, dilation_rate=dilation_rate,
+            activation=activation, use_bias=use_bias,
+            kernel_initializer=kernel_initializer,
+            bias_initializer=bias_initializer,
+            kernel_regularizer=kernel_regularizer,
+            bias_regularizer=bias_regularizer,
+            activity_regularizer=activity_regularizer,
+            kernel_constraint=kernel_constraint,
+            bias_constraint=bias_constraint, trainable=trainable, name=name,
+            **kwargs)
+
+        if collections is not None:
+            assert isinstance(collections, list)
+            _set = {tf.GraphKeys.GLOBAL_VARIABLES,
+                    tf.GraphKeys.TRAINABLE_VARIABLES}
+            collections = list(set(collections).difference(_set))
+            if len(collections) == 0:
+                collections = None
+        self.collections = collections
+
+    def build(self, input_shape):
+        """
+        Build the convolution layer and add the variables 'kernel' and 'bias' to
+        given collections.
+        """
+        super(Conv, self).build(input_shape)
+
+        if self.collections is not None:
+            tf.add_to_collections(self.collections, self.kernel)
+            if self.use_bias:
+                tf.add_to_collections(self.collections, self.bias)
+
+
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
-                   kernel_initializer='xavier', verbose=False):
+                   kernel_initializer='xavier', l2_weight=0.0, verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 
@@ -40,6 +94,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         The size of the hidden layers.
     kernel_initializer : str
         The initialization algorithm for kernel variables.
+    l2_weight : float
+        The weight of the l2 regularization of kernel variables.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -53,33 +109,34 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
     kernel_initializer = _initializers[kernel_initializer]
     bias_initializer = _initializers['zero']
 
-    rank = len(x.shape)
-    if rank == 3:
-        conv = tf.layers.conv1d
-    elif rank == 4:
-        conv = tf.layers.conv2d
-    elif rank == 5:
-        conv = tf.layers.conv3d
+    if l2_weight > 0.0:
+        regularizer = l2_regularizer(l2_weight)
     else:
-        raise ValueError(
-            f"The rank of `x` should be 3, 4 or 5 but not {rank}")
+        regularizer = None
+
+    rank = len(x.shape) - 2
 
     for j in range(len(hidden_sizes)):
-        x = conv(
-            inputs=x, filters=hidden_sizes[j],
-            kernel_size=1, strides=1,
-            activation=activation_fn,
-            use_bias=True,
-            reuse=tf.AUTO_REUSE,
-            kernel_initializer=kernel_initializer,
-            bias_initializer=bias_initializer,
-            kernel_regularizer=tf.keras.regularizers.l2(),
-            name=f'{conv.__name__.capitalize()}{j + 1}')
+        layer = Conv(rank=rank, filters=hidden_sizes[j], kernel_size=1,
+                     strides=1, use_bias=True, activation=activation_fn,
+                     kernel_initializer=kernel_initializer,
+                     bias_initializer=bias_initializer,
+                     kernel_regularizer=regularizer,
+                     bias_regularizer=regularizer,
+                     name=f'Conv{rank}d{j + 1}',
+                     collections=[tf.GraphKeys.MODEL_VARIABLES],
+                     _reuse=tf.AUTO_REUSE)
+        x = layer.apply(x)
         if verbose:
             log_tensor(x)
-    y = conv(inputs=x, filters=1, kernel_size=1, strides=1, use_bias=False,
-             kernel_initializer=kernel_initializer, reuse=tf.AUTO_REUSE,
-             name='Output')
+    layer = Conv(rank=rank, filters=1, kernel_size=1,
+                 strides=1, use_bias=False, activation=activation_fn,
+                 kernel_initializer=kernel_initializer,
+                 kernel_regularizer=regularizer,
+                 name='Output',
+                 collections=[tf.GraphKeys.MODEL_VARIABLES],
+                 _reuse=tf.AUTO_REUSE)
+    y = layer.apply(x)
     if verbose:
         log_tensor(y)
     return y
