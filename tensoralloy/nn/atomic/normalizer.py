@@ -7,8 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from tensoralloy.nn.utils import GraphKeys
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -22,32 +20,45 @@ class InputNormalizer:
         """
         Initialization method.
         """
-        assert method in ('linear', 'arctan', '', None)
         if not method:
             self.method = None
-            self.scope = 'Identity'
+            self.scope = 'RawInput'
         else:
             self.method = method
             self.scope = '{}Norm'.format(method.capitalize())
 
-    def __call__(self, x: tf.Tensor, values=None):
+    @property
+    def enabled(self):
+        """
+        Return True if the input normalization is enabled.
+        """
+        return bool(self.method)
+
+    def __call__(self, x: tf.Tensor, initial_weights=None, collections=None):
         """
         Apply the normalization.
         """
+        default_collections = [tf.GraphKeys.TRAINABLE_VARIABLES,
+                               tf.GraphKeys.GLOBAL_VARIABLES,
+                               tf.GraphKeys.MODEL_VARIABLES]
+        if collections is not None:
+            for collection in collections:
+                if collection not in default_collections:
+                    default_collections.append(collection)
+
         with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
             if not self.method:
                 return tf.identity(x, name='identity')
 
-            if values is None:
-                values = np.ones(x.shape[2], dtype=np.float64)
+            if initial_weights is None:
+                initial_weights = np.ones(x.shape[2], dtype=np.float64)
             alpha = tf.get_variable(
                 name='alpha',
                 shape=x.shape[2],
                 dtype=x.dtype,
-                initializer=tf.constant_initializer(values, dtype=x.dtype),
-                collections=[tf.GraphKeys.TRAINABLE_VARIABLES,
-                             tf.GraphKeys.GLOBAL_VARIABLES,
-                             GraphKeys.ATOMIC_NN_VARIABLES],
+                initializer=tf.constant_initializer(
+                    initial_weights, dtype=x.dtype),
+                collections=default_collections,
                 trainable=True)
             tf.summary.histogram(alpha.op.name + '/hist', alpha)
             x = tf.multiply(x, alpha, name='ax')
