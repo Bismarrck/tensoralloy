@@ -23,6 +23,7 @@ def test_convolution1x1():
 
         x = tf.convert_to_tensor(np.random.rand(5, 100, 8), name='x')
         y_nn = convolution1x1(x, activation_fn=tf.nn.tanh,
+                              collections=[tf.GraphKeys.MODEL_VARIABLES],
                               hidden_sizes=[128, 64], l2_weight=0.01)
         y_true = tf.convert_to_tensor(np.random.rand(5, 100, 1), name='y_true')
         loss = tf.reduce_mean(tf.squared_difference(y_nn, y_true))
