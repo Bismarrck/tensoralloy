@@ -7,14 +7,14 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
-from tensorflow.contrib.learn import ModeKeys
+
 from ase.db import connect
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
 from os.path import join
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
-from tensoralloy.descriptor.indexed_slices import IndexTransformer
+from tensoralloy.transformer.base import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.misc import test_dir, Defaults, AttributeDict
 from tensoralloy.test_utils import qm7m
@@ -62,8 +62,10 @@ def test_qm7m():
         assert_true(dataset.load_tfrecords(savedir))
 
         # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
-        next_batch = dataset.next_batch(mode=ModeKeys.EVAL, batch_size=1,
-                                        num_epochs=1, shuffle=False)
+        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.EVAL,
+                                        batch_size=1,
+                                        num_epochs=1,
+                                        shuffle=False)
 
         with tf.Session() as sess:
 
@@ -95,8 +97,10 @@ def test_ethanol():
         assert_true(dataset.load_tfrecords(savedir))
 
         # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
-        next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=5,
-                                        num_epochs=1, shuffle=False)
+        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.TRAIN,
+                                        batch_size=5,
+                                        num_epochs=1,
+                                        shuffle=False)
 
         atoms = database.get_atoms(id=2)
 
@@ -132,8 +136,10 @@ def test_nickel():
         dataset.to_records(savedir, test_size=1)
         assert_true(dataset.load_tfrecords(savedir))
 
-        next_batch = dataset.next_batch(mode=ModeKeys.TRAIN, batch_size=1,
-                                        num_epochs=1, shuffle=False)
+        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.TRAIN,
+                                        batch_size=1,
+                                        num_epochs=1,
+                                        shuffle=False)
 
         with tf.Session() as sess:
 

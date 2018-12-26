@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import shutil
+
 from argparse import ArgumentParser, Namespace
 from os.path import join, exists, dirname, basename
 from ase.db import connect

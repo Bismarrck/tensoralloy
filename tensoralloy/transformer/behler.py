@@ -5,20 +5,22 @@ Symmetry Function descriptor.
 """
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
+
 from collections import Counter
 from typing import Dict, Tuple
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
-from tensoralloy.descriptor import IndexTransformer
-from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer.base import IndexTransformer
 from tensoralloy.transformer.base import bytes_feature
+from tensoralloy.transformer.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'

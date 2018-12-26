@@ -5,9 +5,10 @@ functions.
 """
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 import nose
+
 from nose.tools import assert_less, assert_equal
 from ase import Atoms
 from ase.io import read
@@ -22,11 +23,12 @@ from dataclasses import dataclass
 from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.test_utils import Pd3O2, qm7m, assert_array_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
-from tensoralloy.descriptor import G2IndexedSlices, G4IndexedSlices
 from tensoralloy.utils import get_kbody_terms
+from tensoralloy.io.neighbor import find_neighbor_sizes
+from tensoralloy.transformer.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.io.neighbor import find_neighbor_sizes
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

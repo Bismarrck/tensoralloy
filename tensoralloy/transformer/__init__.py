@@ -5,12 +5,14 @@ features.
 """
 from __future__ import print_function, absolute_import
 
-from .behler import BatchSymmetryFunctionTransformer
-from .behler import SymmetryFunctionTransformer
-from .eam import BatchEAMTransformer
+from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer.behler import SymmetryFunctionTransformer
+from tensoralloy.transformer.eam import BatchEAMTransformer
+from tensoralloy.transformer.base import IndexTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["BatchSymmetryFunctionTransformer", "BatchEAMTransformer",
-           "SymmetryFunctionTransformer"]
+__all__ = ["IndexTransformer",
+           "BatchSymmetryFunctionTransformer", "SymmetryFunctionTransformer",
+           "BatchEAMTransformer"]

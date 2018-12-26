@@ -7,18 +7,19 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+
 from ase.db import connect
 from ase.atoms import Atoms
 from ase.neighborlist import neighbor_list
 from collections import Counter
 from os.path import join
 
-from tensoralloy.descriptor import IndexTransformer
 from tensoralloy.io.neighbor import find_neighbor_sizes
-from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.misc import datasets_dir, AttributeDict
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.transformer.base import IndexTransformer
+from tensoralloy.transformer.eam import BatchEAMTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

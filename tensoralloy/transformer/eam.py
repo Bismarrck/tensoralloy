@@ -4,16 +4,17 @@ This module defines the fixed transformer for EAM.
 """
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
+
 from collections import Counter
 from typing import Dict, Tuple
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor.eam import BatchEAM
-from tensoralloy.descriptor.indexed_slices import G2IndexedSlices
 from tensoralloy.misc import AttributeDict
+from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 
 __author__ = 'Xin Chen'
