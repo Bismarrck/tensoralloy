@@ -5,6 +5,7 @@ This module defines tensorflow-graph related utility functions.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 

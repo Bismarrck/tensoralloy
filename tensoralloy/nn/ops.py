@@ -5,10 +5,11 @@ This module defines core Ops of `BasicNN`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+
 from typing import List
 
 from tensoralloy.misc import AttributeDict, Defaults
-from . import utils
+from tensoralloy.nn import utils
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -30,6 +31,9 @@ def sum_of_grads_and_vars(list_of_grads_and_vars):
 
     """
     with tf.name_scope("SumGrads"):
+
+        if len(list_of_grads_and_vars) == 1:
+            return list_of_grads_and_vars[0]
 
         # Merge gradients
         outputs = []
@@ -163,23 +167,17 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
                         add_gradients_cos_dist_summary(
                             grads_and_vars['energy'], grads_and_vars[prop])
 
-        if len(minimize_properties) > 1:
-            list_of_grads_and_vars = [
-                grads_and_vars[prop] for prop in minimize_properties]
-
-            grads_and_vars = sum_of_grads_and_vars(
-                list_of_grads_and_vars=list_of_grads_and_vars
-            )
-        else:
-            grads_and_vars = grads_and_vars[minimize_properties[0]]
+        grads_and_vars = sum_of_grads_and_vars(
+            list_of_grads_and_vars=[grads_and_vars[prop]
+                                    for prop in minimize_properties])
 
         apply_gradients_op = optimizer.apply_gradients(
             grads_and_vars, global_step=global_step)
 
         with tf.name_scope("Average"):
             variable_averages = tf.train.ExponentialMovingAverage(
-                Defaults.variable_moving_average_decay, global_step)
-            variables_averages_op = variable_averages.apply(
+                Defaults.variable_moving_average_decay)
+            variable_averages_op = variable_averages.apply(
                 tf.trainable_variables())
 
-        return tf.group(apply_gradients_op, variables_averages_op)
+        return tf.group(apply_gradients_op, variable_averages_op)

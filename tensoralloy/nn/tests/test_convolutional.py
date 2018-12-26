@@ -7,9 +7,10 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+
 from nose.tools import assert_almost_equal
 
-from ..convolutional import convolution1x1
+from tensoralloy.nn.convolutional import convolution1x1
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

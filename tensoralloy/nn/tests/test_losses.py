@@ -7,10 +7,12 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+
 from nose.tools import assert_less, assert_equal
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from ..losses import get_energy_loss, get_forces_loss, get_stress_loss
+from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
+from tensoralloy.nn.losses import get_stress_loss
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

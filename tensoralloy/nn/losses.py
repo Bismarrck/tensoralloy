@@ -5,6 +5,7 @@ This module defines various loss functions.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+
 from typing import List
 
 __author__ = 'Xin Chen'

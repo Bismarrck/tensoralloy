@@ -7,11 +7,12 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+
 from nose.tools import assert_dict_equal
 from ase.db import connect
 from os.path import join
 
-from ..basic import BasicNN
+from tensoralloy.nn.basic import BasicNN
 from tensoralloy.misc import Defaults, datasets_dir
 from tensoralloy.test_utils import assert_array_equal
 

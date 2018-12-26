@@ -5,6 +5,7 @@ This module defines the 1x1 convolutional Op for `tensoralloy`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+
 from tensorflow.contrib.layers import xavier_initializer, l2_regularizer
 from tensorflow.python.layers import base
 from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
