@@ -13,9 +13,10 @@ from tensoralloy.nn.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.misc import safe_select, Defaults, AttributeDict
 
-from .ops import get_train_op
-from .losses import *
-from .hooks import ExamplesPerSecondHook, LoggingTensorHook, ProfilerHook
+from tensoralloy.nn.ops import get_train_op
+from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
+from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
+from tensoralloy.nn import losses as loss_ops
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -362,26 +363,26 @@ class BasicNN:
             collections = [GraphKeys.TRAIN_METRICS]
 
             losses = AttributeDict()
-            losses.energy = get_energy_loss(
+            losses.energy = loss_ops.get_energy_loss(
                 labels=labels.energy, predictions=predictions.energy,
                 n_atoms=n_atoms, weight=self._loss_weights.energy,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
-                losses.forces = get_forces_loss(
+                losses.forces = loss_ops.get_forces_loss(
                     labels=labels.forces, predictions=predictions.forces,
                     n_atoms=n_atoms, weight=self._loss_weights.forces,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses.total_pressure = get_total_pressure_loss(
+                losses.total_pressure = loss_ops.get_total_pressure_loss(
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
                     weight=self._loss_weights.total_pressure,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
-                losses.stress = get_stress_loss(
+                losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
                     weight=self._loss_weights.stress,
@@ -450,13 +451,17 @@ class BasicNN:
 
         return hooks
 
-    def get_evaluation_hooks(self, hparams):
+    def get_evaluation_hooks(self,
+                             ema: tf.train.ExponentialMovingAverage,
+                             hparams: AttributeDict):
         """
         Return a list of `tf.train.SessionRunHook` objects for evaluation.
         """
         hooks = []
-        if len(tf.get_collection(GraphKeys.EVAL_METRICS)) > 0:
-            with tf.name_scope("Hooks"):
+
+        with tf.name_scope("Hooks"):
+
+            if len(tf.get_collection(GraphKeys.EVAL_METRICS)) > 0:
                 with tf.name_scope("Accuracy"):
                     logging_tensor_hook = LoggingTensorHook(
                         tensors=self.get_logging_tensors(
@@ -464,6 +469,11 @@ class BasicNN:
                         every_n_iter=hparams.train.eval_steps,
                         at_end=True)
                 hooks.append(logging_tensor_hook)
+
+            with tf.name_scope("EMA"):
+                restore_ema_hook = RestoreEmaVariablesHook(ema=ema)
+                hooks.append(restore_ema_hook)
+
         return hooks
 
     def get_eval_metrics_ops(self, predictions, labels, n_atoms):
@@ -676,8 +686,10 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms)
-        train_op = get_train_op(losses=losses, hparams=params,
-                                minimize_properties=self._minimize_properties)
+        ema, train_op = get_train_op(
+            losses=losses,
+            hparams=params,
+            minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
             training_hooks = self.get_training_hooks(hparams=params)
@@ -687,7 +699,7 @@ class BasicNN:
 
         eval_metrics_ops = self.get_eval_metrics_ops(
             predictions, labels, n_atoms=features.n_atoms)
-        evaluation_hooks = self.get_evaluation_hooks(hparams=params)
+        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,

@@ -8,12 +8,12 @@ import tensorflow as tf
 import numpy as np
 import nose
 import os
+
 from os.path import exists, join, dirname
 from nose.tools import assert_equal, assert_list_equal, with_setup
 from nose.tools import assert_true, assert_false
 
-from ..atomic import AtomicNN
-from ..resnet import AtomicResNN
+from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
 from tensoralloy.misc import AttributeDict, test_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.nn.utils import GraphKeys

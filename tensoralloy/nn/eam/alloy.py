@@ -279,7 +279,10 @@ class EamAlloyNN(EamNN):
             sess = tf.Session()
             with sess:
                 if checkpoint is not None:
-                    saver = tf.train.Saver()
+                    # Restore the moving averaged variables
+                    ema = tf.train.ExponentialMovingAverage(
+                        Defaults.variable_moving_average_decay)
+                    saver = tf.train.Saver(ema.variables_to_restore())
                     saver.restore(sess, checkpoint)
                 else:
                     tf.global_variables_initializer().run()

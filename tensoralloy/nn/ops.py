@@ -124,6 +124,8 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
 
     Returns
     -------
+    ema : tf.train.ExponentialMovingAverage
+        The ExponentialMovingAverage controller.
     train_op : tf.Operation
         The Op for a training step.
 
@@ -171,13 +173,14 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
             list_of_grads_and_vars=[grads_and_vars[prop]
                                     for prop in minimize_properties])
 
-        apply_gradients_op = optimizer.apply_gradients(
-            grads_and_vars, global_step=global_step)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            apply_gradients_op = optimizer.apply_gradients(
+                grads_and_vars, global_step=global_step)
 
-        with tf.name_scope("Average"):
-            variable_averages = tf.train.ExponentialMovingAverage(
-                Defaults.variable_moving_average_decay)
-            variable_averages_op = variable_averages.apply(
-                tf.trainable_variables())
-
-        return tf.group(apply_gradients_op, variable_averages_op)
+        with tf.control_dependencies([apply_gradients_op]):
+            with tf.name_scope("Average"):
+                ema = tf.train.ExponentialMovingAverage(
+                    Defaults.variable_moving_average_decay)
+                variable_averages_op = ema.apply(tf.trainable_variables())
+            return ema, variable_averages_op

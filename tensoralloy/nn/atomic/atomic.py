@@ -16,7 +16,7 @@ from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor, GraphKeys
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
-from tensoralloy.misc import AttributeDict, safe_select
+from tensoralloy.misc import AttributeDict, safe_select, Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -194,9 +194,16 @@ class AtomicNN(BasicNN):
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                saver = tf.train.Saver()
+
+                # Restore the moving averaged variables
+                ema = tf.train.ExponentialMovingAverage(
+                    Defaults.variable_moving_average_decay)
+                saver = tf.train.Saver(ema.variables_to_restore())
                 if checkpoint is not None:
                     saver.restore(sess, checkpoint)
+
+                # Create another saver to save the trainable variables
+                saver = tf.train.Saver(var_list=tf.trainable_variables())
                 checkpoint_path = saver.save(
                     sess, saved_model_ckpt, global_step=0)
                 graph_io.write_graph(graph_or_graph_def=graph,
