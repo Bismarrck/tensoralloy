@@ -5,12 +5,13 @@ This module defines unit tests of `tensoralloy.io.input.InputReader`.
 from __future__ import print_function, absolute_import
 
 import nose
+
 from nose.tools import assert_dict_equal, assert_equal, assert_list_equal
 from nose.tools import assert_not_in
-from os.path import join
+from os.path import join, realpath
 
-from ..reader import nested_set, nested_get, InputReader
-from tensoralloy.misc import test_dir
+from tensoralloy.io.input.reader import nested_set, nested_get, InputReader
+from tensoralloy.misc import test_dir, project_dir, datasets_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -52,6 +53,13 @@ def test_read_configs():
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.behler.toml'))
     configs = reader.configs
 
+    assert_equal(realpath(reader['dataset.sqlite3']),
+                 realpath(join(datasets_dir(True), 'qm7.db')))
+    assert_equal(realpath(reader['dataset.tfrecords_dir']),
+                 realpath(join(project_dir(True), 'experiments/qm7-k3')))
+    assert_equal(realpath(reader['train.model_dir']),
+                 realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
+
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
     assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
@@ -67,6 +75,9 @@ def test_read_configs():
 
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
     configs = reader.configs
+
+    assert_equal(realpath(reader['train.model_dir']),
+                 realpath("/tmp/experiments/qm7-eam/train"))
 
     assert_not_in('behler', configs)
     assert_not_in('atomic', configs['nn'])

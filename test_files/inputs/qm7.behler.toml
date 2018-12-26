@@ -1,9 +1,9 @@
 [dataset]
-sqlite3 = "datasets/qm7.db"
+sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
 descriptor = "behler"
 rc = 6.5
-tfrecords_dir = "experiments/qm7-k3"
+tfrecords_dir = "../../experiments/qm7-k3"
 test_size = 1000
 
 [nn]
@@ -43,7 +43,7 @@ staircase = false
 restart = true
 batch_size = 25
 shuffle = true
-model_dir = "experiments/qm7-k3/train"
+model_dir = "../../experiments/qm7-k3/train"
 max_checkpoints_to_keep = 20
 train_steps = 100000
 eval_steps = 1000

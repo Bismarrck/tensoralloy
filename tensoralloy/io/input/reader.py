@@ -96,6 +96,8 @@ class InputReader:
             The input file to read.
 
         """
+        input_dir = dirname(filename)
+
         with open(join(dirname(__file__), "defaults.toml")) as fp:
             defaults = toml.load(fp)
 
@@ -105,7 +107,7 @@ class InputReader:
         with open(filename) as fp:
             configs = toml.load(fp)
 
-        self._configs = self._merge(defaults, configs, choices)
+        self._configs = self._merge(defaults, configs, choices, input_dir)
 
     @property
     def configs(self):
@@ -118,9 +120,21 @@ class InputReader:
         return nested_get(self._configs, keypath)
 
     @staticmethod
-    def _merge(defaults: dict, configs: dict, choices: dict):
+    def _merge(defaults: dict, configs: dict, choices: dict, input_dir: str):
         """
         Merge the parsed and the default configs.
+
+        Parameters
+        ----------
+        defaults : dict
+            The default parameters and values.
+        configs : dict
+            The parameters and corresponding values parsed from the input file.
+        choices : dict
+            Restricted choices of certain parameters.
+        input_dir : str
+            The directory where the input file is.
+
         """
         results = defaults.copy()
 
@@ -144,6 +158,13 @@ class InputReader:
             if _dst is None:
                 _dst = _keypath
             _safe_set(_dst, _new_val)
+
+        def _convert_filepath(_filepath: str):
+            if _filepath.startswith('/'):
+                # Absolute path. No change.
+                return _filepath
+            else:
+                return join(input_dir, _filepath)
 
         for section in ("dataset", "nn", "opt", "train"):
             for key, val in defaults[section].items():
@@ -208,5 +229,12 @@ class InputReader:
                 del results['behler']
             if 'atomic' in results['nn']:
                 del results['nn']['atomic']
+
+        # Convert the paths
+        for keypath in ("dataset.sqlite3",
+                        "dataset.tfrecords_dir",
+                        "train.model_dir"):
+            filepath = nested_get(results, keypath)
+            nested_set(results, keypath, _convert_filepath(filepath))
 
         return results
