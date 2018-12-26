@@ -47,7 +47,7 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
         return math_ops.multiply(z, half, name=name)
 
 
-def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=2, name=None):
+def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=5.0, name=None):
     """
     The polynomial cutoff function proposed by Andrew Peterson:
 
