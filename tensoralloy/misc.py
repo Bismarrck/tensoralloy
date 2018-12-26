@@ -5,9 +5,9 @@ This module defines miscellaneous functions and vars.
 from __future__ import print_function, absolute_import
 
 import numpy as np
+
 from unittest import SkipTest
 from os.path import dirname, isdir, join, abspath
-
 from os import makedirs
 
 __author__ = 'Xin Chen'
@@ -55,6 +55,8 @@ class Defaults:
     beta = np.array([0.005, ])
     gamma = np.array([1.0, -1.0])
     zeta = np.array([1.0, 4.0])
+
+    cutoff_function = 'cosine'
 
     n_etas = 4
     n_betas = 1
