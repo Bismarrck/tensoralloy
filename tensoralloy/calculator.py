@@ -123,9 +123,9 @@ class TensorAlloyCalculator(Calculator):
         """
         Return the atomic forces.
         """
-        forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
+        forces = self.get_property('forces', atoms)
         clf = self.transformer.get_index_transformer(atoms)
-        return clf.map_array(forces, reverse=True)
+        return clf.map_forces(forces, reverse=True)
 
     def calculate(self, atoms=None, properties=('energy', 'forces'), *args):
         """

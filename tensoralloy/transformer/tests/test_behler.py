@@ -687,7 +687,7 @@ def test_batch_multi_elements():
         for i, atoms in enumerate(qm7m.trajectory):
             clf = sf.get_index_transformer(atoms)
             indexed_slices.append(sf.get_indexed_slices(atoms))
-            positions.append(clf.map_array(atoms.positions))
+            positions.append(clf.map_positions(atoms.positions))
             cells.append(atoms.get_cell(complete=True))
             volumes.append(atoms.get_volume())
 

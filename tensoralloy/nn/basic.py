@@ -330,8 +330,8 @@ class BasicNN:
         predictions : AttributeDict
             A dict of tensors as the predictions.
                 * 'energy' of shape `[batch_size, ]` is required.
-                * 'forces' of shape `[batch_size, N, 3]` is required if
-                  'forces' should be minimized.
+                * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+                  required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
@@ -339,8 +339,8 @@ class BasicNN:
         labels : AttributeDict
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
-                * 'forces' of shape `[batch_size, N, 3]` is required if
-                  'forces' should be minimized.
+                * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+                  required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
@@ -473,8 +473,8 @@ class BasicNN:
         `predictions` and `labels` are `AttributeDict` with the following keys
         required:
             * 'energy' of shape `[batch_size, ]` is required.
-            * 'forces' of shape `[batch_size, N, 3]` is required if
-              'forces' should be minimized.
+            * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is required
+              if 'forces' should be minimized.
             * 'stress' of shape `[batch_size, 6]` is required if
               'stress' should be minimized.
             * 'total_pressure' of shape `[batch_size, ]` is required if
@@ -504,7 +504,8 @@ class BasicNN:
 
             if 'forces' in self._minimize_properties:
                 with tf.name_scope("Forces"):
-                    x = labels.forces
+                    with tf.name_scope("Split"):
+                        x = tf.split(labels.forces, [1, -1], axis=1)[1]
                     y = predictions.forces
                     with tf.name_scope("Scale"):
                         n_max = tf.convert_to_tensor(
@@ -572,9 +573,9 @@ class BasicNN:
                 * 'descriptors', a dict of (element, (value, mask)) where
                   `element` represents the symbol of an element, `value` is the
                   descriptors of `element` and `mask` is the mask of `value`.
-                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
+                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
@@ -633,17 +634,17 @@ class BasicNN:
                 * 'descriptors', a dict of (element, (value, mask)) where
                   `element` represents the symbol of an element, `value` is the
                   descriptors of `element` and `mask` is the mask of `value`.
-                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
+                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
         labels : AttributeDict
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
-                * 'forces' of shape `[batch_size, N, 3]` is required if
-                  'forces' should be minimized.
+                * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+                  required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if

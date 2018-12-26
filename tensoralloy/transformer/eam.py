@@ -175,9 +175,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         if self._forces:
             f_true = tf.decode_raw(example['f_true'], tf.float64)
             # Ignore the forces of the virtual atom
-            f_true.set_shape([length - 3])
+            f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
-                f_true, (self._max_n_atoms - 1, 3), name='f_true')
+                f_true, (self._max_n_atoms, 3), name='f_true')
 
         if self._stress:
             reduced_stress = tf.decode_raw(

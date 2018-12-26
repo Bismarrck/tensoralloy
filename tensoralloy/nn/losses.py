@@ -104,7 +104,7 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     Parameters
     ----------
     labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
+        A `float64` tensor of shape `[batch_size, n_atoms_max + 1, 3]` as the
         reference forces.
     predictions : tf.Tensor
         A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
@@ -126,6 +126,9 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     with tf.name_scope("Forces"):
         assert labels.shape.ndims == 3 and labels.shape[2].value == 3
         assert predictions.shape.ndims == 3 and predictions.shape[2].value == 3
+        with tf.name_scope("Split"):
+            labels = tf.split(
+                labels, [1, -1], axis=1, name='split')[1]
         raw_loss, mae = _absolute_forces_loss(labels, predictions, n_atoms)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')

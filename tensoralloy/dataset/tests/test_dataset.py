@@ -36,7 +36,7 @@ def qm7m_compute():
     g2 = []
     positions = np.zeros((batch_size, max_n_atoms, 3))
     for i, atoms in enumerate(qm7m.trajectory):
-        positions[i] = sf.get_index_transformer(atoms).map_array(
+        positions[i] = sf.get_index_transformer(atoms).map_positions(
             atoms.positions)
         g2.append(sf.get_g2_indexed_slices(atoms))
 
@@ -106,9 +106,9 @@ def test_ethanol():
 
         clf = IndexTransformer(dataset.transformer.max_occurs,
                                atoms.get_chemical_symbols())
-        positions = clf.map_array(atoms.positions)
+        positions = clf.map_positions(atoms.positions)
         energy = atoms.get_total_energy()
-        forces = clf.map_array(atoms.get_forces())[1:]
+        forces = clf.map_forces(atoms.get_forces())
 
         with tf.Session() as sess:
 

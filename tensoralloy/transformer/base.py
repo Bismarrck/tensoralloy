@@ -213,7 +213,7 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
         Encode the basic properties of an `Atoms` object.
         """
         clf = self.get_index_transformer(atoms)
-        positions = clf.map_array(atoms.positions)
+        positions = clf.map_positions(atoms.positions)
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         y_true = atoms.get_total_energy()
@@ -229,7 +229,7 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
             'composition': bytes_feature(composition.tostring()),
         }
         if self.forces:
-            f_true = clf.map_array(atoms.get_forces())[1:]
+            f_true = clf.map_forces(atoms.get_forces())
             feature_list['f_true'] = bytes_feature(f_true.tostring())
 
         if self.stress:

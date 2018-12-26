@@ -278,7 +278,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         index_transformer = self.get_index_transformer(atoms)
         g2 = self._get_g2_indexed_slices(atoms, index_transformer)
 
-        positions = index_transformer.map_array(atoms.positions)
+        positions = index_transformer.map_positions(atoms.positions)
         n_atoms = index_transformer.n_atoms
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
@@ -551,9 +551,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         if self._forces:
             f_true = tf.decode_raw(example['f_true'], tf.float64)
             # Ignore the forces of the virtual atom
-            f_true.set_shape([length - 3])
+            f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
-                f_true, (self._max_n_atoms - 1, 3), name='f_true')
+                f_true, (self._max_n_atoms, 3), name='f_true')
 
         if self._stress:
             reduced_stress = tf.decode_raw(
