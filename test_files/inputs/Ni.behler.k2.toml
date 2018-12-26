@@ -3,7 +3,7 @@ sqlite3 = "../Ni/Ni.db"
 name = "Ni"
 descriptor = "behler"
 rc = 6.0
-tfrecords_dir = "../Ni/train"
+tfrecords_dir = "../Ni"
 test_size = 1
 
 [nn]
