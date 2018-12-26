@@ -18,7 +18,7 @@ from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.misc import datasets_dir, AttributeDict
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.test_utils import assert_array_equal
-from tensoralloy.transformer.base import IndexTransformer
+from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer
 
 __author__ = 'Xin Chen'

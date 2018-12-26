@@ -17,8 +17,8 @@ from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
 from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
-from tensoralloy.transformer.base import IndexTransformer
 from tensoralloy.transformer.base import bytes_feature
+from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import get_elements_from_kbody_term

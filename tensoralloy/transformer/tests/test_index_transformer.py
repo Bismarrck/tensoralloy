@@ -10,7 +10,7 @@ from collections import Counter
 from unittest import TestCase
 from nose.tools import assert_equal, assert_list_equal, assert_less
 
-from ..base import IndexTransformer
+from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.test_utils import Pd3O2, Pd2O2Pd
 
 __author__ = 'Xin Chen'
@@ -36,10 +36,6 @@ class IndexTransformerTest(TestCase):
         array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
         results = self.clf.map_array(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
-
-        array = np.expand_dims([7, 1, 2, 3, 4, 5], axis=1)
-        results = self.clf.map_array(array, reverse=False).flatten().tolist()
-        assert_list_equal(results, [7, 4, 5, 7, 7, 7, 1, 2, 3, 7])
 
     def test_reverse(self):
         array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
