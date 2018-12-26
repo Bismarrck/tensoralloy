@@ -179,7 +179,10 @@ class TrainingManager:
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
         activation = self._reader['nn.activation']
-        loss_weights = AttributeDict(self._reader['nn.loss.weight'])
+        if self._reader['nn.loss.weight'] is not None:
+            loss_weights = AttributeDict(self._reader['nn.loss.weight'])
+        else:
+            loss_weights = None
         kwargs = {'elements': elements,
                   'loss_weights': loss_weights,
                   'minimize_properties': minimize_properties,

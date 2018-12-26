@@ -1,0 +1,41 @@
+[dataset]
+sqlite3 = "../Ni/Ni.db"
+name = "Ni"
+descriptor = "behler"
+rc = 6.0
+tfrecords_dir = "../Ni/train"
+test_size = 1
+
+[nn]
+activation = "leaky_relu"
+minimize = ['energy']
+
+[nn.atomic]
+export = ['energy']
+
+[nn.atomic.behler]
+cutoff = 'polynomial'
+eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]
+
+[nn.atomic.layers]
+C = [64, 32]
+H = [64, 32]
+N = [64, 32]
+O = [64, 32]
+S = [64, 32]
+
+[opt]
+learning_rate = 0.01
+decay_function = false
+
+[train]
+restart = false
+batch_size = 25
+shuffle = true
+model_dir = "./model"
+max_checkpoints_to_keep = 10
+train_steps = 200
+eval_steps = 200
+summary_steps = 10
+log_steps = 10
+profile_steps = 0

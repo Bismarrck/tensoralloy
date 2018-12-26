@@ -4,14 +4,16 @@ This module defines the Symmetry Function descriptor.
 """
 from __future__ import print_function, absolute_import
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
+import functools
+
 from collections import Counter
 from typing import List, Dict, Tuple
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.descriptor.base import AtomicDescriptor
-from tensoralloy.descriptor.cutoff import cosine_cutoff
+from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.utils import get_elements_from_kbody_term
 
@@ -70,7 +72,7 @@ class SymmetryFunction(AtomicDescriptor):
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
-                 periodic=True):
+                 periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
 
@@ -93,6 +95,8 @@ class SymmetryFunction(AtomicDescriptor):
         periodic : bool
             If False, some Ops of the computation graph will be ignored and this
             can only proceed non-periodic molecules.
+        cutoff_function : str
+            The cutoff function to use. Defaults to 'cosine'.
 
         """
         super(SymmetryFunction, self).__init__(rc, elements, k_max, periodic)
@@ -112,6 +116,13 @@ class SymmetryFunction(AtomicDescriptor):
         self._parameter_grid = ParameterGrid({'beta': self._beta,
                                               'gamma': self._gamma,
                                               'zeta': self._zeta})
+
+        if cutoff_function == 'cosine':
+            self._cutoff_fn = functools.partial(cosine_cutoff, rc=self._rc)
+        elif cutoff_function == 'polynomial':
+            self._cutoff_fn = functools.partial(polynomial_cutoff, rc=self._rc)
+        else:
+            raise ValueError(f"Unknown cutoff function: {cutoff_function}")
 
     @property
     def ndim(self):
@@ -190,7 +201,7 @@ class SymmetryFunction(AtomicDescriptor):
             r2 = tf.square(r, name='r2')
             rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
             r2c = tf.div(r2, rc2, name='div')
-            fc_r = cosine_cutoff(r, rc=self._rc, name='fc_r')
+            fc_r = self._cutoff_fn(r, name='fc_r')
 
             with tf.name_scope("v2g_map"):
                 v2g_map = self._get_v2g_map(
@@ -286,9 +297,9 @@ class SymmetryFunction(AtomicDescriptor):
                 theta = tf.div(upper, lower, name='theta')
 
             with tf.name_scope("fc"):
-                fc_rij = cosine_cutoff(rij, self._rc, name='fc_rij')
-                fc_rik = cosine_cutoff(rik, self._rc, name='fc_rik')
-                fc_rjk = cosine_cutoff(rjk, self._rc, name='fc_rjk')
+                fc_rij = self._cutoff_fn(rij, name='fc_rij')
+                fc_rik = self._cutoff_fn(rik, name='fc_rik')
+                fc_rjk = self._cutoff_fn(rjk, name='fc_rjk')
                 fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
 
             with tf.name_scope("v2g_map"):
@@ -384,13 +395,14 @@ class BatchSymmetryFunction(SymmetryFunction):
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
                  nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 k_max=3, periodic=True):
+                 k_max=3, periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
         """
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, k_max=k_max, periodic=periodic)
+            zeta=zeta, k_max=k_max, periodic=periodic,
+            cutoff_function=cutoff_function)
 
         self._max_occurs = max_occurs
         self._max_n_atoms = sum(max_occurs.values()) + 1

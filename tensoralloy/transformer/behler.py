@@ -37,13 +37,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
-                 periodic=True):
+                 periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
         """
         super(SymmetryFunctionTransformer, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, k_max=k_max, periodic=periodic)
+            zeta=zeta, k_max=k_max, periodic=periodic,
+            cutoff_function=cutoff_function)
         self._index_transformers = {}
         self._placeholders = AttributeDict()
 
@@ -323,7 +324,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
                  batch_size=None, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
-                 periodic=True, forces=True, stress=False):
+                 periodic=True, cutoff_function='cosine', forces=True,
+                 stress=False):
         """
         Initialization method.
 
@@ -342,7 +344,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         super(BatchSymmetryFunctionTransformer, self).__init__(
             rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
             nijk_max=nijk_max, batch_size=batch_size, eta=eta, beta=beta,
-            gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic)
+            gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic,
+            cutoff_function=cutoff_function)
 
         self._index_transformers = {}
         self._forces = forces

@@ -8,6 +8,7 @@ import tensorflow as tf
 import glob
 import sys
 import time
+
 from multiprocessing import cpu_count
 from os.path import join, splitext, basename
 from typing import Dict, List, Tuple
@@ -27,6 +28,8 @@ from tensoralloy.dataset.utils import should_be_serial
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+__all__ = ["Dataset"]
 
 
 class Dataset:
@@ -237,12 +240,14 @@ class Dataset:
             beta = safe_select(kwargs.get('beta', None), Defaults.beta)
             gamma = safe_select(kwargs.get('gamma', None), Defaults.gamma)
             zeta = safe_select(kwargs.get('zeta', None), Defaults.zeta)
+            cutoff_function = safe_select(kwargs.get('cutoff', None),
+                                          Defaults.cutoff_function)
 
             transformer = BatchSymmetryFunctionTransformer(
                 rc=self._rc,  max_occurs=max_occurs, k_max=k_max,
                 nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
                 gamma=gamma, zeta=zeta, periodic=periodic, stress=stress,
-                forces=forces)
+                forces=forces, cutoff_function=cutoff_function)
         else:
             transformer = BatchEAMTransformer(
                 rc=self._rc, max_occurs=max_occurs, nij_max=nij_max,
