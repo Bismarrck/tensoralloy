@@ -127,6 +127,16 @@ def datasets_dir(absolute=False):
     return path
 
 
+def project_dir(absolute=False):
+    """
+    Return the root directory of this project.
+    """
+    path = join(dirname(__file__), "..")
+    if absolute:
+        path = abspath(path)
+    return path
+
+
 def brange(start, stop, batch_size):
     """
     Range from `start` to `stop` given a batch size and return the start and
