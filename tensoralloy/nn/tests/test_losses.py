@@ -68,7 +68,7 @@ def test_forces_loss():
 
     with tf.Graph().as_default():
 
-        x = tf.convert_to_tensor(x)
+        x = tf.convert_to_tensor(np.insert(x, 0, 0, axis=1))
         y = tf.convert_to_tensor(y)
         n_atoms = tf.convert_to_tensor(n_atoms)
 
