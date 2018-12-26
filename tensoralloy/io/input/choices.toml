@@ -10,6 +10,9 @@ activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'sigmoid', 'linear']
 arch = ["AtomicResNN", 'AtomicNN']
 input_normalizer = ["linear", 'arctan']
 
+[nn.atomic.behler]
+cutoff = ["cosine", "polynomial"]
+
 [nn.eam]
 arch = ["EamAlloyNN", "EamFsNN"]
 

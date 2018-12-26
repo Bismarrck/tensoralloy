@@ -160,6 +160,7 @@ class InputReader:
 
         if descriptor == 'behler':
             _safe_update("nn.atomic.behler.angular")
+            _safe_update("nn.atomic.behler.cutoff")
             _safe_update("nn.atomic.behler.eta")
             _safe_update("nn.atomic.behler.gamma")
             _safe_update("nn.atomic.behler.beta")
