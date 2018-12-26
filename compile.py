@@ -22,7 +22,7 @@ __email__ = 'Bismarrck@me.com'
 
 # `cython (<=0.29.1)` can not handle `dataclass` or `nametuple` correctly.
 avoid_to_cythonize = [
-    'tensoralloy/descriptor/indexed_slices.py',
+    'tensoralloy/transformer/indexed_slices.py',
     'tensoralloy/descriptor/cutoff.py',
     'tensoralloy/cli.py',
 ]
