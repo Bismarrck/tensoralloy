@@ -21,7 +21,7 @@ total_pressure = 1.0
 
 [nn.atomic]
 arch = "AtomicNN"
-input_normalizer = "linear"
+input_normalizer = false
 export = ['energy', 'forces']
 
 [nn.atomic.behler]

@@ -11,6 +11,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+# TODO: the optimized `alpha` may be negative. Constraints should be added.
+
+
 class InputNormalizer:
     """
     A collection of funcitons for normalizing input descriptors to [0, 1].
