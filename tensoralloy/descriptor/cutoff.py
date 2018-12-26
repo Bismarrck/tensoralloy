@@ -12,21 +12,30 @@ from tensorflow.python.ops import math_ops
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["cosine_cutoff"]
+__all__ = ["cosine_cutoff", "polynomial_cutoff"]
 
 
 def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
     """
-    The cosine cutoff function proposed by Behler:
+    The cosine cutoff function proposed by Jörg Behler:
 
-    f_c(r) = 0.5 * [ cos(min(r / rc) * pi) + 1 ]
+        fc(r) = 0.5 * [ cos(min(r / rc) * pi) + 1 ]
+
+    Parameters
+    ----------
+    r : tf.Tensor
+        A `float64` tensor.
+    rc : float or tf.Tensor
+        The cutoff radius. fc(r) = 0 if r > rc.
+    name : str or None
+        The name of this Op.
 
     See Also
     --------
     PRL 98, 146401 (2007)
 
     """
-    with ops.name_scope(name, "CosCutoff", [r]) as name:
+    with ops.name_scope(name, "CosCutoff", [r, rc]) as name:
         # TODO: 'TypeError: must be real number, not Tensor' will occur here if
         #  this module was cythonized.
         rc = ops.convert_to_tensor(rc, dtype=tf.float64, name="rc")
@@ -36,3 +45,39 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
         z = math_ops.minimum(ratio, one, name='minimum')
         z = math_ops.cos(z * np.pi, name='cos') + one
         return math_ops.multiply(z, half, name=name)
+
+
+def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=2, name=None):
+    """
+    The polynomial cutoff function proposed by Andrew Peterson:
+
+        fc(r) = 1 + gamma * (r / rc)^(gamma + 1) - (gamma + 1) * (r / rc)^gamma
+
+    Parameters
+    ----------
+    r : tf.Tensor
+        A `float64` tensor.
+    rc : float or tf.Tensor
+        The cutoff radius. fc(r) = 0 if r > rc.
+    gamma : float or tf.Tensor
+        The hyper parameter of this Op. The polynomial function approximates the
+        cosine cutoff function’s behavior if `gamma` is set to 2; as `gamma` is
+        increased the decay is delayed, but the limiting behaviors are intact.
+        As `gamma` is increased to very large values, it approaches the step
+        function, which would be equivalent to not employing a cutoff function.
+    name : str or None
+        The name of this Op.
+
+    See Also
+    --------
+    Comput. Phys. Commun. 207 (2016) 310–324
+
+    """
+    with ops.name_scope(name, "PolyCutoff", [r, rc, gamma]) as name:
+        gamma = ops.convert_to_tensor(gamma, dtype=tf.float64, name='gamma')
+        rc = ops.convert_to_tensor(rc, dtype=tf.float64, name="rc")
+        one = ops.convert_to_tensor(1.0, dtype=tf.float64, name='one')
+        div = math_ops.div(r, rc, name='ratio')
+        div = math_ops.minimum(one, div)
+        z = gamma * div**(gamma + one) - (gamma + one) * div**gamma
+        return tf.add(z, one, name=name)
