@@ -34,7 +34,7 @@ def test_energy_loss():
         n = tf.convert_to_tensor(n)
 
         rmse = get_energy_loss(x, y, n, collections=['UnitTest'])
-        assert_equal(len(tf.get_collection('UnitTest')), 2)
+        assert_equal(len(tf.get_collection('UnitTest')), 3)
 
         mae = tf.get_default_graph().get_tensor_by_name('Energy/mae:0')
 
