@@ -131,6 +131,7 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
 
     """
     with tf.name_scope("Optimize"):
+
         global_step = tf.train.get_or_create_global_step()
         learning_rate = utils.get_learning_rate(
             global_step,
@@ -160,15 +161,6 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
             for var in tf.trainable_variables():
                 tf.summary.histogram(var.op.name + '/hist', var)
 
-        with tf.name_scope("CosDist"):
-            if 'energy' in minimize_properties:
-                for prop in minimize_properties:
-                    if prop == 'energy':
-                        continue
-                    with tf.name_scope(prop):
-                        add_gradients_cos_dist_summary(
-                            grads_and_vars['energy'], grads_and_vars[prop])
-
         grads_and_vars = sum_of_grads_and_vars(
             list_of_grads_and_vars=[grads_and_vars[prop]
                                     for prop in minimize_properties])
@@ -183,4 +175,15 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
                 ema = tf.train.ExponentialMovingAverage(
                     Defaults.variable_moving_average_decay)
                 variable_averages_op = ema.apply(tf.trainable_variables())
-            return ema, variable_averages_op
+
+    # Use an absolute name scope for cosine distances.
+    with tf.name_scope("CosDist"):
+        if 'energy' in minimize_properties:
+            for prop in minimize_properties:
+                if prop == 'energy':
+                    continue
+                with tf.name_scope(prop):
+                    add_gradients_cos_dist_summary(
+                        grads_and_vars['energy'], grads_and_vars[prop])
+
+    return ema, variable_averages_op
