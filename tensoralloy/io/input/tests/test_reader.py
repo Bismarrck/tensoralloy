@@ -59,6 +59,7 @@ def test_read_configs():
                  realpath(join(project_dir(True), 'experiments/qm7-k3')))
     assert_equal(realpath(reader['train.model_dir']),
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
+    assert_equal(reader['train.previous_checkpoint'], False)
 
     assert_equal(reader['nn.loss.energy.positive_mode'], True)
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
@@ -85,6 +86,9 @@ def test_read_eam_alloy_toml():
 
     assert_equal(realpath(reader['train.model_dir']),
                  realpath("/tmp/experiments/qm7-eam/train"))
+    assert_equal(realpath(reader['train.previous_checkpoint']),
+                 realpath(join(project_dir(True), "experiments", "qm7-eam",
+                               "train", "model.ckpt-10000")))
 
     assert_not_in('behler', configs)
     assert_not_in('atomic', configs['nn'])

@@ -1,9 +1,9 @@
 [dataset]
-sqlite3 = "datasets/qm7.db"
+sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
 descriptor = "eam"
 rc = 6.5
-tfrecords_dir = "experiments/qm7-eam"
+tfrecords_dir = "../../experiments/qm7-eam"
 test_size = 1000
 
 [nn]
@@ -65,6 +65,7 @@ staircase = false
 restart = false
 batch_size = 50
 shuffle = true
+previous_checkpoint = "../../experiments/qm7-eam/train/model.ckpt-10000"
 model_dir = "/tmp/experiments/qm7-eam/train"
 max_checkpoints_to_keep = 20
 train_steps = 10000
