@@ -108,6 +108,28 @@ def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
         tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
 
 
+def _check_opt_hparams(hparams: AttributeDict):
+    """
+    Check the hyper parameters and add missing but required parameters.
+    """
+    defaults = AttributeDict(
+        method='adam',
+        decay_function=None,
+        learning_rate=0.01)
+    if hparams is None:
+        hparams = AttributeDict(opt=defaults)
+    else:
+        hparams = AttributeDict(hparams)
+        if 'opt' not in hparams:
+            hparams['opt'] = defaults
+        else:
+            hparams['opt'] = AttributeDict(hparams['opt'])
+            for key, value in defaults.items():
+                if key not in hparams['opt']:
+                    hparams['opt'][key] = value
+    return hparams
+
+
 def get_train_op(losses: AttributeDict, hparams: AttributeDict,
                  minimize_properties: List[str]):
     """
@@ -118,7 +140,13 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
     losses : AttributeDict
         A dict of loss tensors.
     hparams : AttributeDict
-        The hyper parameters.
+        The hyper parameters. Essential keypaths for this function are:
+            - 'hparams.opt.method'
+            - 'hparams.opt.learning_rate'
+            - 'hparams.opt.decay_function'
+            - 'hparams.opt.decay_rate'
+            - 'hparams.opt.decay_steps'
+            - 'hparams.opt.staircase'
     minimize_properties : List[str]
         A list of str as the structural properties to minimize.
 
@@ -131,6 +159,8 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
 
     """
     with tf.name_scope("Optimize"):
+
+        hparams = _check_opt_hparams(hparams)
 
         global_step = tf.train.get_or_create_global_step()
         learning_rate = utils.get_learning_rate(
@@ -161,14 +191,14 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
             for var in tf.trainable_variables():
                 tf.summary.histogram(var.op.name + '/hist', var)
 
-        grads_and_vars = sum_of_grads_and_vars(
+        gradients = sum_of_grads_and_vars(
             list_of_grads_and_vars=[grads_and_vars[prop]
                                     for prop in minimize_properties])
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             apply_gradients_op = optimizer.apply_gradients(
-                grads_and_vars, global_step=global_step)
+                gradients, global_step=global_step)
 
         with tf.control_dependencies([apply_gradients_op]):
             with tf.name_scope("Average"):

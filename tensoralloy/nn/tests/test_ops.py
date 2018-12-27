@@ -40,15 +40,17 @@ def test_get_train_op():
 
         features, labels = input_fn()
 
-        nn = AtomicNN(elements=dataset.transformer.elements)
-        predictions = nn.build(features)
-        total_loss, losses = nn.get_total_loss(
-            predictions, labels, features.n_atoms)
-
         hparams = AttributeDict(
+            loss=AttributeDict(
+                energy=AttributeDict(weight=1.0)),
             opt=AttributeDict(
                 learning_rate=0.01, decay_function=None, decay_steps=1000,
                 decay_rate=0.9, staircase=False, method='adam'))
+
+        nn = AtomicNN(elements=dataset.transformer.elements)
+        predictions = nn.build(features)
+        total_loss, losses = nn.get_total_loss(
+            predictions, labels, features.n_atoms, hparams)
 
         get_train_op(losses, hparams, nn.minimize_properties)
 
