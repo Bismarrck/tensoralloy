@@ -673,7 +673,7 @@ class BasicNN:
             return predictions
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
-                 mode: tf.estimator.ModeKeys, hparams: AttributeDict):
+                 mode: tf.estimator.ModeKeys, params: AttributeDict):
         """
         Initialize a model function for `tf.estimator.Estimator`.
 
@@ -702,7 +702,7 @@ class BasicNN:
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
-        hparams : AttributeDict
+        params : AttributeDict
             Hyperparameters for building and training a NN model.
 
         Returns
@@ -726,21 +726,21 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms,
-                                                 hparams=hparams)
+                                                 hparams=params)
         ema, train_op = get_train_op(
             losses=losses,
-            hparams=hparams,
+            hparams=params,
             minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            training_hooks = self.get_training_hooks(hparams=hparams)
+            training_hooks = self.get_training_hooks(hparams=params)
             return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics_ops(
             predictions, labels, n_atoms=features.n_atoms)
-        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=hparams)
+        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,
