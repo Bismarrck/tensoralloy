@@ -77,7 +77,8 @@ class TrainingManager:
         """
         hparams = AttributeDict(
             train=AttributeDict(self._reader['train']),
-            opt=AttributeDict(self._reader['opt']))
+            opt=AttributeDict(self._reader['opt']),
+            loss=AttributeDict(self._reader['nn.loss']))
 
         if not hparams.opt.decay_function:
             hparams.opt.decay_function = None
@@ -179,12 +180,7 @@ class TrainingManager:
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
         activation = self._reader['nn.activation']
-        if self._reader['nn.loss.weight'] is not None:
-            loss_weights = AttributeDict(self._reader['nn.loss.weight'])
-        else:
-            loss_weights = None
         kwargs = {'elements': elements,
-                  'loss_weights': loss_weights,
                   'minimize_properties': minimize_properties,
                   'activation': activation}
         if self._reader['dataset.descriptor'] == 'behler':
