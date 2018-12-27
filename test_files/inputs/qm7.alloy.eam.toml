@@ -8,10 +8,10 @@ test_size = 1000
 
 [nn]
 activation = "leaky_relu"
+minimize = ['stress']
 
-[nn.loss.weight]
-l2 = 1.0
-energy = 0.0
+[nn.loss.l2]
+weight = 0.1
 
 [nn.eam]
 arch = "EamAlloyNN"

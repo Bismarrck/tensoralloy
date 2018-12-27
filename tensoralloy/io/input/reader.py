@@ -5,6 +5,7 @@ This module defines a TOML based input reader.
 from __future__ import print_function, absolute_import
 
 import toml
+
 from os.path import dirname, join
 from typing import List, Union, Any
 
@@ -172,10 +173,14 @@ class InputReader:
                     continue
                 _safe_update(f"{section}.{key}", required=(val == 'required'))
 
+        _safe_update("nn.loss.energy")
+        _safe_update("nn.loss.forces")
+        _safe_update("nn.loss.stress")
+        _safe_update("nn.loss.total_pressure")
+        _safe_update("nn.loss.l2")
+
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
-        
-        _safe_update("nn.loss.weight")
 
         descriptor = nested_get(configs, 'dataset.descriptor')
 

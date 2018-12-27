@@ -10,11 +10,14 @@ test_size = 1000
 activation = "leaky_relu"
 minimize = ['energy']
 
-[nn.loss.weight]
-l2 = 0.01
+[nn.loss.energy]
+per_atom_loss = false
+
+[nn.loss.l2]
+weight = 0.01
 
 [nn.atomic]
-export = ['energy', 'forces']
+export = ['energy', 'forces', 'hessian']
 
 [nn.atomic.behler]
 angular = true

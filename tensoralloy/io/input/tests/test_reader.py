@@ -48,9 +48,9 @@ def test_nested_get():
 
 def test_read_configs():
     """
-    Test `InputReader`.
+    Test `InputReader` with file 'qm7.behler.k3.toml'.
     """
-    reader = InputReader(join(test_dir(), 'inputs', 'qm7.behler.toml'))
+    reader = InputReader(join(test_dir(), 'inputs', 'qm7.behler.k3.toml'))
     configs = reader.configs
 
     assert_equal(realpath(reader['dataset.sqlite3']),
@@ -71,8 +71,14 @@ def test_read_configs():
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.H'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.N'), [64, 32])
     assert_list_equal(reader['nn.minimize'], ['energy'])
-    assert_list_equal(reader['nn.atomic.export'], ['energy', 'forces'])
+    assert_list_equal(reader['nn.atomic.export'],
+                      ['energy', 'forces', 'hessian'])
 
+
+def test_read_eam_alloy_toml():
+    """
+    Test `InputReader` with file 'qm7.alloy.eam.toml' for an `eam/alloy` task.
+    """
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
     configs = reader.configs
 
@@ -83,9 +89,15 @@ def test_read_configs():
     assert_not_in('atomic', configs['nn'])
     assert_equal(len(nested_get(configs, 'nn.eam.rho')), 5)
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 5)
-    assert_equal(reader['nn.loss.weight.l2'], 1.0)
-    assert_equal(reader['nn.loss.weight.energy'], 0.0)
+    assert_list_equal(reader['nn.minimize'], ['stress'])
+    assert_equal(reader['nn.loss.l2.weight'], 0.1)
+    assert_equal(reader['nn.loss.energy.weight'], 1.0)
 
+
+def test_read_eam_fs_toml():
+    """
+    Test `InputReader` with file 'AlFe.fs.eam.toml' for an `eam/fs` task.
+    """
     reader = InputReader(join(test_dir(), 'inputs', 'AlFe.fs.eam.toml'))
     configs = reader.configs
 
