@@ -26,9 +26,10 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor):
     return loss, mae
 
 
-def get_energy_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
+def get_energy_loss(labels, predictions, n_atoms, weight=1.0,
+                    per_atom_loss=False, collections=None):
     """
-    Return the loss tensor of the per-atom (atomic) energy.
+    Return the loss tensor of the energy.
 
     Parameters
     ----------
@@ -41,21 +42,28 @@ def get_energy_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
         each structure.
     weight : float or tf.Tensor
         The weight of the loss.
+    per_atom_loss : bool
+        If True, return the per-atom loss; otherwise, return the per-structrue
+        loss. Defaults to False.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+        A `float64` tensor as the RMSE loss.
 
     """
     with tf.name_scope("Energy"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
-        x = tf.div(labels, n_atoms)
-        y = tf.div(predictions, n_atoms)
+        if per_atom_loss:
+            n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
+            x = tf.div(labels, n_atoms, name='labels')
+            y = tf.div(predictions, n_atoms, name='labels')
+        else:
+            x = tf.identity(labels, name='labels')
+            y = tf.identity(predictions, name='predictions')
         raw_loss, mae = _get_rmse_loss(x, y)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
@@ -121,7 +129,7 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+        A `float64` tensor as the RMSE loss.
 
     """
     with tf.name_scope("Forces"):
@@ -172,7 +180,7 @@ def get_stress_loss(labels, predictions, weight=1.0, collections=None):
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+        A `float64` tensor as the RMSE loss.
 
     """
     with tf.name_scope("Stress"):
@@ -206,7 +214,7 @@ def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+        A `float64` tensor as the RMSE loss.
 
     """
     with tf.name_scope("Pressure"):
@@ -217,5 +225,32 @@ def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:
             tf.add_to_collections(collections, raw_loss)
+            tf.add_to_collections(collections, loss)
+        return loss
+
+
+def get_l2_regularization_loss(weight=1.0, collections=None):
+    """
+    Return the total L2 regularization loss.
+
+    Parameters
+    ----------
+    weight : float or tf.Tensor
+        The weight of the loss.
+    collections : List[str] or None
+        A list of str as the collections where the loss tensors should be added.
+
+    Returns
+    -------
+    loss : tf.Tensor
+        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+
+    """
+    with tf.name_scope("L2"):
+        l2 = tf.losses.get_regularization_loss()
+        weight = tf.convert_to_tensor(weight, l2.dtype, name='weight')
+        loss = tf.multiply(l2, weight, name='weighted/loss')
+        if collections is not None:
+            tf.add_to_collections(collections, l2)
             tf.add_to_collections(collections, loss)
         return loss
