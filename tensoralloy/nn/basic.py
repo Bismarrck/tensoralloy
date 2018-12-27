@@ -314,7 +314,9 @@ class BasicNN:
                 return adict
 
         defaults = AttributeDict(
-            energy=AttributeDict(weight=1.0, per_atom_loss=False),
+            energy=AttributeDict(weight=1.0,
+                                 per_atom_loss=False,
+                                 positive_mode=False),
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0),
             total_pressure=AttributeDict(weight=1.0),
@@ -405,6 +407,7 @@ class BasicNN:
                 n_atoms=n_atoms,
                 weight=hparams.loss.energy.weight,
                 per_atom_loss=hparams.loss.energy.per_atom_loss,
+                positive_mode=hparams.loss.energy.positive_mode,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
@@ -413,6 +416,7 @@ class BasicNN:
                     predictions=predictions.forces,
                     n_atoms=n_atoms,
                     weight=hparams.loss.forces.weight,
+                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
@@ -420,6 +424,7 @@ class BasicNN:
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
                     weight=hparams.loss.total_pressure.weight,
+                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
@@ -427,6 +432,7 @@ class BasicNN:
                     labels=labels.stress,
                     predictions=predictions.stress,
                     weight=hparams.loss.stress.weight,
+                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(
@@ -516,7 +522,8 @@ class BasicNN:
 
         return hooks
 
-    def get_eval_metrics_ops(self, predictions, labels, n_atoms):
+    def get_eval_metrics_ops(self, predictions, labels, n_atoms,
+                             hparams: AttributeDict):
         """
         Return a dict of Ops as the evaluation metrics.
 
@@ -533,18 +540,24 @@ class BasicNN:
         `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
         the number of atoms in each structure.
 
+        `hparams` is the hyper parameters dict.
+            * 'hparams.loss.energy.positive_mode' is required
+
         """
         with tf.name_scope("Metrics"):
 
             metrics = {}
-
+            positive_mode = hparams.loss.energy.positive_mode
             n_atoms = tf.cast(n_atoms, labels.energy.dtype, name='n_atoms')
 
             with tf.name_scope("Energy"):
-                x = labels.energy
+                if positive_mode:
+                    x = tf.negative(labels.energy, name='negative')
+                else:
+                    x = labels.energy
                 y = predictions.energy
-                xn = labels.energy / n_atoms
-                yn = predictions.energy / n_atoms
+                xn = x / n_atoms
+                yn = y / n_atoms
                 ops_dict = {
                     'Energy/mae': tf.metrics.mean_absolute_error(x, y),
                     'Energy/mse': tf.metrics.mean_squared_error(x, y),
@@ -556,6 +569,8 @@ class BasicNN:
                 with tf.name_scope("Forces"):
                     with tf.name_scope("Split"):
                         x = tf.split(labels.forces, [1, -1], axis=1)[1]
+                    if positive_mode:
+                        x = tf.negative(x, name='negative')
                     y = predictions.forces
                     with tf.name_scope("Scale"):
                         n_max = tf.convert_to_tensor(
@@ -574,6 +589,8 @@ class BasicNN:
             if 'total_pressure' in self._minimize_properties:
                 with tf.name_scope("Pressure"):
                     x = labels.total_pressure
+                    if positive_mode:
+                        x = tf.negative(x, name='negative')
                     y = predictions.total_pressure
                     ops_dict = {
                         'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
@@ -583,6 +600,8 @@ class BasicNN:
             elif 'stress' in self._minimize_properties:
                 with tf.name_scope("Stress"):
                     x = labels.stress
+                    if positive_mode:
+                        x = tf.negative(x, name='negative')
                     y = predictions.stress
                     ops_dict = {
                         'Stress/mae': tf.metrics.mean_absolute_error(x, y),
@@ -739,7 +758,10 @@ class BasicNN:
                                               training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics_ops(
-            predictions, labels, n_atoms=features.n_atoms)
+            predictions=predictions,
+            labels=labels,
+            n_atoms=features.n_atoms,
+            hparams=params)
         evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,

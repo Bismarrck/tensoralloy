@@ -12,6 +12,7 @@ minimize = ['energy']
 
 [nn.loss.energy]
 per_atom_loss = false
+positive_mode = true
 
 [nn.loss.l2]
 weight = 0.01

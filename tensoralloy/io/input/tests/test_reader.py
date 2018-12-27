@@ -60,6 +60,7 @@ def test_read_configs():
     assert_equal(realpath(reader['train.model_dir']),
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
 
+    assert_equal(reader['nn.loss.energy.positive_mode'], True)
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
     assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
