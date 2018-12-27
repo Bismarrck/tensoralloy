@@ -37,7 +37,7 @@ class AtomicResNN(AtomicNN):
     default_collection = GraphKeys.ATOMIC_RES_NN_VARIABLES
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 loss_weights=None, minimize_properties=('energy', 'forces'),
+                 minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces'), normalizer='linear',
                  normalization_weights=None, atomic_static_energy=None):
         """
@@ -45,7 +45,7 @@ class AtomicResNN(AtomicNN):
         """
         super(AtomicResNN, self).__init__(
             elements=elements, hidden_sizes=hidden_sizes, activation=activation,
-            loss_weights=loss_weights, minimize_properties=minimize_properties,
+            minimize_properties=minimize_properties,
             export_properties=export_properties, normalizer=normalizer,
             normalization_weights=normalization_weights)
         self._atomic_static_energy = atomic_static_energy

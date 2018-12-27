@@ -30,7 +30,7 @@ class AtomicNN(BasicNN):
     default_collection = GraphKeys.ATOMIC_NN_VARIABLES
 
     def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 loss_weights=None, minimize_properties=('energy', 'forces'),
+                 minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces'), normalizer=None,
                  normalization_weights=None):
         """
@@ -45,8 +45,10 @@ class AtomicNN(BasicNN):
 
         """
         super(AtomicNN, self).__init__(
-            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
-            loss_weights=loss_weights, minimize_properties=minimize_properties,
+            elements=elements,
+            hidden_sizes=hidden_sizes,
+            activation=activation,
+            minimize_properties=minimize_properties,
             export_properties=export_properties)
         self._initial_normalizer_weights = \
             safe_select(normalization_weights, {})
@@ -100,7 +102,7 @@ class AtomicNN(BasicNN):
                         x,
                         activation_fn=activation_fn,
                         hidden_sizes=hidden_sizes,
-                        l2_weight=self._loss_weights.l2,
+                        l2_weight=1.0,
                         collections=collections,
                         verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')

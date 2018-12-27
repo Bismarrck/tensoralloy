@@ -71,7 +71,7 @@ class EamNN(BasicNN):
     """
 
     def __init__(self, elements: List[str], custom_potentials=None,
-                 hidden_sizes=None, activation=None, loss_weights=None,
+                 hidden_sizes=None, activation=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces')):
         """
@@ -81,8 +81,10 @@ class EamNN(BasicNN):
         self._kbody_terms = None
 
         super(EamNN, self).__init__(
-            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
-            loss_weights=loss_weights, minimize_properties=minimize_properties,
+            elements=elements,
+            hidden_sizes=hidden_sizes,
+            activation=activation,
+            minimize_properties=minimize_properties,
             export_properties=export_properties)
 
         # Setup the potentials
@@ -141,7 +143,7 @@ class EamNN(BasicNN):
         return partial(convolution1x1,
                        activation_fn=activation_fn,
                        hidden_sizes=hidden_sizes,
-                       l2_weight=self._loss_weights.l2,
+                       l2_weight=1.0,
                        collections=collections,
                        verbose=verbose)
 

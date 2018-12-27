@@ -6,13 +6,13 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+
 from typing import List, Dict
 from collections import namedtuple
 
+from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.nn.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.misc import safe_select, Defaults, AttributeDict
-
 from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
@@ -98,8 +98,11 @@ class BasicNN:
     # The default collection for model variabls.
     default_collection = None
 
-    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
-                 loss_weights=None, minimize_properties=('energy', 'forces'),
+    def __init__(self,
+                 elements: List[str],
+                 hidden_sizes=None,
+                 activation=None,
+                 minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces')):
         """
         Initialization method.
@@ -120,9 +123,6 @@ class BasicNN:
         export_properties : List[str]
             A list of str as the properties to infer when exporting the model.
             'energy' will always be exported.
-        loss_weights : AttributeDict or None
-            The weights of the losses. Available keys are 'energy', 'forces',
-            'stress', 'total_pressure' and 'l2'. If None, all will be set to 1.
 
         Notes
         -----
@@ -146,20 +146,6 @@ class BasicNN:
             if prop not in exportable_properties:
                 raise ExportablePropertyError(prop)
 
-        if loss_weights is None:
-            loss_weights = AttributeDict(
-                {prop: 1.0 for prop in minimize_properties})
-            loss_weights.l2 = 0.0
-        else:
-            for prop, val in loss_weights.items():
-                if prop != 'l2' and prop not in available_properties:
-                    raise MinimizablePropertyError(prop)
-                loss_weights[prop] = max(val, 0.0)
-            for prop in minimize_properties:
-                if prop not in loss_weights:
-                    loss_weights[prop] = 1.0
-
-        self._loss_weights = loss_weights
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
 
@@ -190,13 +176,6 @@ class BasicNN:
         Return a list of str as the properties to predict.
         """
         return self._export_properties
-
-    @property
-    def loss_weights(self):
-        """
-        Return the weights of the loss terms.
-        """
-        return self._loss_weights
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -322,7 +301,54 @@ class BasicNN:
                 log_tensor(hessian)
             return hessian
 
-    def get_total_loss(self, predictions, labels, n_atoms):
+    @staticmethod
+    def _check_loss_hparams(hparams: AttributeDict):
+        """
+        Check the hyper parameters and add missing but required parameters.
+        """
+
+        def _convert_to_attr_dict(adict):
+            if not isinstance(adict, AttributeDict):
+                return AttributeDict(adict)
+            else:
+                return adict
+
+        defaults = AttributeDict(
+            energy=AttributeDict(weight=1.0, per_atom_loss=False),
+            forces=AttributeDict(weight=1.0),
+            stress=AttributeDict(weight=1.0),
+            total_pressure=AttributeDict(weight=1.0),
+            l2=AttributeDict(weight=0.01))
+
+        if hparams is None:
+            hparams = AttributeDict(loss=defaults)
+        else:
+            hparams = _convert_to_attr_dict(hparams)
+            if 'loss' not in hparams:
+                hparams.loss = defaults
+            else:
+                hparams.loss = _convert_to_attr_dict(hparams.loss)
+
+                def _check_section(section):
+                    if section not in hparams.loss:
+                        hparams.loss[section] = defaults[section]
+                    else:
+                        hparams.loss[section] = _convert_to_attr_dict(
+                            hparams.loss[section])
+                        for key, value in defaults[section].items():
+                            if key not in hparams.loss[section]:
+                                hparams.loss[section][key] = value
+
+                _check_section('energy')
+                _check_section('forces')
+                _check_section('stress')
+                _check_section('total_pressure')
+                _check_section('l2')
+
+        return hparams
+
+    def get_total_loss(self, predictions, labels, n_atoms,
+                       hparams: AttributeDict):
         """
         Get the total loss tensor.
 
@@ -348,6 +374,15 @@ class BasicNN:
                   'total_pressure' should be minimized.
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
+        hparams : AttributeDict
+            A dict of hyper parameters for defining loss functions. Essential
+            keypaths for this method are:
+                - 'hparams.loss.energy.weight'
+                - 'hparams.loss.energy.per_atom_loss'
+                - 'hparams.loss.forces.weight'
+                - 'hparams.loss.stress.weight'
+                - 'hparams.loss.total_pressure.weight'
+                - 'hparams.loss.l2.weight'
 
         Returns
         -------
@@ -361,37 +396,42 @@ class BasicNN:
         with tf.name_scope("Loss"):
 
             collections = [GraphKeys.TRAIN_METRICS]
+            hparams = self._check_loss_hparams(hparams)
 
             losses = AttributeDict()
             losses.energy = loss_ops.get_energy_loss(
-                labels=labels.energy, predictions=predictions.energy,
-                n_atoms=n_atoms, weight=self._loss_weights.energy,
+                labels=labels.energy,
+                predictions=predictions.energy,
+                n_atoms=n_atoms,
+                weight=hparams.loss.energy.weight,
+                per_atom_loss=hparams.loss.energy.per_atom_loss,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
                 losses.forces = loss_ops.get_forces_loss(
-                    labels=labels.forces, predictions=predictions.forces,
-                    n_atoms=n_atoms, weight=self._loss_weights.forces,
+                    labels=labels.forces,
+                    predictions=predictions.forces,
+                    n_atoms=n_atoms,
+                    weight=hparams.loss.forces.weight,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
                 losses.total_pressure = loss_ops.get_total_pressure_loss(
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
-                    weight=self._loss_weights.total_pressure,
+                    weight=hparams.loss.total_pressure.weight,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
                 losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
-                    weight=self._loss_weights.stress,
+                    weight=hparams.loss.stress.weight,
                     collections=collections)
 
-            if self._loss_weights.l2 > 0.0:
-                with tf.name_scope("L2"):
-                    losses.l2 = tf.losses.get_regularization_loss()
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, losses.l2)
+            losses.l2 = loss_ops.get_l2_regularization_loss(
+                weight=hparams.loss.l2.weight,
+                collections=collections)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -633,7 +673,7 @@ class BasicNN:
             return predictions
 
     def model_fn(self, features: AttributeDict, labels: AttributeDict,
-                 mode: tf.estimator.ModeKeys, params: AttributeDict):
+                 mode: tf.estimator.ModeKeys, hparams: AttributeDict):
         """
         Initialize a model function for `tf.estimator.Estimator`.
 
@@ -662,8 +702,8 @@ class BasicNN:
         mode : tf.estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
-        params : AttributeDict
-            Hyperparameters for building models.
+        hparams : AttributeDict
+            Hyperparameters for building and training a NN model.
 
         Returns
         -------
@@ -675,7 +715,7 @@ class BasicNN:
         """
         self._check_keys(features, labels)
 
-        predictions = self.build(features,
+        predictions = self.build(features=features,
                                  mode=mode,
                                  verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 
@@ -685,21 +725,22 @@ class BasicNN:
 
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
-                                                 n_atoms=features.n_atoms)
+                                                 n_atoms=features.n_atoms,
+                                                 hparams=hparams)
         ema, train_op = get_train_op(
             losses=losses,
-            hparams=params,
+            hparams=hparams,
             minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            training_hooks = self.get_training_hooks(hparams=params)
+            training_hooks = self.get_training_hooks(hparams=hparams)
             return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics_ops(
             predictions, labels, n_atoms=features.n_atoms)
-        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
+        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=hparams)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,

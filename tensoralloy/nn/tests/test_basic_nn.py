@@ -8,12 +8,12 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from nose.tools import assert_dict_equal
+from nose.tools import assert_dict_equal, assert_equal
 from ase.db import connect
 from os.path import join
 
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.misc import Defaults, datasets_dir
+from tensoralloy.misc import Defaults, datasets_dir, AttributeDict
 from tensoralloy.test_utils import assert_array_equal
 
 __author__ = 'Xin Chen'
@@ -76,6 +76,37 @@ def test_convert_to_voigt_stress():
 
         assert_array_equal(pred_voigt, batch_voigt[0])
         assert_array_equal(pred_batch_voigt, batch_voigt)
+
+
+def test_check_hparams():
+    """
+    Test the static method `BasicNN._check_hparams`.
+    """
+    nn = BasicNN(elements=['Ni'], activation='leaky_relu',
+                 minimize_properties=['stress'], export_properties=['stress'])
+    
+    defaults = AttributeDict(
+        loss=AttributeDict(
+            energy=AttributeDict(weight=1.0, per_atom_loss=False),
+            forces=AttributeDict(weight=1.0),
+            stress=AttributeDict(weight=1.0),
+            total_pressure=AttributeDict(weight=1.0),
+            l2=AttributeDict(weight=0.01)))
+
+    # noinspection PyTypeChecker
+    hparams = nn._check_loss_hparams(None)
+    assert_dict_equal(defaults, hparams)
+    
+    hparams = nn._check_loss_hparams(AttributeDict())
+    assert_dict_equal(defaults, hparams)
+
+    hparams = nn._check_loss_hparams(AttributeDict(loss={}))
+    assert_dict_equal(defaults, hparams)
+
+    hparams = nn._check_loss_hparams(
+        AttributeDict(loss={'energy': {'weight': 3.0}}))
+    assert_equal(hparams.loss.energy.weight, 3.0)
+    assert_equal(hparams.loss.forces.weight, 1.0)
 
 
 if __name__ == "__main__":
