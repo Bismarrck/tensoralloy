@@ -474,7 +474,7 @@ class Dataset:
                 descriptor transformer.
 
             """
-            clf = self._transformer.as_runtime_transformer()
+            clf = self._transformer.as_descriptor_transformer()
             params = clf.as_dict()
             params.update({'predict_properties': predict_properties})
             descriptors = clf.get_graph()

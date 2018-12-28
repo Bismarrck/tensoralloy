@@ -48,7 +48,7 @@ def test_initialization():
     assert isinstance(transformer, BatchSymmetryFunctionTransformer)
 
     with tf.Session() as sess:
-        rc = transformer.cutoff
+        rc = transformer.rc
         gamma = 5.0
         r = np.linspace(1.0, 10.0, num=91, endpoint=True)
         x = np.asarray([polynomial_cutoff_simple(ri, rc, gamma) for ri in r])

@@ -6,9 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
-import abc
 from ase.data import chemical_symbols
-from collections import Counter
 from typing import List, Dict, Tuple
 
 from tensoralloy.utils import get_kbody_terms
@@ -18,62 +16,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class AtomicDescriptorInterface(abc.ABC):
-    """
-    The required interafces for all atomic descriptor classes.
-    """
-
-    @property
-    @abc.abstractmethod
-    def elements(self):
-        """
-        Return a list of str as the ordered unique elements.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def cutoff(self):
-        """
-        Return the cutoff radius.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def max_occurs(self) -> Counter:
-        """
-        Return the maximum occurance of each type of element.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def k_max(self) -> int:
-        """
-        Return the maximum k for the many-body expansion scheme.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def all_kbody_terms(self) -> List[str]:
-        """
-        A list of str as the ordered k-body terms.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def kbody_terms(self) -> Dict[str, List[str]]:
-        """
-        A dict of (element, kbody_terms) as the k-body terms for each type of
-        elements.
-        """
-        pass
-
-
-class AtomicDescriptor(AtomicDescriptorInterface):
+class AtomicDescriptor:
     """
     The base class for all kinds of atomic descriptors.
     """
@@ -100,7 +43,7 @@ class AtomicDescriptor(AtomicDescriptorInterface):
         self._periodic = periodic
 
     @property
-    def cutoff(self) -> float:
+    def rc(self) -> float:
         """
         Return the cutoff radius.
         """
