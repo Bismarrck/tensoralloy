@@ -41,12 +41,11 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Initialization method.
         """
-        super(SymmetryFunctionTransformer, self).__init__(
-            rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
+        SymmetryFunction.__init__(
+            self, rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
             zeta=zeta, k_max=k_max, periodic=periodic,
             cutoff_function=cutoff_function)
-        self._index_transformers = {}
-        self._placeholders = AttributeDict()
+        DescriptorTransformer.__init__(self)
 
     def get_graph(self):
         """
@@ -141,35 +140,6 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 )
         return self._placeholders
 
-    def get_index_transformer(self, atoms: Atoms):
-        """
-        Return the corresponding `IndexTransformer`.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            An `Atoms` object.
-
-        Returns
-        -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
-
-        """
-        # The mode 'reduce' is important here because chemical symbol lists of
-        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
-        formula = atoms.get_chemical_formula(mode='reduce')
-        if formula not in self._index_transformers:
-            symbols = atoms.get_chemical_symbols()
-            max_occurs = Counter()
-            counter = Counter(symbols)
-            for element in self._elements:
-                max_occurs[element] = max(1, counter[element])
-            self._index_transformers[formula] = IndexTransformer(
-                max_occurs, symbols
-            )
-        return self._index_transformers[formula]
-
     def _get_g2_indexed_slices(self, atoms, index_transformer: IndexTransformer):
         """
         Return the indexed slices for the symmetry function G2.
@@ -257,15 +227,6 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                                ij_shift=ij_shift, ik_shift=ik_shift,
                                jk_shift=jk_shift)
 
-    def _get_composition(self, atoms: Atoms) -> np.ndarray:
-        """
-        Return the composition of the `Atoms`.
-        """
-        composition = np.zeros(self._n_elements, dtype=np.float64)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            composition[self._elements.index(element)] = float(count)
-        return composition
-
     def get_feed_dict(self, atoms: Atoms):
         """
         Return the feed dict.
@@ -341,15 +302,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         elements = sorted(max_occurs.keys())
 
-        super(BatchSymmetryFunctionTransformer, self).__init__(
-            rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
-            nijk_max=nijk_max, batch_size=batch_size, eta=eta, beta=beta,
-            gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic,
+        BatchSymmetryFunction.__init__(
+            self, rc=rc, max_occurs=max_occurs, elements=elements,
+            nij_max=nij_max, nijk_max=nijk_max, batch_size=batch_size, eta=eta,
+            beta=beta, gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic,
             cutoff_function=cutoff_function)
 
-        self._index_transformers = {}
-        self._forces = forces
-        self._stress = stress
+        BatchDescriptorTransformer.__init__(self, forces=forces, stress=stress)
 
     @property
     def batch_size(self):
@@ -358,21 +317,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         return self._batch_size
 
-    @property
-    def forces(self):
-        """
-        Return True if atomic forces can be calculated.
-        """
-        return self._forces
-
-    @property
-    def stress(self):
-        """
-        Return True if the stress tensor can be calculated.
-        """
-        return self._stress
-
-    def as_runtime_transformer(self):
+    def as_descriptor_transformer(self):
         """
         Return the corresponding `SymmetryFunctionTransformer`.
         """

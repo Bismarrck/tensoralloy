@@ -9,10 +9,9 @@ import numpy as np
 import abc
 
 from collections import Counter
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from ase import Atoms
 
-from tensoralloy.descriptor.base import AtomicDescriptorInterface
 from tensoralloy.misc import AttributeDict
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
@@ -22,18 +21,74 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class DescriptorTransformer(AtomicDescriptorInterface):
+class BaseTransformer:
     """
-    This class represents atomic descriptor transformers for runtime prediction.
+    The base class for all transformers.
     """
+
+    def __init__(self):
+        """
+        Initialization method.
+        """
+        self._index_transformers = {}
 
     @property
     @abc.abstractmethod
+    def elements(self) -> List[str]:
+        """
+        A property that all subclasses should implement.
+
+        Return a list of str as the ordered elements.
+        """
+        pass
+
+    def _get_composition(self, atoms) -> np.ndarray:
+        """
+        Return a vector as the composition of the `Atoms`.
+        """
+        n_elements = len(self.elements)
+        composition = np.zeros(n_elements, dtype=np.float64)
+        for element, count in Counter(atoms.get_chemical_symbols()).items():
+            composition[self.elements.index(element)] = float(count)
+        return composition
+
+    @abc.abstractmethod
+    def get_index_transformer(self, atoms: Atoms):
+        """
+        Return the corresponding `IndexTransformer`.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            An `Atoms` object.
+
+        Returns
+        -------
+        clf : IndexTransformer
+            The `IndexTransformer` for the given `Atoms` object.
+
+        """
+        pass
+
+
+class DescriptorTransformer(BaseTransformer):
+    """
+    This class represents atomic descriptor transformers for prediction.
+    """
+
+    def __init__(self):
+        """
+        Initialization method.
+        """
+        super(DescriptorTransformer, self).__init__()
+        self._placeholders = AttributeDict()
+
+    @property
     def placeholders(self) -> Dict[str, tf.Tensor]:
         """
         Return a dict of names and placeholders.
         """
-        pass
+        return self._placeholders
 
     @abc.abstractmethod
     def get_feed_dict(self, atoms: Atoms):
@@ -56,12 +111,34 @@ class DescriptorTransformer(AtomicDescriptorInterface):
         """
         pass
 
-    @abc.abstractmethod
-    def get_index_transformer(self, atoms: Atoms) -> IndexTransformer:
+    def get_index_transformer(self, atoms: Atoms):
         """
         Return the corresponding `IndexTransformer`.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            An `Atoms` object.
+
+        Returns
+        -------
+        clf : IndexTransformer
+            The `IndexTransformer` for the given `Atoms` object.
+
         """
-        pass
+        # The mode 'reduce' is important here because chemical symbol lists of
+        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
+        formula = atoms.get_chemical_formula(mode='reduce')
+        if formula not in self._index_transformers:
+            symbols = atoms.get_chemical_symbols()
+            max_occurs = Counter()
+            counter = Counter(symbols)
+            for element in self.elements:
+                max_occurs[element] = max(1, counter[element])
+            self._index_transformers[formula] = IndexTransformer(
+                max_occurs, symbols
+            )
+        return self._index_transformers[formula]
 
 
 def bytes_feature(value):
@@ -85,33 +162,42 @@ def int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-class BatchDescriptorTransformer(AtomicDescriptorInterface):
+class BatchDescriptorTransformer(BaseTransformer):
     """
     This class represents atomic descriptor transformers for batch training and
     evaluation.
     """
 
-    def __init__(self):
+    def __init__(self, forces=True, stress=False):
         """
         Initialization method.
+
+        Parameters
+        ----------
+        forces : bool
+            A boolean flag indicating whether atomic forces should be encoded.
+        stress : bool
+            A boolean flag indicating whether stress tensors should be encoded.
+
         """
-        self._index_transformers = {}
+        super(BatchDescriptorTransformer, self).__init__()
+
+        self._forces = forces
+        self._stress = stress
 
     @property
-    @abc.abstractmethod
     def forces(self):
         """
         Return True if atomic forces should be encoded and trained.
         """
-        pass
+        return self._forces
 
     @property
-    @abc.abstractmethod
     def stress(self):
         """
         Return True if the stress tensor should be encoded and trained.
         """
-        pass
+        return self._stress
 
     @property
     @abc.abstractmethod
@@ -138,21 +224,11 @@ class BatchDescriptorTransformer(AtomicDescriptorInterface):
         pass
 
     @abc.abstractmethod
-    def as_runtime_transformer(self) -> DescriptorTransformer:
+    def as_descriptor_transformer(self) -> DescriptorTransformer:
         """
         Return a corresponding `DescriptorTransformer`.
         """
         pass
-
-    def _get_composition(self, atoms: Atoms) -> np.ndarray:
-        """
-        Return the composition of the `Atoms`.
-        """
-        n_el = len(self.elements)
-        composition = np.zeros(n_el, dtype=np.float64)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            composition[self.elements.index(element)] = float(count)
-        return composition
 
     def get_index_transformer(self, atoms: Atoms):
         """

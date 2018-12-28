@@ -34,8 +34,8 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         Initialization method.
         """
-        super(EAMTransformer, self).__init__(rc=rc, elements=elements)
-        self._placeholders = AttributeDict()
+        EAMTransformer.__init__(self, rc=rc, elements=elements)
+        DescriptorTransformer.__init__(self)
 
     def get_graph(self):
         """
@@ -220,12 +220,11 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         elements = sorted(max_occurs.keys())
 
-        super(BatchEAMTransformer, self).__init__(
-            rc=rc, max_occurs=max_occurs, elements=elements, nij_max=nij_max,
-            nnl_max=nnl_max, batch_size=batch_size)
-        self._index_transformers = {}
-        self._forces = forces
-        self._stress = stress
+        BatchEAM.__init__(
+            self, rc=rc, max_occurs=max_occurs, elements=elements,
+            nij_max=nij_max, nnl_max=nnl_max, batch_size=batch_size)
+
+        BatchDescriptorTransformer.__init__(self, forces=forces, stress=stress)
 
     @property
     def batch_size(self):
@@ -241,21 +240,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         return self._max_occurs
 
-    @property
-    def forces(self):
-        """
-        Return True if atomic forces can be calculated.
-        """
-        return self._forces
-
-    @property
-    def stress(self):
-        """
-        Return True if the stress tensor can be calculated.
-        """
-        return self._stress
-
-    def as_runtime_transformer(self):
+    def as_descriptor_transformer(self):
         """
         This method is temporarily disabled as `EamTransformer` is neither
         implemented nor needed.
