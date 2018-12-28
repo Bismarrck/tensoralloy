@@ -11,9 +11,6 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-# TODO: the optimized `alpha` may be negative. Constraints should be added.
-
-
 class InputNormalizer:
     """
     A collection of funcitons for normalizing input descriptors to [0, 1].
@@ -62,6 +59,7 @@ class InputNormalizer:
                 initializer=tf.constant_initializer(
                     initial_weights, dtype=x.dtype),
                 collections=default_collections,
+                constraint=lambda t: tf.clip_by_value(t, 0.1, np.infty),
                 trainable=True)
             tf.summary.histogram(alpha.op.name + '/hist', alpha)
             x = tf.multiply(x, alpha, name='ax')
