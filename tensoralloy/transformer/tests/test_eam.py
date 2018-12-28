@@ -19,7 +19,7 @@ from tensoralloy.misc import datasets_dir, AttributeDict
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.transformer.index_transformer import IndexTransformer
-from tensoralloy.transformer.eam import BatchEAMTransformer
+from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -59,7 +59,36 @@ def eam(atoms: Atoms, max_occurs: Counter, nnl: int, rc=6.5):
     return {'g': g, 'mask': mask}
 
 
-def test():
+def test_eam_transformer():
+    """
+    Test `EAMTransformer`.
+    """
+    db = connect(join(datasets_dir(), 'qm7.db'))
+    atoms = db.get_atoms('id=2')
+    rc = 6.5
+    elements = ['C', 'H']
+    max_occurs = Counter({'C': 2, 'H': 6})
+    nij, _, nnl = find_neighbor_sizes(atoms, rc=rc, k_max=2)
+    ref = eam(atoms, max_occurs, nnl=nnl, rc=rc)
+
+    with tf.Graph().as_default():
+
+        clf = EAMTransformer(rc=6.5, elements=elements)
+
+        with tf.Session() as sess:
+            results = sess.run(clf.get_graph(),
+                               feed_dict=clf.get_feed_dict(atoms))
+
+        g_h, mask_h = results['H']
+        g_c, mask_c = results['C']
+
+        assert_array_equal(ref['g'][0, :, 3: 9, :], g_h)
+        assert_array_equal(ref['g'][0, :, 1: 3, :], g_c)
+        assert_array_equal(ref['mask'][0, :, 3: 9, :], mask_h)
+        assert_array_equal(ref['mask'][0, :, 1: 3, :], mask_c)
+
+
+def test_batch_eam_transformer():
     """
     Test `BatchEAMTransformer`.
     """

@@ -22,7 +22,7 @@ from tensoralloy.transformer.base import DescriptorTransformer
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["BatchEAMTransformer"]
+__all__ = ["BatchEAMTransformer", "EAMTransformer"]
 
 
 class EAMTransformer(EAM, DescriptorTransformer):
@@ -34,7 +34,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         Initialization method.
         """
-        EAMTransformer.__init__(self, rc=rc, elements=elements)
+        EAM.__init__(self, rc=rc, elements=elements)
         DescriptorTransformer.__init__(self)
 
     def get_graph(self):
@@ -107,12 +107,10 @@ class EAMTransformer(EAM, DescriptorTransformer):
             self._placeholders.nnl_max = _int('nnl_max')
             self._placeholders.row_splits = _int_1d(
                 'row_splits', d0=self._n_elements + 1)
-            self._placeholders.g2 = AttributeDict(
-                ilist=_int_1d('g2.ilist'),
-                jlist=_int_1d('g2.jlist'),
-                shift=_double_2d(3, 'g2.shift'),
-                v2g_map=_int_2d(4, 'g2.v2g_map')
-            )
+            self._placeholders.ilist = _int_1d('ilist')
+            self._placeholders.jlist = _int_1d('jlist')
+            self._placeholders.shift = _double_2d(3, 'shift')
+            self._placeholders.v2g_map = _int_2d(4, 'v2g_map')
 
         return self._placeholders
 
@@ -182,7 +180,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
         index_transformer = self.get_index_transformer(atoms)
         g2 = self._get_indexed_slices(atoms, index_transformer)
-        nnl_max = g2.v2g_map[:, 2].max()
+        nnl_max = g2.v2g_map[:, 2].max() + 1
 
         positions = index_transformer.map_positions(atoms.positions)
         n_atoms = index_transformer.n_atoms
@@ -200,10 +198,10 @@ class EAMTransformer(EAM, DescriptorTransformer):
         feed_dict[placeholders.volume] = volume
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits
-        feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
-        feed_dict[placeholders.g2.ilist] = g2.ilist
-        feed_dict[placeholders.g2.jlist] = g2.jlist
-        feed_dict[placeholders.g2.shift] = g2.shift
+        feed_dict[placeholders.v2g_map] = g2.v2g_map
+        feed_dict[placeholders.ilist] = g2.ilist
+        feed_dict[placeholders.jlist] = g2.jlist
+        feed_dict[placeholders.shift] = g2.shift
 
         return feed_dict
 
