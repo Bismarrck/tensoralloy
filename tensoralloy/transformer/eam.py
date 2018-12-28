@@ -8,19 +8,204 @@ import tensorflow as tf
 import numpy as np
 
 from collections import Counter
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
-from tensoralloy.descriptor.eam import BatchEAM
+from tensoralloy.descriptor.eam import EAM, BatchEAM
 from tensoralloy.misc import AttributeDict
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer.base import DescriptorTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["BatchEAMTransformer"]
+
+
+class EAMTransformer(EAM, DescriptorTransformer):
+    """
+    The feature transformer for the EAM model.
+    """
+
+    def __init__(self, rc: float, elements: List[str]):
+        """
+        Initialization method.
+        """
+        super(EAMTransformer, self).__init__(rc=rc, elements=elements)
+        self._placeholders = AttributeDict()
+
+    def get_graph(self):
+        """
+        Return the graph to compute symmetry function descriptors.
+        """
+        if not self._placeholders:
+            self._initialize_placeholders()
+        return self.build_graph(self._placeholders)
+
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        d = {'class': self.__class__.__name__,
+             'rc': self._rc,
+             'elements': self._elements}
+        return d
+
+    @property
+    def placeholders(self) -> AttributeDict:
+        """
+        Return a dict of placeholders.
+        """
+        return self._placeholders
+
+    def _initialize_placeholders(self):
+        """
+        Initialize the placeholders.
+        """
+        graph = tf.get_default_graph()
+
+        # Make sure the all placeholder ops are placed under the absolute path
+        # of 'Placeholders/'. Placeholder ops can be recovered from graph
+        # directly.
+        with tf.name_scope("Placeholders/"):
+
+            def _get_or_create(dtype, shape, name):
+                try:
+                    return graph.get_tensor_by_name(f'Placeholders/{name}:0')
+                except KeyError:
+                    return tf.placeholder(dtype, shape, name)
+                except Exception as excp:
+                    raise excp
+
+            def _double(name):
+                return _get_or_create(tf.float64, (), name)
+
+            def _double_1d(name):
+                return _get_or_create(tf.float64, (None, ), name)
+
+            def _double_2d(d1, name, d0=None):
+                return _get_or_create(tf.float64, (d0, d1), name)
+
+            def _int(name):
+                return _get_or_create(tf.int32, (), name)
+
+            def _int_1d(name, d0=None):
+                return _get_or_create(tf.int32, (d0, ), name)
+
+            def _int_2d(d1, name, d0=None):
+                return _get_or_create(tf.int32, (d0, d1), name)
+
+            self._placeholders.positions = _double_2d(3, 'positions')
+            self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
+            self._placeholders.n_atoms = _int('n_atoms')
+            self._placeholders.volume = _double('volume')
+            self._placeholders.mask = _double_1d('mask')
+            self._placeholders.composition = _double_1d('composition')
+            self._placeholders.nnl_max = _int('nnl_max')
+            self._placeholders.row_splits = _int_1d(
+                'row_splits', d0=self._n_elements + 1)
+            self._placeholders.g2 = AttributeDict(
+                ilist=_int_1d('g2.ilist'),
+                jlist=_int_1d('g2.jlist'),
+                shift=_double_2d(3, 'g2.shift'),
+                v2g_map=_int_2d(4, 'g2.v2g_map')
+            )
+
+        return self._placeholders
+
+    def _get_indexed_slices(self, atoms, index_transformer: IndexTransformer):
+        """
+        Return the corresponding indexed slices.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `ase.Atoms` object.
+        index_transformer : IndexTransformer
+            The corresponding index transformer.
+
+        Returns
+        -------
+        g2 : G2IndexedSlices
+            The indexed slices for the target `Atoms` object.
+
+        """
+        symbols = atoms.get_chemical_symbols()
+        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
+        nij = len(ilist)
+
+        v2g_map = np.zeros((nij, 4), dtype=np.int32)
+
+        tlist = np.zeros(nij, dtype=np.int32)
+        for i in range(nij):
+            symboli = symbols[ilist[i]]
+            symbolj = symbols[jlist[i]]
+            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+
+        ilist = index_transformer.inplace_map_index(ilist + 1)
+        jlist = index_transformer.inplace_map_index(jlist + 1)
+        shift = np.asarray(Slist, dtype=np.float64)
+
+        # The type of the (atomi, atomj) interaction.
+        v2g_map[:, 0] = tlist
+
+        # The indices of center atoms
+        v2g_map[:, 1] = ilist
+        counters = {}
+        for index in range(nij):
+            atomi = ilist[index]
+            if atomi not in counters:
+                counters[atomi] = Counter()
+
+            # The indices of the pair atoms
+            v2g_map[index, 2] = counters[atomi][tlist[index]]
+            counters[atomi][tlist[index]] += 1
+
+        # The mask
+        v2g_map[:, 3] = ilist > 0
+
+        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                               shift=shift)
+
+    def get_feed_dict(self, atoms: Atoms):
+        """
+        Return the feed dict.
+        """
+        feed_dict = {}
+
+        if not self._placeholders:
+            self._initialize_placeholders()
+        placeholders = self._placeholders
+
+        index_transformer = self.get_index_transformer(atoms)
+        g2 = self._get_indexed_slices(atoms, index_transformer)
+        nnl_max = g2.v2g_map[:, 2].max()
+
+        positions = index_transformer.map_positions(atoms.positions)
+        n_atoms = index_transformer.n_atoms
+        cells = atoms.get_cell(complete=True)
+        volume = atoms.get_volume()
+        mask = index_transformer.mask
+        splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
+        composition = self._get_composition(atoms)
+
+        feed_dict[placeholders.positions] = positions
+        feed_dict[placeholders.n_atoms] = n_atoms
+        feed_dict[placeholders.nnl_max] = nnl_max
+        feed_dict[placeholders.mask] = mask
+        feed_dict[placeholders.cells] = cells
+        feed_dict[placeholders.volume] = volume
+        feed_dict[placeholders.composition] = composition
+        feed_dict[placeholders.row_splits] = splits
+        feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
+        feed_dict[placeholders.g2.ilist] = g2.ilist
+        feed_dict[placeholders.g2.jlist] = g2.jlist
+        feed_dict[placeholders.g2.shift] = g2.shift
+
+        return feed_dict
 
 
 class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
