@@ -107,6 +107,7 @@ venv.bak/
 
 # Local tests
 test.py
+test.npz
 
 # Ignore PyCharm settings
 .idea
