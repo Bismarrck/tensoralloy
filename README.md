@@ -7,12 +7,14 @@
 alloys. **TensorAlloy** builds direct computation graph from atomic positions 
 to total energy:
 
-Thus, atomic forces and the virial stress tensor can be derived by the 
-**AutoGrad** module of TensorFlow directly:
+Thus, atomic forces, virial stress tensor and the second-order 
+**Hessian** matrix can be derived by the **AutoGrad** module of 
+TensorFlow directly:
 
 ```python
 forces = tf.gradients(E, R)[0]
 stress = -0.5 * (tf.gradients(E, h)[0] @ h)
+hessian = tf.hessian(E, R)[0]
 ```
 
 where `E` is the total energy tensor built from atomic positions `R` and `h` is 
