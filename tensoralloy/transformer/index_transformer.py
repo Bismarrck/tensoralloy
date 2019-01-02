@@ -121,7 +121,7 @@ class IndexTransformer:
         """
         Transform the array from local to global reference (reverse=False) or
         vise versa (reverse=True).
-s
+
         Parameters
         ----------
         array : array_like
