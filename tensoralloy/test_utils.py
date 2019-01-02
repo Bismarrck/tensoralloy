@@ -4,10 +4,10 @@ This module defines unit tests related functions and vars.
 """
 from __future__ import print_function, absolute_import
 
+import numpy as np
+
 from collections import Counter
 from os.path import join
-
-import numpy as np
 from ase import Atoms
 from ase.io import read
 from nose.tools import assert_less, assert_equal

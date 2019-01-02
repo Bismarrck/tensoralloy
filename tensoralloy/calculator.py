@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import json
+
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 from tensorflow.core.framework import graph_pb2
