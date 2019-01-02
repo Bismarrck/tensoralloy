@@ -150,32 +150,32 @@ class Zjw04(EamAlloyPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        if kbody_term in ('AlAl', 'CuCu'):
-            element = get_elements_from_kbody_term(kbody_term)[0]
-            with tf.variable_scope(f"ZJW04/Phi/{element}"):
-                re = self._get_var('re', r.dtype, element, shared=True)
-                A = self._get_var('A', r.dtype, element, shared=True)
-                B = self._get_var('B', r.dtype, element, shared=True)
-                alpha = self._get_var('alpha', r.dtype, element, shared=True)
-                beta = self._get_var('beta', r.dtype, element, shared=True)
-                kappa = self._get_var('kappa', r.dtype, element, shared=True)
-                lamda = self._get_var('lamda', r.dtype, element, shared=True)
+        el_a, el_b = get_elements_from_kbody_term(kbody_term)
+        if el_a == el_b:
+            with tf.variable_scope(f"Zjw04/Phi/{el_a}"):
+                re = self._get_var('re', r.dtype, el_a, shared=True)
+                A = self._get_var('A', r.dtype, el_a, shared=True)
+                B = self._get_var('B', r.dtype, el_a, shared=True)
+                alpha = self._get_var('alpha', r.dtype, el_a, shared=True)
+                beta = self._get_var('beta', r.dtype, el_a, shared=True)
+                kappa = self._get_var('kappa', r.dtype, el_a, shared=True)
+                lamda = self._get_var('lamda', r.dtype, el_a, shared=True)
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
                 return tf.subtract(
                     self._exp_func(re, A, alpha, kappa, one, name='A')(r),
                     self._exp_func(re, B, beta, lamda, one, name='B')(r),
                     name='phi')
         else:
-            with tf.name_scope('AlAl'):
-                phi_al = self.phi(r, 'AlAl')
-                rho_al = self.rho(r, 'Al')
-            with tf.name_scope("CuCu"):
-                phi_cu = self.phi(r, 'CuCu')
-                rho_cu = self.rho(r, 'Cu')
+            with tf.name_scope(f'{el_a}{el_a}'):
+                phi_a = self.phi(r, f'{el_a}{el_a}')
+                rho_a = self.rho(r, f'{el_a}')
+            with tf.name_scope(f"{el_b}{el_b}"):
+                phi_b = self.phi(r, f'{el_b}{el_b}')
+                rho_b = self.rho(r, f'{el_b}')
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             return tf.multiply(half,
-                               tf.add(tf.div(rho_al, rho_cu) * phi_cu,
-                                      tf.div(rho_cu, rho_al) * phi_al),
+                               tf.add(tf.div(rho_a, rho_b) * phi_b,
+                                      tf.div(rho_b, rho_a) * phi_a),
                                name='phi')
 
     def rho(self, r: tf.Tensor, element: str):
@@ -195,7 +195,7 @@ class Zjw04(EamAlloyPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        with tf.variable_scope(f"ZJW04/Rho/{element}"):
+        with tf.variable_scope(f"Zjw04/Rho/{element}"):
             re = self._get_var('re', r.dtype, element, shared=True)
             fe = self._get_var('fe', r.dtype, element, shared=True)
             beta = self._get_var('beta', r.dtype, element, shared=True)
@@ -223,7 +223,7 @@ class Zjw04(EamAlloyPotential):
         """
         dtype = rho.dtype
 
-        with tf.variable_scope(f"ZJW04/Embed/{element}"):
+        with tf.variable_scope(f"Zjw04/Embed/{element}"):
             Fn0 = self._get_var('Fn0', dtype, element, shared=True)
             Fn1 = self._get_var('Fn1', dtype, element, shared=True)
             Fn2 = self._get_var('Fn2', dtype, element, shared=True)
