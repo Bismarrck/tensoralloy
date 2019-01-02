@@ -17,7 +17,7 @@ from nose.tools import assert_equal
 
 from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
-from tensoralloy.nn.eam.potentials.zjw04 import AlCuZJW04
+from tensoralloy.nn.eam.potentials.zjw04 import Zjw04
 from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
@@ -191,7 +191,7 @@ def test_rho_phi_aa():
 
         r = tf.convert_to_tensor(r, name='r')
 
-        layer = AlCuZJW04()
+        layer = Zjw04()
 
         with tf.name_scope("Rho"):
             with tf.variable_scope("AlAl"):
@@ -229,7 +229,7 @@ def test_phi_ab():
 
         r = tf.convert_to_tensor(r, name='r')
 
-        layer = AlCuZJW04()
+        layer = Zjw04()
 
         with tf.name_scope("Phi"):
             with tf.variable_scope("AlCu"):
@@ -254,7 +254,7 @@ def test_embed():
 
         rho = tf.convert_to_tensor(rho, name='rho')
 
-        layer = AlCuZJW04()
+        layer = Zjw04()
 
         with tf.name_scope("Embed"):
 
