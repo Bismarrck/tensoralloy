@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import shutil
+import os
 
 from argparse import ArgumentParser, Namespace
 from os.path import join, exists, dirname, basename
@@ -229,6 +230,8 @@ class TrainingManager:
 
             set_logging_configs(
                 logfile=check_path(join(hparams.train.model_dir, 'logfile')))
+
+            tf.logging.info(f'pid={os.getpid()}')
 
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,
