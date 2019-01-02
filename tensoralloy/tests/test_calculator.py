@@ -7,8 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import nose
 
-from nose.tools import assert_almost_equal, assert_equal, assert_raises
-from unittest import expectedFailure
+from nose.tools import assert_almost_equal
 from os.path import join
 from ase.db import connect
 from sklearn.metrics import mean_absolute_error
@@ -19,9 +18,6 @@ from tensoralloy.misc import test_dir, Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-# TODO: fix the test `test_calculator_with_nickel`
 
 
 def test_calculator_with_nickel():
@@ -47,8 +43,7 @@ def test_calculator_with_nickel():
     y_mae = mean_absolute_error(y_true, y_pred)
     assert_almost_equal(y_mae, 0.00769633, delta=1e-7)
 
-    with assert_raises(Exception):
-        calc.get_forces(db.get_atoms('id=1'))
+    calc.get_forces(db.get_atoms('id=1'))
 
 
 if __name__ == "__main__":
