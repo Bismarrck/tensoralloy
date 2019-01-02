@@ -36,14 +36,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
     """
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=False,
                  periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
         """
         SymmetryFunction.__init__(
             self, rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, k_max=k_max, periodic=periodic,
+            zeta=zeta, angular=angular, periodic=periodic,
             cutoff_function=cutoff_function)
         DescriptorTransformer.__init__(self)
 
@@ -60,7 +60,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         Return a JSON serializable dict representation of this transformer.
         """
         d = {'class': self.__class__.__name__, 'rc': self._rc,
-             'elements': self._elements, 'k_max': self._k_max,
+             'elements': self._elements, 'angular': self._angular,
              'periodic': self._periodic, 'eta': self._eta.tolist(),
              'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
              'beta': self._beta.tolist()}
@@ -284,7 +284,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
     def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
                  batch_size=None, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=False,
                  periodic=True, cutoff_function='cosine', forces=True,
                  stress=False):
         """
@@ -305,8 +305,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         BatchSymmetryFunction.__init__(
             self, rc=rc, max_occurs=max_occurs, elements=elements,
             nij_max=nij_max, nijk_max=nijk_max, batch_size=batch_size, eta=eta,
-            beta=beta, gamma=gamma, zeta=zeta, k_max=k_max, periodic=periodic,
-            cutoff_function=cutoff_function)
+            beta=beta, gamma=gamma, zeta=zeta, angular=angular,
+            periodic=periodic, cutoff_function=cutoff_function)
 
         BatchDescriptorTransformer.__init__(self, forces=forces, stress=stress)
 
@@ -324,7 +324,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         return SymmetryFunctionTransformer(
             rc=self._rc, elements=self._elements, eta=self._eta,
             beta=self._beta, gamma=self._gamma, zeta=self._zeta,
-            k_max=self._k_max, periodic=self._periodic)
+            angular=self._angular, periodic=self._periodic)
 
     def get_g2_indexed_slices(self, atoms: Atoms):
         """

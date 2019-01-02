@@ -244,7 +244,7 @@ class Dataset:
                                           Defaults.cutoff_function)
 
             transformer = BatchSymmetryFunctionTransformer(
-                rc=self._rc,  max_occurs=max_occurs, k_max=k_max,
+                rc=self._rc,  max_occurs=max_occurs, angular=(k_max == 3),
                 nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
                 gamma=gamma, zeta=zeta, periodic=periodic, stress=stress,
                 forces=forces, cutoff_function=cutoff_function)

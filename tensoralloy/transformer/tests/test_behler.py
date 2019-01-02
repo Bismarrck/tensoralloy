@@ -555,7 +555,7 @@ def test_legacy_and_new_flexible():
         targets[i] = legacy_symmetry_function(atoms, rc)[0]
 
     with tf.Graph().as_default():
-        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'])
+        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'], angular=True)
         g = sf.get_graph()
 
         with tf.Session() as sess:
@@ -577,9 +577,9 @@ def test_manybody_k():
     ref = ref[[3, 4, 0, 1, 2]]
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
-    for k_max in (1, 2, 3):
+    for k_max in (2, 3):
         with tf.Graph().as_default():
-            sf = SymmetryFunctionTransformer(rc, elements, k_max=k_max)
+            sf = SymmetryFunctionTransformer(rc, elements, angular=(k_max == 3))
             g = sf.get_graph()
             with tf.Session() as sess:
                 values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
@@ -679,7 +679,8 @@ def test_batch_multi_elements():
 
         nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
         sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
-                                              nijk_max, batch_size)
+                                              nijk_max, batch_size,
+                                              angular=True)
         indexed_slices = []
         positions = []
         cells = []
@@ -717,7 +718,7 @@ def test_splits():
 
     with tf.Graph().as_default():
 
-        sf = SymmetryFunctionTransformer(rc, elements, k_max=3)
+        sf = SymmetryFunctionTransformer(rc, elements, angular=True)
         with tf.Session() as sess:
             values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
 
@@ -735,7 +736,7 @@ def test_as_dict():
     elements = sorted(max_occurs.keys())
 
     with tf.Graph().as_default():
-        old = SymmetryFunctionTransformer(rc, elements, k_max=3)
+        old = SymmetryFunctionTransformer(rc, elements, angular=True)
 
         params = old.as_dict()
         cls = params.pop('class')

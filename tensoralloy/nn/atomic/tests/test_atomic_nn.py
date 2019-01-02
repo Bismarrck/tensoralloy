@@ -80,7 +80,8 @@ def test_inference_from_transformer():
     with tf.Graph().as_default():
         rc = 6.5
         elements = ['Al', 'Cu']
-        clf = SymmetryFunctionTransformer(rc=rc, elements=elements, k_max=2)
+        clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
+                                          angular=False)
         placeholders = clf.placeholders
         descriptors = clf.get_graph()
         features = AttributeDict(descriptors=descriptors,
@@ -125,7 +126,7 @@ def test_export_to_pb():
         An example of the `input_fn` for exporting an `AtomicNN` to a pb file.
         """
         clf = SymmetryFunctionTransformer(
-            rc=6.5, elements=['Ni'], k_max=2,
+            rc=6.5, elements=['Ni'], angular=False,
             eta=[0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0])
         placeholders = clf.placeholders
         descriptors = clf.get_graph()

@@ -71,7 +71,7 @@ class SymmetryFunction(AtomicDescriptor):
     gather_fn = staticmethod(tf.gather)
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, k_max=3,
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=True,
                  periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
@@ -90,8 +90,8 @@ class SymmetryFunction(AtomicDescriptor):
             The `beta` for angular functions.
         zeta : array_like
             The `beta` for angular functions.
-        k_max : int
-            The maximum k for the many-body expansion.
+        angular : bool
+            The model will also use angular symmetry functions if True.
         periodic : bool
             If False, some Ops of the computation graph will be ignored and this
             can only proceed non-periodic molecules.
@@ -99,6 +99,11 @@ class SymmetryFunction(AtomicDescriptor):
             The cutoff function to use. Defaults to 'cosine'.
 
         """
+        if angular:
+            k_max = 3
+        else:
+            k_max = 2
+
         super(SymmetryFunction, self).__init__(rc, elements, k_max, periodic)
 
         ndim, kbody_sizes = compute_dimension(
@@ -116,6 +121,7 @@ class SymmetryFunction(AtomicDescriptor):
         self._parameter_grid = ParameterGrid({'beta': self._beta,
                                               'gamma': self._gamma,
                                               'zeta': self._zeta})
+        self._angular = angular
 
         if cutoff_function == 'cosine':
             self._cutoff_fn = functools.partial(cosine_cutoff, rc=self._rc)
@@ -137,6 +143,13 @@ class SymmetryFunction(AtomicDescriptor):
         Return a list of int as the sizes of the k-body terms.
         """
         return self._kbody_sizes
+
+    @property
+    def angular(self):
+        """
+        Return True if angular symmetry functions shall be used.
+        """
+        return self._angular
 
     @staticmethod
     def _get_v2g_map_delta(index):
@@ -395,13 +408,13 @@ class BatchSymmetryFunction(SymmetryFunction):
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
                  nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 k_max=3, periodic=True, cutoff_function='cosine'):
+                 angular=True, periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
         """
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, k_max=k_max, periodic=periodic,
+            zeta=zeta, angular=angular, periodic=periodic,
             cutoff_function=cutoff_function)
 
         self._max_occurs = max_occurs

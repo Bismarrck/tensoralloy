@@ -31,7 +31,7 @@ def qm7m_compute():
     sf = BatchSymmetryFunctionTransformer(rc=Defaults.rc,
                                           max_occurs=qm7m.max_occurs,
                                           nij_max=qm7m.nij_max, nijk_max=0,
-                                          k_max=2)
+                                          angular=False)
     max_n_atoms = sum(qm7m.max_occurs.values()) + 1
     g2 = []
     positions = np.zeros((batch_size, max_n_atoms, 3))
@@ -53,7 +53,7 @@ def test_qm7m():
 
         savedir = join(test_dir(), 'qm7m')
         database = connect(join(savedir, 'qm7m.db'))
-        dataset = Dataset(database, 'qm7m', k_max=2, serial=True)
+        dataset = Dataset(database, 'qm7m', angular=False, serial=True)
 
         assert_equal(len(dataset), 3)
         assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
@@ -128,7 +128,7 @@ def test_nickel():
 
         savedir = join(test_dir(), 'Ni')
         database = connect(join(savedir, 'Ni.db'))
-        dataset = Dataset(database, 'Ni', k_max=2, serial=True)
+        dataset = Dataset(database, 'Ni', angular=False, serial=True)
 
         assert_equal(len(dataset), 2)
         assert_true(dataset.stress)
