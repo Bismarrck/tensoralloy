@@ -18,6 +18,7 @@ from tensoralloy.transformer import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.misc import test_dir, Defaults, AttributeDict
 from tensoralloy.test_utils import qm7m
+from tensoralloy.dtypes import set_float_precision, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -85,6 +86,8 @@ def test_ethanol():
     """
     with tf.Graph().as_default():
 
+        set_float_precision('medium')
+
         savedir = join(test_dir(), 'ethanol')
         database = connect(join(savedir, 'ethanol.db'))
         dataset = Dataset(database, 'ethanol', descriptor='behler',
@@ -104,11 +107,14 @@ def test_ethanol():
 
         atoms = database.get_atoms(id=2)
 
+        dtype = get_float_dtype()
+        np_dtype = dtype.as_numpy_dtype
+
         clf = IndexTransformer(dataset.transformer.max_occurs,
                                atoms.get_chemical_symbols())
-        positions = clf.map_positions(atoms.positions)
-        energy = atoms.get_total_energy()
-        forces = clf.map_forces(atoms.get_forces())
+        positions = clf.map_positions(atoms.positions).astype(np_dtype)
+        energy = np_dtype(atoms.get_total_energy())
+        forces = clf.map_forces(atoms.get_forces()).astype(np_dtype)
 
         with tf.Session() as sess:
 
@@ -118,6 +124,8 @@ def test_ethanol():
             assert_less(np.abs(result.positions[1] - positions).max(), eps)
             assert_less(np.abs(result.f_true[1] - forces).max(), eps)
             assert_less(float(result.y_true[1] - energy), eps)
+
+        set_float_precision('high')
 
 
 def test_nickel():
