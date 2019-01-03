@@ -152,8 +152,8 @@ def test_nickel():
             stress = [-xx, -yy, -zz, -yz, -xz, -xy]
             total_pressure = -(xx + yy + zz) / 3.0
 
-            assert_less(np.abs(result.reduced_stress[0] - stress).max(), eps)
-            assert_less(result.reduced_total_pressure[0] - total_pressure, eps)
+            assert_less(np.abs(result.stress[0] - stress).max(), eps)
+            assert_less(result.total_pressure[0] - total_pressure, eps)
 
 
 if __name__ == "__main__":

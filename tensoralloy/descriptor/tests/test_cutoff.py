@@ -51,6 +51,7 @@ def test_cosine_cutoff():
                           name='cutoff'))
 
         assert_less(np.abs(x - y).max(), dtype.eps)
+    set_float_precision(Precision.high)
 
 
 def polynomial_cutoff_simple(r: float, rc: float, gamma: float):

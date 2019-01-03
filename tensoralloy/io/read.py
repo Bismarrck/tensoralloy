@@ -225,8 +225,8 @@ def main(args: Namespace):
     """
     read_file(args.filename,
               units={'energy': args.energy_unit,
-                'forces': args.forces_unit,
-                'stress': args.stress_unit},
+                     'forces': args.forces_unit,
+                     'stress': args.stress_unit},
               num_examples=args.num_examples,
               verbose=True)
 

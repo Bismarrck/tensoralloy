@@ -182,7 +182,7 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"eta{index}"):
-            eta = tf.constant(self._eta[index], dtype=tf.float64, name='eta')
+            eta = tf.constant(self._eta[index], dtype=r2c.dtype, name='eta')
             delta = self._get_v2g_map_delta(index)
             v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
             v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
@@ -212,7 +212,7 @@ class SymmetryFunction(AtomicDescriptor):
                               placeholders.g2.shift,
                               name='rij')
             r2 = tf.square(r, name='r2')
-            rc2 = tf.constant(self._rc**2, dtype=tf.float64, name='rc2')
+            rc2 = tf.constant(self._rc**2, dtype=r.dtype, name='rc2')
             r2c = tf.div(r2, rc2, name='div')
             fc_r = self._cutoff_fn(r, name='fc_r')
 
@@ -230,11 +230,11 @@ class SymmetryFunction(AtomicDescriptor):
                 return tf.add_n(values, name='g')
 
     @staticmethod
-    def _extract(_params):
+    def _extract(_params, dtype=tf.float64):
         """
         A helper function to get `beta`, `gamma` and `zeta`.
         """
-        return [tf.constant(_params[key], dtype=tf.float64, name=key)
+        return [tf.constant(_params[key], dtype=dtype, name=key)
                 for key in ('beta', 'gamma', 'zeta')]
 
     def _get_g4_graph_for_params(self, shape, index, theta, r2c, fc_r,
@@ -265,9 +265,12 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"grid{index}"):
-            beta, gamma, zeta = self._extract(self._parameter_grid[index])
+            beta, gamma, zeta = self._extract(self._parameter_grid[index],
+                                              dtype=r2c.dtype)
             delta = self._get_v2g_map_delta(index)
-            c = (1.0 + gamma * theta) ** zeta * 2.0 ** (1.0 - zeta)
+            one = tf.constant(1.0, dtype=r2c.dtype, name='one')
+            two = tf.constant(2.0, dtype=r2c.dtype, name='two')
+            c = ((one + gamma * theta)**zeta) * (two**(one - zeta))
             v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
             return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
@@ -300,13 +303,14 @@ class SymmetryFunction(AtomicDescriptor):
             rij2 = tf.square(rij, name='rij2')
             rik2 = tf.square(rik, name='rik2')
             rjk2 = tf.square(rjk, name='rjk2')
-            rc2 = tf.constant(self._rc ** 2, dtype=tf.float64, name='rc2')
+            rc2 = tf.constant(self._rc ** 2, dtype=rij.dtype, name='rc2')
             r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
             r2c = tf.div(r2, rc2, name='r2_rc2')
 
             with tf.name_scope("cosine"):
+                two = tf.constant(2.0, dtype=rij.dtype, name='two')
                 upper = tf.subtract(rij2 + rik2, rjk2, name='upper')
-                lower = tf.multiply(2 * rij, rik, name='lower')
+                lower = tf.multiply(two * rij, rik, name='lower')
                 theta = tf.div(upper, lower, name='theta')
 
             with tf.name_scope("fc"):
@@ -445,28 +449,31 @@ class BatchSymmetryFunction(SymmetryFunction):
         return self._max_occurs
 
     @staticmethod
-    def _get_pbc_displacements(shift, cells):
+    def _get_pbc_displacements(shift, cells, dtype=tf.float64):
         """
         Return the periodic boundary shift displacements.
 
         Parameters
         ----------
         shift : tf.Tensor
-            A `float64` tensor of shape `[batch_size, ndim, 3]` as the cell
-            shift vector where `ndim == nij_max` or `ndim == nijk_max`.
+            A `float64` or `float32` tensor of shape `[batch_size, ndim, 3]` as
+            the cell shift vectors and `ndim == nij_max` or `ndim == nijk_max`.
         cells : tf.Tensor
-            A `float64` tensor of shape `[batch_size, 3, 3]` as the cells.
+            A `float64` or `float32` tensor of shape `[batch_size, 3, 3]` as the
+            cell tensors.
+        dtype : DType
+            The corresponding tensorflow data type of `shift` and `cells`.
 
         Returns
         -------
         Dij : tf.Tensor
-            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
-            vector.
+            A `float64` or `float32` tensor of shape `[-1, 3]` as the periodic
+            displacements vectors.
 
         """
         with tf.name_scope("Einsum"):
-            shift = tf.convert_to_tensor(shift, dtype=tf.float64, name='shift')
-            cells = tf.convert_to_tensor(cells, dtype=tf.float64, name='cells')
+            shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
+            cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
             return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
 
     def _get_g_shape(self, _):

@@ -17,6 +17,7 @@ from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn import losses as loss_ops
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -217,13 +218,13 @@ class BasicNN:
             return forces
 
     @staticmethod
-    def _get_reduced_full_stress_tensor(energy, cells):
+    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells):
         """
         Return the Op to compute the reduced stress tensor `-0.5 * dE/dh @ h`
         where `h` is a column-major cell tensor.
         """
         with tf.name_scope("Full"):
-            factor = tf.constant(-0.5, dtype=tf.float64, name='factor')
+            factor = tf.constant(-0.5, dtype=energy.dtype, name='factor')
             dEdhT = tf.gradients(energy, cells)[0]
             # The cell tensor `h` in text books is column-major while in ASE
             # is row-major. So the Voigt indices and the matrix multiplication
@@ -258,7 +259,7 @@ class BasicNN:
                 log_tensor(stress)
             return stress
 
-    def _get_reduced_stress(self, energy, cells, verbose=True):
+    def _get_reduced_stress(self, energy: tf.Tensor, cells, verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
@@ -271,7 +272,7 @@ class BasicNN:
             return self._convert_to_voigt_stress(
                 stress, batch_size, verbose=verbose)
 
-    def _get_reduced_total_pressure(self, energy, cells, verbose=True):
+    def _get_reduced_total_pressure(self, energy: tf.Tensor, cells, verbose=True):
         """
         Return the Op to compute the reduced total pressure (eV).
 
@@ -280,7 +281,7 @@ class BasicNN:
         """
         with tf.name_scope("Pressure"):
             stress = self._get_reduced_full_stress_tensor(energy, cells)
-            three = tf.constant(-3.0, dtype=tf.float64, name='three')
+            three = tf.constant(-3.0, dtype=energy.dtype, name='three')
             total_pressure = tf.div(tf.trace(stress), three, 'pressure')
             if verbose:
                 log_tensor(total_pressure)
@@ -575,7 +576,7 @@ class BasicNN:
                     with tf.name_scope("Scale"):
                         n_max = tf.convert_to_tensor(
                             x.shape[1].value, dtype=x.dtype, name='n_max')
-                        one = tf.constant(1.0, dtype=tf.float64, name='one')
+                        one = tf.constant(1.0, dtype=x.dtype, name='one')
                         weight = tf.div(one, tf.reduce_mean(n_atoms / n_max),
                                         name='weight')
                         x = tf.multiply(weight, x)

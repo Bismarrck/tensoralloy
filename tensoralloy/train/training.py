@@ -21,6 +21,7 @@ from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.utils import set_logging_configs
 from tensoralloy.misc import check_path, Defaults, AttributeDict
+from tensoralloy.dtypes import set_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -43,6 +44,9 @@ class TrainingManager:
 
         """
         self._reader = InputReader(input_file)
+
+        set_float_precision(self._reader['precision'])
+
         self._dataset = self._get_dataset()
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()

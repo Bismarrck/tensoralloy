@@ -9,8 +9,9 @@ import numpy as np
 import math
 import nose
 
-from ..msah11 import AlFeMsah11
-from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.nn.eam.potentials.msah11 import AlFeMsah11
+from tensoralloy.test_utils import assert_array_almost_equal
+from tensoralloy.dtypes import get_float_dtype, set_float_precision, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -210,27 +211,31 @@ def atsim_pairwise_fefe(r):
     return sum(vals)
 
 
-def test_msah11():
+def test_msah11(precision=Precision.high, delta=1e-12):
     """
     Test the tensorflow based implementation of MSAH11 Al-Fe potential.
     """
+    set_float_precision(precision)
+    dtype = get_float_dtype()
+    np_dtype = dtype.as_numpy_dtype
+
     rho = np.linspace(0.0, 20.0, num=201, endpoint=True)
-    embed_al = np.asarray([atsim_embed_al(x) for x in rho])
-    embed_fe = np.asarray([atsim_embed_fe(x) for x in rho])
+    embed_al = np.asarray([atsim_embed_al(x) for x in rho]).astype(np_dtype)
+    embed_fe = np.asarray([atsim_embed_fe(x) for x in rho]).astype(np_dtype)
 
     r = np.linspace(0.0, 10.0, num=101, endpoint=True)
-    rho_alal = np.asarray([atsim_density_alal(x) for x in r])
-    rho_fefe = np.asarray([atsim_density_fefe(x) for x in r])
-    rho_alfe = np.asarray([atsim_density_alfe(x) for x in r])
-    phi_alal = np.asarray([atsim_pairwise_alal(x) for x in r])
-    phi_fefe = np.asarray([atsim_pairwise_fefe(x) for x in r])
-    phi_alfe = np.asarray([atsim_pairwise_alfe(x) for x in r])
+    rho_alal = np.asarray([atsim_density_alal(x) for x in r]).astype(np_dtype)
+    rho_fefe = np.asarray([atsim_density_fefe(x) for x in r]).astype(np_dtype)
+    rho_alfe = np.asarray([atsim_density_alfe(x) for x in r]).astype(np_dtype)
+    phi_alal = np.asarray([atsim_pairwise_alal(x) for x in r]).astype(np_dtype)
+    phi_fefe = np.asarray([atsim_pairwise_fefe(x) for x in r]).astype(np_dtype)
+    phi_alfe = np.asarray([atsim_pairwise_alfe(x) for x in r]).astype(np_dtype)
 
     with tf.Graph().as_default():
 
         with tf.name_scope("Inputs"):
-            rho = tf.convert_to_tensor(rho, name='rho')
-            r = tf.convert_to_tensor(r, name='r')
+            rho = tf.convert_to_tensor(rho, name='rho', dtype=dtype)
+            r = tf.convert_to_tensor(r, name='r', dtype=dtype)
 
         pot = AlFeMsah11()
         embed_al_op = pot.embed(rho, element='Al')
@@ -247,14 +252,24 @@ def test_msah11():
             rho_vals = sess.run([rho_alal_op, rho_fefe_op, rho_alfe_op])
             phi_vals = sess.run([phi_alal_op, phi_fefe_op, phi_alfe_op])
 
-        assert_array_equal(embed_vals[0], embed_al)
-        assert_array_equal(embed_vals[1], embed_fe)
-        assert_array_equal(rho_vals[0], rho_alal)
-        assert_array_equal(rho_vals[1], rho_fefe)
-        assert_array_equal(rho_vals[2], rho_alfe)
-        assert_array_equal(phi_vals[0], phi_alal)
-        assert_array_equal(phi_vals[1], phi_fefe)
-        assert_array_equal(phi_vals[2], phi_alfe)
+        assert_array_almost_equal(embed_vals[0], embed_al, delta=delta)
+        assert_array_almost_equal(embed_vals[1], embed_fe, delta=delta)
+        assert_array_almost_equal(rho_vals[0], rho_alal, delta=delta)
+        assert_array_almost_equal(rho_vals[1], rho_fefe, delta=delta)
+        assert_array_almost_equal(rho_vals[2], rho_alfe, delta=delta)
+        assert_array_almost_equal(phi_vals[0], phi_alal, delta=delta)
+        assert_array_almost_equal(phi_vals[1], phi_fefe, delta=delta)
+        assert_array_almost_equal(phi_vals[2], phi_alfe, delta=delta)
+
+    set_float_precision(Precision.high)
+
+
+def test_msah11_float32():
+    """
+    Test the tensorflow based implementation of MSAH11 Al-Fe potential using
+    float32.
+    """
+    test_msah11(Precision.medium, delta=1e-2)
 
 
 if __name__ == "__main__":

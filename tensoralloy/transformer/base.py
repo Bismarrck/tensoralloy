@@ -13,6 +13,7 @@ from typing import Dict, Tuple, List
 from ase import Atoms
 
 from tensoralloy.misc import AttributeDict
+from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 
@@ -47,7 +48,8 @@ class BaseTransformer:
         Return a vector as the composition of the `Atoms`.
         """
         n_elements = len(self.elements)
-        composition = np.zeros(n_elements, dtype=np.float64)
+        dtype = get_float_dtype().as_numpy_dtype
+        composition = np.zeros(n_elements, dtype=dtype)
         for element, count in Counter(atoms.get_chemical_symbols()).items():
             composition[self.elements.index(element)] = float(count)
         return composition
@@ -289,23 +291,24 @@ class BatchDescriptorTransformer(BaseTransformer):
         Encode the basic properties of an `Atoms` object.
         """
         clf = self.get_index_transformer(atoms)
-        positions = clf.map_positions(atoms.positions)
-        cells = atoms.get_cell(complete=True)
-        volume = atoms.get_volume()
-        y_true = atoms.get_total_energy()
+        numpy_dtype = get_float_dtype().as_numpy_dtype
+        positions = clf.map_positions(atoms.positions).astype(numpy_dtype)
+        cells = atoms.get_cell(complete=True).astype(numpy_dtype)
+        volume = np.atleast_1d(atoms.get_volume()).astype(numpy_dtype)
+        y_true = np.atleast_1d(atoms.get_total_energy()).astype(numpy_dtype)
         composition = self._get_composition(atoms)
-        mask = clf.mask.astype(np.float64)
+        mask = clf.mask.astype(numpy_dtype)
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
             'cells': bytes_feature(cells.tostring()),
             'n_atoms': int64_feature(len(atoms)),
-            'volume': bytes_feature(np.atleast_1d(volume).tostring()),
-            'y_true': bytes_feature(np.atleast_1d(y_true).tostring()),
+            'volume': bytes_feature(volume.tostring()),
+            'y_true': bytes_feature(y_true.tostring()),
             'mask': bytes_feature(mask.tostring()),
             'composition': bytes_feature(composition.tostring()),
         }
         if self.forces:
-            f_true = clf.map_forces(atoms.get_forces())
+            f_true = clf.map_forces(atoms.get_forces()).astype(numpy_dtype)
             feature_list['f_true'] = bytes_feature(f_true.tostring())
 
         if self.stress:
@@ -313,10 +316,11 @@ class BatchDescriptorTransformer(BaseTransformer):
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar
             # reduced_stress (eV) = stress * volume
-            virial = atoms.get_stress(voigt=True) * volume
-            total_pressure = virial[:3].mean()
-            feature_list['reduced_stress'] = bytes_feature(virial.tostring())
-            feature_list['reduced_total_pressure'] = bytes_feature(
+            virial = atoms.get_stress(voigt=True).astype(numpy_dtype) * volume
+            total_pressure = np.atleast_1d(
+                virial[:3].mean()).astype(numpy_dtype)
+            feature_list['stress'] = bytes_feature(virial.tostring())
+            feature_list['total_pressure'] = bytes_feature(
                 np.atleast_1d(total_pressure).tostring())
         return feature_list
 

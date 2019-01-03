@@ -25,6 +25,7 @@ from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
 from tensoralloy.dataset.utils import should_be_serial
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -329,7 +330,7 @@ class Dataset:
 
             if verbose:
                 print("")
-                print("Done.")
+                print(f"Done: {filename}")
                 print("")
 
     def _get_signature(self) -> str:
@@ -337,7 +338,13 @@ class Dataset:
         Return a str as the signature of this dataset.
         """
         k_max = self._transformer.k_max
-        return "k{:d}-rc{:.2f}".format(k_max, self._rc)
+        sig = "k{:d}-rc{:.2f}".format(k_max, self._rc)
+        dtype = get_float_dtype()
+        if dtype == tf.float32:
+            sig += "-fp32"
+        else:
+            sig += "-fp64"
+        return sig
 
     def to_records(self, savedir, test_size=0.2, verbose=False):
         """
@@ -383,7 +390,7 @@ class Dataset:
         signature = self._get_signature()
 
         def _get_file_size(filename):
-            suffix = str(splitext(basename(filename))[0].split('-')[4])
+            suffix = str(splitext(basename(filename))[0].split('-')[5])
             return int(suffix.split('.')[0])
 
         def _load(key):
@@ -451,8 +458,8 @@ class Dataset:
             if self._forces:
                 labels['forces'] = batch.f_true
             if self._stress:
-                labels['stress'] = batch.reduced_stress
-                labels['total_pressure'] = batch.reduced_total_pressure
+                labels['stress'] = batch.stress
+                labels['total_pressure'] = batch.total_pressure
             return features, labels
 
         return _input_fn

@@ -15,6 +15,7 @@ from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
 from tensoralloy.misc import Defaults, AttributeDict
+from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import bytes_feature
@@ -92,14 +93,16 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 except Exception as excp:
                     raise excp
 
-            def _double(name):
-                return _get_or_create(tf.float64, (), name)
+            float_dtype = get_float_dtype()
 
-            def _double_1d(name):
-                return _get_or_create(tf.float64, (None, ), name)
+            def _float(name):
+                return _get_or_create(float_dtype, (), name)
 
-            def _double_2d(d1, name, d0=None):
-                return _get_or_create(tf.float64, (d0, d1), name)
+            def _float_1d(name):
+                return _get_or_create(float_dtype, (None, ), name)
+
+            def _float_2d(d1, name, d0=None):
+                return _get_or_create(float_dtype, (d0, d1), name)
 
             def _int(name):
                 return _get_or_create(tf.int32, (), name)
@@ -110,18 +113,18 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             def _int_2d(d1, name, d0=None):
                 return _get_or_create(tf.int32, (d0, d1), name)
 
-            self._placeholders.positions = _double_2d(3, 'positions')
-            self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
+            self._placeholders.positions = _float_2d(3, 'positions')
+            self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
             self._placeholders.n_atoms = _int('n_atoms')
-            self._placeholders.volume = _double('volume')
-            self._placeholders.mask = _double_1d('mask')
-            self._placeholders.composition = _double_1d('composition')
+            self._placeholders.volume = _float('volume')
+            self._placeholders.mask = _float_1d('mask')
+            self._placeholders.composition = _float_1d('composition')
             self._placeholders.row_splits = _int_1d(
                 'row_splits', d0=self._n_elements + 1)
             self._placeholders.g2 = AttributeDict(
                 ilist=_int_1d('g2.ilist'),
                 jlist=_int_1d('g2.jlist'),
-                shift=_double_2d(3, 'g2.shift'),
+                shift=_float_2d(3, 'g2.shift'),
                 v2g_map=_int_2d(2, 'g2.v2g_map')
             )
 
@@ -134,9 +137,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                                      klist=_int_1d('g4.ik.klist')),
                     jk=AttributeDict(jlist=_int_1d('g4.jk.jlist'),
                                      klist=_int_1d('g4.jk.klist')),
-                    shift=AttributeDict(ij=_double_2d(3, 'g4.shift.ij'),
-                                        ik=_double_2d(3, 'g4.shift.ik'),
-                                        jk=_double_2d(3, 'g4.shift.jk'))
+                    shift=AttributeDict(ij=_float_2d(3, 'g4.shift.ij'),
+                                        ik=_float_2d(3, 'g4.shift.ik'),
+                                        jk=_float_2d(3, 'g4.shift.jk'))
                 )
         return self._placeholders
 
@@ -145,13 +148,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         Return the indexed slices for the symmetry function G2.
         """
         symbols = atoms.get_chemical_symbols()
+        float_dtype = get_float_dtype()
         ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        if self._k_max == 1:
-            cols = [i for i in range(len(ilist))
-                    if symbols[ilist[i]] == symbols[jlist[i]]]
-            ilist = ilist[cols]
-            jlist = jlist[cols]
-            Slist = Slist[cols]
         nij = len(ilist)
         v2g_map = np.zeros((nij, 2), dtype=np.int32)
 
@@ -163,7 +161,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
         ilist = index_transformer.inplace_map_index(ilist + 1)
         jlist = index_transformer.inplace_map_index(jlist + 1)
-        shift = np.asarray(Slist, dtype=np.float64)
+        shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self._offsets[tlist]
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
@@ -175,6 +173,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         Return the indexed slices for the symmetry function G4.
         """
         symbols = atoms.get_chemical_symbols()
+        float_dtype = get_float_dtype()
         indices = {}
         vectors = {}
         for i, atomi in enumerate(g2.ilist):
@@ -193,9 +192,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         ij = np.zeros((nijk, 2), dtype=np.int32)
         ik = np.zeros((nijk, 2), dtype=np.int32)
         jk = np.zeros((nijk, 2), dtype=np.int32)
-        ij_shift = np.zeros((nijk, 3), dtype=np.float64)
-        ik_shift = np.zeros((nijk, 3), dtype=np.float64)
-        jk_shift = np.zeros((nijk, 3), dtype=np.float64)
+        ij_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
+        ik_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
+        jk_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
 
         count = 0
         for atomi, nl in indices.items():
@@ -240,6 +239,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         index_transformer = self.get_index_transformer(atoms)
         g2 = self._get_g2_indexed_slices(atoms, index_transformer)
 
+        numpy_float_dtype = get_float_dtype().as_numpy_dtype
+
         positions = index_transformer.map_positions(atoms.positions)
         n_atoms = index_transformer.n_atoms
         cells = atoms.get_cell(complete=True)
@@ -248,11 +249,11 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
 
-        feed_dict[placeholders.positions] = positions
+        feed_dict[placeholders.positions] = positions.astype(numpy_float_dtype)
         feed_dict[placeholders.n_atoms] = n_atoms
         feed_dict[placeholders.mask] = mask
-        feed_dict[placeholders.cells] = cells
-        feed_dict[placeholders.volume] = volume
+        feed_dict[placeholders.cells] = cells.astype(numpy_float_dtype)
+        feed_dict[placeholders.volume] = numpy_float_dtype(volume)
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits
         feed_dict[placeholders.g2.v2g_map] = g2.v2g_map
@@ -332,6 +333,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         v2g_map = np.zeros((self._nij_max, 3), dtype=np.int32)
         tlist = np.zeros(self._nij_max, dtype=np.int32)
+        float_dtype = get_float_dtype()
 
         symbols = atoms.get_chemical_symbols()
         transformer = self.get_index_transformer(atoms)
@@ -356,7 +358,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Slist = self._resize_to_nij_max(Slist, False)
         ilist = transformer.inplace_map_index(ilist)
         jlist = transformer.inplace_map_index(jlist)
-        shift = np.asarray(Slist, dtype=np.float64)
+        shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
 
@@ -370,13 +372,15 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         if self._k_max < 3:
             return None
 
+        numpy_float_dtype = get_float_dtype().as_numpy_dtype
+
         v2g_map = np.zeros((self._nijk_max, 3), dtype=np.int32)
         ij = np.zeros((self._nijk_max, 2), dtype=np.int32)
         ik = np.zeros((self._nijk_max, 2), dtype=np.int32)
         jk = np.zeros((self._nijk_max, 2), dtype=np.int32)
-        ij_shift = np.zeros((self._nijk_max, 3), dtype=np.float64)
-        ik_shift = np.zeros((self._nijk_max, 3), dtype=np.float64)
-        jk_shift = np.zeros((self._nijk_max, 3), dtype=np.float64)
+        ij_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
+        ik_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
+        jk_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
 
         symbols = atoms.get_chemical_symbols()
         transformer = self.get_index_transformer(atoms)
@@ -467,8 +471,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         decoded = AttributeDict()
 
         length = 3 * self._max_n_atoms
+        float_dtype = get_float_dtype()
 
-        positions = tf.decode_raw(example['positions'], tf.float64)
+        positions = tf.decode_raw(example['positions'], float_dtype)
         positions.set_shape([length])
         decoded.positions = tf.reshape(
             positions, (self._max_n_atoms, 3), name='R')
@@ -476,43 +481,43 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
         decoded.n_atoms = n_atoms
 
-        y_true = tf.decode_raw(example['y_true'], tf.float64)
+        y_true = tf.decode_raw(example['y_true'], float_dtype)
         y_true.set_shape([1])
         decoded.y_true = tf.squeeze(y_true, name='y_true')
 
-        cells = tf.decode_raw(example['cells'], tf.float64)
+        cells = tf.decode_raw(example['cells'], float_dtype)
         cells.set_shape([9])
         decoded.cells = tf.reshape(cells, (3, 3), name='cells')
 
-        volume = tf.decode_raw(example['volume'], tf.float64)
+        volume = tf.decode_raw(example['volume'], float_dtype)
         volume.set_shape([1])
         decoded.volume = tf.squeeze(volume, name='volume')
 
-        mask = tf.decode_raw(example['mask'], tf.float64)
+        mask = tf.decode_raw(example['mask'], float_dtype)
         mask.set_shape([self._max_n_atoms, ])
         decoded.mask = mask
 
-        composition = tf.decode_raw(example['composition'], tf.float64)
+        composition = tf.decode_raw(example['composition'], float_dtype)
         composition.set_shape([self._n_elements, ])
         decoded.composition = composition
 
         if self._forces:
-            f_true = tf.decode_raw(example['f_true'], tf.float64)
+            f_true = tf.decode_raw(example['f_true'], float_dtype)
             # Ignore the forces of the virtual atom
             f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
                 f_true, (self._max_n_atoms, 3), name='f_true')
 
         if self._stress:
-            reduced_stress = tf.decode_raw(
-                example['reduced_stress'], tf.float64, name='stress')
-            reduced_stress.set_shape([6])
-            decoded.reduced_stress = reduced_stress
+            stress = tf.decode_raw(
+                example['stress'], float_dtype, name='stress')
+            stress.set_shape([6])
+            decoded.stress = stress
 
-            reduced_total_pressure = tf.decode_raw(
-                example['reduced_total_pressure'], tf.float64, name='stress')
-            reduced_total_pressure.set_shape([1])
-            decoded.reduced_total_pressure = reduced_total_pressure
+            total_pressure = tf.decode_raw(
+                example['total_pressure'], float_dtype, name='stress')
+            total_pressure.set_shape([1])
+            decoded.total_pressure = total_pressure
 
         return decoded
 
@@ -530,7 +535,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
-            shift = tf.decode_raw(example['g2.shifts'], tf.float64)
+            shift = tf.decode_raw(example['g2.shifts'], get_float_dtype())
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
@@ -554,7 +559,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     tf.split(indices, [3, 2, 2, 2], axis=1, name='splits')
 
             with tf.name_scope("shifts"):
-                shifts = tf.decode_raw(example['g4.shifts'], tf.float64)
+                shifts = tf.decode_raw(example['g4.shifts'], get_float_dtype())
                 shifts.set_shape([self._nijk_max * 9])
                 shifts = tf.reshape(
                     shifts, [self._nijk_max, 9], name='g4.shifts')
@@ -610,9 +615,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
 
             if self._stress:
-                feature_list['reduced_stress'] = \
+                feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
-                feature_list['reduced_total_pressure'] = \
+                feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:
@@ -642,32 +647,32 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             Here are default keys:
 
-            * 'positions': float64, [batch_size, max_n_atoms, 3]
-            * 'cells': float64, [batch_size, 3, 3]
-            * 'volume': float64, [batch_size, ]
+            * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
+            * 'cells': float64 or float32, [batch_size, 3, 3]
+            * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
-            * 'y_true': float64, [batch_size, ]
-            * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
-            * 'composition': float64, [batch_size, n_elements]
-            * 'mask': float64, [batch_size, max_n_atoms]
+            * 'y_true': float64 or float32, [batch_size, ]
+            * 'f_true': float64 or float32, [batch_size, max_n_atoms + 1, 3]
+            * 'composition': float64 or float32, [batch_size, n_elements]
+            * 'mask': float64 or float32, [batch_size, max_n_atoms + 1]
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
-            * 'shift': float64, [batch_size, nij_max, 3]
+            * 'shift': float64 or float32, [batch_size, nij_max, 3]
             * 'rv2g': int32, [batch_size, nij_max, 3]
 
-            If `self.stress` is `True`, the following keys are provided:
+            If `self.stress` is `True`, these following keys will be provided:
 
-            * 'reduced_stress': float64, [batch_size, 6]
-            * 'total_pressure': float64, [batch_size, ]
+            * 'stress': float64 or float32, [batch_size, 6]
+            * 'total_pressure': float64 or float32, [batch_size, ]
 
-            These keys will only be valid if G4 functions are used:
+            If `self.angular` is `True`, these following keys will be provided:
 
             * 'ij': int32, [batch_size, nijk_max, 2]
             * 'ik': int32, [batch_size, nijk_max, 2]
             * 'jk': int32, [batch_size, nijk_max, 2]
-            * 'ij_shift': float64, [batch_size, nijk_max, 3]
-            * 'ik_shift': float64, [batch_size, nijk_max, 3]
-            * 'jk_shift': float64, [batch_size, nijk_max, 3]
+            * 'ij_shift': float64 or float32, [batch_size, nijk_max, 3]
+            * 'ik_shift': float64 or float32, [batch_size, nijk_max, 3]
+            * 'jk_shift': float64 or float32, [batch_size, nijk_max, 3]
             * 'av2g': int32, [batch_size, nijk_max, 3]
 
         batch_size : int
@@ -721,6 +726,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 else:
                     for p in self._parameter_grid:
                         values.append(p['beta'])
-            values = np.asarray(values)
+            values = np.asarray(values, dtype=get_float_dtype().as_numpy_dtype)
             weights[element] = 0.25 / np.exp(-values * 0.25**2)
         return weights

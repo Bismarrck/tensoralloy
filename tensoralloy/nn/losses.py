@@ -8,6 +8,8 @@ import tensorflow as tf
 
 from typing import List
 
+from tensoralloy.dtypes import get_float_dtype
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -90,6 +92,7 @@ def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
 
     """
     with tf.name_scope("Absolute"):
+        dtype = get_float_dtype()
         mse = tf.reduce_mean(
             tf.squared_difference(labels, predictions), name='raw_mse')
         mae = tf.reduce_mean(tf.abs(labels - predictions), name='raw_mae')
@@ -97,13 +100,13 @@ def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
             # Add a very small 'eps' to the mean squared error to make
             # sure `mse` is always greater than zero. Otherwise NaN may
             # occur at `Sqrt_Grad`.
-            eps = tf.constant(1e-14, dtype=tf.float64, name='eps')
+            eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
             mse = tf.add(mse, eps)
         with tf.name_scope("Scale"):
             n_reals = tf.cast(n_atoms, dtype=labels.dtype)
             n_max = tf.convert_to_tensor(
                 labels.shape[1].value, dtype=labels.dtype, name='n_max')
-            one = tf.constant(1.0, dtype=tf.float64, name='one')
+            one = tf.constant(1.0, dtype=dtype, name='one')
             weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
         mse = tf.multiply(mse, weight, name='mse')
     mae = tf.multiply(mae, weight, name='mae')

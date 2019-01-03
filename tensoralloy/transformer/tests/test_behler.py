@@ -20,8 +20,10 @@ from typing import List, Union, Tuple
 from collections import Counter
 from dataclasses import dataclass
 
+from tensoralloy.dtypes import set_float_precision, Precision, get_float_dtype
 from tensoralloy.misc import Defaults, AttributeDict
-from tensoralloy.test_utils import Pd3O2, qm7m, assert_array_equal
+from tensoralloy.test_utils import Pd3O2, qm7m
+from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.utils import get_kbody_terms
 from tensoralloy.io.neighbor import find_neighbor_sizes
@@ -677,6 +679,10 @@ def test_batch_multi_elements():
 
     with tf.Graph().as_default():
 
+        set_float_precision(Precision.medium)
+        float_dtype = get_float_dtype()
+        numpy_float_dtype = float_dtype.as_numpy_dtype
+
         nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
         sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
                                               nijk_max, batch_size,
@@ -688,22 +694,35 @@ def test_batch_multi_elements():
         for i, atoms in enumerate(qm7m.trajectory):
             clf = sf.get_index_transformer(atoms)
             indexed_slices.append(sf.get_indexed_slices(atoms))
-            positions.append(clf.map_positions(atoms.positions))
-            cells.append(atoms.get_cell(complete=True))
-            volumes.append(atoms.get_volume())
+            positions.append(
+                clf.map_positions(atoms.positions).astype(numpy_float_dtype))
+            cells.append(
+                atoms.get_cell(complete=True).astype(numpy_float_dtype))
+            volumes.append(numpy_float_dtype(atoms.get_volume()))
 
         batch = _merge_indexed_slices(indexed_slices)
         batch.positions = np.asarray(positions)
         batch.cells = np.asarray(cells)
         batch.volume = volumes
 
+        # Use a large delta because we use float32 in this test.
+        delta = 1e-5
+
         g = sf.get_descriptor_ops_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
             results = sess.run(g)
 
-            assert_array_equal(results['C'][0], targets['C'])
-            assert_array_equal(results['H'][0], targets['H'])
-            assert_array_equal(results['O'][0], targets['O'])
+            assert_array_almost_equal(results['C'][0],
+                                      targets['C'].astype(numpy_float_dtype),
+                                      delta=delta)
+            assert_array_almost_equal(results['H'][0],
+                                      targets['H'].astype(numpy_float_dtype),
+                                      delta=delta)
+            assert_array_almost_equal(results['O'][0],
+                                      targets['O'].astype(numpy_float_dtype),
+                                      delta=delta)
+
+        set_float_precision(Precision.high)
 
 
 def test_splits():

@@ -38,12 +38,15 @@ def set_float_precision(precision=Precision.high):
 
     Parameters
     ----------
-    precision : Precision
+    precision : Precision or str
         The precision of the floating-point numbers.
 
     """
     global _floating_point_precision
-    _floating_point_precision = precision
+    if isinstance(precision, Precision):
+        _floating_point_precision = precision
+    else:
+        _floating_point_precision = Precision[precision]
 
 
 class DType(tf_DType):
@@ -68,7 +71,7 @@ class DType(tf_DType):
 
 
 float64 = DType(types_pb2.DT_DOUBLE, eps=1e-14)
-float32 = DType(types_pb2.DT_FLOAT, eps=1e-7)
+float32 = DType(types_pb2.DT_FLOAT, eps=1e-8)
 
 
 def get_float_dtype():

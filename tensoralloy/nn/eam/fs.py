@@ -18,6 +18,7 @@ from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor, GraphKeys
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -254,7 +255,8 @@ class EamFsNN(EamNN):
         """
         outdir = dirname(setfl)
         elements = self._elements
-        rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=np.float64),
+        rho = np.tile(np.arange(0.0, nrho * drho, drho,
+                                dtype=get_float_dtype().as_numpy_dtype),
                       reps=len(elements))
         rho = np.atleast_2d(rho)
         r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))

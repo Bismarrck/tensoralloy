@@ -259,7 +259,6 @@ class EamNN(BasicNN):
         outputs = {}
         values = {}
         with tf.name_scope("Phi"):
-            half = tf.constant(0.5, dtype=tf.float64, name='half')
             for kbody_term, (value, mask) in partitions.items():
                 with tf.variable_scope(f"{kbody_term}/Phi"):
                     # Convert `x` to a 5D tensor.
@@ -278,6 +277,7 @@ class EamNN(BasicNN):
                     values[kbody_term] = y
                     y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
                     y = tf.squeeze(y, axis=1)
+                    half = tf.constant(0.5, dtype=x.dtype, name='half')
                     y = tf.multiply(y, half, name='atomic')
                     if verbose:
                         log_tensor(y)

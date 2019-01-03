@@ -152,17 +152,18 @@ class BatchEAM(EAM):
         return self._nnl_max
 
     @staticmethod
-    def _get_pbc_displacements(shift, cells):
+    def _get_pbc_displacements(shift, cells, dtype=tf.float64):
         """
         Return the periodic boundary shift displacements.
 
         Parameters
         ----------
         shift : tf.Tensor
-            A `float64` tensor of shape `[batch_size, ndim, 3]` as the cell
-            shift vector where `ndim == nij_max` or `ndim == nijk_max`.
+            A `float64` or `float32` tensor of shape `[batch_size, ndim, 3]` as
+            the cell shift vectors and `ndim == nij_max` or `ndim == nijk_max`.
         cells : tf.Tensor
-            A `float64` tensor of shape `[batch_size, 3, 3]` as the cells.
+            A `float64` or `float32` tensor of shape `[batch_size, 3, 3]` as the
+            cell tensors.
 
         Returns
         -------
@@ -172,8 +173,8 @@ class BatchEAM(EAM):
 
         """
         with tf.name_scope("Einsum"):
-            shift = tf.convert_to_tensor(shift, dtype=tf.float64, name='shift')
-            cells = tf.convert_to_tensor(cells, dtype=tf.float64, name='cells')
+            shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
+            cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
             return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
 
     def _get_g_shape(self, _):

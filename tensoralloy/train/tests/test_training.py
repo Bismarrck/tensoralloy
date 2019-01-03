@@ -17,6 +17,7 @@ from tensoralloy.train.training import TrainingManager
 from tensoralloy.misc import test_dir
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.tests.test_cutoff import polynomial_cutoff_simple
+from tensoralloy.dtypes import get_float_dtype, set_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -41,6 +42,8 @@ def test_initialization():
     transformer = manager.dataset.transformer
     hparams = manager.hparams
 
+    assert_equal(get_float_dtype(), tf.float32)
+
     assert_equal(manager.dataset.descriptor, 'behler')
     assert_equal(manager.dataset.test_size, 1)
     assert_equal(manager.dataset.cutoff_radius, 6.0)
@@ -62,6 +65,8 @@ def test_initialization():
     assert_equal(hparams.opt.method, 'adam')
     assert_equal(hparams.opt.learning_rate, 0.01)
     assert_is_none(hparams.opt.decay_function)
+
+    set_float_precision()
 
 
 

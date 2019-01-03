@@ -13,6 +13,7 @@ from typing import List
 
 from tensoralloy.misc import Defaults
 from tensoralloy.nn.utils import log_tensor
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -21,9 +22,9 @@ __all__ = ["convolution1x1"]
 
 
 _initializers = {
-    'xavier': xavier_initializer(seed=Defaults.seed, dtype=tf.float64),
-    'msar': xavier_initializer(seed=Defaults.seed, dtype=tf.float64),
-    'zero': tf.zeros_initializer(dtype=tf.float64)
+    'xavier': xavier_initializer(seed=Defaults.seed, dtype=get_float_dtype()),
+    'msar': xavier_initializer(seed=Defaults.seed, dtype=get_float_dtype()),
+    'zero': tf.zeros_initializer(dtype=get_float_dtype())
 }
 
 

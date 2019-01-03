@@ -13,6 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
 from tensoralloy.nn.losses import get_stress_loss
+from tensoralloy.dtypes import set_float_precision, get_float_dtype, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -22,9 +23,13 @@ def test_energy_loss():
     """
     Test the function `get_energy_loss`.
     """
-    x = np.random.uniform(0.0, 3.0, size=(6, ))
-    y = np.random.uniform(0.0, 3.0, size=(6, ))
-    n = np.random.randint(1, 5, size=(6, ))
+    set_float_precision(Precision.medium)
+
+    dtype = get_float_dtype()
+
+    x = np.random.uniform(0.0, 3.0, size=(6, )).astype(dtype.as_numpy_dtype)
+    y = np.random.uniform(0.0, 3.0, size=(6, )).astype(dtype.as_numpy_dtype)
+    n = np.random.randint(1, 5, size=(6, )).astype(dtype.as_numpy_dtype)
 
     y_rmse = np.sqrt(mean_squared_error(x / n, y / n))
     y_mae = mean_absolute_error(x / n, y / n)
@@ -43,6 +48,8 @@ def test_energy_loss():
         with tf.Session() as sess:
             assert_less(y_rmse - sess.run(rmse), 1e-8)
             assert_less(y_mae - sess.run(mae), 1e-8)
+
+    set_float_precision(Precision.high)
 
 
 def test_forces_loss():

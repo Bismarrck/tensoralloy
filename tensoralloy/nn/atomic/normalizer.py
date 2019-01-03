@@ -51,7 +51,8 @@ class InputNormalizer:
                 return tf.identity(x, name='identity')
 
             if initial_weights is None:
-                initial_weights = np.ones(x.shape[2], dtype=np.float64)
+                initial_weights = np.ones(x.shape[2],
+                                          dtype=x.dtype.as_numpy_dtype)
             alpha = tf.get_variable(
                 name='alpha',
                 shape=x.shape[2],

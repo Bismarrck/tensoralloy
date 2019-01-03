@@ -10,6 +10,7 @@ from typing import List
 
 from tensoralloy.misc import AttributeDict, Defaults
 from tensoralloy.nn import utils
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -95,7 +96,8 @@ def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
     Compute the cosine distance of dL(energy)/dvars and dL(target)/dvars
     where `target` is `forces` or `stress`.
     """
-    eps = tf.constant(1e-14, dtype=tf.float64)
+    dtype = get_float_dtype()
+    eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
     for i, (grad, var) in enumerate(grads_and_vars):
         if grad is None:
             continue

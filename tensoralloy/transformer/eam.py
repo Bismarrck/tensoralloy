@@ -14,6 +14,7 @@ from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor.eam import EAM, BatchEAM
 from tensoralloy.misc import AttributeDict
+from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -80,14 +81,16 @@ class EAMTransformer(EAM, DescriptorTransformer):
                 except Exception as excp:
                     raise excp
 
-            def _double(name):
-                return _get_or_create(tf.float64, (), name)
+            float_dtype = get_float_dtype()
 
-            def _double_1d(name):
-                return _get_or_create(tf.float64, (None, ), name)
+            def _float(name):
+                return _get_or_create(float_dtype, (), name)
 
-            def _double_2d(d1, name, d0=None):
-                return _get_or_create(tf.float64, (d0, d1), name)
+            def _float_1d(name):
+                return _get_or_create(float_dtype, (None, ), name)
+
+            def _float_2d(d1, name, d0=None):
+                return _get_or_create(float_dtype, (d0, d1), name)
 
             def _int(name):
                 return _get_or_create(tf.int32, (), name)
@@ -98,18 +101,18 @@ class EAMTransformer(EAM, DescriptorTransformer):
             def _int_2d(d1, name, d0=None):
                 return _get_or_create(tf.int32, (d0, d1), name)
 
-            self._placeholders.positions = _double_2d(3, 'positions')
-            self._placeholders.cells = _double_2d(d0=3, d1=3, name='cells')
+            self._placeholders.positions = _float_2d(3, 'positions')
+            self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
             self._placeholders.n_atoms = _int('n_atoms')
-            self._placeholders.volume = _double('volume')
-            self._placeholders.mask = _double_1d('mask')
-            self._placeholders.composition = _double_1d('composition')
+            self._placeholders.volume = _float('volume')
+            self._placeholders.mask = _float_1d('mask')
+            self._placeholders.composition = _float_1d('composition')
             self._placeholders.nnl_max = _int('nnl_max')
             self._placeholders.row_splits = _int_1d(
                 'row_splits', d0=self._n_elements + 1)
             self._placeholders.ilist = _int_1d('ilist')
             self._placeholders.jlist = _int_1d('jlist')
-            self._placeholders.shift = _double_2d(3, 'shift')
+            self._placeholders.shift = _float_2d(3, 'shift')
             self._placeholders.v2g_map = _int_2d(4, 'v2g_map')
 
         return self._placeholders
@@ -145,7 +148,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
         ilist = index_transformer.inplace_map_index(ilist + 1)
         jlist = index_transformer.inplace_map_index(jlist + 1)
-        shift = np.asarray(Slist, dtype=np.float64)
+        shift = np.asarray(Slist, dtype=get_float_dtype().as_numpy_dtype)
 
         # The type of the (atomi, atomj) interaction.
         v2g_map[:, 0] = tlist
@@ -190,12 +193,14 @@ class EAMTransformer(EAM, DescriptorTransformer):
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
 
-        feed_dict[placeholders.positions] = positions
+        numpy_float_dtype = get_float_dtype().as_numpy_dtype
+
+        feed_dict[placeholders.positions] = positions.astype(numpy_float_dtype)
         feed_dict[placeholders.n_atoms] = n_atoms
         feed_dict[placeholders.nnl_max] = nnl_max
-        feed_dict[placeholders.mask] = mask
-        feed_dict[placeholders.cells] = cells
-        feed_dict[placeholders.volume] = volume
+        feed_dict[placeholders.mask] = mask.astype(numpy_float_dtype)
+        feed_dict[placeholders.cells] = cells.astype(numpy_float_dtype)
+        feed_dict[placeholders.volume] = numpy_float_dtype(volume)
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits
         feed_dict[placeholders.v2g_map] = g2.v2g_map
@@ -269,7 +274,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         Slist = self._resize_to_nij_max(Slist, False)
         ilist = clf.inplace_map_index(ilist)
         jlist = clf.inplace_map_index(jlist)
-        shift = np.asarray(Slist, dtype=np.float64)
+        shift = np.asarray(Slist, dtype=get_float_dtype().as_numpy_dtype)
 
         v2g_map[:, 1] = tlist
         v2g_map[:, 2] = ilist
@@ -284,15 +289,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
-
-    def _get_composition(self, atoms: Atoms) -> np.ndarray:
-        """
-        Return the composition of the `Atoms`.
-        """
-        composition = np.zeros(self._n_elements, dtype=np.float64)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            composition[self._elements.index(element)] = float(count)
-        return composition
 
     def encode(self, atoms: Atoms):
         """
@@ -311,8 +307,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         decoded = AttributeDict()
 
         length = 3 * self._max_n_atoms
+        float_dtype = get_float_dtype()
 
-        positions = tf.decode_raw(example['positions'], tf.float64)
+        positions = tf.decode_raw(example['positions'], float_dtype)
         positions.set_shape([length])
         decoded.positions = tf.reshape(
             positions, (self._max_n_atoms, 3), name='R')
@@ -320,28 +317,28 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
         decoded.n_atoms = n_atoms
 
-        y_true = tf.decode_raw(example['y_true'], tf.float64)
+        y_true = tf.decode_raw(example['y_true'], float_dtype)
         y_true.set_shape([1])
         decoded.y_true = tf.squeeze(y_true, name='y_true')
 
-        cells = tf.decode_raw(example['cells'], tf.float64)
+        cells = tf.decode_raw(example['cells'], float_dtype)
         cells.set_shape([9])
         decoded.cells = tf.reshape(cells, (3, 3), name='cells')
 
-        volume = tf.decode_raw(example['volume'], tf.float64)
+        volume = tf.decode_raw(example['volume'], float_dtype)
         volume.set_shape([1])
         decoded.volume = tf.squeeze(volume, name='volume')
 
-        mask = tf.decode_raw(example['mask'], tf.float64)
+        mask = tf.decode_raw(example['mask'], float_dtype)
         mask.set_shape([self._max_n_atoms, ])
         decoded.mask = mask
 
-        composition = tf.decode_raw(example['composition'], tf.float64)
+        composition = tf.decode_raw(example['composition'], float_dtype)
         composition.set_shape([self._n_elements, ])
         decoded.composition = composition
 
         if self._forces:
-            f_true = tf.decode_raw(example['f_true'], tf.float64)
+            f_true = tf.decode_raw(example['f_true'], float_dtype)
             # Ignore the forces of the virtual atom
             f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
@@ -349,12 +346,12 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         if self._stress:
             reduced_stress = tf.decode_raw(
-                example['reduced_stress'], tf.float64, name='stress')
+                example['stress'], float_dtype, name='stress')
             reduced_stress.set_shape([6])
             decoded.reduced_stress = reduced_stress
 
             reduced_total_pressure = tf.decode_raw(
-                example['reduced_total_pressure'], tf.float64, name='stress')
+                example['total_pressure'], float_dtype, name='stress')
             reduced_total_pressure.set_shape([1])
             decoded.reduced_total_pressure = reduced_total_pressure
 
@@ -374,7 +371,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
-            shift = tf.decode_raw(example['g2.shifts'], tf.float64)
+            shift = tf.decode_raw(example['g2.shifts'], get_float_dtype())
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
@@ -416,9 +413,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
 
             if self._stress:
-                feature_list['reduced_stress'] = \
+                feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
-                feature_list['reduced_total_pressure'] = \
+                feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
 
             example = tf.parse_single_example(example_proto, feature_list)
@@ -442,20 +439,20 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
             Here are default keys:
 
-            * 'positions': float64, [batch_size, max_n_atoms, 3]
-            * 'cells': float64, [batch_size, 3, 3]
-            * 'volume': float64, [batch_size, ]
+            * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
+            * 'cells': float64 or float32, [batch_size, 3, 3]
+            * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64, [batch_size, ]
-            * 'f_true': float64, [batch_size, max_n_atoms - 1, 3]
+            * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
             * 'composition': float64, [batch_size, n_elements]
-            * 'mask': float64, [batch_size, max_n_atoms]
+            * 'mask': float64, [batch_size, max_n_atoms + 1]
             * 'ilist': int32, [batch_size, nij_max]
             * 'jlist': int32, [batch_size, nij_max]
             * 'shift': float64, [batch_size, nij_max, 3]
             * 'rv2g': int32, [batch_size, nij_max, 5]
 
-            If `self.stress` is `True`, the following keys are provided:
+            If `self.stress` is `True`, these following keys will be provided:
 
             * 'reduced_stress': float64, [batch_size, 6]
             * 'total_pressure': float64, [batch_size, ]

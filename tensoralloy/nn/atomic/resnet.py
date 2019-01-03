@@ -67,21 +67,22 @@ class AtomicResNN(AtomicNN):
             axis = ndims - 1
 
             with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-                if self._atomic_static_energy is None:
-                    values = np.ones(len(self._elements), dtype=np.float64)
-                else:
-                    values = np.asarray(
-                        [self._atomic_static_energy[e] for e in self._elements],
-                        dtype=np.float64)
-                initializer = tf.constant_initializer(values, dtype=tf.float64)
                 x = tf.identity(features.composition, name='input')
                 if ndims == 1:
                     x = tf.expand_dims(x, axis=0, name='1to2')
                 if x.shape[1].value is None:
                     x.set_shape([x.shape[0], len(self._elements)])
+                if self._atomic_static_energy is None:
+                    values = np.ones(len(self._elements),
+                                     dtype=x.dtype.as_numpy_dtype)
+                else:
+                    values = np.asarray(
+                        [self._atomic_static_energy[e] for e in self._elements],
+                        dtype=x.dtype.as_numpy_dtype)
+                initializer = tf.constant_initializer(values, dtype=x.dtype)
                 z = tf.get_variable("weights",
                                     shape=len(self._elements),
-                                    dtype=tf.float64,
+                                    dtype=x.dtype,
                                     trainable=True,
                                     collections=[
                                         GraphKeys.ATOMIC_RES_NN_VARIABLES,
