@@ -24,7 +24,7 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
     Parameters
     ----------
     r : tf.Tensor
-        A `float64` tensor.
+        A `float64` or `float32` tensor.
     rc : float or tf.Tensor
         The cutoff radius. fc(r) = 0 if r > rc.
     name : str or None
@@ -38,10 +38,11 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
     with ops.name_scope(name, "CosCutoff", [r, rc]) as name:
         # TODO: 'TypeError: must be real number, not Tensor' will occur here if
         #  this module was cythonized.
-        rc = ops.convert_to_tensor(rc, dtype=tf.float64, name="rc")
+        r = ops.convert_to_tensor(r, name='r')
+        rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
         ratio = math_ops.div(r, rc, name='ratio')
-        one = ops.convert_to_tensor(1.0, dtype=tf.float64, name='one')
-        half = ops.convert_to_tensor(0.5, dtype=tf.float64, name='half')
+        one = ops.convert_to_tensor(1.0, dtype=r.dtype, name='one')
+        half = ops.convert_to_tensor(0.5, dtype=r.dtype, name='half')
         z = math_ops.minimum(ratio, one, name='minimum')
         z = math_ops.cos(z * np.pi, name='cos') + one
         return math_ops.multiply(z, half, name=name)
@@ -56,7 +57,7 @@ def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=5.0, name=None):
     Parameters
     ----------
     r : tf.Tensor
-        A `float64` tensor.
+        A `float64` or `float32` tensor.
     rc : float or tf.Tensor
         The cutoff radius. fc(r) = 0 if r > rc.
     gamma : float or tf.Tensor
@@ -74,9 +75,10 @@ def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=5.0, name=None):
 
     """
     with ops.name_scope(name, "PolyCutoff", [r, rc, gamma]) as name:
-        gamma = ops.convert_to_tensor(gamma, dtype=tf.float64, name='gamma')
-        rc = ops.convert_to_tensor(rc, dtype=tf.float64, name="rc")
-        one = ops.convert_to_tensor(1.0, dtype=tf.float64, name='one')
+        r = ops.convert_to_tensor(r, name='r')
+        gamma = ops.convert_to_tensor(gamma, dtype=r.dtype, name='gamma')
+        rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
+        one = ops.convert_to_tensor(1.0, dtype=r.dtype, name='one')
         div = math_ops.div(r, rc, name='ratio')
         div = math_ops.minimum(one, div)
         z = gamma * div**(gamma + one) - (gamma + one) * div**gamma

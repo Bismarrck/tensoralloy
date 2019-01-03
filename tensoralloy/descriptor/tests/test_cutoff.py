@@ -12,6 +12,7 @@ from nose.tools import assert_less
 
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.descriptor.cutoff import polynomial_cutoff
+from tensoralloy.dtypes import get_float_dtype, set_float_precision, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -36,16 +37,20 @@ def test_cosine_cutoff():
     Test the cosine cutoff function.
     """
     rc = 6.0
-    r = np.linspace(1.0, 10.0, num=91, endpoint=True)
-    x = np.asarray([cosine_cutoff_simple(ri, rc) for ri in r])
+    set_float_precision(Precision.medium)
+    dtype = get_float_dtype()
+    r = np.linspace(1.0, 10.0, num=91, endpoint=True,
+                    dtype=dtype.as_numpy_dtype)
+    x = np.asarray([cosine_cutoff_simple(ri, rc) for ri in r],
+                   dtype=dtype.as_numpy_dtype)
 
     with tf.Session() as sess:
         y = sess.run(
-            cosine_cutoff(tf.convert_to_tensor(r, dtype=tf.float64),
-                          tf.convert_to_tensor(rc, dtype=tf.float64),
+            cosine_cutoff(tf.convert_to_tensor(r, dtype=dtype),
+                          tf.convert_to_tensor(rc, dtype=dtype),
                           name='cutoff'))
 
-        assert_less(np.abs(x - y).max(), 1e-8)
+        assert_less(np.abs(x - y).max(), dtype.eps)
 
 
 def polynomial_cutoff_simple(r: float, rc: float, gamma: float):
