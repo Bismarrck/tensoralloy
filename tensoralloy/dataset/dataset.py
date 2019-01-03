@@ -67,8 +67,8 @@ class Dataset:
         self._rc = rc
         self._files = {}
         self._file_sizes = {}
-        self._forces = False
-        self._stress = False
+        self._use_forces = False
+        self._use_stress = False
 
         if should_be_serial():
             self._serial = False
@@ -94,20 +94,20 @@ class Dataset:
         return self._name
 
     @property
-    def forces(self) -> bool:
+    def use_forces(self) -> bool:
         """
         Return True if the atomic forces are provided. The unit of the atomic
         forces is 'eV / Angstrom'.
         """
-        return self._forces
+        return self._use_forces
 
     @property
-    def stress(self) -> bool:
+    def use_stress(self) -> bool:
         """
         Return True if the stress tensors are provided. The unit of the stress
         tensors is 'eV/Angstrom'.
         """
-        return self._stress
+        return self._use_stress
 
     @property
     def cutoff_radius(self):
@@ -259,8 +259,8 @@ class Dataset:
                 self._database, transformer.elements, True)
 
         self._transformer = transformer
-        self._forces = forces
-        self._stress = stress
+        self._use_forces = forces
+        self._use_stress = stress
         self._max_occurs = max_occurs
         self._atomic_static_energy = \
             self._database.metadata['atomic_static_energy']
@@ -455,9 +455,9 @@ class Dataset:
                                      mask=batch.mask,
                                      volume=batch.volume)
             labels = AttributeDict(energy=batch.y_true)
-            if self._forces:
+            if self._use_forces:
                 labels['forces'] = batch.f_true
-            if self._stress:
+            if self._use_stress:
                 labels['stress'] = batch.stress
                 labels['total_pressure'] = batch.total_pressure
             return features, labels

@@ -17,7 +17,6 @@ from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn import losses as loss_ops
-from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

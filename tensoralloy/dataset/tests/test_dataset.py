@@ -91,7 +91,7 @@ def test_ethanol():
                           serial=False, angular=True)
 
         assert_equal(len(dataset), 10)
-        assert_true(dataset.forces)
+        assert_true(dataset.use_forces)
 
         dataset.to_records(savedir, test_size=0.5)
         assert_true(dataset.load_tfrecords(savedir))
@@ -131,7 +131,7 @@ def test_nickel():
         dataset = Dataset(database, 'Ni', angular=False, serial=True)
 
         assert_equal(len(dataset), 2)
-        assert_true(dataset.stress)
+        assert_true(dataset.use_stress)
 
         dataset.to_records(savedir, test_size=1)
         assert_true(dataset.load_tfrecords(savedir))

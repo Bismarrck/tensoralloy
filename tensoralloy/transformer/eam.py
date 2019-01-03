@@ -337,14 +337,14 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         composition.set_shape([self._n_elements, ])
         decoded.composition = composition
 
-        if self._forces:
+        if self._use_forces:
             f_true = tf.decode_raw(example['f_true'], float_dtype)
             # Ignore the forces of the virtual atom
             f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
                 f_true, (self._max_n_atoms, 3), name='f_true')
 
-        if self._stress:
+        if self._use_stress:
             reduced_stress = tf.decode_raw(
                 example['stress'], float_dtype, name='stress')
             reduced_stress.set_shape([6])
@@ -409,10 +409,10 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 'mask': tf.FixedLenFeature([], tf.string),
                 'composition': tf.FixedLenFeature([], tf.string),
             }
-            if self._forces:
+            if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
 
-            if self._stress:
+            if self._use_stress:
                 feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
                 feature_list['total_pressure'] = \

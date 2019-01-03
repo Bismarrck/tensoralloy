@@ -184,22 +184,22 @@ class BatchDescriptorTransformer(BaseTransformer):
         """
         super(BatchDescriptorTransformer, self).__init__()
 
-        self._forces = forces
-        self._stress = stress
+        self._use_forces = forces
+        self._use_stress = stress
 
     @property
-    def forces(self):
+    def use_forces(self):
         """
         Return True if atomic forces should be encoded and trained.
         """
-        return self._forces
+        return self._use_forces
 
     @property
-    def stress(self):
+    def use_stress(self):
         """
         Return True if the stress tensor should be encoded and trained.
         """
-        return self._stress
+        return self._use_stress
 
     @property
     @abc.abstractmethod
@@ -307,11 +307,11 @@ class BatchDescriptorTransformer(BaseTransformer):
             'mask': bytes_feature(mask.tostring()),
             'composition': bytes_feature(composition.tostring()),
         }
-        if self.forces:
+        if self.use_forces:
             f_true = clf.map_forces(atoms.get_forces()).astype(numpy_dtype)
             feature_list['f_true'] = bytes_feature(f_true.tostring())
 
-        if self.stress:
+        if self.use_stress:
             # Convert the unit of the stress tensor to 'eV' for simplification:
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar

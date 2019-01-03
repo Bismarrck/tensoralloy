@@ -50,7 +50,7 @@ def test_cosine_cutoff():
                           tf.convert_to_tensor(rc, dtype=dtype),
                           name='cutoff'))
 
-        assert_less(np.abs(x - y).max(), dtype.eps)
+        assert_less(np.abs(x - y).max(), 1e-7)
     set_float_precision(Precision.high)
 
 
