@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import sys
 import time
+
 from collections import Counter
 from os.path import splitext
 from ase.db import connect

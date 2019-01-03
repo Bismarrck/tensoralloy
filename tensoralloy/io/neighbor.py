@@ -5,6 +5,7 @@ This module defines functions to detect the limits of the neighbor lists.
 from __future__ import print_function, absolute_import
 
 import numpy as np
+
 from collections import Counter
 from ase.db.sqlite import SQLite3Database
 from ase.neighborlist import neighbor_list
@@ -68,7 +69,7 @@ def find_neighbor_sizes(atoms, rc, k_max):
 
 
 def find_neighbor_size_limits(database: SQLite3Database, rc: float,
-                              k_max: int=3, n_jobs=-1, verbose=True):
+                              k_max=3, n_jobs=-1, verbose=True):
     """
     Find `nij_max`, `nijk_max` and 'nnl_max' of all `Atoms` objects in the
     database.
