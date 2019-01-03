@@ -4,9 +4,12 @@ This module controls precision of floating-point numbers.
 """
 from __future__ import print_function, absolute_import
 
-import tensorflow as tf
-import numpy as np
 import enum
+
+from tensorflow.core.framework import types_pb2
+from tensorflow.python.framework.dtypes import DType as tf_DType
+from typing import Union
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -43,15 +46,39 @@ def set_float_precision(precision=Precision.high):
     _floating_point_precision = precision
 
 
-def get_float_dtype(numpy=False):
+class DType(tf_DType):
+    """
+    A wrapper of `tensorflow.core.framework.dtypes.DType` with an added property
+    `eps`.
+    """
+
+    def __init__(self, type_enum, eps: Union[float, int]):
+        """
+        Initialization method.
+        """
+        super(DType, self).__init__(type_enum=type_enum)
+        self._eps = eps
+
+    @property
+    def eps(self):
+        """
+        Return the machine epsilon of this data type.
+        """
+        return self._eps
+
+
+float64 = DType(types_pb2.DT_DOUBLE, eps=1e-14)
+float32 = DType(types_pb2.DT_FLOAT, eps=1e-7)
+
+
+def get_float_dtype():
     """
     Return the data dtype of the floating-point numbers.
 
-    Parameters
-    ----------
-    numpy : bool
-        If True, return the numpy data type; Otherwise return the tensorflow
-        data type.
+    Returns
+    -------
+    dtype : DType
+        The corresponding data type of floating-point numbers.
 
     """
     global _floating_point_precision
@@ -59,12 +86,6 @@ def get_float_dtype(numpy=False):
         set_float_precision()
     assert isinstance(_floating_point_precision, Precision)
     if _floating_point_precision == Precision.medium:
-        if numpy:
-            return np.float32
-        else:
-            return tf.float32
+        return float32
     else:
-        if numpy:
-            return np.float64
-        else:
-            return tf.float64
+        return float64
