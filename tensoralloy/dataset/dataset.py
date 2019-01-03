@@ -25,7 +25,8 @@ from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
 from tensoralloy.dataset.utils import should_be_serial
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.dtypes import get_float_dtype, set_float_precision
+from tensoralloy.dtypes import get_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -295,21 +296,35 @@ class Dataset:
 
             batch_size = min(num_examples, batch_size)
             n_cpus = min(num_examples, n_cpus)
+            precision = get_float_precision()
 
             logstr = "\rProgress: {:7d} / {:7d} | Speed = {:6.1f}"
-
             if verbose:
                 print("Start writing {} subset ...".format(str(mode)))
 
             tic = time.time()
 
             if not self._serial:
+
+                def pipeline(_atoms, _precision):
+                    """
+                    The parallel pipeline function.
+
+                    If we use `BatchDescriptorTransformer.encode` direcly as the
+                    pipeline function of `of process-based `joblib.Parallel`,
+                    the global floating-point precision of the main process can
+                    not be accessed by child processes. So here we must set
+                    `precision` on every child process.
+                    """
+                    set_float_precision(_precision)
+                    return self._transformer.encode(_atoms)
+
                 for istart, istop in brange(0, num_examples, batch_size):
                     trajectory = []
                     for atoms_id in indices[istart: istop]:
                         trajectory.append(self._database.get_atoms(id=atoms_id))
                     examples = Parallel(n_jobs=n_cpus)(
-                        delayed(self._transformer.encode)(atoms)
+                        delayed(pipeline)(atoms, precision)
                         for atoms in trajectory
                     )
                     for example in examples:

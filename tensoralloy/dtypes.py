@@ -14,7 +14,8 @@ from typing import Union
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["Precision", "set_float_precision", "get_float_dtype"]
+__all__ = ["Precision", "set_float_precision", "get_float_dtype",
+           "get_float_precision"]
 
 
 class Precision(enum.Enum):
@@ -47,6 +48,13 @@ def set_float_precision(precision=Precision.high):
         _floating_point_precision = precision
     else:
         _floating_point_precision = Precision[precision]
+
+
+def get_float_precision():
+    """
+    Return the global precision of floating-point numbers.
+    """
+    return _floating_point_precision
 
 
 class DType(tf_DType):

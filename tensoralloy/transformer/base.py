@@ -328,6 +328,11 @@ class BatchDescriptorTransformer(BaseTransformer):
     def encode(self, atoms: Atoms) -> tf.train.Example:
         """
         Encode the `Atoms` object to a tensorflow example.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `Atoms` object to encode.
         """
         pass
 
