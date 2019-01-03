@@ -167,6 +167,8 @@ class InputReader:
             else:
                 return join(input_dir, _filepath)
 
+        _safe_update('precision')
+        
         for section in ("dataset", "nn", "opt", "train"):
             for key, val in defaults[section].items():
                 if isinstance(val, dict):

@@ -53,6 +53,8 @@ def test_read_configs():
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.behler.k3.toml'))
     configs = reader.configs
 
+    assert_equal(reader['precision'], 'medium')
+
     assert_equal(realpath(reader['dataset.sqlite3']),
                  realpath(join(datasets_dir(True), 'qm7.db')))
     assert_equal(realpath(reader['dataset.tfrecords_dir']),
@@ -83,6 +85,8 @@ def test_read_eam_alloy_toml():
     """
     reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
     configs = reader.configs
+
+    assert_equal(reader['precision'], 'high')
 
     assert_equal(realpath(reader['train.model_dir']),
                  realpath("/tmp/experiments/qm7-eam/train"))

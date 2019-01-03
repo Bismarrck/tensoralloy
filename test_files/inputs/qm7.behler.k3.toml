@@ -1,3 +1,5 @@
+precision = 'medium'
+
 [dataset]
 sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
