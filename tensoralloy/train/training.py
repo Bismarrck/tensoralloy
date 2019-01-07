@@ -9,7 +9,7 @@ import shutil
 import os
 
 from argparse import ArgumentParser, Namespace
-from os.path import join, exists, dirname, basename
+from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
 from typing import Union
 
@@ -33,7 +33,7 @@ class TrainingManager:
     an input TOML file.
     """
 
-    def __init__(self, input_file: str):
+    def __init__(self, input_file: str, validate_tfrecords=True):
         """
         Initialization method.
 
@@ -41,20 +41,21 @@ class TrainingManager:
         ----------
         input_file : str
             The input job file to read.
+        validate_tfrecords : bool
+            If True, the corresponding tfrecords files will be created if
+            missing.
 
         """
         self._reader = InputReader(input_file)
 
         set_float_precision(self._reader['precision'])
 
-        self._dataset = self._get_dataset()
+        self._dataset = self._get_dataset(validate_tfrecords)
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()
         self._seed = self._reader['seed']
 
-        shutil.copyfile(
-            input_file,
-            join(self._hparams.train.model_dir, basename(input_file)))
+        self._backup_input_file(input_file)
 
     @property
     def nn(self) -> BasicNN:
@@ -84,6 +85,17 @@ class TrainingManager:
         """
         return self._seed
 
+    def _backup_input_file(self, input_file):
+        """
+        Copy the input file to `model_dir` for back up.
+        """
+        dst = join(self._hparams.train.model_dir, basename(input_file))
+        if realpath(dst) == realpath(input_file):
+            dst += '.bak'
+        if exists(dst):
+            os.remove(dst)
+        shutil.copyfile(input_file, dst)
+
     def _get_hparams(self):
         """
         Initialize the hyper parameters.
@@ -107,21 +119,6 @@ class TrainingManager:
         else:
             eval_batch_size = hparams.train.batch_size
         hparams.train.eval_batch_size = eval_batch_size
-
-        deleted = []
-        if not hparams.train.restart:
-            if exists(hparams.train.model_dir):
-                shutil.rmtree(hparams.train.model_dir, ignore_errors=True)
-                deleted.append(hparams.train.model_dir)
-
-        if not exists(hparams.train.model_dir):
-            tf.gfile.MakeDirs(hparams.train.model_dir)
-
-        if hparams.train.restart and hparams.train.previous_checkpoint:
-            if dirname(hparams.train.previous_checkpoint) in deleted:
-                print(f"Warning: {hparams.train.previous_checkpoint} "
-                      f"was already deleted")
-                hparams.train.previous_checkpoint = None
 
         return hparams
 
@@ -203,7 +200,7 @@ class TrainingManager:
             kwargs['export_properties'] = minimize_properties
             return self._get_eam_nn(kwargs)
 
-    def _get_dataset(self):
+    def _get_dataset(self, validate_tfrecords=True):
         """
         Initialize a `Dataset` using the configs of the input file.
         """
@@ -223,9 +220,32 @@ class TrainingManager:
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
         if not dataset.load_tfrecords(tfrecords_dir):
-            dataset.to_records(
-                tfrecords_dir, test_size=test_size, verbose=True)
+            if validate_tfrecords:
+                dataset.to_records(
+                    tfrecords_dir, test_size=test_size, verbose=True)
+            else:
+                tf.logging.info("Warning: tfrecords files missing.")
         return dataset
+
+    @staticmethod
+    def _check_before_training(hparams: AttributeDict):
+        """
+        Check the `model_dir` and `previous_checkpoint` before training.
+        """
+        deleted = []
+        if not hparams.train.restart:
+            if exists(hparams.train.model_dir):
+                shutil.rmtree(hparams.train.model_dir, ignore_errors=True)
+                deleted.append(hparams.train.model_dir)
+
+        if not exists(hparams.train.model_dir):
+            tf.gfile.MakeDirs(hparams.train.model_dir)
+
+        if hparams.train.restart and hparams.train.previous_checkpoint:
+            if dirname(hparams.train.previous_checkpoint) in deleted:
+                print(f"Warning: {hparams.train.previous_checkpoint} "
+                      f"was already deleted")
+                hparams.train.previous_checkpoint = None
 
     def train_and_evaluate(self):
         """
@@ -239,6 +259,8 @@ class TrainingManager:
             dataset = self._dataset
             nn = self._nn
             hparams = self._hparams
+
+            self._check_before_training(hparams)
 
             set_logging_configs(
                 logfile=check_path(join(hparams.train.model_dir, 'logfile')))
@@ -323,8 +345,12 @@ def main(args: Namespace):
     """
     The main function.
     """
-    manager = TrainingManager(args.filename)
-    manager.train_and_evaluate()
+    export_latest_only = args.export_latest_only
+    validate_tfrecords = not export_latest_only
+
+    manager = TrainingManager(args.filename, validate_tfrecords)
+    if not export_latest_only:
+        manager.train_and_evaluate()
     manager.export()
 
 
@@ -336,6 +362,12 @@ def config_parser(parser: ArgumentParser):
         'filename',
         type=str,
         help="A cfg file to read."
+    )
+    parser.add_argument(
+        '--export-latest-only',
+        action='store_true',
+        default=False,
+        help="Directly export the lastest checkpoint to a model file and exit."
     )
     return parser
 
