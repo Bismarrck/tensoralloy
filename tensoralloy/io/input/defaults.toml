@@ -1,6 +1,7 @@
 # This toml file defines the default values of the options.
 
 precision = 'high'
+seed = 611
 
 [dataset]
 sqlite3 = "required"

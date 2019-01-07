@@ -50,6 +50,7 @@ class TrainingManager:
         self._dataset = self._get_dataset()
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()
+        self._seed = self._reader['seed']
 
         shutil.copyfile(
             input_file,
@@ -75,6 +76,13 @@ class TrainingManager:
         Return a dict of hyper parameters.
         """
         return self._hparams
+
+    @property
+    def seed(self) -> int:
+        """
+        Return the used random seed.
+        """
+        return self._seed
 
     def _get_hparams(self):
         """
@@ -236,6 +244,9 @@ class TrainingManager:
                 logfile=check_path(join(hparams.train.model_dir, 'logfile')))
 
             tf.logging.info(f'pid={os.getpid()}')
+            tf.logging.info(f'seed={self._seed}')
+
+            tf.set_random_seed(self._seed)
 
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,

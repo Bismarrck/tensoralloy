@@ -168,6 +168,7 @@ class InputReader:
                 return join(input_dir, _filepath)
 
         _safe_update('precision')
+        _safe_update('seed')
         
         for section in ("dataset", "nn", "opt", "train"):
             for key, val in defaults[section].items():
