@@ -18,13 +18,17 @@ __all__ = ["get_energy_loss", "get_forces_loss", "get_stress_loss",
            "get_total_pressure_loss"]
 
 
-def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor):
+def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     """
     Return the RMSE loss tensor. The MAE loss will also be calculated.
     """
-    mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse')
-    mae = tf.reduce_mean(tf.abs(x - y), name='mae')
-    loss = tf.sqrt(mse, name='rmse')
+    if is_per_atom_loss:
+        suffix = "/atom"
+    else:
+        suffix = ""
+    mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse' + suffix)
+    mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
+    loss = tf.sqrt(mse, name='rmse' + suffix)
     return loss, mae
 
 
@@ -71,7 +75,7 @@ def get_energy_loss(labels, predictions, n_atoms, weight=1.0,
         else:
             x = tf.identity(labels, name='labels')
             y = tf.identity(predictions, name='predictions')
-        raw_loss, mae = _get_rmse_loss(x, y)
+        raw_loss, mae = _get_rmse_loss(x, y, is_per_atom_loss=per_atom_loss)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:
