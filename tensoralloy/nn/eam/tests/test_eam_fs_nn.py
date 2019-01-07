@@ -164,9 +164,9 @@ def test_export_setfl():
     nr = 10000
     dr = 6.50000000000000E-4
 
-    nn.export('AlFe.fs.eam', nr=nr, dr=dr, nrho=nrho, drho=drho,
-              lattice_constants={'Al': 4.04527, 'Fe': 2.855312},
-              lattice_types={'Al': 'fcc', 'Fe': 'bcc'})
+    nn.export_to_setfl('AlFe.fs.eam', nr=nr, dr=dr, nrho=nrho, drho=drho,
+                       lattice_constants={'Al': 4.04527, 'Fe': 2.855312},
+                       lattice_types={'Al': 'fcc', 'Fe': 'bcc'})
 
     with open('AlFe.fs.eam') as fp:
         out = []

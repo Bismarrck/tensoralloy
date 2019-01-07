@@ -228,8 +228,9 @@ class EamFsNN(EamNN):
             y = tf.add(phi, embed, name='atomic')
             return y
 
-    def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
-               checkpoint=None, lattice_constants=None, lattice_types=None):
+    def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
+                        drho: float, checkpoint=None, lattice_constants=None,
+                        lattice_types=None):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
 

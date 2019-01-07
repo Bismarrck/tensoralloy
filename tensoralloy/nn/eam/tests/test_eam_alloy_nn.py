@@ -322,7 +322,8 @@ def test_export_setfl():
                            'AlAl': {'phi': 'zjw04'},
                            'AlCu': {'phi': 'zjw04'},
                            'CuCu': {'phi': 'zjw04'}})
-    nn.export('AlCu.alloy.eam', nr=2000, dr=0.003, nrho=2000, drho=0.05)
+    nn.export_to_setfl('AlCu.alloy.eam',
+                       nr=2000, dr=0.003, nrho=2000, drho=0.05)
 
     with open('AlCu.alloy.eam') as fp:
         out = []

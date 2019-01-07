@@ -248,7 +248,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         This method is temporarily disabled as `EamTransformer` is neither
         implemented nor needed.
         """
-        raise NotImplementedError("`EamTransformer` is not implemented yet")
+        return EAMTransformer(self._rc, self._elements)
 
     def get_indexed_slices(self, atoms: Atoms):
         """

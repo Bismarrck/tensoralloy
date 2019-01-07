@@ -440,10 +440,12 @@ class EamNN(BasicNN):
         raise NotImplementedError(
             "This method must be overridden by its subclass")
 
-    def export(self, setfl: str, nr: int, dr: float, nrho: int, drho: float,
-               checkpoint=None, lattice_constants=None, lattice_types=None):
+    def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
+                        drho: float, checkpoint=None, lattice_constants=None,
+                        lattice_types=None):
         """
-        Export this model to an `eam/alloy` or an `eam/fs` potential file.
+        Export this model to an `eam/alloy` or an `eam/fs` LAMMPS setfl
+        potential file.
 
         Parameters
         ----------

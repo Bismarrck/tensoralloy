@@ -54,8 +54,7 @@ class TrainingManager:
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()
         self._seed = self._reader['seed']
-
-        self._backup_input_file(input_file)
+        self._input_file = input_file
 
     @property
     def nn(self) -> BasicNN:
@@ -85,16 +84,16 @@ class TrainingManager:
         """
         return self._seed
 
-    def _backup_input_file(self, input_file):
+    def _backup_input_file(self):
         """
         Copy the input file to `model_dir` for back up.
         """
-        dst = join(self._hparams.train.model_dir, basename(input_file))
-        if realpath(dst) == realpath(input_file):
+        dst = join(self._hparams.train.model_dir, basename(self._input_file))
+        if realpath(dst) == realpath(self._input_file):
             dst += '.bak'
         if exists(dst):
             os.remove(dst)
-        shutil.copyfile(input_file, dst)
+        shutil.copyfile(self._input_file, dst)
 
     def _get_hparams(self):
         """
@@ -261,6 +260,7 @@ class TrainingManager:
             hparams = self._hparams
 
             self._check_before_training(hparams)
+            self._backup_input_file()
 
             set_logging_configs(
                 logfile=check_path(join(hparams.train.model_dir, 'logfile')))
@@ -311,18 +311,18 @@ class TrainingManager:
             checkpoint = tf.train.latest_checkpoint(
                 self._hparams.train.model_dir)
 
-        if isinstance(self._nn, AtomicNN):
-            output_graph_path = join(self._hparams.train.model_dir,
-                                     f'{self._dataset.name}.pb')
+        output_graph_path = join(self._hparams.train.model_dir,
+                                 f'{self._dataset.name}.pb')
 
-            input_fn = self._dataset.input_fn_for_prediction(
-                predict_properties=self._reader['nn.atomic.export'])
+        input_fn = self._dataset.input_fn_for_prediction(
+            predict_properties=self._reader['nn.atomic.export'])
 
-            self._nn.export(features_and_params_fn=input_fn,
-                            output_graph_path=output_graph_path,
-                            checkpoint=checkpoint,
-                            keep_tmp_files=False)
-        else:
+        self._nn.export(input_fn_for_prediction=input_fn,
+                        output_graph_path=output_graph_path,
+                        checkpoint=checkpoint,
+                        keep_tmp_files=False)
+
+        if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
             kwargs = self._reader['nn.eam.export']
 
             if 'lattice' in kwargs:
@@ -336,9 +336,9 @@ class TrainingManager:
             output_setfl = join(self._hparams.train.model_dir,
                                 f'{self._dataset.name}.{self._nn.tag}.eam')
 
-            self._nn.export(output_setfl, checkpoint=checkpoint,
-                            lattice_constants=lattice_constants,
-                            lattice_types=lattice_types, **kwargs)
+            self._nn.export_to_setfl(output_setfl, checkpoint=checkpoint,
+                                     lattice_constants=lattice_constants,
+                                     lattice_types=lattice_types, **kwargs)
 
 
 def main(args: Namespace):
