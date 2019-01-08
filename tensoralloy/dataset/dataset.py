@@ -557,7 +557,7 @@ class Dataset:
 
             # Setup the batch
             dataset = dataset.batch(batch_size)
-            dataset = dataset.prefetch(buffer_size=batch_size)
+            dataset = dataset.prefetch(buffer_size=1)
 
             # Return the iterator
             return dataset.make_one_shot_iterator().get_next()
