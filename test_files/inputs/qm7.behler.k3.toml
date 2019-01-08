@@ -11,10 +11,10 @@ test_size = 1000
 [nn]
 activation = "leaky_relu"
 minimize = ['energy']
+positive_energy_mode = true
 
 [nn.loss.energy]
 per_atom_loss = false
-positive_mode = true
 
 [nn.loss.l2]
 weight = 0.01
