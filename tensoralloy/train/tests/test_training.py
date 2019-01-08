@@ -65,6 +65,8 @@ def test_initialization():
     assert_equal(hparams.opt.method, 'adam')
     assert_equal(hparams.opt.learning_rate, 0.01)
     assert_is_none(hparams.opt.decay_function)
+    assert_equal(hparams.precision, 'medium')
+    assert_equal(hparams.seed, 1958)
 
     assert_equal(manager.nn.positive_energy_mode, True)
 

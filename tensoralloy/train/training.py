@@ -53,7 +53,6 @@ class TrainingManager:
         self._dataset = self._get_dataset(validate_tfrecords)
         self._hparams = self._get_hparams()
         self._nn = self._get_nn()
-        self._seed = self._reader['seed']
         self._input_file = input_file
 
     @property
@@ -77,13 +76,6 @@ class TrainingManager:
         """
         return self._hparams
 
-    @property
-    def seed(self) -> int:
-        """
-        Return the used random seed.
-        """
-        return self._seed
-
     def _backup_input_file(self):
         """
         Copy the input file to `model_dir` for back up.
@@ -100,6 +92,8 @@ class TrainingManager:
         Initialize the hyper parameters.
         """
         hparams = AttributeDict(
+            seed=self._reader['seed'],
+            precision=self._reader['precision'],
             train=AttributeDict(self._reader['train']),
             opt=AttributeDict(self._reader['opt']),
             loss=AttributeDict(self._reader['nn.loss']))
@@ -268,9 +262,11 @@ class TrainingManager:
                 logfile=check_path(join(hparams.train.model_dir, 'logfile')))
 
             tf.logging.info(f'pid={os.getpid()}')
-            tf.logging.info(f'seed={self._seed}')
+            tf.logging.info(f'seed={self._hparams.seed}')
+            tf.logging.info(
+                f'positive_energy_mode={self._nn.positive_energy_mode}')
 
-            tf.set_random_seed(self._seed)
+            tf.set_random_seed(self._hparams.seed)
 
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,
