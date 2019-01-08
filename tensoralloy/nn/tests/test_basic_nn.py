@@ -88,8 +88,7 @@ def test_check_hparams():
     defaults = AttributeDict(
         loss=AttributeDict(
             energy=AttributeDict(weight=1.0,
-                                 per_atom_loss=False,
-                                 positive_mode=False),
+                                 per_atom_loss=False),
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0),
             total_pressure=AttributeDict(weight=1.0),

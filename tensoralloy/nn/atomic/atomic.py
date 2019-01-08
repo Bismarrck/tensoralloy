@@ -25,9 +25,14 @@ class AtomicNN(BasicNN):
 
     default_collection = GraphKeys.ATOMIC_NN_VARIABLES
 
-    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
+    def __init__(self,
+                 elements: List[str],
+                 hidden_sizes=None,
+                 activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'), normalizer=None,
+                 export_properties=('energy', 'forces'),
+                 positive_energy_mode=False,
+                 normalizer=None,
                  normalization_weights=None):
         """
         Initialization method.
@@ -45,7 +50,9 @@ class AtomicNN(BasicNN):
             hidden_sizes=hidden_sizes,
             activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties)
+            export_properties=export_properties,
+            positive_energy_mode=positive_energy_mode)
+
         self._initial_normalizer_weights = \
             safe_select(normalization_weights, {})
         self._normalizer = InputNormalizer(method=normalizer)
@@ -107,7 +114,7 @@ class AtomicNN(BasicNN):
                     outputs.append(yi)
             return outputs
 
-    def _get_energy(self, outputs, features, verbose=True):
+    def _get_energy_op(self, outputs, features, name='energy', verbose=True):
         """
         Return the Op to compute total energy.
 
@@ -117,6 +124,8 @@ class AtomicNN(BasicNN):
             A list of `tf.Tensor` as the outputs of the ANNs.
         features : AttributeDict
             A dict of input tensors.
+        name : str
+            The name of the output tensor.
         verbose : bool
             If True, the total energy tensor will be logged.
 
@@ -126,18 +135,17 @@ class AtomicNN(BasicNN):
             The total energy tensor.
 
         """
-        with tf.name_scope("Energy"):
-            y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-            ndims = features.mask.shape.ndims
-            axis = ndims - 1
-            with tf.name_scope("mask"):
-                if ndims == 1:
-                    y_atomic = tf.squeeze(y_atomic, axis=0)
-                mask = tf.split(
-                    features.mask, [1, -1], axis=axis, name='split')[1]
-                y_mask = tf.multiply(y_atomic, mask, name='mask')
-            energy = tf.reduce_sum(
-                y_mask, axis=axis, keepdims=False, name='energy')
-            if verbose:
-                log_tensor(energy)
-            return energy
+        y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+        ndims = features.mask.shape.ndims
+        axis = ndims - 1
+        with tf.name_scope("mask"):
+            if ndims == 1:
+                y_atomic = tf.squeeze(y_atomic, axis=0)
+            mask = tf.split(
+                features.mask, [1, -1], axis=axis, name='split')[1]
+            y_mask = tf.multiply(y_atomic, mask, name='mask')
+        energy = tf.reduce_sum(
+            y_mask, axis=axis, keepdims=False, name=name)
+        if verbose:
+            log_tensor(energy)
+        return energy

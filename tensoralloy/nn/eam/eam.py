@@ -70,10 +70,14 @@ class EamNN(BasicNN):
     The tensorflow/CNN based implementation of the Embedded-Atom Method.
     """
 
-    def __init__(self, elements: List[str], custom_potentials=None,
-                 hidden_sizes=None, activation=None,
+    def __init__(self,
+                 elements: List[str],
+                 custom_potentials=None,
+                 hidden_sizes=None,
+                 activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces')):
+                 export_properties=('energy', 'forces'),
+                 positive_energy_mode=False):
         """
         Initialization method.
         """
@@ -85,7 +89,8 @@ class EamNN(BasicNN):
             hidden_sizes=hidden_sizes,
             activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties)
+            export_properties=export_properties,
+            positive_energy_mode=positive_energy_mode)
 
         # Setup the potentials
         self._potentials = self._setup_potentials(custom_potentials)
@@ -189,8 +194,8 @@ class EamNN(BasicNN):
             return partial(self._empirical_functions[name].phi,
                            kbody_term=kbody_term)
 
-    def _get_energy(self, outputs: List[tf.Tensor], features: AttributeDict,
-                    verbose=True):
+    def _get_energy_op(self, outputs: List[tf.Tensor], features: AttributeDict,
+                       name='energy', verbose=True):
         """
         Return the Op to compute total energy of nn-EAM.
 
@@ -201,6 +206,8 @@ class EamNN(BasicNN):
             atomic energies.
         features : AttributeDict
             A dict of input features.
+        name : str
+            The name of the output tensor.
         verbose : bool
             If True, the total energy tensor will be logged.
 
@@ -210,19 +217,18 @@ class EamNN(BasicNN):
             The total energy tensor.
 
         """
-        with tf.name_scope("Energy"):
-            y_atomic = tf.identity(outputs, name='atomic')
-            shape = y_atomic.shape
-            with tf.name_scope("mask"):
-                mask = tf.split(
-                    features.mask, [1, -1], axis=1, name='split')[1]
-                y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_mask.set_shape(shape)
-            energy = tf.reduce_sum(
-                y_mask, axis=1, keepdims=False, name='energy')
-            if verbose:
-                log_tensor(energy)
-            return energy
+        y_atomic = tf.identity(outputs, name='atomic')
+        shape = y_atomic.shape
+        with tf.name_scope("mask"):
+            mask = tf.split(
+                features.mask, [1, -1], axis=1, name='split')[1]
+            y_mask = tf.multiply(y_atomic, mask, name='mask')
+            y_mask.set_shape(shape)
+        energy = tf.reduce_sum(
+            y_mask, axis=1, keepdims=False, name=name)
+        if verbose:
+            log_tensor(energy)
+        return energy
 
     def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
                       verbose=False):

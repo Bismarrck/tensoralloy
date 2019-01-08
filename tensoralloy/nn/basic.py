@@ -108,7 +108,8 @@ class BasicNN:
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces')):
+                 export_properties=('energy', 'forces'),
+                 positive_energy_mode=False):
         """
         Initialization method.
 
@@ -128,6 +129,11 @@ class BasicNN:
         export_properties : List[str]
             A list of str as the properties to infer when exporting the model.
             'energy' will always be exported.
+        positive_energy_mode : bool
+            A boolean flag. Defaults to False. If True, the true energies will
+            be converted to positive values by multiplying with `-1` before
+            computing the energy loss. Thus, the predicted energies of the NN
+            will also be positive.
 
         Notes
         -----
@@ -153,6 +159,7 @@ class BasicNN:
 
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
+        self._positive_energy_mode = positive_energy_mode
 
     @property
     def elements(self):
@@ -182,6 +189,13 @@ class BasicNN:
         """
         return self._export_properties
 
+    @property
+    def positive_energy_mode(self):
+        """
+        Return True if positive energy mode is enabled.
+        """
+        return self._positive_energy_mode
+
     def _get_hidden_sizes(self, hidden_sizes):
         """
         Convert `hidden_sizes` to a dict if needed.
@@ -198,28 +212,27 @@ class BasicNN:
             results[element] = sizes.tolist()
         return results
 
-    def _get_energy(self, outputs, features, verbose=True):
+    def _get_energy_op(self, outputs, features, name='energy', verbose=True):
         """
         Return the Op to compute total energy.
         """
         raise NotImplementedError("This method must be overridden!")
 
     @staticmethod
-    def _get_forces(energy, positions, verbose=True):
+    def _get_forces_op(energy, positions, name='forces', verbose=True):
         """
         Return the Op to compute atomic forces (eV / Angstrom).
         """
-        with tf.name_scope("Forces"):
-            dEdR = tf.gradients(energy, positions, name='dEdR')[0]
-            # Setup the splitting axis. `energy` may be a 1D vector or a scalar.
-            axis = energy.shape.ndims
-            # Please remember: f = -dE/dR
-            forces = tf.negative(
-                tf.split(dEdR, [1, -1], axis=axis, name='split')[1],
-                name='forces')
-            if verbose:
-                log_tensor(forces)
-            return forces
+        dEdR = tf.gradients(energy, positions, name='dEdR')[0]
+        # Setup the splitting axis. `energy` may be a 1D vector or a scalar.
+        axis = energy.shape.ndims
+        # Please remember: f = -dE/dR
+        forces = tf.negative(
+            tf.split(dEdR, [1, -1], axis=axis, name='split')[1],
+            name=name)
+        if verbose:
+            log_tensor(forces)
+        return forces
 
     @staticmethod
     def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells):
@@ -241,7 +254,8 @@ class BasicNN:
             return stress
 
     @staticmethod
-    def _convert_to_voigt_stress(stress, batch_size, verbose=False):
+    def _convert_to_voigt_stress(stress, batch_size, name='stress',
+                                 verbose=False):
         """
         Convert a 3x3 stress tensor or a Nx3x3 stress tensors to corresponding
         Voigt form(s).
@@ -258,53 +272,52 @@ class BasicNN:
                     tf.range(batch_size), [batch_size, 1, 1]),
                     [1, 6, 1])
                 voigt = tf.concat((indices, voigt), axis=2, name='indices')
-            stress = tf.gather_nd(stress, voigt, name='stress')
+            stress = tf.gather_nd(stress, voigt, name=name)
             if verbose:
                 log_tensor(stress)
             return stress
 
-    def _get_reduced_stress(self, energy: tf.Tensor, cells, verbose=True):
+    def _get_stress_op(self, energy: tf.Tensor, cells, name='stress',
+                       verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
-        with tf.name_scope("Stress"):
-            stress = self._get_reduced_full_stress_tensor(energy, cells)
-            ndims = stress.shape.ndims
-            batch_size = cells.shape[0].value or energy.shape[0].value
-            if ndims == 3 and batch_size is None:
-                raise ValueError("The batch size cannot be inferred.")
-            return self._convert_to_voigt_stress(
-                stress, batch_size, verbose=verbose)
+        stress = self._get_reduced_full_stress_tensor(energy, cells)
+        ndims = stress.shape.ndims
+        batch_size = cells.shape[0].value or energy.shape[0].value
+        if ndims == 3 and batch_size is None:
+            raise ValueError("The batch size cannot be inferred.")
+        return self._convert_to_voigt_stress(
+            stress, batch_size, name=name, verbose=verbose)
 
-    def _get_reduced_total_pressure(self, energy: tf.Tensor, cells, verbose=True):
+    def _get_total_pressure_op(self, energy: tf.Tensor, cells, name='pressure',
+                               verbose=True):
         """
         Return the Op to compute the reduced total pressure (eV).
 
             reduced_total_pressure = -0.5 * trace(dy/dC @ cells) / -3.0
 
         """
-        with tf.name_scope("Pressure"):
-            stress = self._get_reduced_full_stress_tensor(energy, cells)
-            three = tf.constant(-3.0, dtype=energy.dtype, name='three')
-            total_pressure = tf.div(tf.trace(stress), three, 'pressure')
-            if verbose:
-                log_tensor(total_pressure)
-            return total_pressure
+        stress = self._get_reduced_full_stress_tensor(energy, cells)
+        three = tf.constant(-3.0, dtype=energy.dtype, name='three')
+        total_pressure = tf.div(tf.trace(stress), three, name=name)
+        if verbose:
+            log_tensor(total_pressure)
+        return total_pressure
 
     @staticmethod
-    def _get_hessian(energy: tf.Tensor, positions: tf.Tensor, verbose=True):
+    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
+                        verbose=True):
         """
         Return the Op to compute the Hessian matrix:
 
             hessian = d^2E / dR^2 = d(dE / dR) / dR
 
         """
-        with tf.name_scope("Hessian"):
-            hessian = tf.identity(tf.hessians(energy, positions)[0],
-                                  name='hessian')
-            if verbose:
-                log_tensor(hessian)
-            return hessian
+        hessian = tf.identity(tf.hessians(energy, positions)[0], name=name)
+        if verbose:
+            log_tensor(hessian)
+        return hessian
 
     @staticmethod
     def _check_loss_hparams(hparams: AttributeDict):
@@ -320,8 +333,7 @@ class BasicNN:
 
         defaults = AttributeDict(
             energy=AttributeDict(weight=1.0,
-                                 per_atom_loss=False,
-                                 positive_mode=False),
+                                 per_atom_loss=False),
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0),
             total_pressure=AttributeDict(weight=1.0),
@@ -412,7 +424,6 @@ class BasicNN:
                 n_atoms=n_atoms,
                 weight=hparams.loss.energy.weight,
                 per_atom_loss=hparams.loss.energy.per_atom_loss,
-                positive_mode=hparams.loss.energy.positive_mode,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
@@ -421,7 +432,6 @@ class BasicNN:
                     predictions=predictions.forces,
                     n_atoms=n_atoms,
                     weight=hparams.loss.forces.weight,
-                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
@@ -429,7 +439,6 @@ class BasicNN:
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
                     weight=hparams.loss.total_pressure.weight,
-                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
@@ -437,7 +446,6 @@ class BasicNN:
                     labels=labels.stress,
                     predictions=predictions.stress,
                     weight=hparams.loss.stress.weight,
-                    positive_mode=hparams.loss.energy.positive_mode,
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(
@@ -527,8 +535,7 @@ class BasicNN:
 
         return hooks
 
-    def get_eval_metrics_ops(self, predictions, labels, n_atoms,
-                             hparams: AttributeDict):
+    def get_eval_metrics_ops(self, predictions, labels, n_atoms):
         """
         Return a dict of Ops as the evaluation metrics.
 
@@ -545,21 +552,14 @@ class BasicNN:
         `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
         the number of atoms in each structure.
 
-        `hparams` is the hyper parameters dict.
-            * 'hparams.loss.energy.positive_mode' is required
-
         """
         with tf.name_scope("Metrics"):
 
             metrics = {}
-            positive_mode = hparams.loss.energy.positive_mode
             n_atoms = tf.cast(n_atoms, labels.energy.dtype, name='n_atoms')
 
             with tf.name_scope("Energy"):
-                if positive_mode:
-                    x = tf.negative(labels.energy, name='negative')
-                else:
-                    x = labels.energy
+                x = labels.energy
                 y = predictions.energy
                 xn = x / n_atoms
                 yn = y / n_atoms
@@ -574,8 +574,6 @@ class BasicNN:
                 with tf.name_scope("Forces"):
                     with tf.name_scope("Split"):
                         x = tf.split(labels.forces, [1, -1], axis=1)[1]
-                    if positive_mode:
-                        x = tf.negative(x, name='negative')
                     y = predictions.forces
                     with tf.name_scope("Scale"):
                         n_max = tf.convert_to_tensor(
@@ -594,8 +592,6 @@ class BasicNN:
             if 'total_pressure' in self._minimize_properties:
                 with tf.name_scope("Pressure"):
                     x = labels.total_pressure
-                    if positive_mode:
-                        x = tf.negative(x, name='negative')
                     y = predictions.total_pressure
                     ops_dict = {
                         'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
@@ -605,8 +601,6 @@ class BasicNN:
             elif 'stress' in self._minimize_properties:
                 with tf.name_scope("Stress"):
                     x = labels.stress
-                    if positive_mode:
-                        x = tf.negative(x, name='negative')
                     y = predictions.stress
                     ops_dict = {
                         'Stress/mae': tf.metrics.mean_absolute_error(x, y),
@@ -675,24 +669,39 @@ class BasicNN:
 
             predictions = AttributeDict()
 
-            predictions.energy = self._get_energy(
-                outputs, features, verbose=verbose)
+            with tf.name_scope("Energy"):
+                if self._positive_energy_mode:
+                    energy = self._get_energy_op(
+                        outputs, features, name='energy/positive',
+                        verbose=verbose)
+                    predictions.energy = tf.negative(energy, name='energy')
+                else:
+                    predictions.energy = self._get_energy_op(
+                        outputs, features, name='energy', verbose=verbose)
 
             if 'forces' in properties:
-                predictions.forces = self._get_forces(
-                    predictions.energy, features.positions, verbose=verbose)
+                with tf.name_scope("Forces"):
+                    predictions.forces = self._get_forces_op(
+                        predictions.energy, features.positions, name='forces',
+                        verbose=verbose)
 
             if 'total_pressure' in properties:
-                predictions.total_pressure = \
-                    self._get_reduced_total_pressure(
-                        predictions.energy, features.cells, verbose=verbose)
+                with tf.name_scope("Pressure"):
+                    predictions.total_pressure = \
+                        self._get_total_pressure_op(
+                            predictions.energy, features.cells, name='pressure',
+                            verbose=verbose)
             elif 'stress' in properties:
-                predictions.stress = self._get_reduced_stress(
-                    predictions.energy, features.cells, verbose=verbose)
+                with tf.name_scope("Stress"):
+                    predictions.stress = self._get_stress_op(
+                        predictions.energy, features.cells, name='stress',
+                        verbose=verbose)
 
             if 'hessian' in properties:
-                predictions.hessian = self._get_hessian(
-                    predictions.energy, features.positions, verbose=verbose)
+                with tf.name_scope("Hessian"):
+                    predictions.hessian = self._get_hessian_op(
+                        predictions.energy, features.positions, name='hessian',
+                        verbose=verbose)
 
             return predictions
 
@@ -765,8 +774,7 @@ class BasicNN:
         eval_metrics_ops = self.get_eval_metrics_ops(
             predictions=predictions,
             labels=labels,
-            n_atoms=features.n_atoms,
-            hparams=params)
+            n_atoms=features.n_atoms)
         evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
@@ -816,7 +824,7 @@ class BasicNN:
             predictions = self.build(features,
                                      mode=tf.estimator.ModeKeys.PREDICT)
 
-            # Encode the JSON dict into the graph.
+            # Encode the JSON dict of the serialized transformer into the graph.
             with tf.name_scope("Transformer/"):
                 transformer_params = tf.constant(
                     json.dumps(params), name='params')

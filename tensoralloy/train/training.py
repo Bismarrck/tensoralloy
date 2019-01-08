@@ -189,9 +189,11 @@ class TrainingManager:
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
         activation = self._reader['nn.activation']
+        positive_energy_mode = self._reader['nn.positive_energy_mode']
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
-                  'activation': activation}
+                  'activation': activation,
+                  'positive_energy_mode': positive_energy_mode}
         if self._reader['dataset.descriptor'] == 'behler':
             kwargs['export_properties'] = self._reader['nn.atomic.export']
             return self._get_atomic_nn(kwargs)

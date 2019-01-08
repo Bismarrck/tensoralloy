@@ -32,8 +32,8 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     return loss, mae
 
 
-def get_energy_loss(labels, predictions, n_atoms, weight=1.0,
-                    per_atom_loss=False, positive_mode=False, collections=None):
+def get_energy_loss(labels, predictions, n_atoms, weight=1.0, collections=None,
+                    per_atom_loss=False):
     """
     Return the loss tensor of the energy.
 
@@ -51,9 +51,6 @@ def get_energy_loss(labels, predictions, n_atoms, weight=1.0,
     per_atom_loss : bool
         If True, return the per-atom loss; otherwise, return the per-structrue
         loss. Defaults to False.
-    positive_mode : bool
-        If True, the ground truth energies will be converted to positive values
-        by multiplying with `-1` before computing the RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -66,8 +63,6 @@ def get_energy_loss(labels, predictions, n_atoms, weight=1.0,
     with tf.name_scope("Energy"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        if positive_mode:
-            labels = tf.negative(labels, name='positive')
         if per_atom_loss:
             n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
             x = tf.div(labels, n_atoms, name='labels')
@@ -118,8 +113,7 @@ def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
     return loss, mae
 
 
-def get_forces_loss(labels, predictions, n_atoms, weight=1.0,
-                    positive_mode=False, collections=None):
+def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
     """
     Return the loss tensor of the atomic forces.
 
@@ -136,9 +130,6 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0,
         each structure.
     weight : float or tf.Tensor
         The weight of the loss.
-    positive_mode : bool
-        If True, the ground truth energies will be converted to positive values
-        by multiplying with `-1` before computing the RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -154,8 +145,6 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0,
         with tf.name_scope("Split"):
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
-        if positive_mode:
-            labels = tf.negative(labels, name='positive')
         raw_loss, mae = _absolute_forces_loss(labels, predictions, n_atoms)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
@@ -180,8 +169,7 @@ def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
     return loss
 
 
-def get_stress_loss(labels, predictions, weight=1.0, positive_mode=False,
-                    collections=None):
+def get_stress_loss(labels, predictions, weight=1.0, collections=None):
     """
     Return the relative RMSE loss of the stress.
 
@@ -193,9 +181,6 @@ def get_stress_loss(labels, predictions, weight=1.0, positive_mode=False,
         A `float64` tensor of shape `[batch_size, 6]` as the predicted stress.
     weight : float or tf.Tensor
         The weight of the loss.
-    positive_mode : bool
-        If True, the ground truth energies will be converted to positive values
-        by multiplying with `-1` before computing the RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -208,8 +193,6 @@ def get_stress_loss(labels, predictions, weight=1.0, positive_mode=False,
     with tf.name_scope("Stress"):
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
-        if positive_mode:
-            labels = tf.negative(labels, name='positive')
         raw_loss = _get_relative_rmse_loss(labels, predictions)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
@@ -219,8 +202,7 @@ def get_stress_loss(labels, predictions, weight=1.0, positive_mode=False,
         return loss
 
 
-def get_total_pressure_loss(labels, predictions, weight=1.0,
-                            positive_mode=False, collections=None):
+def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
     """
     Return the relative RMSE loss of the total pressure.
 
@@ -233,9 +215,6 @@ def get_total_pressure_loss(labels, predictions, weight=1.0,
         A `float64` tensor of shape `[batch_size, ]` as the predicted pressure.
     weight : float or tf.Tensor
         The weight of the loss.
-    positive_mode : bool
-        If True, the ground truth energies will be converted to positive values
-        by multiplying with `-1` before computing the RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -248,8 +227,6 @@ def get_total_pressure_loss(labels, predictions, weight=1.0,
     with tf.name_scope("Pressure"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        if positive_mode:
-            labels = tf.negative(labels, name='positive')
         raw_loss = _get_relative_rmse_loss(labels, predictions)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')

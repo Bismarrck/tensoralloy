@@ -66,6 +66,8 @@ def test_initialization():
     assert_equal(hparams.opt.learning_rate, 0.01)
     assert_is_none(hparams.opt.decay_function)
 
+    assert_equal(manager.nn.positive_energy_mode, True)
+
     set_float_precision()
 
 

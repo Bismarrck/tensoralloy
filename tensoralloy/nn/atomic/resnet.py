@@ -36,18 +36,28 @@ class AtomicResNN(AtomicNN):
 
     default_collection = GraphKeys.ATOMIC_RES_NN_VARIABLES
 
-    def __init__(self, elements: List[str], hidden_sizes=None, activation=None,
+    def __init__(self,
+                 elements: List[str],
+                 hidden_sizes=None,
+                 activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'), normalizer='linear',
-                 normalization_weights=None, atomic_static_energy=None):
+                 export_properties=('energy', 'forces'),
+                 normalizer='linear',
+                 normalization_weights=None,
+                 positive_energy_mode=False,
+                 atomic_static_energy=None):
         """
         Initialization method.
         """
         super(AtomicResNN, self).__init__(
-            elements=elements, hidden_sizes=hidden_sizes, activation=activation,
+            elements=elements,
+            hidden_sizes=hidden_sizes,
+            activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties, normalizer=normalizer,
-            normalization_weights=normalization_weights)
+            export_properties=export_properties,
+            normalizer=normalizer,
+            normalization_weights=normalization_weights,
+            positive_energy_mode=positive_energy_mode)
         self._atomic_static_energy = atomic_static_energy
 
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
@@ -57,69 +67,70 @@ class AtomicResNN(AtomicNN):
         super(AtomicResNN, self)._check_keys(features, labels)
         assert 'composition' in features
 
-    def _get_energy(self, outputs, features, verbose=True):
+    def _get_energy_op(self, outputs, features, name='energy', verbose=True):
         """
         Return the Op to compute total energy (eV).
         """
-        with tf.name_scope("Energy"):
 
-            ndims = features.composition.shape.ndims
-            axis = ndims - 1
+        ndims = features.composition.shape.ndims
+        axis = ndims - 1
 
-            with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-                x = tf.identity(features.composition, name='input')
-                if ndims == 1:
-                    x = tf.expand_dims(x, axis=0, name='1to2')
-                if x.shape[1].value is None:
-                    x.set_shape([x.shape[0], len(self._elements)])
-                if self._atomic_static_energy is None:
-                    values = np.ones(len(self._elements),
-                                     dtype=x.dtype.as_numpy_dtype)
-                else:
-                    values = np.asarray(
-                        [self._atomic_static_energy[e] for e in self._elements],
-                        dtype=x.dtype.as_numpy_dtype)
-                initializer = tf.constant_initializer(values, dtype=x.dtype)
-                z = tf.get_variable("weights",
-                                    shape=len(self._elements),
-                                    dtype=x.dtype,
-                                    trainable=True,
-                                    collections=[
-                                        GraphKeys.ATOMIC_RES_NN_VARIABLES,
-                                        GraphKeys.TRAIN_METRICS,
-                                        tf.GraphKeys.TRAINABLE_VARIABLES,
-                                        tf.GraphKeys.GLOBAL_VARIABLES,
-                                        tf.GraphKeys.MODEL_VARIABLES],
-                                    initializer=initializer)
-                xz = tf.multiply(x, z, name='xz')
-                if ndims == 1:
-                    y_static = tf.reduce_sum(xz, keepdims=False, name='static')
-                else:
-                    y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
-                                             name='static')
-                if verbose:
-                    log_tensor(y_static)
-
-            with tf.name_scope("Residual"):
-                y_atomic = tf.concat(outputs, axis=1, name='atomic')
-                with tf.name_scope("mask"):
-                    if ndims == 1:
-                        y_atomic = tf.squeeze(y_atomic, axis=0)
-                    mask = tf.split(
-                        features.mask, [1, -1], axis=axis, name='split')[1]
-                    y_mask = tf.multiply(y_atomic, mask, name='mask')
-                y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
-                                      name='residual')
-                if verbose:
-                    log_tensor(y_res)
-
-            energy = tf.add(y_static, y_res, name='energy')
+        with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
+            x = tf.identity(features.composition, name='input')
+            if ndims == 1:
+                x = tf.expand_dims(x, axis=0, name='1to2')
+            if x.shape[1].value is None:
+                x.set_shape([x.shape[0], len(self._elements)])
+            if self._atomic_static_energy is None:
+                values = np.ones(len(self._elements),
+                                 dtype=x.dtype.as_numpy_dtype)
+            else:
+                values = np.asarray(
+                    [self._atomic_static_energy[e] for e in self._elements],
+                    dtype=x.dtype.as_numpy_dtype)
+            initializer = tf.constant_initializer(values, dtype=x.dtype)
+            z = tf.get_variable("weights",
+                                shape=len(self._elements),
+                                dtype=x.dtype,
+                                trainable=True,
+                                collections=[
+                                    GraphKeys.ATOMIC_RES_NN_VARIABLES,
+                                    GraphKeys.TRAIN_METRICS,
+                                    tf.GraphKeys.TRAINABLE_VARIABLES,
+                                    tf.GraphKeys.GLOBAL_VARIABLES,
+                                    tf.GraphKeys.MODEL_VARIABLES],
+                                initializer=initializer)
+            xz = tf.multiply(x, z, name='xz')
+            if ndims == 1:
+                y_static = tf.reduce_sum(xz, keepdims=False, name='static')
+            else:
+                y_static = tf.reduce_sum(xz, axis=1, keepdims=False,
+                                         name='static')
             if verbose:
-                log_tensor(energy)
+                log_tensor(y_static)
 
-            with tf.name_scope("Ratio"):
-                ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
-                                       name='avg')
-                tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
-                tf.summary.scalar(ratio.op.name + '/summary', ratio)
-            return energy
+        with tf.name_scope("Residual"):
+            y_atomic = tf.concat(outputs, axis=1, name='atomic')
+            with tf.name_scope("mask"):
+                if ndims == 1:
+                    y_atomic = tf.squeeze(y_atomic, axis=0)
+                mask = tf.split(
+                    features.mask, [1, -1], axis=axis, name='split')[1]
+                y_mask = tf.multiply(y_atomic, mask, name='mask')
+            y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
+                                  name='residual')
+            if verbose:
+                log_tensor(y_res)
+
+        energy = tf.add(y_static, y_res, name=name)
+
+        with tf.name_scope("Ratio"):
+            ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
+                                   name='avg')
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
+            tf.summary.scalar(ratio.op.name + '/summary', ratio)
+
+        if verbose:
+            log_tensor(energy)
+
+        return energy
