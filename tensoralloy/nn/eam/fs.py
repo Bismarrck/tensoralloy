@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+
 from collections import Counter
 from os.path import join, dirname
 from datetime import datetime
@@ -142,7 +143,9 @@ class EamFsNN(EamNN):
 
         return potentials
 
-    def _build_rho_nn(self, partitions: AttributeDict, max_occurs: Counter,
+    def _build_rho_nn(self, partitions: AttributeDict,
+                      mode: tf.estimator.ModeKeys,
+                      max_occurs: Counter,
                       verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
@@ -156,17 +159,21 @@ class EamFsNN(EamNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
 
         Returns
         -------
         atomic : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]`.
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor. The last axis has the
+            size `max_n_atoms`.
         values : Dict[str, tf.Tensor]
             The corresponding value tensor of each `kbody_term` of
             `descriptors`. Each value tensor is a 5D tensor of shape
-            `[batch_size, 1, max_n_element, nnl, 1]`.
+            `[batch_size, 1, max_n_element, nnl, 1]`. If `mode` is PREDICT,
+            `batch_size` will be 1.
 
         """
         outputs = {}
@@ -190,9 +197,12 @@ class EamFsNN(EamNN):
                         log_tensor(rho)
                     outputs[kbody_term] = rho
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
+            if mode == tf.estimator.ModeKeys.PREDICT:
+                atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
-    def _build_nn(self, features: AttributeDict, verbose=False):
+    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
+                  verbose=False):
         """
         Return the EAM/Alloy model.
 
@@ -208,23 +218,46 @@ class EamFsNN(EamNN):
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
+        verbose : bool
+            If True, key tensors will be logged.
 
         Returns
         -------
         y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
-            atomic energies.
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
+            energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
         with tf.name_scope("nnEAM"):
             partitions, max_occurs = self._dynamic_partition(
-                features, merge_symmetric=False)
-            rho, _ = self._build_rho_nn(partitions, max_occurs, verbose=verbose)
-            embed = self._build_embed_nn(rho, max_occurs, verbose=verbose)
+                descriptors=features.descriptors,
+                mode=mode,
+                merge_symmetric=False)
+
+            rho, _ = self._build_rho_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
+
+            embed = self._build_embed_nn(
+                rho=rho,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
 
             partitions, max_occurs = self._dynamic_partition(
-                features, merge_symmetric=True)
-            phi, _ = self._build_phi_nn(partitions, max_occurs, verbose=verbose)
+                descriptors=features.descriptors,
+                mode=mode,
+                merge_symmetric=True)
+
+            phi, _ = self._build_phi_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
             y = tf.add(phi, embed, name='atomic')
             return y
 
@@ -263,6 +296,7 @@ class EamFsNN(EamNN):
         r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
+        mode = tf.estimator.ModeKeys.EVAL
 
         with tf.Graph().as_default():
 
@@ -286,14 +320,19 @@ class EamFsNN(EamNN):
 
             with tf.name_scope("Model"):
                 embed = self._build_embed_nn(
-                    rho, max_occurs=Counter({el: nrho for el in elements}),
+                    rho,
+                    max_occurs=Counter({el: nrho for el in elements}),
+                    mode=mode,
                     verbose=False)
                 _, rho_vals = self._build_rho_nn(
-                    partitions, max_occurs=Counter({el: 1 for el in elements}),
+                    partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=mode,
                     verbose=False)
                 _, phi_vals = self._build_phi_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
+                    mode=mode,
                     verbose=False)
 
             sess = tf.Session()
@@ -391,7 +430,7 @@ class EamFsNN(EamNN):
                 "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
                     datetime.today()),
                 "LAMMPS setfl format",
-                "Conversion by TensorAlloy.nn.eam.alloy.EamAlloyNN"
+                "Conversion by TensorAlloy.nn.eam.fs.EamAlloyNN"
             ]
 
             with open(setfl, 'wb') as fp:

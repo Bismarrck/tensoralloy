@@ -7,12 +7,19 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+import os
+import shutil
+
+from unittest import skipUnless
 from nose.tools import assert_list_equal, assert_dict_equal, with_setup
-from nose.tools import assert_equal
+from nose.tools import assert_equal, assert_almost_equal
 from os.path import exists, join
 from os import remove
+from ase.calculators.lammpsrun import LAMMPS
+from ase.build import bulk
 
-from ..fs import EamFsNN
+from tensoralloy.nn.eam import EamFsNN
+from tensoralloy.transformer import EAMTransformer
 from tensoralloy.misc import skip, AttributeDict, test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.utils import get_elements_from_kbody_term
@@ -70,6 +77,7 @@ def test_inference():
     with tf.Graph().as_default():
 
         data = Data()
+        mode = tf.estimator.ModeKeys.EVAL
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
         max_n_elements = {
@@ -87,15 +95,30 @@ def test_inference():
 
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
-                data.features, merge_symmetric=False)
-            rho, rho_values = nn._build_rho_nn(partitions, max_occurs,
-                                               verbose=False)
-            embed = nn._build_embed_nn(rho, max_occurs, verbose=False)
+                descriptors=data.features.descriptors,
+                mode=mode,
+                merge_symmetric=False)
+            rho, rho_values = nn._build_rho_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=False)
+
+            embed = nn._build_embed_nn(
+                rho=rho,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=False)
 
             partitions, max_occurs = nn._dynamic_partition(
-                data.features, merge_symmetric=True)
-            phi, phi_values = nn._build_phi_nn(partitions, max_occurs,
-                                               verbose=False)
+                descriptors=data.features.descriptors,
+                mode=mode,
+                merge_symmetric=True)
+            phi, phi_values = nn._build_phi_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=False)
             y = tf.add(phi, embed, name='atomic')
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
@@ -198,6 +221,79 @@ def test_export_eam_fs_from_ckpt():
     Test exporting eam/fs model by loading variables from a checkpoint.
     """
     pass
+
+
+# Setup the environment for `LAMMPS`
+if 'LAMMPS_COMMAND' not in os.environ:
+    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
+    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
+else:
+    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
+
+
+def get_lammps_calculator():
+    """
+    Return a LAMMPS calculator for Ag.
+    """
+    eam_file = join(test_dir(absolute=True), 'lammps', 'Mendelev_Al_Fe.fs.eam')
+    parameters = {'pair_style': 'eam/fs',
+                  'pair_coeff': ['* * Mendelev_Al_Fe.fs.eam Al Fe']}
+    work_dir = join(test_dir(absolute=True), 'lammps', 'msah11')
+    if not exists(work_dir):
+        os.makedirs(work_dir)
+
+    return LAMMPS(files=[eam_file], parameters=parameters, tmp_dir=work_dir,
+                  keep_tmp_files=True, keep_alive=False, no_data_file=False)
+
+
+lammps = get_lammps_calculator()
+
+
+def teardown():
+    """
+    Delete the tmp dir.
+    """
+    if exists(lammps.tmp_dir):
+        shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
+
+
+@with_setup(teardown=teardown)
+@skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
+def test_eam_fs_msah11():
+    """
+    Test the total energy calculation of `EamFsNN` with `Msah11`.
+    """
+    rc = 6.0
+
+    atoms = bulk('Fe') * [2, 2, 2]
+    symbols = atoms.get_chemical_symbols()
+    symbols[0: 2] = ['Al', 'Al']
+    atoms.set_chemical_symbols(symbols)
+    elements = sorted(set(symbols))
+
+    with tf.Graph().as_default():
+        clf = EAMTransformer(rc=rc, elements=elements)
+        nn = EamFsNN(elements=elements,
+                     custom_potentials={
+                         "Al": {"embed": "msah11"},
+                         "Fe": {"embed": "msah11"},
+                         "AlAl": {"phi": "msah11", "rho": "msah11"},
+                         "AlFe": {"phi": "msah11", "rho": "msah11"},
+                         "FeFe": {"phi": "msah11", "rho": "msah11"},
+                         "FeAl": {"phi": "msah11", "rho": "msah11"}})
+        prediction = nn.build(
+            features=clf.get_features(),
+            mode=tf.estimator.ModeKeys.PREDICT,
+            verbose=True)
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            energy = float(sess.run(prediction.energy,
+                                    feed_dict=clf.get_feed_dict(atoms)))
+
+    atoms.calc = lammps
+    assert_almost_equal(energy,
+                        lammps.get_potential_energy(atoms), delta=1e-6)
 
 
 if __name__ == "__main__":

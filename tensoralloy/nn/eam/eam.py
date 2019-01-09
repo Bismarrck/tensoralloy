@@ -398,8 +398,12 @@ class EamNN(BasicNN):
         """
         partitions = AttributeDict()
         max_occurs = {}
+        if merge_symmetric:
+            name_scope = "Partition/Symmetric"
+        else:
+            name_scope = "Partition"
 
-        with tf.name_scope("Partition"):
+        with tf.name_scope(name_scope):
             for element in self._elements:
                 with tf.name_scope(f"{element}"):
                     kbody_terms = self._kbody_terms[element]

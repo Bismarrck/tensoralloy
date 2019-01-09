@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+
 from datetime import datetime
 from os.path import dirname, join
 from ase import data
@@ -152,7 +153,7 @@ class EamAlloyNN(EamNN):
         -------
         atomic : tf.Tensor
             A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor. The last axis has the
-            size `n_atoms_max`.
+            size `max_n_atoms`.
         values : Dict[str, tf.Tensor]
             The corresponding value tensor of each element of `descriptors`.
             Each value tensor is a 4D or 5D tensor.
@@ -213,8 +214,8 @@ class EamAlloyNN(EamNN):
         Returns
         -------
         y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
-            atomic energies.
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
+            energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
         with tf.name_scope("nnEAM"):

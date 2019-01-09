@@ -117,7 +117,6 @@ def test_dynamic_stitch_2el():
             assert_array_equal(results[1], ref)
 
 
-@skip
 def test_dynamic_stitch_3el():
     """
     Test the method `EamNN._dynamic_stitch` with three types of element.
@@ -167,7 +166,6 @@ def test_dynamic_stitch_3el():
             assert_array_equal(results, ref)
 
 
-@skip
 def test_dynamic_partition():
     """
     Test the method `EamNN._dynamic_partition`.
@@ -218,7 +216,6 @@ def test_dynamic_partition():
                                                data.m_cu[:, [1]]), 2))
 
 
-@skip
 def test_hidden_sizes():
     """
     Test setting hidden layer sizes of `EamAlloyNN`.
@@ -247,7 +244,6 @@ def test_hidden_sizes():
                          'embed': Defaults.hidden_sizes}})
 
 
-@skip
 def test_custom_potentials():
     """
     Test setting layers of `EamAlloyNN`.
@@ -270,7 +266,6 @@ def test_custom_potentials():
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
-@skip
 def test_inference():
     """
     Test the inference of `EamAlloyNN` with mixed potentials.
@@ -337,7 +332,6 @@ def export_setfl_teardown():
             remove(afile)
 
 
-@skip
 @with_setup(teardown=export_setfl_teardown)
 def test_export_setfl():
     """
@@ -413,7 +407,7 @@ def teardown():
 
 @with_setup(teardown=teardown)
 @skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
-def test_eam_zjw04():
+def test_eam_alloy_zjw04():
     """
     Test the total energy calculation of `EamAlloyNN` with `Zjw04`.
     """

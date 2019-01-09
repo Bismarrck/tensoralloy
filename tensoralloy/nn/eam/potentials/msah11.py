@@ -60,7 +60,7 @@ class AlFeMsah11(EamFSPotential):
                 idx = tf.where(
                     tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
                 x = tf.gather_nd(r, idx)
-                shape = r.shape
+                shape = tf.shape(r, out_type=idx.dtype)
                 values = []
                 for i in range(len(factors)):
                     factor = tf.convert_to_tensor(factors[i], name=f'c{i}',
