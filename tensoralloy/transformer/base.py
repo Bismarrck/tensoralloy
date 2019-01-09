@@ -86,7 +86,7 @@ class DescriptorTransformer(BaseTransformer):
         self._placeholders = AttributeDict()
 
     @property
-    def placeholders(self) -> Dict[str, tf.Tensor]:
+    def placeholders(self) -> AttributeDict:
         """
         Return a dict of names and placeholders.
         """
@@ -112,6 +112,21 @@ class DescriptorTransformer(BaseTransformer):
         Return a JSON serializable dict representation of this transformer.
         """
         pass
+
+    def get_features(self) -> AttributeDict:
+        """
+        Return the dict `features` that can be used to construct a `BasicNN`.
+        """
+        descriptors = self.get_graph()
+        placeholders = self._placeholders
+        features = AttributeDict(descriptors=descriptors,
+                                 positions=placeholders.positions,
+                                 n_atoms=placeholders.n_atoms,
+                                 cells=placeholders.cells,
+                                 composition=placeholders.composition,
+                                 mask=placeholders.mask,
+                                 volume=placeholders.volume)
+        return features
 
     def get_index_transformer(self, atoms: Atoms):
         """
