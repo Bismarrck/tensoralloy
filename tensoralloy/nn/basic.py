@@ -609,7 +609,8 @@ class BasicNN:
 
             return metrics
 
-    def _build_nn(self, features: AttributeDict, verbose=False):
+    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
+                  verbose=False):
         """
         Build the neural network.
         """
@@ -629,7 +630,7 @@ class BasicNN:
         for prop in self._minimize_properties:
             assert prop in labels
 
-    def build(self, features: AttributeDict, mode=tf.estimator.ModeKeys.TRAIN,
+    def build(self, features: AttributeDict, mode: tf.estimator.ModeKeys.TRAIN,
               verbose=True):
         """
         Build the atomic neural network.
@@ -658,7 +659,7 @@ class BasicNN:
             A dict of output tensors.
 
         """
-        outputs = self._build_nn(features, verbose)
+        outputs = self._build_nn(features, mode, verbose)
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             properties = self._export_properties

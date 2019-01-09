@@ -62,7 +62,8 @@ def test_inference():
             features = AttributeDict(
                 descriptors=descriptors, positions=positions, mask=mask)
 
-        predictions = nn.build(features, verbose=True)
+        predictions = nn.build(features=features, mode=tf.estimator.ModeKeys.TRAIN,
+                               verbose=True)
 
         assert_equal(predictions.energy.shape.as_list(), [batch_size, ])
 
@@ -82,18 +83,10 @@ def test_inference_from_transformer():
         elements = ['Al', 'Cu']
         clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
                                           angular=False)
-        placeholders = clf.placeholders
-        descriptors = clf.get_graph()
-        features = AttributeDict(descriptors=descriptors,
-                                 positions=placeholders.positions,
-                                 n_atoms=placeholders.n_atoms,
-                                 cells=placeholders.cells,
-                                 composition=placeholders.composition,
-                                 mask=placeholders.mask,
-                                 volume=placeholders.volume)
         nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'],
                          normalizer=None)
-        prediction = nn.build(features)
+        prediction = nn.build(features=clf.get_features(),
+                              mode=tf.estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)

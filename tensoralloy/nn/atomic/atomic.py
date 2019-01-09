@@ -64,7 +64,8 @@ class AtomicNN(BasicNN):
         """
         return self._hidden_sizes
 
-    def _build_nn(self, features: AttributeDict, verbose=False):
+    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
+                  verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
 
@@ -80,6 +81,8 @@ class AtomicNN(BasicNN):
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
 
@@ -92,7 +95,8 @@ class AtomicNN(BasicNN):
             for element, (value, _) in features.descriptors.items():
                 with tf.variable_scope(element):
                     x = tf.identity(value, name='input')
-                    if x.shape.ndims == 2:
+                    if mode == tf.estimator.ModeKeys.PREDICT:
+                        assert x.shape.ndims == 2
                         x = tf.expand_dims(x, axis=0, name='2to3')
                     if self._normalizer.enabled:
                         x = self._normalizer(
