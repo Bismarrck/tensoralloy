@@ -263,7 +263,7 @@ def test_eam_fs_msah11():
     """
     Test the total energy calculation of `EamFsNN` with `Msah11`.
     """
-    rc = 6.0
+    rc = 6.5
 
     atoms = bulk('Fe') * [2, 2, 2]
     symbols = atoms.get_chemical_symbols()
