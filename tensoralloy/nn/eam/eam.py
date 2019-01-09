@@ -217,21 +217,21 @@ class EamNN(BasicNN):
             The total energy tensor.
 
         """
-        y_atomic = tf.identity(outputs, name='atomic')
-        shape = y_atomic.shape
-        with tf.name_scope("mask"):
+        y_atomic = tf.identity(outputs, name='y_atomic')
+        ndims = features.mask.shape.ndims
+        axis = ndims - 1
+        with tf.name_scope("Mask"):
             mask = tf.split(
-                features.mask, [1, -1], axis=1, name='split')[1]
+                features.mask, [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
-            y_mask.set_shape(shape)
         energy = tf.reduce_sum(
-            y_mask, axis=1, keepdims=False, name=name)
+            y_mask, axis=axis, keepdims=False, name=name)
         if verbose:
             log_tensor(energy)
         return energy
 
     def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
-                      verbose=False):
+                      mode: tf.estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -246,6 +246,8 @@ class EamNN(BasicNN):
             `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -289,10 +291,14 @@ class EamNN(BasicNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
+
+            if mode == tf.estimator.ModeKeys.PREDICT:
+                atomic = tf.squeeze(atomic, axis=0, name='squeeze')
+
             return atomic, values
 
     def _build_rho_nn(self, values: AttributeDict, max_occurs: Counter,
-                      verbose=False):
+                      mode: tf.estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
         """
@@ -300,17 +306,19 @@ class EamNN(BasicNN):
             "This method must be overridden by its subclass")
 
     def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
-                        verbose=True):
+                        mode: tf.estimator.ModeKeys, verbose=True):
         """
         Return the embedding energy, `F(rho)`.
 
         Parameters
         ----------
         rho : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the electron
-            density of each atom.
+            A 1D or 2D tensor as the electron densities of the atoms. The last
+            axis has the size `n_atoms_max`.
         max_occurs : Counter
             The maximum occurance of each type of element.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
 
@@ -322,8 +330,16 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            split_axis = 0
+            squeeze_axis = 1
+        else:
+            split_axis = 1
+            squeeze_axis = 2
+
         with tf.name_scope("Embed"):
-            splits = tf.split(rho, num_or_size_splits=split_sizes, axis=1)
+            splits = tf.split(
+                rho, num_or_size_splits=split_sizes, axis=split_axis)
             values = []
             for i, element in enumerate(self._elements):
                 with tf.variable_scope(f"{element}/Embed"):
@@ -333,13 +349,15 @@ class EamNN(BasicNN):
                     # Apply the embedding function on `x`
                     comput = self._get_embed_fn(element, verbose=verbose)
                     y = comput(x)
-                    embed = tf.squeeze(y, axis=2, name='atomic')
+                    embed = tf.squeeze(y, axis=squeeze_axis, name='atomic')
                     if verbose:
                         log_tensor(embed)
                     values.append(embed)
-            return tf.concat(values, axis=1)
+            return tf.concat(values, axis=split_axis)
 
-    def _dynamic_partition(self, descriptors: AttributeDict,
+    def _dynamic_partition(self,
+                           descriptors: AttributeDict,
+                           mode: tf.estimator.ModeKeys,
                            merge_symmetric=True):
         """
         Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
@@ -355,8 +373,13 @@ class EamNN(BasicNN):
         descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are elements and values are tuples of (value, mask)
             where where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, max_n_terms, max_n_element, nnl]`.
+            the value mask. `value` and `mask` have the same shape.
+                * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
+                  `[batch_size, max_n_terms, max_n_element, nnl]`.
+                * If `mode` is PREDICT, both should be 3D tensors of shape
+                  `[max_n_terms, max_n_element, nnl]`.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
         merge_symmetric : bool
             A bool.
 
@@ -378,23 +401,35 @@ class EamNN(BasicNN):
 
         with tf.name_scope("Partition"):
             for element in self._elements:
-                kbody_terms = self._kbody_terms[element]
-                values, masks = descriptors.descriptors[element]
-                max_occurs[element] = values.shape[2].value
-                num = len(kbody_terms)
-                glists = tf.split(values, num_or_size_splits=num, axis=1)
-                mlists = tf.split(masks, num_or_size_splits=num, axis=1)
-                for i, (value, mask) in enumerate(zip(glists, mlists)):
-                    kbody_term = kbody_terms[i]
-                    if merge_symmetric:
-                        kbody_term = ''.join(
-                            sorted(get_elements_from_kbody_term(kbody_term)))
-                        if kbody_term in partitions:
-                            value = tf.concat(
-                                (partitions[kbody_term][0], value), axis=2)
-                            mask = tf.concat(
-                                (partitions[kbody_term][1], mask), axis=2)
-                    partitions[kbody_term] = (value, mask)
+                with tf.name_scope(f"{element}"):
+                    kbody_terms = self._kbody_terms[element]
+                    values, masks = descriptors[element]
+                    values = tf.convert_to_tensor(values, name='values')
+                    masks = tf.convert_to_tensor(masks, name='masks')
+                    if mode == tf.estimator.ModeKeys.PREDICT:
+                        assert values.shape.ndims == 3
+                        values = tf.expand_dims(values, axis=0)
+                        masks = tf.expand_dims(masks, axis=0)
+                        max_occurs[element] = tf.shape(values)[2]
+                    else:
+                        assert values.shape.ndims == 4
+                        max_occurs[element] = values.shape[2].value
+                    num = len(kbody_terms)
+                    glists = tf.split(
+                        values, num_or_size_splits=num, axis=1, name='glist')
+                    mlists = tf.split(
+                        masks, num_or_size_splits=num, axis=1, name='mlist')
+                    for i, (value, mask) in enumerate(zip(glists, mlists)):
+                        kbody_term = kbody_terms[i]
+                        if merge_symmetric:
+                            kbody_term = ''.join(
+                                sorted(get_elements_from_kbody_term(kbody_term)))
+                            if kbody_term in partitions:
+                                value = tf.concat(
+                                    (partitions[kbody_term][0], value), axis=2)
+                                mask = tf.concat(
+                                    (partitions[kbody_term][1], mask), axis=2)
+                        partitions[kbody_term] = (value, mask)
             return partitions, Counter(max_occurs)
 
     def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor],
@@ -439,7 +474,8 @@ class EamNN(BasicNN):
                 [tf.add_n(stacks[el], name=el) for el in self._elements],
                 axis=1, name='sum')
 
-    def _build_nn(self, features: AttributeDict, verbose=False):
+    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
+                  verbose=False):
         """
         Return an nn-EAM model.
         """

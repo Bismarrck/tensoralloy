@@ -7,13 +7,20 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
-from nose.tools import assert_equal, assert_tuple_equal
+import os
+import shutil
+
+from nose.tools import assert_equal, assert_tuple_equal, assert_almost_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
 from os import remove
 from collections import Counter
+from unittest import skipUnless
+from ase.calculators.lammpsrun import LAMMPS
+from ase.build import bulk
 
-from ..alloy import EamAlloyNN
+from tensoralloy.nn.eam.alloy import EamAlloyNN
+from tensoralloy.transformer import EAMTransformer
 from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.nn.utils import GraphKeys
@@ -110,6 +117,7 @@ def test_dynamic_stitch_2el():
             assert_array_equal(results[1], ref)
 
 
+@skip
 def test_dynamic_stitch_3el():
     """
     Test the method `EamNN._dynamic_stitch` with three types of element.
@@ -159,6 +167,7 @@ def test_dynamic_stitch_3el():
             assert_array_equal(results, ref)
 
 
+@skip
 def test_dynamic_partition():
     """
     Test the method `EamNN._dynamic_partition`.
@@ -166,13 +175,14 @@ def test_dynamic_partition():
     with tf.Graph().as_default():
 
         data = AlCuData()
+        mode = tf.estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
                         export_properties=['energy'])
 
         with tf.Session() as sess:
             partitions_op, max_occurs = nn._dynamic_partition(
-                data.features, merge_symmetric=False)
+                data.features.descriptors, mode=mode, merge_symmetric=False)
             results = sess.run(partitions_op)
 
             assert_equal(len(max_occurs), 2)
@@ -190,7 +200,7 @@ def test_dynamic_partition():
             assert_array_equal(results['CuAl'][1], data.m_cu[:, [1]])
 
             partitions_op, _ = nn._dynamic_partition(
-                data.features, merge_symmetric=True)
+                data.features.descriptors, mode=mode, merge_symmetric=True)
             results = sess.run(partitions_op)
 
             assert_equal(len(results), 3)
@@ -208,6 +218,7 @@ def test_dynamic_partition():
                                                data.m_cu[:, [1]]), 2))
 
 
+@skip
 def test_hidden_sizes():
     """
     Test setting hidden layer sizes of `EamAlloyNN`.
@@ -236,6 +247,7 @@ def test_hidden_sizes():
                          'embed': Defaults.hidden_sizes}})
 
 
+@skip
 def test_custom_potentials():
     """
     Test setting layers of `EamAlloyNN`.
@@ -258,6 +270,7 @@ def test_custom_potentials():
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
+@skip
 def test_inference():
     """
     Test the inference of `EamAlloyNN` with mixed potentials.
@@ -267,6 +280,7 @@ def test_inference():
         data = AlCuData()
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
+        mode = tf.estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements,
                         custom_potentials={
@@ -275,11 +289,24 @@ def test_inference():
 
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
-                data.features, merge_symmetric=True)
-            rho, _ = nn._build_rho_nn(data.descriptors, max_occurs,
-                                      verbose=True)
-            embed = nn._build_embed_nn(rho, max_occurs, verbose=True)
-            phi, _ = nn._build_phi_nn(partitions, max_occurs, verbose=True)
+                descriptors=data.features.descriptors,
+                mode=mode,
+                merge_symmetric=True)
+            rho, _ = nn._build_rho_nn(
+                descriptors=data.descriptors,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=True)
+            embed = nn._build_embed_nn(
+                rho=rho,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=True)
+            phi, _ = nn._build_phi_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=True)
             y = tf.add(phi, embed, name='atomic')
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
@@ -310,6 +337,7 @@ def export_setfl_teardown():
             remove(afile)
 
 
+@skip
 @with_setup(teardown=export_setfl_teardown)
 def test_export_setfl():
     """
@@ -347,6 +375,78 @@ def test_export_setfl_from_ckpt():
     # TODO: to be implemented
     """
     pass
+
+
+# Setup the environment for `LAMMPS`
+if 'LAMMPS_COMMAND' not in os.environ:
+    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
+    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
+else:
+    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
+
+
+def get_lammps_calculator():
+    """
+    Return a LAMMPS calculator for Ag.
+    """
+    eam_file = join(test_dir(absolute=True), 'lammps', 'Zhou_AlCu.alloy.eam')
+    parameters = {'pair_style': 'eam/alloy',
+                  'pair_coeff': ['* * Zhou_AlCu.alloy.eam Al Cu']}
+    work_dir = join(test_dir(absolute=True), 'lammps', 'zjw04')
+    if not exists(work_dir):
+        os.makedirs(work_dir)
+
+    return LAMMPS(files=[eam_file], parameters=parameters, tmp_dir=work_dir,
+                  keep_tmp_files=True, keep_alive=False, no_data_file=False)
+
+
+lammps = get_lammps_calculator()
+
+
+def teardown():
+    """
+    Delete the tmp dir.
+    """
+    if exists(lammps.tmp_dir):
+        shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
+
+
+@with_setup(teardown=teardown)
+@skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
+def test_eam_zjw04():
+    """
+    Test the total energy calculation of `EamAlloyNN` with `Zjw04`.
+    """
+    rc = 6.0
+
+    atoms = bulk('Cu') * [2, 2, 2]
+    symbols = atoms.get_chemical_symbols()
+    symbols[0: 2] = ['Al', 'Al']
+    atoms.set_chemical_symbols(symbols)
+    elements = sorted(set(symbols))
+
+    with tf.Graph().as_default():
+        clf = EAMTransformer(rc=rc, elements=elements)
+        nn = EamAlloyNN(elements=elements,
+                        custom_potentials={
+                            "Al": {"rho": "zjw04", "embed": "zjw04"},
+                            "Cu": {"rho": "zjw04", "embed": "zjw04"},
+                            "AlAl": {"phi": "zjw04"},
+                            "AlCu": {"phi": "zjw04"},
+                            "CuCu": {"phi": "zjw04"}})
+        prediction = nn.build(
+            features=clf.get_features(),
+            mode=tf.estimator.ModeKeys.PREDICT,
+            verbose=True)
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            energy = float(sess.run(prediction.energy,
+                                    feed_dict=clf.get_feed_dict(atoms)))
+
+    atoms.calc = lammps
+    assert_almost_equal(energy,
+                        lammps.get_potential_energy(atoms), delta=1e-6)
 
 
 if __name__ == "__main__":
