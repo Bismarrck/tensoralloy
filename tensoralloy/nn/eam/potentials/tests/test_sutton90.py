@@ -26,11 +26,14 @@ __email__ = 'Bismarrck@me.com'
 
 
 # Setup the environment for `LAMMPS`
-LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
+if 'LAMMPS_COMMAND' not in os.environ:
+    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
+    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
+else:
+    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
 
 
-def get_lammps_calc():
+def get_lammps_calculator():
     """
     Return a LAMMPS calculator for Ag.
     """
@@ -42,15 +45,15 @@ def get_lammps_calc():
                   keep_tmp_files=False, keep_alive=False, no_data_file=True)
 
 
-LMP = get_lammps_calc()
+lammps = get_lammps_calculator()
 
 
 def teardown():
     """
     Delete the tmp dir.
     """
-    if exists(LMP.tmp_dir):
-        rmtree(LMP.tmp_dir, ignore_errors=True)
+    if exists(lammps.tmp_dir):
+        rmtree(lammps.tmp_dir, ignore_errors=True)
 
 
 @with_setup(teardown=teardown)
@@ -65,7 +68,7 @@ def test_eam_sutton90():
     max_occurs = Counter(ref.get_chemical_symbols())
 
     atoms = bulk('Ag') * [2, 2, 1]
-    atoms.calc = LMP
+    atoms.calc = lammps
 
     with tf.Graph().as_default():
 
@@ -98,7 +101,8 @@ def test_eam_sutton90():
             tf.global_variables_initializer().run()
             energy = float(sess.run(prediction.energy))
 
-        assert_almost_equal(energy, LMP.get_potential_energy(atoms), delta=1e-6)
+        assert_almost_equal(energy,
+                            lammps.get_potential_energy(atoms), delta=1e-6)
 
 
 if __name__ == "__main__":
