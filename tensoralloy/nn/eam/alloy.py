@@ -126,24 +126,23 @@ class EamAlloyNN(EamNN):
 
         return potentials
 
-    def _build_rho_nn(self, descriptors: AttributeDict, max_occurs: Counter,
-                      mode: tf.estimator.ModeKeys, verbose=False):
+    def _build_rho_nn(self,
+                      partitions: AttributeDict,
+                      mode: tf.estimator.ModeKeys,
+                      max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
 
         Parameters
         ----------
-        descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are elements and values are tuples of (value, mask)
-            where where `value` represents the interatomic distances and `mask`
-            is the value mask. `value` and `mask` have the same shape.
-                * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
-                  `[batch_size, max_n_terms, max_n_element, nnl]`.
-                * If `mode` is PREDICT, both should be 3D tensors of shape
-                  `[max_n_terms, max_n_element, nnl]`.
+        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict. The keys are kbody terms and values are tuples of
+            (value, mask) where `value` represents the descriptors and `mask` is
+            the value mask. Both `value` and `mask` are 4D tensors of shape
+            `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
-            The maximum occurance of each type of element. This arg is not
-            needed here.
+            The maximum occurance of each type of element.
         mode : tf.estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
@@ -155,97 +154,37 @@ class EamAlloyNN(EamNN):
             A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor. The last axis has the
             size `max_n_atoms`.
         values : Dict[str, tf.Tensor]
-            The corresponding value tensor of each element of `descriptors`.
-            Each value tensor is a 4D or 5D tensor.
+            The corresponding value tensor of each `kbody_term` of
+            `descriptors`. Each value tensor is a 5D tensor of shape
+            `[batch_size, 1, max_n_element, nnl, 1]`. If `mode` is PREDICT,
+            `batch_size` will be 1.
 
         """
         outputs = {}
         values = {}
-
-        if mode == tf.estimator.ModeKeys.PREDICT:
-            axes = (0, 2, 3)
-            concat_axis = 0
-        else:
-            axes = (1, 3, 4)
-            concat_axis = 1
-
         with tf.name_scope("Rho"):
-            for element, (value, mask) in descriptors.items():
-                with tf.variable_scope(f'{element}/Rho'):
+            for kbody_term, (value, mask) in partitions.items():
+                other = get_elements_from_kbody_term(kbody_term)[1]
+                with tf.variable_scope(f"{kbody_term}/Rho"):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
-                    # Apply the `rho` function on `x`
-                    comput = self._get_rho_fn(element, verbose=verbose)
+                    # Apply the `rho` function of element `other` on `x`
+                    comput = self._get_rho_fn(other, verbose=verbose)
                     y = comput(x)
                     # Apply the mask to rho.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
-                    values[element] = y
-                    rho = tf.reduce_sum(y, axis=axes, keepdims=False,
-                                        name='rho')
+                    values[kbody_term] = y
+                    rho = tf.reduce_sum(
+                        y, axis=(1, 3, 4), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
-                    outputs[element] = rho
-            rho = tf.concat([outputs[el] for el in self._elements],
-                            axis=concat_axis, name='atomic')
-            return rho, values
-
-    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
-                  verbose=False):
-        """
-        Return the EAM/Alloy model.
-
-        Parameters
-        ----------
-        features : AttributeDict
-            A dict of tensors:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is the mask of `value`.
-                * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
-                * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
-        mode : tf.estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
-            energies of atoms. The last axis has the size `max_n_atoms`.
-
-        """
-        with tf.name_scope("nnEAM"):
-
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=features.descriptors,
-                mode=mode,
-                merge_symmetric=True)
-
-            rho, _ = self._build_rho_nn(
-                descriptors=features.descriptors,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=verbose)
-
-            embed = self._build_embed_nn(
-                rho=rho,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=verbose)
-
-            phi, _ = self._build_phi_nn(
-                partitions=partitions,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=verbose)
-
-            y = tf.add(phi, embed, name='atomic')
-
-            return y
+                    outputs[kbody_term] = rho
+            atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
+            if mode == tf.estimator.ModeKeys.PREDICT:
+                atomic = tf.squeeze(atomic, axis=0)
+            return atomic, values
 
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
                         drho: float, checkpoint=None, lattice_constants=None,

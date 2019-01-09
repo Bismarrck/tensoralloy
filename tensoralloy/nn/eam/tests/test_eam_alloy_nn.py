@@ -283,28 +283,40 @@ def test_inference():
                             'AlCu': {'phi': 'zjw04'}})
 
         with tf.name_scope("Inference"):
+
             partitions, max_occurs = nn._dynamic_partition(
                 descriptors=data.features.descriptors,
                 mode=mode,
-                merge_symmetric=True)
+                merge_symmetric=False)
+
             rho, _ = nn._build_rho_nn(
-                descriptors=data.descriptors,
+                partitions=partitions,
                 max_occurs=max_occurs,
                 mode=mode,
                 verbose=True)
+
             embed = nn._build_embed_nn(
                 rho=rho,
                 max_occurs=max_occurs,
                 mode=mode,
                 verbose=True)
+
+            partitions, max_occurs = nn._dynamic_partition(
+                descriptors=data.features.descriptors,
+                mode=mode,
+                merge_symmetric=True)
+
             phi, _ = nn._build_phi_nn(
                 partitions=partitions,
                 max_occurs=max_occurs,
                 mode=mode,
                 verbose=True)
+
             y = tf.add(phi, embed, name='atomic')
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        for var in collection:
+            print(var.op.name)
         assert_equal(len(collection), 41)
 
         collection = tf.get_collection(GraphKeys.EAM_ALLOY_NN_VARIABLES)

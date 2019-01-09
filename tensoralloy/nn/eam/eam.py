@@ -297,10 +297,39 @@ class EamNN(BasicNN):
 
             return atomic, values
 
-    def _build_rho_nn(self, values: AttributeDict, max_occurs: Counter,
-                      mode: tf.estimator.ModeKeys, verbose=False):
+    def _build_rho_nn(self,
+                      partitions: AttributeDict,
+                      mode: tf.estimator.ModeKeys,
+                      max_occurs: Counter,
+                      verbose=False):
         """
         Return the outputs of the electron densities, `rho(r)`.
+
+        Parameters
+        ----------
+        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict. The keys are kbody terms and values are tuples of
+            (value, mask) where `value` represents the descriptors and `mask` is
+            the value mask. Both `value` and `mask` are 4D tensors of shape
+            `[batch_size, 1, max_n_element, nnl]`.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
+        verbose : bool
+            If True, key tensors will be logged.
+
+        Returns
+        -------
+        atomic : tf.Tensor
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor. The last axis has the
+            size `max_n_atoms`.
+        values : Dict[str, tf.Tensor]
+            The corresponding value tensor of each `kbody_term` of
+            `descriptors`. Each value tensor is a 5D tensor of shape
+            `[batch_size, 1, max_n_element, nnl, 1]`. If `mode` is PREDICT,
+            `batch_size` will be 1.
+
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass")
@@ -481,10 +510,63 @@ class EamNN(BasicNN):
     def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
                   verbose=False):
         """
-        Return an nn-EAM model.
+        Return the EAM/Alloy model.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of tensors:
+                * 'descriptors', a dict of (element, (value, mask)) where
+                  `element` represents the symbol of an element, `value` is the
+                  descriptors of `element` and `mask` is the mask of `value`.
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
+            energies of atoms. The last axis has the size `max_n_atoms`.
+
         """
-        raise NotImplementedError(
-            "This method must be overridden by its subclass")
+        with tf.name_scope("nnEAM"):
+
+            partitions, max_occurs = self._dynamic_partition(
+                descriptors=features.descriptors,
+                mode=mode,
+                merge_symmetric=False)
+
+            rho, _ = self._build_rho_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
+
+            embed = self._build_embed_nn(
+                rho=rho,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
+
+            partitions, max_occurs = self._dynamic_partition(
+                descriptors=features.descriptors,
+                mode=mode,
+                merge_symmetric=True)
+
+            phi, _ = self._build_phi_nn(
+                partitions=partitions,
+                max_occurs=max_occurs,
+                mode=mode,
+                verbose=verbose)
+
+            y = tf.add(phi, embed, name='atomic')
+
+            return y
 
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
                         drho: float, checkpoint=None, lattice_constants=None,
