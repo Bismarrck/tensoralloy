@@ -48,7 +48,7 @@ def test_get_train_op():
                 decay_rate=0.9, staircase=False, method='adam'))
 
         nn = AtomicNN(elements=dataset.transformer.elements)
-        predictions = nn.build(features)
+        predictions = nn.build(features, tf.estimator.ModeKeys.TRAIN)
         total_loss, losses = nn.get_total_loss(
             predictions, labels, features.n_atoms, hparams)
 
