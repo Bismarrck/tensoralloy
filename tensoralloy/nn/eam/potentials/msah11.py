@@ -85,7 +85,7 @@ class AlFeMsah11(EamFSPotential):
                 idx = tf.where(
                     tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
                 x = tf.gather_nd(r, idx)
-                shape = r.shape
+                shape = tf.shape(r, out_type=idx.dtype)
                 b = factors[1::2]
                 c = factors[2::2]
                 scale = tf.div(tf.convert_to_tensor(factors[0], dtype=dtype), x)
@@ -111,7 +111,7 @@ class AlFeMsah11(EamFSPotential):
                 idx = tf.where(
                     tf.logical_and(tf.greater_equal(r, lc), tf.less(r, hc)))
                 x = tf.gather_nd(r, idx)
-                shape = r.shape
+                shape = tf.shape(r, out_type=idx.dtype)
                 c0 = tf.convert_to_tensor(factors[0], dtype=dtype)
                 values = []
                 for i in range(1, 4):
@@ -364,7 +364,7 @@ class AlFeMsah11(EamFSPotential):
                         0.0023491751192724, dtype=rho.dtype, name='c2')
                     eps = tf.constant(1e-12, dtype=rho.dtype, name='eps')
                     idx = tf.where(tf.greater_equal(rho, eps), name='idx')
-                    shape = rho.shape
+                    shape = tf.shape(rho, out_type=idx.dtype)
                     x = tf.gather_nd(rho, idx)
                     y = -tf.sqrt(x) + c1 * tf.pow(x, 2) - c2 * x * tf.log(x)
                     return tf.scatter_nd(idx, y, shape, name='embed')

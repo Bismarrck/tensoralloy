@@ -272,11 +272,11 @@ class Zjw04(EamAlloyPotential):
                     return tf.multiply(Fe * (one - eta * lnx),
                                        tf.pow(x, eta), name='e3')
 
-            shape = rho.shape
             idx1 = tf.where(tf.less(rho, rho_n), name='idx1')
             idx2 = tf.where(tf.logical_and(tf.greater_equal(rho, rho_n),
                                            tf.less(rho, rho_0)), name='idx2')
             idx3 = tf.where(tf.greater_equal(rho, rho_0), name='idx3')
+            shape = tf.shape(rho, name='shape', out_type=idx1.dtype)
 
             values = [
                 tf.scatter_nd(idx1, embed1(tf.gather_nd(rho, idx1)), shape),
