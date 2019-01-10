@@ -111,6 +111,7 @@ class AtomicNN(BasicNN):
                         hidden_sizes=hidden_sizes,
                         l2_weight=1.0,
                         collections=collections,
+                        variable_scope=None,
                         verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')
                     if verbose:
