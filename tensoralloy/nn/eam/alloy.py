@@ -232,6 +232,7 @@ class EamAlloyNN(EamNN):
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
+        all_kbody_terms = get_kbody_terms(self._elements, k_max=2)[0]
 
         with tf.Graph().as_default():
 
@@ -245,30 +246,36 @@ class EamAlloyNN(EamNN):
                     descriptors[element] = (value, mask)
 
                 partitions = AttributeDict()
-                for kbody_term in self._unique_kbody_terms:
+                symmetric_partitions = AttributeDict()
+                for kbody_term in all_kbody_terms:
+                    value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
+                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    partitions[kbody_term] = (value, mask)
                     a, b = get_elements_from_kbody_term(kbody_term)
                     if a == b:
-                        value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
-                        mask = tf.ones_like(value, name=f'm{kbody_term}')
-                    else:
+                        symmetric_partitions[kbody_term] = (value, mask)
+                    elif kbody_term in self._unique_kbody_terms:
                         rr = np.concatenate((r, r), axis=2)
                         value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
                         mask = tf.ones_like(value, name=f'm{kbody_term}')
-                    partitions[kbody_term] = (value, mask)
+                        symmetric_partitions[kbody_term] = (value, mask)
 
             with tf.name_scope("Model"):
                 embed = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL)
+                    mode=tf.estimator.ModeKeys.EVAL,
+                    verbose=False)
                 _, rho = self._build_rho_nn(
-                    descriptors,
-                    max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL)
-                _, phi = self._build_phi_nn(
                     partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL)
+                    mode=tf.estimator.ModeKeys.EVAL,
+                    verbose=False)
+                _, phi = self._build_phi_nn(
+                    symmetric_partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=tf.estimator.ModeKeys.EVAL,
+                    verbose=False)
 
             sess = tf.Session()
             with sess:
@@ -291,7 +298,8 @@ class EamAlloyNN(EamNN):
                     def _func(_r):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results.rho[_element][0, 0, 0, idx, 0]
+                        _kbody_term = f'{_element}{_element}'
+                        return results.rho[_kbody_term][0, 0, 0, idx, 0]
                     return _func
 
                 def make_embed(_element):
