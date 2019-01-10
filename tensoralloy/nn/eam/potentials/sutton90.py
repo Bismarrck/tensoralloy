@@ -32,7 +32,7 @@ class AgSutton90(EamAlloyPotential):
         """
         super(AgSutton90, self).__init__()
 
-    def phi(self, r: tf.Tensor, kbody_term: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
         """
         The pairwise potential function:
 
@@ -41,12 +41,12 @@ class AgSutton90(EamAlloyPotential):
         """
         with tf.variable_scope('Sutton'):
             one = tf.constant(1.0, r.dtype, name='one')
-            b = self._get_var('b', r.dtype, kbody_term)
+            b = self._get_variable('b', r.dtype, kbody_term, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
             return tf.pow(b * r, 12, name='phi')
 
-    def rho(self, r: tf.Tensor, element: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
         """
         The electron density function:
 
@@ -55,12 +55,12 @@ class AgSutton90(EamAlloyPotential):
         """
         with tf.variable_scope('Sutton'):
             one = tf.constant(1.0, r.dtype, name='one')
-            a = self._get_var('a', r.dtype, element)
+            a = self._get_variable('a', r.dtype, element, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
             return tf.pow(a * r, 6, name='rho')
 
-    def embed(self, rho: tf.Tensor, element: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
         """
         The embedding function:
 

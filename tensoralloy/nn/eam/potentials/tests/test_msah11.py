@@ -238,14 +238,14 @@ def test_msah11(precision=Precision.high, delta=1e-12):
             r = tf.convert_to_tensor(r, name='r', dtype=dtype)
 
         pot = AlFeMsah11()
-        embed_al_op = pot.embed(rho, element='Al')
-        embed_fe_op = pot.embed(rho, element='Fe')
-        rho_alal_op = pot.rho(r, kbody_term='AlAl')
-        rho_fefe_op = pot.rho(r, kbody_term='FeFe')
-        rho_alfe_op = pot.rho(r, kbody_term='AlFe')
-        phi_alal_op = pot.phi(r, kbody_term='AlAl')
-        phi_fefe_op = pot.phi(r, kbody_term='FeFe')
-        phi_alfe_op = pot.phi(r, kbody_term='AlFe')
+        embed_al_op = pot.embed(rho, element='Al', variable_scope='Embed/Al')
+        embed_fe_op = pot.embed(rho, element='Fe', variable_scope='Embed/Fe')
+        rho_alal_op = pot.rho(r, kbody_term='AlAl', variable_scope='Rho/AlAl')
+        rho_fefe_op = pot.rho(r, kbody_term='FeFe', variable_scope='Rho/FeFe')
+        rho_alfe_op = pot.rho(r, kbody_term='AlFe', variable_scope='Rho/AlFe')
+        phi_alal_op = pot.phi(r, kbody_term='AlAl', variable_scope='Phi/AlAl')
+        phi_fefe_op = pot.phi(r, kbody_term='FeFe', variable_scope='Phi/FeFe')
+        phi_alfe_op = pot.phi(r, kbody_term='AlFe', variable_scope='Phi/AlFe')
 
         with tf.Session() as sess:
             embed_vals = sess.run([embed_al_op, embed_fe_op])

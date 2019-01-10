@@ -78,7 +78,7 @@ class EmpiricalPotential:
             if self.__contains__(section):
                 self._fixed[section] = list(fixed[section])
 
-        self._shared_vars = {}
+        self._shared_variables = {}
 
     @property
     def params(self):
@@ -110,37 +110,96 @@ class EmpiricalPotential:
             return True
         return False
 
-    def _get_var(self, parameter, dtype, section, shared=False):
+    def _get_variable(self, parameter, dtype, section, variable_scope: str):
         """
-        A helper function to initialize a new `tf.Variable`.
+        A function to initialize a new local `tf.Variable`.
+        Local variables cannot be used by potential functions outside `section`.
+        Local variables will be placed under the given variable scope.
+
+        Parameters
+        ----------
+        parameter : str
+            The name of the variable.
+        dtype : DType
+            The data type of the variable.
+        section : str
+            The section to which the parameter belongs.
+        variable_scope : str
+            The created variable will be placed under this scope.
+
+        Returns
+        -------
+        var : tf.Variable
+            The corresponding variable.
+
+        """
+        trainable = self._is_trainable(parameter, section)
+        with tf.variable_scope(variable_scope, reuse=False):
+            var = get_variable(name=parameter, dtype=dtype,
+                               initializer=tf.constant_initializer(
+                                   value=self._params[section][parameter],
+                                   dtype=dtype),
+                               collections=[
+                                   GraphKeys.EAM_POTENTIAL_VARIABLES,
+                                   tf.GraphKeys.MODEL_VARIABLES,
+                               ],
+                               trainable=trainable)
+            return var
+
+    def _get_shared_variable(self, parameter: str, dtype, section: str):
+        """
+        Return a shared variable. A shared variable may be reused by potential
+        functions in different sections.
+
+        As an example, all variables in `zjw04` are shared. The param `Al.re` is
+        used by `Al.rho()` and `Al.embed()`.
+
+        Parameters
+        ----------
+        parameter : str
+            The name of the variable.
+        dtype : DType
+            The data type of the variable.
+        section : str
+            The section to which the parameter belongs.
+
+        Returns
+        -------
+        var : tf.Variable
+            The corresponding variable.
+
         """
         tag = f"{section}.{parameter}"
-        if shared:
-            if tag in self._shared_vars:
-                return self._shared_vars[tag]
+        if tag in self._shared_variables:
+            return self._shared_variables[tag]
 
-        trainable = self._is_trainable(parameter, section)
-        var = get_variable(name=parameter, dtype=dtype,
-                           initializer=tf.constant_initializer(
-                               value=self._params[section][parameter],
-                               dtype=dtype),
-                           collections=[
-                               GraphKeys.EAM_POTENTIAL_VARIABLES,
-                               tf.GraphKeys.MODEL_VARIABLES,
-                           ],
-                           trainable=trainable)
-        if shared:
-            self._shared_vars[tag] = var
-        return var
+        with tf.variable_scope(f"Shared/{section}", reuse=tf.AUTO_REUSE):
+            trainable = self._is_trainable(parameter, section)
+            var = get_variable(name=parameter, dtype=dtype,
+                               initializer=tf.constant_initializer(
+                                   value=self._params[section][parameter],
+                                   dtype=dtype),
+                               collections=[
+                                   GraphKeys.EAM_POTENTIAL_VARIABLES,
+                                   tf.GraphKeys.MODEL_VARIABLES],
+                               trainable=trainable)
+            self._shared_variables[tag] = var
+            return var
 
-    def rho(self, *args):
+    def rho(self,
+            r: tf.Tensor,
+            element_or_kbody_term: str,
+            variable_scope: str):
         """
         Return the Op to compute electron density `rho(r)`.
         """
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
 
-    def phi(self, r: tf.Tensor, kbody_term: str):
+    def phi(self,
+            r: tf.Tensor,
+            kbody_term: str,
+            variable_scope: str):
         """
         Return the Op to compute pairwise potential `phi(r)`.
 
@@ -150,6 +209,8 @@ class EmpiricalPotential:
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -160,7 +221,10 @@ class EmpiricalPotential:
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
 
-    def embed(self, rho: tf.Tensor, element: str):
+    def embed(self,
+              rho: tf.Tensor,
+              element: str,
+              variable_scope: str):
         """
         Return the Op to compute the embedding energy F(rho(r)).
 
@@ -171,6 +235,8 @@ class EmpiricalPotential:
             `max_n_element` is the maximum occurace of `element`.
         element : str
             An element symbol.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -187,7 +253,7 @@ class EamAlloyPotential(EmpiricalPotential, ABC):
     This class represents an `EAM/Alloy` style empirical potential.
     """
 
-    def rho(self, r: tf.Tensor, element: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -197,6 +263,8 @@ class EamAlloyPotential(EmpiricalPotential, ABC):
             A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
         element : str
             The corresponding element.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -213,7 +281,7 @@ class EamFSPotential(EmpiricalPotential, ABC):
     This class represents an `EAM/Finnis-Sinclair` style empirical potential.
     """
 
-    def rho(self, r: tf.Tensor, kbody_term: str):
+    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -223,6 +291,8 @@ class EamFSPotential(EmpiricalPotential, ABC):
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------

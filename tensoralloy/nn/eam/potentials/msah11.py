@@ -141,7 +141,7 @@ class AlFeMsah11(EamFSPotential):
             return tf.add_n(values, name='phi')
         return _phi
 
-    def phi(self, r: tf.Tensor, kbody_term: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
         """
         The pairwise potential function.
 
@@ -151,6 +151,8 @@ class AlFeMsah11(EamFSPotential):
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -268,7 +270,7 @@ class AlFeMsah11(EamFSPotential):
                 return comput(r)
 
 
-    def rho(self, r: tf.Tensor, kbody_term: str):
+    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -278,6 +280,8 @@ class AlFeMsah11(EamFSPotential):
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -334,7 +338,7 @@ class AlFeMsah11(EamFSPotential):
                     order = 4
                 return _density(factors, cutoffs, order)
 
-    def embed(self, rho: tf.Tensor, element: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
         """
         Return the Op to compute the embedding energy F(rho(r)).
 
@@ -345,6 +349,8 @@ class AlFeMsah11(EamFSPotential):
             `max_n_element` is the maximum occurace of `element`.
         element : str
             An element symbol.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------

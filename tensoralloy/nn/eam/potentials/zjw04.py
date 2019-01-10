@@ -133,7 +133,7 @@ class Zjw04(EamAlloyPotential):
             return tf.div(upper, lower, name=name)
         return func
 
-    def phi(self, r: tf.Tensor, kbody_term: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
         """
         The pairwise potential function.
 
@@ -143,6 +143,8 @@ class Zjw04(EamAlloyPotential):
             A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
         kbody_term : str
             The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -152,14 +154,14 @@ class Zjw04(EamAlloyPotential):
         """
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
         if el_a == el_b:
-            with tf.variable_scope(f"Zjw04/Phi/{el_a}"):
-                re = self._get_var('re', r.dtype, el_a, shared=True)
-                A = self._get_var('A', r.dtype, el_a, shared=True)
-                B = self._get_var('B', r.dtype, el_a, shared=True)
-                alpha = self._get_var('alpha', r.dtype, el_a, shared=True)
-                beta = self._get_var('beta', r.dtype, el_a, shared=True)
-                kappa = self._get_var('kappa', r.dtype, el_a, shared=True)
-                lamda = self._get_var('lamda', r.dtype, el_a, shared=True)
+            with tf.name_scope(f"Zjw04/Phi/{el_a}"):
+                re = self._get_shared_variable('re', r.dtype, el_a)
+                A = self._get_shared_variable('A', r.dtype, el_a)
+                B = self._get_shared_variable('B', r.dtype, el_a)
+                alpha = self._get_shared_variable('alpha', r.dtype, el_a)
+                beta = self._get_shared_variable('beta', r.dtype, el_a, )
+                kappa = self._get_shared_variable('kappa', r.dtype, el_a)
+                lamda = self._get_shared_variable('lamda', r.dtype, el_a)
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
                 return tf.subtract(
                     self._exp_func(re, A, alpha, kappa, one, name='A')(r),
@@ -167,18 +169,18 @@ class Zjw04(EamAlloyPotential):
                     name='phi')
         else:
             with tf.name_scope(f'{el_a}{el_a}'):
-                phi_a = self.phi(r, f'{el_a}{el_a}')
-                rho_a = self.rho(r, f'{el_a}')
+                phi_a = self.phi(r, f'{el_a}{el_a}', variable_scope)
+                rho_a = self.rho(r, f'{el_a}', variable_scope)
             with tf.name_scope(f"{el_b}{el_b}"):
-                phi_b = self.phi(r, f'{el_b}{el_b}')
-                rho_b = self.rho(r, f'{el_b}')
+                phi_b = self.phi(r, f'{el_b}{el_b}', variable_scope)
+                rho_b = self.rho(r, f'{el_b}', variable_scope)
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             return tf.multiply(half,
                                tf.add(tf.div(rho_a, rho_b) * phi_b,
                                       tf.div(rho_b, rho_a) * phi_a),
                                name='phi')
 
-    def rho(self, r: tf.Tensor, element: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
         """
         The electron density function rho(r).
 
@@ -188,6 +190,8 @@ class Zjw04(EamAlloyPotential):
             A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
         element : str
             The corresponding element.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -195,15 +199,15 @@ class Zjw04(EamAlloyPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        with tf.variable_scope(f"Zjw04/Rho/{element}"):
-            re = self._get_var('re', r.dtype, element, shared=True)
-            fe = self._get_var('fe', r.dtype, element, shared=True)
-            beta = self._get_var('beta', r.dtype, element, shared=True)
-            lamda = self._get_var('lamda', r.dtype, element, shared=True)
+        with tf.name_scope(f"Zjw04/Rho/{element}"):
+            re = self._get_shared_variable('re', r.dtype, element)
+            fe = self._get_shared_variable('fe', r.dtype, element)
+            beta = self._get_shared_variable('beta', r.dtype, element)
+            lamda = self._get_shared_variable('lamda', r.dtype, element)
             one = tf.constant(1.0, dtype=r.dtype, name='one')
             return self._exp_func(re, fe, beta, lamda, one, name='rho')(r)
 
-    def embed(self, rho: tf.Tensor, element: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
         """
         The embedding energy function F(rho).
 
@@ -214,6 +218,8 @@ class Zjw04(EamAlloyPotential):
             `max_n_element` is the maximum occurace of `element`.
         element : str
             An element symbol.
+        variable_scope : str
+            The scope for variables of this potential function.
 
         Returns
         -------
@@ -223,19 +229,19 @@ class Zjw04(EamAlloyPotential):
         """
         dtype = rho.dtype
 
-        with tf.variable_scope(f"Zjw04/Embed/{element}"):
-            Fn0 = self._get_var('Fn0', dtype, element, shared=True)
-            Fn1 = self._get_var('Fn1', dtype, element, shared=True)
-            Fn2 = self._get_var('Fn2', dtype, element, shared=True)
-            Fn3 = self._get_var('Fn3', dtype, element, shared=True)
-            F0 = self._get_var('F0', dtype, element, shared=True)
-            F1 = self._get_var('F1', dtype, element, shared=True)
-            F2 = self._get_var('F2', dtype, element, shared=True)
-            F3 = self._get_var('F3', dtype, element, shared=True)
-            eta = self._get_var('eta', dtype, element, shared=True)
-            rho_e = self._get_var('rho_e', dtype, element, shared=True)
-            rho_s = self._get_var('rho_s', dtype, element, shared=True)
-            Fe = self._get_var('Fe', dtype, element, shared=True)
+        with tf.name_scope(f"Zjw04/Embed/{element}"):
+            Fn0 = self._get_shared_variable('Fn0', dtype, element)
+            Fn1 = self._get_shared_variable('Fn1', dtype, element)
+            Fn2 = self._get_shared_variable('Fn2', dtype, element)
+            Fn3 = self._get_shared_variable('Fn3', dtype, element)
+            F0 = self._get_shared_variable('F0', dtype, element)
+            F1 = self._get_shared_variable('F1', dtype, element)
+            F2 = self._get_shared_variable('F2', dtype, element)
+            F3 = self._get_shared_variable('F3', dtype, element)
+            eta = self._get_shared_variable('eta', dtype, element)
+            rho_e = self._get_shared_variable('rho_e', dtype, element)
+            rho_s = self._get_shared_variable('rho_s', dtype, element)
+            Fe = self._get_shared_variable('Fe', dtype, element)
             rho_n = tf.convert_to_tensor(
                 self._params[element]['rho_e'] * 0.85, dtype, name='rho_n')
             rho_0 = tf.convert_to_tensor(

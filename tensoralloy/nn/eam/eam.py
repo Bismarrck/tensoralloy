@@ -135,7 +135,7 @@ class EamNN(BasicNN):
         raise NotImplementedError(
             "This method must be overridden by its subclass")
 
-    def _get_nn_fn(self, section, key, verbose=False):
+    def _get_nn_fn(self, section, key, variable_scope, verbose=False):
         """
         Return a layer function of `f(x)` where `f` is a 1x1 CNN.
         """
@@ -149,21 +149,29 @@ class EamNN(BasicNN):
                        activation_fn=activation_fn,
                        hidden_sizes=hidden_sizes,
                        l2_weight=1.0,
+                       variable_scope=variable_scope,
                        collections=collections,
                        verbose=verbose)
 
-    def _get_embed_fn(self, element: str, verbose=False):
+    def _get_embed_fn(self, element: str, variable_scope='Embed',
+                      verbose=False):
         """
         Return the embedding function of `name` for `element`.
         """
         name = self._potentials[element]['embed']
         if name == 'nn':
-            return self._get_nn_fn(element, 'embed', verbose=verbose)
+            return self._get_nn_fn(
+                section=element,
+                key='embed',
+                variable_scope=f"{variable_scope}/{element}",
+                verbose=verbose)
         else:
             return partial(self._empirical_functions[name].embed,
-                           element=element)
+                           element=element,
+                           variable_scope=variable_scope)
 
-    def _get_rho_fn(self, element_or_kbody_term: str, verbose=False):
+    def _get_rho_fn(self, element_or_kbody_term: str, variable_scope='Rho',
+                    verbose=False):
         """
         Return the electron density function of `name` for the given k-body
         term.
@@ -171,28 +179,40 @@ class EamNN(BasicNN):
         name = self._potentials[element_or_kbody_term]['rho']
         if name == 'nn':
             return self._get_nn_fn(
-                element_or_kbody_term, 'rho', verbose=verbose)
+                section=element_or_kbody_term,
+                key='rho',
+                variable_scope=f"{variable_scope}/{element_or_kbody_term}",
+                verbose=verbose)
         else:
             pot = self._empirical_functions[name]
             if isinstance(pot, EamAlloyPotential):
-                return partial(pot.rho, element=element_or_kbody_term)
+                return partial(pot.rho,
+                               element=element_or_kbody_term,
+                               variable_scope=variable_scope)
             elif isinstance(pot, EamFSPotential):
-                return partial(pot.rho, kbody_term=element_or_kbody_term)
+                return partial(pot.rho,
+                               kbody_term=element_or_kbody_term,
+                               variable_scope=variable_scope)
             else:
                 raise ValueError(
                     f"Unknown EAM potential: {pot.__class__.__name__}")
 
-    def _get_phi_fn(self, kbody_term: str, verbose=False):
+    def _get_phi_fn(self, kbody_term: str, variable_scope='Phi', verbose=False):
         """
         Return the pairwise potential function of `name` for the given k-body
         term.
         """
         name = self._potentials[kbody_term]['phi']
         if name == 'nn':
-            return self._get_nn_fn(kbody_term, 'phi', verbose=verbose)
+            return self._get_nn_fn(
+                section=kbody_term,
+                key='phi',
+                variable_scope=f"{variable_scope}/{kbody_term}",
+                verbose=verbose)
         else:
             return partial(self._empirical_functions[name].phi,
-                           kbody_term=kbody_term)
+                           kbody_term=kbody_term,
+                           variable_scope=variable_scope)
 
     def _get_energy_op(self, outputs: List[tf.Tensor], features: AttributeDict,
                        name='energy', verbose=True):
@@ -268,8 +288,8 @@ class EamNN(BasicNN):
         values = {}
         with tf.name_scope("Phi"):
             for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(f"{kbody_term}/Phi"):
-                    # Convert `x` to a 5D tensor.
+                with tf.name_scope(f"{kbody_term}"):
+                    # name_scope `x` to a 5D tensor.
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
@@ -371,7 +391,7 @@ class EamNN(BasicNN):
                 rho, num_or_size_splits=split_sizes, axis=split_axis)
             values = []
             for i, element in enumerate(self._elements):
-                with tf.variable_scope(f"{element}/Embed"):
+                with tf.name_scope(f"{element}"):
                     x = tf.expand_dims(splits[i], axis=-1, name=element)
                     if verbose:
                         log_tensor(x)
@@ -534,7 +554,7 @@ class EamNN(BasicNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.name_scope("nnEAM"):
+        with tf.variable_scope("nnEAM"):
 
             partitions, max_occurs = self._dynamic_partition(
                 descriptors=features.descriptors,

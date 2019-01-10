@@ -164,23 +164,33 @@ class EamAlloyNN(EamNN):
         values = {}
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
-                other = get_elements_from_kbody_term(kbody_term)[1]
-                with tf.variable_scope(f"{kbody_term}/Rho"):
+
+                # Split `kbody_term` to two elements: center, other
+                center, other = get_elements_from_kbody_term(kbody_term)
+
+                with tf.name_scope(f"{kbody_term}"):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
-                    # Apply the `rho` function of element `other` on `x`
+
+                    # Get the rho function.
                     comput = self._get_rho_fn(other, verbose=verbose)
+
+                    # Apply the `rho` function of element `other` on `x`
                     y = comput(x)
-                    # Apply the mask to rho.
+
+                    # Apply the `mask` to `rho`.
                     y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
                                     name='masked')
                     values[kbody_term] = y
+
+                    # Compute the sum of electron densities from different `r`.
                     rho = tf.reduce_sum(
                         y, axis=(1, 3, 4), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
+
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
             if mode == tf.estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)

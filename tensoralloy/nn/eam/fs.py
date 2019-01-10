@@ -179,9 +179,9 @@ class EamFsNN(EamNN):
         """
         outputs = {}
         values = {}
-        with tf.name_scope("Rho"):
+        with tf.variable_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
-                with tf.variable_scope(f"{kbody_term}/Rho"):
+                with tf.variable_scope(f"{kbody_term}"):
                     x = tf.expand_dims(value, axis=-1, name='input')
                     if verbose:
                         log_tensor(x)

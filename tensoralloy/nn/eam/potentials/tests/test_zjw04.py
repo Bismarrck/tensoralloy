@@ -194,16 +194,16 @@ def test_rho_phi_aa():
         layer = Zjw04()
 
         with tf.name_scope("Rho"):
-            with tf.variable_scope("AlAl"):
-                rho_al_op = layer.rho(r, 'Al')
-            with tf.variable_scope("CuCu"):
-                rho_cu_op = layer.rho(r, 'Cu')
+            with tf.name_scope("Al"):
+                rho_al_op = layer.rho(r, 'Al', variable_scope='Rho/Al')
+            with tf.name_scope("Cu"):
+                rho_cu_op = layer.rho(r, 'Cu', variable_scope='Rho/Cu')
 
         with tf.name_scope("Phi"):
-            with tf.variable_scope("AlAl"):
-                phi_al_op = layer.phi(r, 'AlAl')
-            with tf.variable_scope("CuCu"):
-                phi_cu_op = layer.phi(r, 'CuCu')
+            with tf.name_scope("AlAl"):
+                phi_al_op = layer.phi(r, 'AlAl', variable_scope='Phi/AlAl')
+            with tf.name_scope("CuCu"):
+                phi_cu_op = layer.phi(r, 'CuCu', variable_scope='Phi/CuCu')
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -232,8 +232,8 @@ def test_phi_ab():
         layer = Zjw04()
 
         with tf.name_scope("Phi"):
-            with tf.variable_scope("AlCu"):
-                op = layer.phi(r, 'AlCu')
+            with tf.name_scope("AlCu"):
+                op = layer.phi(r, 'AlCu', variable_scope='Phi/AlCu')
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -258,10 +258,10 @@ def test_embed():
 
         with tf.name_scope("Embed"):
 
-            with tf.variable_scope("Al"):
-                al_op = layer.embed(rho, "Al")
-            with tf.variable_scope("Cu"):
-                cu_op = layer.embed(rho, "Cu")
+            with tf.name_scope("Al"):
+                al_op = layer.embed(rho, "Al", variable_scope='Embed/Al')
+            with tf.name_scope("Cu"):
+                cu_op = layer.embed(rho, "Cu", variable_scope='Embed/Cu')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()

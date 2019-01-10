@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines unit tests of `EamNN`.
+This module defines unit tests of `EamAlloyNN`.
 """
 from __future__ import print_function, absolute_import
 
@@ -42,7 +42,7 @@ class AlCuData:
         self.max_n_terms = 2
         self.max_n_al = 5
         self.max_n_cu = 7
-        self.max_n_atoms = self.max_n_al + self.max_n_cu + 1
+        self.max_n_atoms = self.max_n_al + self.max_n_cu
         self.max_occurs = Counter({'Al': self.max_n_al, 'Cu': self.max_n_cu})
         self.nnl = 10
         self.elements = sorted(['Cu', 'Al'])
@@ -67,10 +67,11 @@ class AlCuData:
                 Cu=(tf.convert_to_tensor(self.g_cu, tf.float64, 'g_cu'),
                     tf.convert_to_tensor(self.m_cu, tf.float64, 'm_cu')))
             self.positions = tf.constant(
-                np.random.rand(1, self.max_n_atoms, 3),
+                np.random.rand(1, self.max_n_atoms + 1, 3),
                 dtype=tf.float64,
                 name='positions')
-            self.mask = np.ones((self.batch_size, self.max_n_atoms), np.float64)
+            self.mask = tf.convert_to_tensor(
+                np.ones((self.batch_size, self.max_n_atoms + 1), np.float64))
             self.features = AttributeDict(
                 descriptors=self.descriptors, positions=self.positions,
                 mask=self.mask)
@@ -80,11 +81,11 @@ class AlCuData:
                 CuCu=tf.convert_to_tensor(self.y_cucu, tf.float64, 'y_cucu'),
                 CuAl=tf.convert_to_tensor(self.y_cual, tf.float64, 'y_cual'))
             self.symmetric_atomic_splits = AttributeDict(
-                AlAl=tf.convert_to_tensor(self.y_alal, tf.float64, 'y_alal'),
-                CuCu=tf.convert_to_tensor(self.y_cucu, tf.float64, 'y_cucu'),
+                AlAl=tf.convert_to_tensor(self.y_alal, tf.float64, 'ys_alal'),
+                CuCu=tf.convert_to_tensor(self.y_cucu, tf.float64, 'ys_cucu'),
                 AlCu=tf.convert_to_tensor(
                     np.concatenate((self.y_alcu, self.y_cual), axis=1),
-                    tf.float64, 'y_alcu'))
+                    tf.float64, 'ys_alcu'))
 
 
 def test_dynamic_stitch_2el():
@@ -266,7 +267,27 @@ def test_custom_potentials():
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
-def test_inference():
+def test_inference_nn():
+    """
+    Test the inference of `EamAlloyNN` with only NN potentials.
+    """
+    with tf.Graph().as_default():
+
+        data = AlCuData()
+        mode = tf.estimator.ModeKeys.TRAIN
+
+        nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
+                        export_properties=['energy'])
+        nn.build(data.features, mode, verbose=True)
+
+        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+        assert_equal(len(collection), 35)
+
+        collection = tf.get_collection(GraphKeys.EAM_ALLOY_NN_VARIABLES)
+        assert_equal(len(collection), 35)
+
+
+def test_inference_mixed():
     """
     Test the inference of `EamAlloyNN` with mixed potentials.
     """
@@ -279,10 +300,13 @@ def test_inference():
 
         nn = EamAlloyNN(elements=data.elements,
                         custom_potentials={
-                            'Cu': {'rho': 'zjw04', 'embed': 'nn'},
-                            'AlCu': {'phi': 'zjw04'}})
+                            'Al': {'rho': 'nn', 'embed': 'zjw04'},
+                            'Cu': {'rho': 'nn', 'embed': 'zjw04'},
+                            'AlCu': {'phi': 'nn'},
+                            'AlAl': {'phi': 'zjw04'},
+                            'CuCu': {'phi': 'zjw04'}})
 
-        with tf.name_scope("Inference"):
+        with tf.variable_scope("nnEAM"):
 
             partitions, max_occurs = nn._dynamic_partition(
                 descriptors=data.features.descriptors,
@@ -315,22 +339,20 @@ def test_inference():
             y = tf.add(phi, embed, name='atomic')
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        for var in collection:
-            print(var.op.name)
-        assert_equal(len(collection), 41)
+        assert_equal(len(collection), 3 * 5 + 2 * 19)
 
         collection = tf.get_collection(GraphKeys.EAM_ALLOY_NN_VARIABLES)
-        assert_equal(len(collection), 25)
+        assert_equal(len(collection), 3 * 5)
 
         collection = tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)
-        assert_equal(len(collection), 16)
+        assert_equal(len(collection), 2 * 19)
 
         assert_dict_equal(max_occurs, {'Al': data.max_n_al,
                                        'Cu': data.max_n_cu})
-        assert_list_equal(rho.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_list_equal(embed.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_list_equal(phi.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_list_equal(y.shape.as_list(), [batch_size, max_n_atoms - 1])
+        assert_list_equal(rho.shape.as_list(), [batch_size, max_n_atoms])
+        assert_list_equal(embed.shape.as_list(), [batch_size, max_n_atoms])
+        assert_list_equal(phi.shape.as_list(), [batch_size, max_n_atoms])
+        assert_list_equal(y.shape.as_list(), [batch_size, max_n_atoms])
 
 
 def export_setfl_teardown():
