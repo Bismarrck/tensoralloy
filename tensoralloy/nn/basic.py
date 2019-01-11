@@ -237,19 +237,19 @@ class BasicNN:
     @staticmethod
     def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells):
         """
-        Return the Op to compute the reduced stress tensor `-0.5 * dE/dh @ h`
-        where `h` is a column-major cell tensor.
+        Return the Op to compute the reduced stress tensor `dE/dh @ h` where `h`
+        is the cell tensor.
         """
         with tf.name_scope("Full"):
-            factor = tf.constant(-0.5, dtype=energy.dtype, name='factor')
-            dEdhT = tf.gradients(energy, cells)[0]
+            factor = tf.constant(1.0, dtype=energy.dtype, name='factor')
+            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
             # The cell tensor `h` in text books is column-major while in ASE
             # is row-major. So the Voigt indices and the matrix multiplication
             # below are transposed.
             if cells.shape.ndims == 2:
-                stress = tf.matmul(cells, dEdhT)
+                stress = tf.matmul(dEdh, cells)
             else:
-                stress = tf.einsum('ijk,ikl->ijl', cells, dEdhT)
+                stress = tf.einsum('ijk,ikl->ijl', dEdh, cells)
             stress = tf.multiply(factor, stress, name='full')
             return stress
 
@@ -263,7 +263,7 @@ class BasicNN:
         ndims = stress.shape.ndims
         with tf.name_scope("Voigt"):
             voigt = tf.convert_to_tensor(
-                [[0, 0], [1, 1], [2, 2], [1, 2], [2, 0], [1, 0]],
+                [[0, 0], [1, 1], [2, 2], [1, 2], [0, 2], [0, 1]],
                 dtype=tf.int32, name='voigt')
             if ndims == 3:
                 voigt = tf.tile(
