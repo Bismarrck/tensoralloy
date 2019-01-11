@@ -22,7 +22,7 @@ from ase.build import bulk
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
-from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.nn.utils import GraphKeys
 
 __author__ = 'Xin Chen'
@@ -452,6 +452,7 @@ def test_eam_alloy_zjw04():
     symbols[0: 2] = ['Al', 'Al']
     atoms.set_chemical_symbols(symbols)
     elements = sorted(set(symbols))
+    volume = atoms.get_volume()
 
     with tf.Graph().as_default():
         clf = EAMTransformer(rc=rc, elements=elements)
@@ -461,20 +462,32 @@ def test_eam_alloy_zjw04():
                             "Cu": {"rho": "zjw04", "embed": "zjw04"},
                             "AlAl": {"phi": "zjw04"},
                             "AlCu": {"phi": "zjw04"},
-                            "CuCu": {"phi": "zjw04"}})
-        prediction = nn.build(
+                            "CuCu": {"phi": "zjw04"}},
+                        export_properties=['energy', 'forces', 'stress'])
+        predictions = nn.build(
             features=clf.get_features(),
             mode=tf.estimator.ModeKeys.PREDICT,
             verbose=True)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            energy = float(sess.run(prediction.energy,
-                                    feed_dict=clf.get_feed_dict(atoms)))
+            result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
 
     atoms.calc = lammps
-    assert_almost_equal(energy,
+    lammps.calculate(atoms)
+
+    print(result)
+
+    print('lammps stress')
+    print(lammps.get_stress(atoms) * volume)
+    print('')
+
+    assert_almost_equal(result['energy'],
                         lammps.get_potential_energy(atoms), delta=1e-6)
+    assert_array_almost_equal(result['forces'],
+                              lammps.get_forces(atoms), delta=1e-9)
+    assert_array_almost_equal(result['stress'],
+                              lammps.get_stress(atoms) * volume, delta=1e-5)
 
 
 if __name__ == "__main__":

@@ -274,6 +274,7 @@ def test_eam_fs_msah11():
     with tf.Graph().as_default():
         clf = EAMTransformer(rc=rc, elements=elements)
         nn = EamFsNN(elements=elements,
+                     export_properties=['energy', 'forces', 'stress'],
                      custom_potentials={
                          "Al": {"embed": "msah11"},
                          "Fe": {"embed": "msah11"},
@@ -281,19 +282,22 @@ def test_eam_fs_msah11():
                          "AlFe": {"phi": "msah11", "rho": "msah11"},
                          "FeFe": {"phi": "msah11", "rho": "msah11"},
                          "FeAl": {"phi": "msah11", "rho": "msah11"}})
-        prediction = nn.build(
+        predictions = nn.build(
             features=clf.get_features(),
             mode=tf.estimator.ModeKeys.PREDICT,
             verbose=True)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            energy = float(sess.run(prediction.energy,
-                                    feed_dict=clf.get_feed_dict(atoms)))
+            result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
 
     atoms.calc = lammps
-    assert_almost_equal(energy,
+    lammps.calculate(atoms)
+
+    assert_almost_equal(result['energy'],
                         lammps.get_potential_energy(atoms), delta=1e-6)
+    assert_array_almost_equal(result['forces'],
+                              lammps.get_forces(atoms), delta=1e-9)
 
 
 if __name__ == "__main__":
