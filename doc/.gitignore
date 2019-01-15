@@ -1,2 +1,8 @@
 # Ignore generated html files
 *.html
+
+# Ignore LaTeX auxiliary files
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
