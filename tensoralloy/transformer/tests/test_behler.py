@@ -561,6 +561,7 @@ def test_legacy_and_new_flexible():
         g = sf.get_graph()
 
         with tf.Session() as sess:
+            tf.global_variables_initializer().run()
             for i, atoms in enumerate(trajectory):
                 feed_dict = sf.get_feed_dict(atoms)
                 values = sess.run(g, feed_dict=feed_dict)
@@ -584,6 +585,7 @@ def test_manybody_k():
             sf = SymmetryFunctionTransformer(rc, elements, angular=(k_max == 3))
             g = sf.get_graph()
             with tf.Session() as sess:
+                tf.global_variables_initializer().run()
                 values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
 
             x = np.zeros((5, len(sf.all_kbody_terms) * len(Defaults.eta)))
@@ -710,6 +712,7 @@ def test_batch_multi_elements():
 
         g = sf.get_descriptor_ops_from_batch(batch, batch_size)
         with tf.Session(graph=tf.get_default_graph()) as sess:
+            tf.global_variables_initializer().run()
             results = sess.run(g)
 
             assert_array_almost_equal(results['C'][0],
@@ -738,8 +741,10 @@ def test_splits():
     with tf.Graph().as_default():
 
         sf = SymmetryFunctionTransformer(rc, elements, angular=True)
+        g = sf.get_graph()
         with tf.Session() as sess:
-            values = sess.run(sf.get_graph(), feed_dict=sf.get_feed_dict(Pd3O2))
+            tf.global_variables_initializer().run()
+            values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
 
         assert_array_equal(values['O'][0], ref[3:, :20])
         assert_array_equal(values['Pd'][0], ref[:3, 20:])
@@ -756,18 +761,19 @@ def test_as_dict():
 
     with tf.Graph().as_default():
         old = SymmetryFunctionTransformer(rc, elements, angular=True)
+        old_g = old.get_graph()
 
         params = old.as_dict()
         cls = params.pop('class')
         assert_equal(cls, "SymmetryFunctionTransformer")
 
         new = SymmetryFunctionTransformer(**params)
+        new_g = new.get_graph()
 
         with tf.Session() as sess:
-            old_vals = sess.run(
-                old.get_graph(), feed_dict=old.get_feed_dict(Pd3O2))
-            new_vals = sess.run(
-                new.get_graph(), feed_dict=new.get_feed_dict(Pd3O2))
+            tf.global_variables_initializer().run()
+            old_vals = sess.run(old_g, feed_dict=old.get_feed_dict(Pd3O2))
+            new_vals = sess.run(new_g, feed_dict=new.get_feed_dict(Pd3O2))
 
         assert_array_equal(old_vals['O'][0], new_vals['O'][0])
         assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])

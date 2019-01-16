@@ -72,7 +72,7 @@ class SymmetryFunction(AtomicDescriptor):
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
                  gamma=Defaults.gamma, zeta=Defaults.zeta, angular=True,
-                 periodic=True, cutoff_function='cosine'):
+                 trainable=False, periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
 
@@ -92,6 +92,9 @@ class SymmetryFunction(AtomicDescriptor):
             The `beta` for angular functions.
         angular : bool
             The model will also use angular symmetry functions if True.
+        trainable : bool
+            A boolean indicating whether the symmetry function parameters should
+            be trainable or not. Defaults to False.
         periodic : bool
             If False, some Ops of the computation graph will be ignored and this
             can only proceed non-periodic molecules.
@@ -118,11 +121,18 @@ class SymmetryFunction(AtomicDescriptor):
         self._gamma = np.asarray(gamma)
         self._beta = np.asarray(beta)
         self._zeta = np.asarray(zeta)
-        self._parameter_grid = ParameterGrid({'beta': self._beta,
-                                              'gamma': self._gamma,
-                                              'zeta': self._zeta})
+        self._indices_grid = ParameterGrid({
+            'beta': np.arange(len(self._beta), dtype=int),
+            'gamma': np.arange(len(self._gamma), dtype=int),
+            'zeta': np.arange(len(self._zeta), dtype=int)}
+        )
         self._angular = angular
+        self._variables = {}
+        self._initial_values = {'eta': self._eta, 'gamma': self._gamma,
+                                'beta': self._beta, 'zeta': self._zeta}
+        self._trainable = trainable
 
+        self._cutoff_function = cutoff_function
         if cutoff_function == 'cosine':
             self._cutoff_fn = functools.partial(cosine_cutoff, rc=self._rc)
         elif cutoff_function == 'polynomial':
@@ -150,6 +160,33 @@ class SymmetryFunction(AtomicDescriptor):
         Return True if angular symmetry functions shall be used.
         """
         return self._angular
+
+    @property
+    def trainable(self):
+        """
+        Return True if symmetry function parameters are trainable.
+        """
+        return self._trainable
+
+    def _get_variable(self, name: str, index: int, dtype):
+        """
+        Return a shared variable.
+        """
+        keypath = f"{name}.{index}"
+        if keypath not in self._variables:
+            with tf.variable_scope(f'{name}', reuse=tf.AUTO_REUSE):
+                initializer = tf.constant_initializer(
+                    self._initial_values[name][index], dtype=dtype)
+                variable = tf.get_variable(
+                    name=f'{index}',
+                    shape=(),
+                    dtype=dtype,
+                    initializer=initializer,
+                    trainable=self._trainable,
+                    collections=[tf.GraphKeys.MODEL_VARIABLES,
+                                 tf.GraphKeys.GLOBAL_VARIABLES])
+                self._variables[keypath] = variable
+        return self._variables[keypath]
 
     @staticmethod
     def _get_v2g_map_delta(index):
@@ -182,7 +219,7 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"eta{index}"):
-            eta = tf.constant(self._eta[index], dtype=r2c.dtype, name='eta')
+            eta = self._get_variable('eta', index=index, dtype=r2c.dtype)
             delta = self._get_v2g_map_delta(index)
             v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
             v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
@@ -203,7 +240,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         The implementation of Behler's G2 symmetry function.
         """
-        with tf.name_scope("G2"):
+        with tf.variable_scope("G2"):
 
             r = self._get_rij(placeholders.positions,
                               placeholders.cells,
@@ -216,26 +253,31 @@ class SymmetryFunction(AtomicDescriptor):
             r2c = tf.div(r2, rc2, name='div')
             fc_r = self._cutoff_fn(r, name='fc_r')
 
-            with tf.name_scope("v2g_map"):
+            with tf.name_scope("Map"):
                 v2g_map = self._get_v2g_map(
                     placeholders, symmetry_function='g2')
 
-            with tf.name_scope("features"):
-                shape = self._get_g_shape(placeholders)
-                values = []
-                for index in range(len(self._eta)):
-                    values.append(
-                        self._get_g2_graph_for_eta(
-                            shape, index, r2c, fc_r, v2g_map))
-                return tf.add_n(values, name='g')
+            shape = self._get_g_shape(placeholders)
+            values = []
+            for index in range(len(self._eta)):
+                values.append(
+                    self._get_g2_graph_for_eta(
+                        shape, index, r2c, fc_r, v2g_map))
+            return tf.add_n(values, name='g')
 
-    @staticmethod
-    def _extract(_params, dtype=tf.float64):
+    def _extract_variables(self, indices, dtype=tf.float64):
         """
         A helper function to get `beta`, `gamma` and `zeta`.
         """
-        return [tf.constant(_params[key], dtype=dtype, name=key)
-                for key in ('beta', 'gamma', 'zeta')]
+        beta_index = indices['beta']
+        gamma_index = indices['gamma']
+        zeta_index = indices['zeta']
+
+        beta = self._get_variable('beta', index=beta_index, dtype=dtype)
+        gamma = self._get_variable('gamma', index=gamma_index, dtype=dtype)
+        zeta = self._get_variable('zeta', index=zeta_index, dtype=dtype)
+
+        return beta, gamma, zeta
 
     def _get_g4_graph_for_params(self, shape, index, theta, r2c, fc_r,
                                  v2g_map):
@@ -265,8 +307,10 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"grid{index}"):
-            beta, gamma, zeta = self._extract(self._parameter_grid[index],
-                                              dtype=r2c.dtype)
+            beta, gamma, zeta = self._extract_variables(
+                self._indices_grid[index],
+                dtype=r2c.dtype
+            )
             delta = self._get_v2g_map_delta(index)
             one = tf.constant(1.0, dtype=r2c.dtype, name='one')
             two = tf.constant(2.0, dtype=r2c.dtype, name='two')
@@ -279,7 +323,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         The implementation of Behler's angular symmetry function.
         """
-        with tf.name_scope("G4"):
+        with tf.variable_scope("G4"):
 
             rij = self._get_rij(placeholders.positions,
                                 placeholders.cells,
@@ -307,30 +351,29 @@ class SymmetryFunction(AtomicDescriptor):
             r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
             r2c = tf.div(r2, rc2, name='r2_rc2')
 
-            with tf.name_scope("cosine"):
+            with tf.name_scope("Theta"):
                 two = tf.constant(2.0, dtype=rij.dtype, name='two')
                 upper = tf.subtract(rij2 + rik2, rjk2, name='upper')
                 lower = tf.multiply(two * rij, rik, name='lower')
                 theta = tf.div(upper, lower, name='theta')
 
-            with tf.name_scope("fc"):
+            with tf.name_scope("Cutoff"):
                 fc_rij = self._cutoff_fn(rij, name='fc_rij')
                 fc_rik = self._cutoff_fn(rik, name='fc_rik')
                 fc_rjk = self._cutoff_fn(rjk, name='fc_rjk')
                 fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
 
-            with tf.name_scope("v2g_map"):
+            with tf.name_scope("Map"):
                 v2g_map = self._get_v2g_map(
                     placeholders, symmetry_function='g4')
 
-            with tf.name_scope("features"):
-                shape = self._get_g_shape(placeholders)
-                values = []
-                for index in range(len(self._parameter_grid)):
-                    values.append(
-                        self._get_g4_graph_for_params(
-                            shape, index, theta, r2c, fc_r, v2g_map))
-                return tf.add_n(values, name='g')
+            shape = self._get_g_shape(placeholders)
+            values = []
+            for index in range(len(self._indices_grid)):
+                values.append(
+                    self._get_g4_graph_for_params(
+                        shape, index, theta, r2c, fc_r, v2g_map))
+            return tf.add_n(values, name='g')
 
     def _get_row_split_sizes(self, placeholders):
         """
@@ -394,7 +437,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         Get the tensorflow based computation graph of the Symmetry Function.
         """
-        with tf.name_scope("Behler"):
+        with tf.variable_scope("Behler"):
             g = self._get_g2_graph(placeholders)
             if self._k_max == 3:
                 g += self._get_g4_graph(placeholders)
@@ -412,13 +455,14 @@ class BatchSymmetryFunction(SymmetryFunction):
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
                  nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 angular=True, periodic=True, cutoff_function='cosine'):
+                 angular=True, trainable=False, periodic=True,
+                 cutoff_function='cosine'):
         """
         Initialization method.
         """
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, angular=angular, periodic=periodic,
+            zeta=zeta, angular=angular, periodic=periodic, trainable=trainable,
             cutoff_function=cutoff_function)
 
         self._max_occurs = max_occurs
