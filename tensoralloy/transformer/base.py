@@ -185,22 +185,22 @@ class BatchDescriptorTransformer(BaseTransformer):
     evaluation.
     """
 
-    def __init__(self, forces=True, stress=False):
+    def __init__(self, use_forces=True, use_stress=False):
         """
         Initialization method.
 
         Parameters
         ----------
-        forces : bool
+        use_forces : bool
             A boolean flag indicating whether atomic forces should be encoded.
-        stress : bool
+        use_stress : bool
             A boolean flag indicating whether stress tensors should be encoded.
 
         """
         super(BatchDescriptorTransformer, self).__init__()
 
-        self._use_forces = forces
-        self._use_stress = stress
+        self._use_forces = use_forces
+        self._use_stress = use_stress
 
     @property
     def use_forces(self):

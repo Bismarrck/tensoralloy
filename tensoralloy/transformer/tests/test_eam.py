@@ -140,7 +140,7 @@ def test_encode_atoms():
 
     with tf.Graph().as_default():
         clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
-                                  nnl_max=nnl_max, stress=True)
+                                  nnl_max=nnl_max, use_stress=True)
         protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
         example = clf.decode_protobuf(protobuf)
 

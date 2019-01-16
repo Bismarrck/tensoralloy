@@ -217,7 +217,8 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
     """
 
     def __init__(self, rc: float, max_occurs: Counter, nij_max: int,
-                 nnl_max: int, batch_size=None, forces=True, stress=False):
+                 nnl_max: int, batch_size=None, use_forces=True,
+                 use_stress=False):
         """
         Initialization method.
         """
@@ -227,7 +228,8 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             self, rc=rc, max_occurs=max_occurs, elements=elements,
             nij_max=nij_max, nnl_max=nnl_max, batch_size=batch_size)
 
-        BatchDescriptorTransformer.__init__(self, forces=forces, stress=stress)
+        BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
+                                            use_stress=use_stress)
 
     @property
     def batch_size(self):
