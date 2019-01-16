@@ -14,7 +14,8 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 
 from tensoralloy.calculator import TensorAlloyCalculator
-from tensoralloy.misc import test_dir, Defaults
+from tensoralloy.utils import Defaults
+from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

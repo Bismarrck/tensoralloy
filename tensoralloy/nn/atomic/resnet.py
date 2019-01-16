@@ -6,11 +6,12 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+
 from typing import List
 
-from tensoralloy.misc import AttributeDict
 from tensoralloy.nn.atomic.atomic import AtomicNN
-from tensoralloy.nn.utils import GraphKeys, log_tensor
+from tensoralloy.nn.utils import log_tensor
+from tensoralloy.utils import GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

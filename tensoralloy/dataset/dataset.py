@@ -19,12 +19,12 @@ from tensorflow.contrib.data import shuffle_and_repeat
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.misc import Defaults, safe_select, brange, check_path
-from tensoralloy.misc import AttributeDict
+from tensoralloy.utils import AttributeDict, Defaults, safe_select, check_path
 from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.dataset.utils import compute_atomic_static_energy
 from tensoralloy.dataset.utils import should_be_serial
+from tensoralloy.dataset.utils import brange
 from tensoralloy.dtypes import get_float_dtype, set_float_precision
 from tensoralloy.dtypes import get_float_precision
 

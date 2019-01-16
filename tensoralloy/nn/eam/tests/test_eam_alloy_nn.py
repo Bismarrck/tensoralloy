@@ -15,15 +15,14 @@ from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
 from os import remove
 from collections import Counter
-from unittest import skipUnless
+from unittest import skipUnless, skip
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.transformer import EAMTransformer
-from tensoralloy.misc import AttributeDict, test_dir, skip, Defaults
-from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal, test_dir
+from tensoralloy.utils import GraphKeys, AttributeDict, Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

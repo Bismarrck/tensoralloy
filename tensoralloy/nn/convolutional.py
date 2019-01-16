@@ -12,7 +12,7 @@ from tensorflow.python.layers import base
 from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
 from typing import List
 
-from tensoralloy.misc import Defaults
+from tensoralloy.utils import Defaults
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.dtypes import get_float_dtype
 

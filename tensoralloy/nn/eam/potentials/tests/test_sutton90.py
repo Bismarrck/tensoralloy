@@ -20,7 +20,8 @@ from nose import with_setup
 from tensoralloy.transformer import BatchEAMTransformer, EAMTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.io.neighbor import find_neighbor_sizes
-from tensoralloy.misc import AttributeDict, test_dir
+from tensoralloy.utils import AttributeDict
+from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

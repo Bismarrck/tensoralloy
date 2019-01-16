@@ -9,27 +9,10 @@ import tensorflow as tf
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 
-from tensoralloy.misc import Defaults
+from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-class GraphKeys:
-    """
-    Standard names for variable collections.
-    """
-
-    # Variable keys
-    ATOMIC_NN_VARIABLES = 'atomic_nn_variables'
-    ATOMIC_RES_NN_VARIABLES = 'atomic_res_nn_variables'
-    EAM_ALLOY_NN_VARIABLES = 'eam_alloy_nn_variables'
-    EAM_FS_NN_VARIABLES = 'eam_fs_nn_variables'
-    EAM_POTENTIAL_VARIABLES = 'eam_potential_variables'
-
-    # Metrics Keys
-    TRAIN_METRICS = 'train_metrics'
-    EVAL_METRICS = 'eval_metrics'
 
 
 def get_activation_fn(fn_name: str):

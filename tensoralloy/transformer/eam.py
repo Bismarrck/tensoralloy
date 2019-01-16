@@ -13,7 +13,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor.eam import EAM, BatchEAM
-from tensoralloy.misc import AttributeDict
+from tensoralloy.utils import AttributeDict
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.index_transformer import IndexTransformer

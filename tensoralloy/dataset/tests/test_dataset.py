@@ -16,8 +16,8 @@ from os.path import join
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
-from tensoralloy.misc import test_dir, Defaults, AttributeDict
-from tensoralloy.test_utils import qm7m
+from tensoralloy.utils import AttributeDict, Defaults
+from tensoralloy.test_utils import qm7m, test_dir
 from tensoralloy.dtypes import set_float_precision, get_float_dtype
 
 __author__ = 'Xin Chen'

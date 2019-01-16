@@ -5,11 +5,11 @@ This module defines general classical potential function layers for NN-EAM.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+
 from typing import List, Dict
 from abc import ABC
 
-from tensoralloy.misc import safe_select
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, safe_select
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

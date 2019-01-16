@@ -11,7 +11,7 @@ from nose.tools import assert_not_in
 from os.path import join, realpath
 
 from tensoralloy.io.input.reader import nested_set, nested_get, InputReader
-from tensoralloy.misc import test_dir, project_dir, datasets_dir
+from tensoralloy.test_utils import test_dir, datasets_dir, project_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

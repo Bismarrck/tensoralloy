@@ -12,7 +12,7 @@ from collections import Counter
 from typing import Dict, Tuple, List
 from ase import Atoms
 
-from tensoralloy.misc import AttributeDict
+from tensoralloy.utils import AttributeDict
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices

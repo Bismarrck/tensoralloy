@@ -13,8 +13,8 @@ from ase.db import connect
 from os.path import join
 
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.misc import Defaults, datasets_dir, AttributeDict
-from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.utils import AttributeDict, Defaults
+from tensoralloy.test_utils import assert_array_equal, datasets_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

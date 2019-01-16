@@ -5,6 +5,7 @@ This module defines tests for unit conversions.
 from __future__ import print_function, absolute_import
 
 import nose
+
 from ase.units import kcal, mol, Hartree, eV
 from nose.tools import assert_almost_equal
 

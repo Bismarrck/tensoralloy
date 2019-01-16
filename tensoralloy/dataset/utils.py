@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import re
 import platform
+
 from subprocess import PIPE, Popen
 from collections import Counter
 from typing import List
@@ -14,6 +15,35 @@ from ase.db.sqlite import SQLite3Database
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def brange(start, stop, batch_size):
+    """
+    Range from `start` to `stop` given a batch size and return the start and
+    stop of each batch.
+
+    Parameters
+    ----------
+    start : int
+        The start number of a sequence.
+    stop : int,
+        The end number of a sequence.
+    batch_size : int
+        The size of each batch.
+
+    Yields
+    ------
+    istart : int
+        The start number of a batch.
+    istop : int
+        The end number of a batch.
+
+    """
+    istart = start
+    while istart < stop:
+        istop = min(istart + batch_size, stop)
+        yield istart, istop
+        istart = istop
 
 
 def should_be_serial():

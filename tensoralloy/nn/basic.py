@@ -15,8 +15,7 @@ from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 
-from tensoralloy.misc import safe_select, Defaults, AttributeDict
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook

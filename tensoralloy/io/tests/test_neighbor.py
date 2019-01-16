@@ -5,6 +5,7 @@ This module defines tests for finding neighbor sizes.
 from __future__ import print_function, absolute_import
 
 import nose
+
 from nose.tools import assert_equal
 from ase.db import connect
 

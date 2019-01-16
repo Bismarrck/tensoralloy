@@ -8,8 +8,8 @@ import tensorflow as tf
 
 from typing import List
 
-from tensoralloy.misc import AttributeDict, Defaults
-from tensoralloy.nn import utils
+from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
+from tensoralloy.nn.utils import get_optimizer, get_learning_rate
 from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -87,7 +87,7 @@ def add_grads_and_vars_summary(grads_and_vars, name):
     with tf.name_scope("GradNorm/{}/".format(name)):
         total_norm = tf.add_n(list_of_ops, name='total')
         tf.summary.scalar('total', total_norm)
-        tf.add_to_collection(utils.GraphKeys.TRAIN_METRICS, total_norm)
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
     return total_norm
 
 
@@ -165,7 +165,7 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
         hparams = _check_opt_hparams(hparams)
 
         global_step = tf.train.get_or_create_global_step()
-        learning_rate = utils.get_learning_rate(
+        learning_rate = get_learning_rate(
             global_step,
             learning_rate=hparams.opt.learning_rate,
             decay_function=hparams.opt.decay_function,
@@ -176,7 +176,7 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
 
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            optimizer = utils.get_optimizer(learning_rate, hparams.opt.method)
+            optimizer = get_optimizer(learning_rate, hparams.opt.method)
 
         grads_and_vars = {}
         total_norms = {}

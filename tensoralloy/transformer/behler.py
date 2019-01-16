@@ -14,7 +14,6 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
-from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -22,7 +21,8 @@ from tensoralloy.transformer.base import bytes_feature
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
+from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -144,7 +144,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 )
         return self._placeholders
 
-    def _get_g2_indexed_slices(self, atoms, index_transformer: IndexTransformer):
+    def _get_g2_indexed_slices(self,
+                               atoms: Atoms,
+                               index_transformer: IndexTransformer):
         """
         Return the indexed slices for the symmetry function G2.
         """
@@ -168,7 +170,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
-    def _get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices,
+    def _get_g4_indexed_slices(self,
+                               atoms: Atoms,
+                               g2: G2IndexedSlices,
                                transformer: IndexTransformer):
         """
         Return the indexed slices for the symmetry function G4.

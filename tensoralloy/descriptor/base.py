@@ -10,8 +10,7 @@ import numpy as np
 from ase.data import chemical_symbols
 from typing import List, Dict, Tuple
 
-from tensoralloy.utils import get_kbody_terms
-from tensoralloy.misc import AttributeDict
+from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'

@@ -21,11 +21,10 @@ from collections import Counter
 from dataclasses import dataclass
 
 from tensoralloy.dtypes import set_float_precision, Precision, get_float_dtype
-from tensoralloy.misc import Defaults, AttributeDict
 from tensoralloy.test_utils import Pd3O2, qm7m
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
-from tensoralloy.utils import get_kbody_terms
+from tensoralloy.utils import get_kbody_terms, AttributeDict, Defaults
 from tensoralloy.io.neighbor import find_neighbor_sizes
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices

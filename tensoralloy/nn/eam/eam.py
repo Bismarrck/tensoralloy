@@ -6,13 +6,13 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+
 from matplotlib import pyplot as plt
 from collections import Counter
 from functools import partial
 from typing import List, Dict, Callable
 
-from tensoralloy.misc import AttributeDict
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
@@ -476,7 +476,8 @@ class EamNN(BasicNN):
                         kbody_term = kbody_terms[i]
                         if merge_symmetric:
                             kbody_term = ''.join(
-                                sorted(get_elements_from_kbody_term(kbody_term)))
+                                sorted(get_elements_from_kbody_term(
+                                    kbody_term)))
                             if kbody_term in partitions:
                                 value = tf.concat(
                                     (partitions[kbody_term][0], value), axis=2)

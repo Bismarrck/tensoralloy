@@ -9,10 +9,10 @@ import tensorflow as tf
 from typing import List, Dict
 
 from tensoralloy.nn.atomic.normalizer import InputNormalizer
-from tensoralloy.nn.utils import get_activation_fn, log_tensor, GraphKeys
+from tensoralloy.nn.utils import get_activation_fn, log_tensor
+from tensoralloy.utils import GraphKeys, AttributeDict, safe_select
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
-from tensoralloy.misc import AttributeDict, safe_select
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

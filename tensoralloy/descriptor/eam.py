@@ -6,12 +6,12 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import tensorflow as tf
+
 from collections import Counter
 from typing import List
 
-from tensoralloy.misc import AttributeDict
 from tensoralloy.descriptor.base import AtomicDescriptor
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

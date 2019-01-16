@@ -13,12 +13,12 @@ import tensorflow as tf
 import numpy as np
 import nose
 import math
+
 from nose.tools import assert_equal
 
-from tensoralloy.misc import AttributeDict
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.nn.eam.potentials.zjw04 import Zjw04
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import nose
+
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
 
 from tensoralloy.utils import cantor_pairing

@@ -14,9 +14,9 @@ from ase.data import atomic_masses, atomic_numbers
 from atsim.potentials import writeSetFLFinnisSinclair, Potential, EAMPotential
 from typing import Dict, List
 
-from tensoralloy.misc import safe_select, Defaults, AttributeDict
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
-from tensoralloy.nn.utils import log_tensor, GraphKeys
+from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
+from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.dtypes import get_float_dtype

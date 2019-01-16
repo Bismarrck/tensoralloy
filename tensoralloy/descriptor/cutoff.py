@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import tensorflow as tf
+
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import math_ops
 

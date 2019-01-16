@@ -15,9 +15,8 @@ from collections import Counter
 from os.path import join
 
 from tensoralloy.io.neighbor import find_neighbor_sizes
-from tensoralloy.misc import datasets_dir, AttributeDict
-from tensoralloy.utils import get_kbody_terms
-from tensoralloy.test_utils import assert_array_equal
+from tensoralloy.utils import get_kbody_terms, AttributeDict
+from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
 

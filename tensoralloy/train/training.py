@@ -19,8 +19,8 @@ from tensoralloy.io.input.reader import nested_set
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.utils import set_logging_configs
-from tensoralloy.misc import check_path, Defaults, AttributeDict
+from tensoralloy.utils import set_logging_configs, AttributeDict, Defaults
+from tensoralloy.utils import check_path
 from tensoralloy.dtypes import set_float_precision
 
 __author__ = 'Xin Chen'

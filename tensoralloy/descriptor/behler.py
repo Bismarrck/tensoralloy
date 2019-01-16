@@ -14,8 +14,8 @@ from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
-from tensoralloy.misc import Defaults, AttributeDict
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
+from tensoralloy.utils import Defaults, GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -184,7 +184,8 @@ class SymmetryFunction(AtomicDescriptor):
                     initializer=initializer,
                     trainable=self._trainable,
                     collections=[tf.GraphKeys.MODEL_VARIABLES,
-                                 tf.GraphKeys.GLOBAL_VARIABLES])
+                                 tf.GraphKeys.GLOBAL_VARIABLES,
+                                 GraphKeys.DESCRIPTOR_VARIABLES])
                 self._variables[keypath] = variable
         return self._variables[keypath]
 

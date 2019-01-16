@@ -14,7 +14,7 @@ from nose.tools import assert_equal, assert_less, assert_is_none
 from nose.tools import with_setup
 
 from tensoralloy.train.training import TrainingManager
-from tensoralloy.misc import test_dir
+from tensoralloy.test_utils import test_dir
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.tests.test_cutoff import polynomial_cutoff_simple
 from tensoralloy.dtypes import get_float_dtype, set_float_precision

@@ -14,9 +14,9 @@ from nose.tools import assert_equal, assert_list_equal, with_setup
 from nose.tools import assert_true, assert_false
 
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
-from tensoralloy.misc import AttributeDict, test_dir
+from tensoralloy.test_utils import test_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -90,7 +90,9 @@ def test_inference_from_transformer():
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        assert_equal(len(collection), 11)
+        assert_equal(len(collection), 15)
+
+        assert_equal(len(tf.trainable_variables()), 11)
 
         collection = tf.get_collection(GraphKeys.ATOMIC_RES_NN_VARIABLES)
         assert_equal(len(collection), 11)

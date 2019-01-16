@@ -7,12 +7,12 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from collections import Counter
-from os.path import join
+from os.path import join, dirname, abspath
 from ase import Atoms
 from ase.io import read
 from nose.tools import assert_less, assert_equal
 
-from tensoralloy.misc import AttributeDict, test_dir
+from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -68,6 +68,16 @@ Pd2O2Pd = Atoms(symbols='Pd2O2Pd',
                                     [3.89, 2.75064538, 8.37532269]]))
 
 
+def test_dir(absolute=False):
+    """
+    Return the directory of `test_files`.
+    """
+    path = join(dirname(__file__), "..", "test_files")
+    if absolute:
+        path = abspath(path)
+    return path
+
+
 qm7m = AttributeDict(
     max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
     nij_max=198,
@@ -80,3 +90,23 @@ for _atoms in qm7m.trajectory:
     # Setting the boundary cell is important because `neighbor_list` may give
     # totally different results.
     _atoms.set_cell(np.eye(3) * 20.0)
+
+
+def datasets_dir(absolute=False):
+    """
+    Return the directory of `datasets`. Built-in datasets can be found here.
+    """
+    path = join(dirname(__file__), "..", "datasets")
+    if absolute:
+        path = abspath(path)
+    return path
+
+
+def project_dir(absolute=False):
+    """
+    Return the root directory of this project.
+    """
+    path = join(dirname(__file__), "..")
+    if absolute:
+        path = abspath(path)
+    return path

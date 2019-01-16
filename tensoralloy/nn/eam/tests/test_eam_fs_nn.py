@@ -10,7 +10,7 @@ import nose
 import os
 import shutil
 
-from unittest import skipUnless
+from unittest import skipUnless, skip
 from nose.tools import assert_list_equal, assert_dict_equal, with_setup
 from nose.tools import assert_equal, assert_almost_equal
 from os.path import exists, join
@@ -20,10 +20,8 @@ from ase.build import bulk
 
 from tensoralloy.nn.eam import EamFsNN
 from tensoralloy.transformer import EAMTransformer
-from tensoralloy.misc import skip, AttributeDict, test_dir
-from tensoralloy.test_utils import assert_array_almost_equal
-from tensoralloy.utils import get_elements_from_kbody_term
-from tensoralloy.nn.utils import GraphKeys
+from tensoralloy.test_utils import assert_array_almost_equal, test_dir
+from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
