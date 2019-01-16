@@ -187,6 +187,7 @@ class SymmetryFunction(AtomicDescriptor):
                 initializer=initializer,
                 trainable=self._trainable,
                 collections=collections)
+            tf.summary.scalar(f'{index}/summary', variable)
             return variable
 
     @staticmethod
