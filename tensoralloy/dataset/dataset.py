@@ -244,16 +244,18 @@ class Dataset:
             zeta = safe_select(kwargs.get('zeta', None), Defaults.zeta)
             cutoff_function = safe_select(kwargs.get('cutoff', None),
                                           Defaults.cutoff_function)
+            trainable = safe_select(kwargs.get('trainable', None), False)
 
             transformer = BatchSymmetryFunctionTransformer(
                 rc=self._rc,  max_occurs=max_occurs, angular=(k_max == 3),
                 nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
-                gamma=gamma, zeta=zeta, periodic=periodic, stress=stress,
-                forces=forces, cutoff_function=cutoff_function)
+                gamma=gamma, zeta=zeta, trainable=trainable, periodic=periodic,
+                use_stress=stress, use_forces=forces,
+                cutoff_function=cutoff_function)
         else:
             transformer = BatchEAMTransformer(
                 rc=self._rc, max_occurs=max_occurs, nij_max=nij_max,
-                nnl_max=nnl_max, forces=forces, stress=stress)
+                nnl_max=nnl_max, use_forces=forces, use_stress=stress)
 
         if self._should_compute_atomic_static_energy():
             compute_atomic_static_energy(

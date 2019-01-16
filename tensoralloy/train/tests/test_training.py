@@ -49,6 +49,7 @@ def test_initialization():
     assert_equal(manager.dataset.cutoff_radius, 6.0)
 
     assert isinstance(transformer, BatchSymmetryFunctionTransformer)
+    assert_equal(transformer.trainable, True)
 
     with tf.Session() as sess:
         rc = transformer.rc
