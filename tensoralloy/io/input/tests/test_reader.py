@@ -46,7 +46,7 @@ def test_nested_get():
     assert_equal(nested_get(d, ['a', 'c', 'd']), 4)
 
 
-def test_read_configs():
+def test_read_behler_angular_toml():
     """
     Test `InputReader` with file 'qm7.behler.k3.toml'.
     """
@@ -54,6 +54,7 @@ def test_read_configs():
     configs = reader.configs
 
     assert_equal(reader['precision'], 'medium')
+    assert_equal(reader['nn.atomic.behler.trainable'], True)
 
     assert_equal(realpath(reader['dataset.sqlite3']),
                  realpath(join(datasets_dir(True), 'qm7.db')))

@@ -194,6 +194,7 @@ class InputReader:
             _safe_update("nn.atomic.behler.gamma")
             _safe_update("nn.atomic.behler.beta")
             _safe_update("nn.atomic.behler.zeta")
+            _safe_update("nn.atomic.behler.trainable")
             _safe_update("nn.atomic.arch")
             _safe_update("nn.atomic.input_normalizer")
             _safe_update("nn.atomic.export")
