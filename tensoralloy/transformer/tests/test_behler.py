@@ -778,5 +778,16 @@ def test_as_dict():
         assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])
 
 
+def test_reuse_descriptor_variables():
+    """
+    Check if symmetry function variables can be reused correctly.
+    """
+    with tf.Graph().as_default():
+        sf = SymmetryFunctionTransformer(rc=6.0, elements=['Al', 'Cu'],
+                                         trainable=True, angular=True)
+        sf.get_graph()
+        assert_equal(len(tf.model_variables()), 9)
+
+
 if __name__ == "__main__":
     nose.run()

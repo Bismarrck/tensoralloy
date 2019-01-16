@@ -127,7 +127,6 @@ class SymmetryFunction(AtomicDescriptor):
             'zeta': np.arange(len(self._zeta), dtype=int)}
         )
         self._angular = angular
-        self._variables = {}
         self._initial_values = {'eta': self._eta, 'gamma': self._gamma,
                                 'beta': self._beta, 'zeta': self._zeta}
         self._trainable = trainable
@@ -172,22 +171,23 @@ class SymmetryFunction(AtomicDescriptor):
         """
         Return a shared variable.
         """
-        keypath = f"{name}.{index}"
-        if keypath not in self._variables:
-            with tf.variable_scope(f'{name}', reuse=tf.AUTO_REUSE):
-                initializer = tf.constant_initializer(
-                    self._initial_values[name][index], dtype=dtype)
-                variable = tf.get_variable(
-                    name=f'{index}',
-                    shape=(),
-                    dtype=dtype,
-                    initializer=initializer,
-                    trainable=self._trainable,
-                    collections=[tf.GraphKeys.MODEL_VARIABLES,
-                                 tf.GraphKeys.GLOBAL_VARIABLES,
-                                 GraphKeys.DESCRIPTOR_VARIABLES])
-                self._variables[keypath] = variable
-        return self._variables[keypath]
+        collections = [tf.GraphKeys.MODEL_VARIABLES,
+                       tf.GraphKeys.GLOBAL_VARIABLES,
+                       GraphKeys.DESCRIPTOR_VARIABLES,
+                       GraphKeys.EVAL_METRICS]
+        if self._trainable:
+            collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
+        with tf.variable_scope(f'{name}', reuse=tf.AUTO_REUSE):
+            initializer = tf.constant_initializer(
+                self._initial_values[name][index], dtype=dtype)
+            variable = tf.get_variable(
+                name=f'{index}',
+                shape=(),
+                dtype=dtype,
+                initializer=initializer,
+                trainable=self._trainable,
+                collections=collections)
+            return variable
 
     @staticmethod
     def _get_v2g_map_delta(index):

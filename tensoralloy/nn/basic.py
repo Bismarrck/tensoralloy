@@ -840,7 +840,7 @@ class BasicNN:
                     saver.restore(sess, checkpoint)
 
                 # Create another saver to save the trainable variables
-                saver = tf.train.Saver(var_list=tf.trainable_variables())
+                saver = tf.train.Saver(var_list=tf.model_variables())
                 checkpoint_path = saver.save(
                     sess, saved_model_ckpt, global_step=0)
                 graph_io.write_graph(graph_or_graph_def=graph,
