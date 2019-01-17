@@ -280,8 +280,9 @@ def test_eam_fs_msah11():
                          "AlFe": {"phi": "msah11", "rho": "msah11"},
                          "FeFe": {"phi": "msah11", "rho": "msah11"},
                          "FeAl": {"phi": "msah11", "rho": "msah11"}})
+        nn.attach_transformer(clf)
         predictions = nn.build(
-            features=clf.get_features(),
+            features=clf.placeholders,
             mode=tf.estimator.ModeKeys.PREDICT,
             verbose=True)
 

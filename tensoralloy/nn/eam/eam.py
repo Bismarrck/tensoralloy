@@ -121,6 +121,19 @@ class EamNN(BasicNN):
         raise NotImplementedError(
             "This property must be overridden by its subclass")
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        return {"class": self.__class__.__name__,
+                "elements": self._elements,
+                "custom_potentials": self._potentials,
+                "hidden_sizes": self._hidden_sizes,
+                "activation": self._activation,
+                "minimize_properties": self._minimize_properties,
+                "export_properties": self._export_properties,
+                "positive_energy_mode": self._positive_energy_mode}
+
     @property
     def potentials(self):
         """
@@ -486,8 +499,10 @@ class EamNN(BasicNN):
                         partitions[kbody_term] = (value, mask)
             return partitions, Counter(max_occurs)
 
-    def _dynamic_stitch(self, outputs: Dict[str, tf.Tensor],
-                        max_occurs: Counter, symmetric=False):
+    def _dynamic_stitch(self,
+                        outputs: Dict[str, tf.Tensor],
+                        max_occurs: Counter,
+                        symmetric=False):
         """
         The reverse of `dynamic_partition`. Interleave the kbody-term centered
         `outputs` of type `Dict[kbody_term, tensor]` to element centered values
@@ -528,25 +543,31 @@ class EamNN(BasicNN):
                 [tf.add_n(stacks[el], name=el) for el in self._elements],
                 axis=1, name='sum')
 
-    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
-                  verbose=False):
+    def _get_model_outputs(self,
+                           features: AttributeDict,
+                           descriptors: AttributeDict,
+                           mode: tf.estimator.ModeKeys,
+                           verbose=False):
         """
-        Return the EAM/Alloy model.
+        Return raw NN-EAM model outputs.
 
         Parameters
         ----------
         features : AttributeDict
-            A dict of tensors:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is the mask of `value`.
+            A dict of tensors, includeing raw properties and the descriptors:
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+        descriptors : AttributeDict
+            A dict of (element, (value, mask)) where `element` represents the
+            symbol of an element, `value` is the descriptors of `element` and
+            `mask` is the mask of `value`.
         mode : tf.estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
+        verbose : bool
+            If True, the prediction tensors will be logged.
 
         Returns
         -------
@@ -558,7 +579,7 @@ class EamNN(BasicNN):
         with tf.variable_scope("nnEAM"):
 
             partitions, max_occurs = self._dynamic_partition(
-                descriptors=features.descriptors,
+                descriptors=descriptors,
                 mode=mode,
                 merge_symmetric=False)
 
@@ -575,7 +596,7 @@ class EamNN(BasicNN):
                 verbose=verbose)
 
             partitions, max_occurs = self._dynamic_partition(
-                descriptors=features.descriptors,
+                descriptors=descriptors,
                 mode=mode,
                 merge_symmetric=True)
 

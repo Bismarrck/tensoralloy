@@ -266,6 +266,32 @@ def test_custom_potentials():
                            'Cu': {'rho': 'nn', 'embed': 'nn'}})
 
 
+def test_as_dict():
+    """
+    Test the inherited `EamAlloyNN.as_dict().
+    """
+    data = AlCuData()
+    custom_potentials = {
+        'AlCu': {'phi': 'zjw04'},
+        'Al': {'rho': 'zjw04'},
+        'CuCu': {'phi': 'zjw04'},
+    }
+    old_nn = EamAlloyNN(elements=data.elements,
+                        custom_potentials=custom_potentials)
+
+    d = old_nn.as_dict()
+    assert_equal(d.pop('class'), 'EamAlloyNN')
+
+    new_nn = EamAlloyNN(**d)
+    assert_dict_equal(new_nn.potentials, old_nn.potentials)
+    assert_dict_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
+    assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
+    assert_list_equal(new_nn.predict_properties, old_nn.predict_properties)
+    assert_equal(new_nn.positive_energy_mode, old_nn.positive_energy_mode)
+    assert_list_equal(new_nn.elements, old_nn.elements)
+    assert_equal(new_nn._activation, old_nn._activation)
+
+
 def test_inference_nn():
     """
     Test the inference of `EamAlloyNN` with only NN potentials.
@@ -277,7 +303,8 @@ def test_inference_nn():
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
                         export_properties=['energy'])
-        nn.build(data.features, mode, verbose=True)
+        nn._get_model_outputs(
+            data.features, data.descriptors, mode, verbose=True)
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
         assert_equal(len(collection), 35)
@@ -434,9 +461,8 @@ def teardown():
     """
     Delete the tmp dir.
     """
-    # if exists(lammps.tmp_dir):
-    #     shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
-    pass
+    if exists(lammps.tmp_dir):
+        shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
 
 
 @with_setup(teardown=None)
@@ -452,7 +478,6 @@ def test_eam_alloy_zjw04():
     symbols[0: 2] = ['Al', 'Al']
     atoms.set_chemical_symbols(symbols)
     elements = sorted(set(symbols))
-    volume = atoms.get_volume()
 
     with tf.Graph().as_default():
         clf = EAMTransformer(rc=rc, elements=elements)
@@ -464,36 +489,24 @@ def test_eam_alloy_zjw04():
                             "AlCu": {"phi": "zjw04"},
                             "CuCu": {"phi": "zjw04"}},
                         export_properties=['energy', 'forces', 'stress'])
+        nn.attach_transformer(clf)
         predictions = nn.build(
-            features=clf.get_features(),
+            features=clf.placeholders,
             mode=tf.estimator.ModeKeys.PREDICT,
             verbose=True)
 
-        op = tf.get_default_graph().get_tensor_by_name('Output/Stress/Full/dEdh:0')
-
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            result, dEdh = sess.run([predictions, op],
-                                    feed_dict=clf.get_feed_dict(atoms))
+            result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
 
     atoms.calc = lammps
     lammps.calculate(atoms)
-
-    print(result)
-
-    print(atoms.cell)
-
-    nns = result['stress']
-    lms = lammps.get_stress(atoms) * volume
-
-    print('lammps stress')
-    print(lammps.get_stress(atoms) * volume)
-    print('')
 
     assert_almost_equal(result['energy'],
                         lammps.get_potential_energy(atoms), delta=1e-6)
     assert_array_almost_equal(result['forces'],
                               lammps.get_forces(atoms), delta=1e-9)
+    # TODO: fix the stress
     # assert_array_almost_equal(result['stress'],
     #                           lammps.get_stress(atoms) * volume, delta=1e-5)
 
