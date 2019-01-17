@@ -9,15 +9,16 @@ import numpy as np
 import nose
 import os
 
-from unittest import skip
+from ase.db import connect
 from os.path import exists, join, dirname
 from nose.tools import assert_equal, assert_list_equal, with_setup
 from nose.tools import assert_true, assert_false
 
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
-from tensoralloy.test_utils import test_dir
+from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys, AttributeDict
+from tensoralloy.dtypes import set_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -129,10 +130,10 @@ def test_inference_from_transformer():
 
 
 output_graph_path = join(
-    test_dir(), 'checkpoints', 'Ni-k2', 'Ni.belher.k2.pb')
+    test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
 
 checkpoint_path = join(
-    test_dir(), 'checkpoints', 'Ni-k2', 'model.ckpt-100000')
+    test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-100000')
 
 
 def _delete():
@@ -140,23 +141,27 @@ def _delete():
         os.remove(output_graph_path)
 
 
-@skip
 @with_setup(teardown=_delete)
 def test_export_to_pb():
     """
-    Test exporting an `AtomicNN` to a pb file.
-
-    TODO: update the checkpoint file.
-
+    Test exporting an `AtomicResNN` to a pb file.
     """
+    db = connect(join(datasets_dir(), 'qm7.db'))
+    max_occurs = db.metadata['max_occurs']
+    elements = list(sorted(max_occurs.keys()))
+
+    set_float_precision('medium')
+
     clf = SymmetryFunctionTransformer(
-        rc=6.5, elements=['Ni'], angular=False,
+        rc=6.5, elements=elements, angular=False, trainable=True,
         eta=[0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0])
 
-    nn = AtomicNN(elements=['Ni'], hidden_sizes={'Ni': [64, 32]},
-                  activation='leaky_relu',
-                  export_properties=['energy', 'forces', 'stress'],
-                  normalizer=None)
+    nn = AtomicResNN(elements=elements,
+                     hidden_sizes=[64, 32],
+                     activation='leaky_relu',
+                     export_properties=['energy', 'forces', 'stress'],
+                     normalizer=None,
+                     atomic_static_energy=db.metadata['atomic_static_energy'])
     nn.attach_transformer(clf)
     nn.export(output_graph_path=output_graph_path,
               checkpoint=checkpoint_path,
@@ -164,6 +169,8 @@ def test_export_to_pb():
 
     assert_true(exists(output_graph_path))
     assert_false(exists(join(dirname(output_graph_path), 'export')))
+
+    set_float_precision('high')
 
 
 if __name__ == "__main__":

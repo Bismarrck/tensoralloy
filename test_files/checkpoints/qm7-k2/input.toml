@@ -1,0 +1,55 @@
+precision = 'medium'
+
+[dataset]
+sqlite3 = "../../datasets/qm7.db"
+name = "qm7"
+descriptor = "behler"
+rc = 6.5
+test_size = 1000
+
+[nn]
+activation = "leaky_relu"
+minimize = ['energy']
+positive_energy_mode = true
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+
+[nn.loss.l2]
+weight = 0.01
+
+[nn.atomic.behler]
+angular = false
+trainable = true
+cutoff = "cosine"
+eta = [0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0]
+
+[nn.atomic]
+input_normalizer = false
+arch = "AtomicResNN"
+export = ['energy', 'forces', 'hessian']
+
+[nn.atomic.layers]
+C = [64, 32]
+H = [64, 32]
+N = [64, 32]
+O = [64, 32]
+S = [64, 32]
+
+[opt]
+learning_rate = 0.001
+decay_function = "exponential"
+decay_rate = 0.99
+
+[train]
+restart = false
+batch_size = 50
+model_dir = "train"
+train_steps = 100000
+max_checkpoints_to_keep = 10
+eval_steps = 5000
+eval_dir = "eval"
+summary_steps = 100
+log_steps = 100
+profile_steps = 5000

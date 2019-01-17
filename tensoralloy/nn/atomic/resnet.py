@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from typing import List
+from typing import List, Dict
 
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.utils import log_tensor
@@ -59,7 +59,8 @@ class AtomicResNN(AtomicNN):
             normalizer=normalizer,
             normalization_weights=normalization_weights,
             positive_energy_mode=positive_energy_mode)
-        self._atomic_static_energy = atomic_static_energy
+
+        self._atomic_static_energy: Dict[str, float] = atomic_static_energy
 
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
         """
@@ -73,12 +74,7 @@ class AtomicResNN(AtomicNN):
         Return a JSON serializable dict representation of this `BasicNN`.
         """
         d = super(AtomicResNN, self).as_dict()
-
-        if self._atomic_static_energy is not None:
-            d['atomic_static_energy'] = list(self._atomic_static_energy)
-        else:
-            d['atomic_static_energy'] = None
-
+        d['atomic_static_energy'] = self._atomic_static_energy
         return d
 
     def _get_energy_op(self, outputs, features, name='energy', verbose=True):
