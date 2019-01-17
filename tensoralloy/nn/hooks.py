@@ -13,17 +13,62 @@ from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
 from tensorflow.python.training import training_util
 
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
-           "ExamplesPerSecondHook"]
+           "ExamplesPerSecondHook", "WarmStartFromVariablesHook"]
+
+
+class WarmStartFromVariablesHook(tf.train.SessionRunHook):
+    """
+    This hook can be used to replace `tf.estimator.WarmStartSettings`.
+    """
+
+    def __init__(self,
+                 previous_checkpoint: str,
+                 ema: tf.train.ExponentialMovingAverage):
+        """
+        Initialization method.
+
+        Parameters
+        ----------
+        previous_checkpoint : str
+            The previous checkpoint to load.
+        ema : tf.train.ExponentialMovingAverage
+            A function to obtain exponentially moving averaged variables.
+
+        """
+        tf.logging.info("Create WarmStartFromVariablesHook.")
+
+        self._previous_checkpoint = previous_checkpoint
+        self._ema = ema
+        self._saver = None
+
+    def begin(self):
+        """
+        Create restoring operations before the graph been finalized.
+        """
+        tf.logging.info('Initialize a Saver to restore EMA variables.')
+        self._saver = tf.train.Saver(var_list=self._ema.variables_to_restore())
+
+    def after_create_session(self, session, coord):
+        """
+        When this is called, the graph is finalized and ops can no longer be
+        added to the graph.
+        """
+        tf.logging.info(
+            f'Restore EMA variables from {self._previous_checkpoint}')
+        self._saver.restore(session, self._previous_checkpoint)
 
 
 class RestoreEmaVariablesHook(tf.train.SessionRunHook):
     """
     Replace parameters with their moving averages.
     This operation should be executed only once, and before any inference.
+
+    **Note: this hook should be used for restoring parameters for evaluation. **
 
     References
     ----------

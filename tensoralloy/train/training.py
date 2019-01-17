@@ -270,7 +270,7 @@ class TrainingManager:
 
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,
-                warm_start_from=hparams.train.previous_checkpoint,
+                warm_start_from=None,
                 model_dir=hparams.train.model_dir,
                 config=tf.estimator.RunConfig(
                     save_checkpoints_steps=hparams.train.eval_steps,

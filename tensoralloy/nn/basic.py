@@ -20,6 +20,7 @@ from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
+from tensoralloy.nn.hooks import WarmStartFromVariablesHook
 from tensoralloy.nn import losses as loss_ops
 
 __author__ = 'Xin Chen'
@@ -466,12 +467,16 @@ class BasicNN:
             tensors[tensor.op.name] = tensor
         return tensors
 
-    def get_training_hooks(self, hparams) -> List[tf.train.SessionRunHook]:
+    def get_training_hooks(self,
+                           ema: tf.train.ExponentialMovingAverage,
+                           hparams) -> List[tf.train.SessionRunHook]:
         """
         Return a list of `tf.train.SessionRunHook` objects for training.
 
         Parameters
         ----------
+        ema : tf.train.ExponentialMovingAverage
+            A function to obtain moving averaged variables.
         hparams : AttributeDict
             Hyper parameters for this function.
 
@@ -506,6 +511,13 @@ class BasicNN:
                         output_dir=f"{hparams.train.model_dir}-profile",
                         show_memory=True)
                 hooks.append(profiler_hook)
+
+            if hparams.train.previous_checkpoint is not None:
+                with tf.name_scope("Restore"):
+                    warm_start_hook = WarmStartFromVariablesHook(
+                        previous_checkpoint=hparams.train.previous_checkpoint,
+                        ema=ema)
+                hooks.append(warm_start_hook)
 
         return hooks
 
@@ -766,7 +778,7 @@ class BasicNN:
             minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            training_hooks = self.get_training_hooks(hparams=params)
+            training_hooks = self.get_training_hooks(ema=ema, hparams=params)
             return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
