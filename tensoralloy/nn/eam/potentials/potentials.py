@@ -110,7 +110,8 @@ class EmpiricalPotential:
             return True
         return False
 
-    def _get_variable(self, parameter, dtype, section, variable_scope: str):
+    def _get_variable(self, parameter, dtype, section, variable_scope: str,
+                      reuse=False):
         """
         A function to initialize a new local `tf.Variable`.
         Local variables cannot be used by potential functions outside `section`.
@@ -126,6 +127,8 @@ class EmpiricalPotential:
             The section to which the parameter belongs.
         variable_scope : str
             The created variable will be placed under this scope.
+        reuse : bool or tf._ReuseMode
+            The reuse mode.
 
         Returns
         -------
@@ -134,7 +137,7 @@ class EmpiricalPotential:
 
         """
         trainable = self._is_trainable(parameter, section)
-        with tf.variable_scope(variable_scope, reuse=False):
+        with tf.variable_scope(variable_scope, reuse=reuse):
             var = get_variable(name=parameter, dtype=dtype,
                                initializer=tf.constant_initializer(
                                    value=self._params[section][parameter],
@@ -169,22 +172,9 @@ class EmpiricalPotential:
             The corresponding variable.
 
         """
-        tag = f"{section}.{parameter}"
-        if tag in self._shared_variables:
-            return self._shared_variables[tag]
-
-        with tf.variable_scope(f"Shared/{section}", reuse=tf.AUTO_REUSE):
-            trainable = self._is_trainable(parameter, section)
-            var = get_variable(name=parameter, dtype=dtype,
-                               initializer=tf.constant_initializer(
-                                   value=self._params[section][parameter],
-                                   dtype=dtype),
-                               collections=[
-                                   GraphKeys.EAM_POTENTIAL_VARIABLES,
-                                   tf.GraphKeys.MODEL_VARIABLES],
-                               trainable=trainable)
-            self._shared_variables[tag] = var
-            return var
+        return self._get_variable(parameter, dtype, section,
+                                  variable_scope=f"Shared/{section}",
+                                  reuse=tf.AUTO_REUSE)
 
     def rho(self,
             r: tf.Tensor,
