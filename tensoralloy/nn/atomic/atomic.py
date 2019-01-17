@@ -64,15 +64,17 @@ class AtomicNN(BasicNN):
         """
         return self._hidden_sizes
 
-    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
-                  verbose=False):
+    def _get_model_outputs(self,
+                           features: AttributeDict,
+                           mode: tf.estimator.ModeKeys,
+                           verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
 
         Parameters
         ----------
         features : AttributeDict
-            A dict of input tensors:
+            A dict of input raw property tensors and the descriptors:
                 * 'descriptors', a dict of (element, (value, mask)) where
                   `element` represents the symbol of an element, `value` is the
                   descriptors of `element` and `mask` is None.
