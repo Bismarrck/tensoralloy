@@ -347,15 +347,15 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 f_true, (self._max_n_atoms, 3), name='f_true')
 
         if self._use_stress:
-            reduced_stress = tf.decode_raw(
+            stress = tf.decode_raw(
                 example['stress'], float_dtype, name='stress')
-            reduced_stress.set_shape([6])
-            decoded.reduced_stress = reduced_stress
+            stress.set_shape([6])
+            decoded.stress = stress
 
-            reduced_total_pressure = tf.decode_raw(
+            total_pressure = tf.decode_raw(
                 example['total_pressure'], float_dtype, name='stress')
-            reduced_total_pressure.set_shape([1])
-            decoded.reduced_total_pressure = reduced_total_pressure
+            total_pressure.set_shape([1])
+            decoded.total_pressure = total_pressure
 
         return decoded
 
