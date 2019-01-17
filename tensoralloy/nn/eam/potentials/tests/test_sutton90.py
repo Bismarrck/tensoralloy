@@ -86,9 +86,8 @@ def test_eam_sutton90_batch_transformer():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
-        ops = clf.get_descriptor_ops_from_batch(batch, batch_size=1)
-        features = AttributeDict(descriptors=ops,
-                                 positions=batch.positions,
+        descriptors = clf.get_descriptors(batch)
+        features = AttributeDict(positions=batch.positions,
                                  n_atoms=batch.n_atoms,
                                  cells=batch.cells,
                                  composition=batch.composition,
@@ -98,9 +97,12 @@ def test_eam_sutton90_batch_transformer():
         nn = EamAlloyNN(elements=['Ag'], custom_potentials={
             "Ag": {"rho": "sutton90", "embed": "sutton90"},
             "AgAg": {"phi": "sutton90"}})
-        prediction = nn.build(features=features,
-                              mode=tf.estimator.ModeKeys.EVAL,
-                              verbose=False)
+        outputs = nn._get_model_outputs(
+            features=features,
+            descriptors=AttributeDict(descriptors),
+            mode=tf.estimator.ModeKeys.EVAL,
+            verbose=False)
+        prediction = AttributeDict(energy=nn._get_energy_op(outputs, features))
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -130,8 +132,9 @@ def test_eam_sutton90():
                         custom_potentials={
                             "Ag": {"rho": "sutton90", "embed": "sutton90"},
                             "AgAg": {"phi": "sutton90"}})
+        nn.attach_transformer(clf)
         prediction = nn.build(
-            features=clf.get_features(),
+            features=clf.placeholders,
             mode=tf.estimator.ModeKeys.PREDICT,
             verbose=True)
 

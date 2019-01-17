@@ -438,9 +438,8 @@ class Dataset:
         """
         Return a Callable input function for `tf.estimator.Estimator`.
         """
-
         if mode == tf.estimator.ModeKeys.PREDICT:
-            return self.input_fn_for_prediction()
+            raise ValueError("The PREDICT does not need an `input_fn`.")
 
         def _input_fn() -> Tuple[AttributeDict, AttributeDict]:
             """
@@ -462,55 +461,13 @@ class Dataset:
                     shape = batch_of_tensors.shape.as_list()
                     if shape[0] is None:
                         batch_of_tensors.set_shape([batch_size] + shape[1:])
-            ops = self._transformer.get_descriptor_ops_from_batch(
-                batch, batch_size)
-            features = AttributeDict(descriptors=ops,
-                                     positions=batch.positions,
-                                     n_atoms=batch.n_atoms,
-                                     cells=batch.cells,
-                                     composition=batch.composition,
-                                     mask=batch.mask,
-                                     volume=batch.volume)
-            labels = AttributeDict(energy=batch.y_true)
+            labels = AttributeDict(energy=batch.pop('y_true'))
             if self._use_forces:
-                labels['forces'] = batch.f_true
+                labels['forces'] = batch.pop('f_true')
             if self._use_stress:
-                labels['stress'] = batch.stress
-                labels['total_pressure'] = batch.total_pressure
-            return features, labels
-
-        return _input_fn
-
-    def input_fn_for_prediction(self, predict_properties=('energy', 'forces')):
-        """
-        Return the input function, without any args, for runtime prediction.
-        """
-        def _input_fn() -> Tuple[AttributeDict, dict]:
-            """
-            The input function.
-
-            Returns
-            -------
-            features : AttributeDict
-                A dict of input feature placeholders.
-            params : dict
-                A JSON serializable dict representation of the runtime
-                descriptor transformer.
-
-            """
-            clf = self._transformer.as_descriptor_transformer()
-            params = clf.as_dict()
-            params.update({'predict_properties': predict_properties})
-            descriptors = clf.get_graph()
-            placeholders = AttributeDict(clf.placeholders)
-            features = AttributeDict(descriptors=descriptors,
-                                     positions=placeholders.positions,
-                                     n_atoms=placeholders.n_atoms,
-                                     cells=placeholders.cells,
-                                     composition=placeholders.composition,
-                                     mask=placeholders.mask,
-                                     volume=placeholders.volume)
-            return features, params
+                labels['stress'] = batch.pop('stress')
+                labels['total_pressure'] = batch.pop('total_pressure')
+            return batch, labels
 
         return _input_fn
 

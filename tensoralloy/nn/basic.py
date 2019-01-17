@@ -880,8 +880,7 @@ class BasicNN:
             if self._transformer is None:
                 raise ValueError("A transformer must be attached before "
                                  "exporting to a pb file.")
-
-            if isinstance(self._transformer, BatchDescriptorTransformer):
+            elif isinstance(self._transformer, BatchDescriptorTransformer):
                 clf = self._transformer.as_descriptor_transformer()
             else:
                 clf = self._transformer

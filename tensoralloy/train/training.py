@@ -19,7 +19,7 @@ from tensoralloy.io.input.reader import nested_set
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.utils import set_logging_configs, AttributeDict, Defaults
+from tensoralloy.utils import set_logging_configs, AttributeDict
 from tensoralloy.utils import check_path
 from tensoralloy.dtypes import set_float_precision
 
@@ -190,10 +190,14 @@ class TrainingManager:
                   'positive_energy_mode': positive_energy_mode}
         if self._reader['dataset.descriptor'] == 'behler':
             kwargs['export_properties'] = self._reader['nn.atomic.export']
-            return self._get_atomic_nn(kwargs)
+            nn = self._get_atomic_nn(kwargs)
         else:
             kwargs['export_properties'] = minimize_properties
-            return self._get_eam_nn(kwargs)
+            nn = self._get_eam_nn(kwargs)
+
+        # Attach the transformer
+        nn.attach_transformer(self._dataset.transformer)
+        return nn
 
     def _get_dataset(self, validate_tfrecords=True):
         """
@@ -266,15 +270,13 @@ class TrainingManager:
             tf.logging.info(
                 f'positive_energy_mode={self._nn.positive_energy_mode}')
 
-            tf.set_random_seed(self._hparams.seed)
-
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,
                 warm_start_from=None,
                 model_dir=hparams.train.model_dir,
                 config=tf.estimator.RunConfig(
                     save_checkpoints_steps=hparams.train.eval_steps,
-                    tf_random_seed=Defaults.seed,
+                    tf_random_seed=hparams.seed,
                     log_step_count_steps=None,
                     keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
                     session_config=tf.ConfigProto(allow_soft_placement=True)),
@@ -312,11 +314,7 @@ class TrainingManager:
         output_graph_path = join(self._hparams.train.model_dir,
                                  f'{self._dataset.name}.pb')
 
-        input_fn = self._dataset.input_fn_for_prediction(
-            predict_properties=self._reader['nn.atomic.export'])
-
-        self._nn.export(input_fn_for_prediction=input_fn,
-                        output_graph_path=output_graph_path,
+        self._nn.export(output_graph_path=output_graph_path,
                         checkpoint=checkpoint,
                         keep_tmp_files=False)
 

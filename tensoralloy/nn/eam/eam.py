@@ -227,7 +227,7 @@ class EamNN(BasicNN):
                            kbody_term=kbody_term,
                            variable_scope=variable_scope)
 
-    def _get_energy_op(self, outputs: List[tf.Tensor], features: AttributeDict,
+    def _get_energy_op(self, outputs: tf.Tensor, features: AttributeDict,
                        name='energy', verbose=True):
         """
         Return the Op to compute total energy of nn-EAM.
