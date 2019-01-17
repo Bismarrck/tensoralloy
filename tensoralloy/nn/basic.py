@@ -646,10 +646,30 @@ class BasicNN:
 
     def _get_model_outputs(self,
                            features: AttributeDict,
+                           descriptors: AttributeDict,
                            mode: tf.estimator.ModeKeys,
                            verbose=False):
         """
         Build the NN model and return raw outputs.
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of input raw property tensors:
+                * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+        descriptors : AttributeDict
+            A dict of Ops to get atomic descriptors. This should be produced by
+            an overrided `BaseTransformer.get_descriptors()`.
+        mode : tf.estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
         """
         raise NotImplementedError("This method must be overridden!")
 
@@ -668,7 +688,7 @@ class BasicNN:
             assert prop in labels
 
     def build(self,
-              raw_properties: AttributeDict,
+              features: AttributeDict,
               mode: tf.estimator.ModeKeys.TRAIN,
               verbose=True):
         """
@@ -676,7 +696,7 @@ class BasicNN:
 
         Parameters
         ----------
-        raw_properties : AttributeDict
+        features : AttributeDict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
@@ -699,10 +719,13 @@ class BasicNN:
         # 'descriptors', a dict of (element, (value, mask)) where `element`
         # represents the symbol of an element, `value` is the descriptors of
         # `element` and `mask` is the mask of `value`.
-        descriptors = self._transformer.get_descriptors(raw_properties)
+        descriptors = self._transformer.get_descriptors(features)
 
-        features = AttributeDict(descriptors=descriptors, **raw_properties)
-        outputs = self._get_model_outputs(features, mode, verbose)
+        outputs = self._get_model_outputs(
+            features=features,
+            descriptors=descriptors,
+            mode=mode,
+            verbose=verbose)
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             properties = self._export_properties
@@ -749,8 +772,11 @@ class BasicNN:
 
             return predictions
 
-    def model_fn(self, features: AttributeDict, labels: AttributeDict,
-                 mode: tf.estimator.ModeKeys, params: AttributeDict):
+    def model_fn(self,
+                 features: AttributeDict,
+                 labels: AttributeDict,
+                 mode: tf.estimator.ModeKeys,
+                 params: AttributeDict):
         """
         Initialize a model function for `tf.estimator.Estimator`.
 
@@ -793,7 +819,7 @@ class BasicNN:
         """
         self._check_keys(features, labels)
 
-        predictions = self.build(raw_properties=features,
+        predictions = self.build(features=features,
                                  mode=mode,
                                  verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 

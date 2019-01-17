@@ -84,11 +84,12 @@ def test_inference():
                 name='positions')
             mask = tf.convert_to_tensor(
                 np.ones((batch_size, max_n_atoms), np.float64))
-            features = AttributeDict(
-                descriptors=descriptors, positions=positions, mask=mask)
+            features = AttributeDict(positions=positions, mask=mask)
 
         outputs = nn._get_model_outputs(
-            features=features, mode=tf.estimator.ModeKeys.TRAIN,
+            features=features,
+            descriptors=descriptors,
+            mode=tf.estimator.ModeKeys.TRAIN,
             verbose=True)
         predictions = AttributeDict(energy=nn._get_energy_op(
             outputs, features, verbose=False))
@@ -114,7 +115,7 @@ def test_inference_from_transformer():
         nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'],
                          normalizer=None)
         nn.transformer = clf
-        prediction = nn.build(raw_properties=clf.placeholders,
+        prediction = nn.build(features=clf.placeholders,
                               mode=tf.estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 

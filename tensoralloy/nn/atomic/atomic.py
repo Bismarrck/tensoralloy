@@ -86,6 +86,7 @@ class AtomicNN(BasicNN):
 
     def _get_model_outputs(self,
                            features: AttributeDict,
+                           descriptors: AttributeDict,
                            mode: tf.estimator.ModeKeys,
                            verbose=False):
         """
@@ -95,14 +96,16 @@ class AtomicNN(BasicNN):
         ----------
         features : AttributeDict
             A dict of input raw property tensors and the descriptors:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is None.
+                * 'descriptors',
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+        descriptors : AttributeDict
+            A dict of (element, (value, mask)) where `element` represents the
+            symbol of an element, `value` is the descriptors of `element` and
+            `mask` is None.
         mode : tf.estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
@@ -114,7 +117,7 @@ class AtomicNN(BasicNN):
         with tf.variable_scope("ANN"):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
-            for element, (value, _) in features.descriptors.items():
+            for element, (value, _) in descriptors.items():
                 with tf.variable_scope(element):
                     x = tf.identity(value, name='input')
                     if mode == tf.estimator.ModeKeys.PREDICT:
