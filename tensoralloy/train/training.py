@@ -270,6 +270,10 @@ class TrainingManager:
             tf.logging.info(
                 f'positive_energy_mode={self._nn.positive_energy_mode}')
 
+            gpu_options = tf.GPUOptions(allow_growth=True)
+            session_config = tf.ConfigProto(allow_soft_placement=True,
+                                            gpu_options=gpu_options)
+
             estimator = tf.estimator.Estimator(
                 model_fn=nn.model_fn,
                 warm_start_from=None,
@@ -279,7 +283,7 @@ class TrainingManager:
                     tf_random_seed=hparams.seed,
                     log_step_count_steps=None,
                     keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
-                    session_config=tf.ConfigProto(allow_soft_placement=True)),
+                    session_config=session_config),
                 params=hparams)
 
             train_spec = tf.estimator.TrainSpec(
