@@ -29,8 +29,8 @@ __email__ = 'Bismarrck@me.com'
 
 class TrainingManager:
     """
-    This class is used to train/evalue/export a `BasicNN` model initialized from
-    an input TOML file.
+    This class is used to train/evaluate/export a `BasicNN` model initialized
+    from a TOML input file.
     """
 
     def __init__(self, input_file: str, validate_tfrecords=True):
