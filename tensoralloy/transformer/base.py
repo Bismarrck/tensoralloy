@@ -9,7 +9,7 @@ import numpy as np
 import abc
 
 from collections import Counter
-from typing import Dict, Tuple, List
+from typing import Dict, List
 from ase import Atoms
 
 from tensoralloy.utils import AttributeDict
@@ -72,6 +72,25 @@ class BaseTransformer:
         """
         pass
 
+    @abc.abstractmethod
+    def get_descriptors(self, raw_properties: AttributeDict):
+        """
+        An abstract method. Return the Op to compute atomic descriptors from raw
+        properties (positions, volume, v2g_map, ...).
+
+        Parameters
+        ----------
+        raw_properties : AttributeDict
+            A dict of raw properties.
+
+        Returns
+        -------
+        descriptors : tf.Tensor
+            The Op to compute atomic descriptors.
+
+        """
+        pass
+
 
 class DescriptorTransformer(BaseTransformer):
     """
@@ -112,6 +131,19 @@ class DescriptorTransformer(BaseTransformer):
         Return a JSON serializable dict representation of this transformer.
         """
         pass
+
+    def get_descriptors(self, _):
+        """
+        An abstract method. Return the Op to compute atomic descriptors from raw
+        properties (positions, volume, v2g_map, ...).
+
+        Returns
+        -------
+        descriptors : tf.Tensor
+            The Op to compute atomic descriptors.
+
+        """
+        return self.get_graph()
 
     def get_features(self) -> AttributeDict:
         """
@@ -359,19 +391,42 @@ class BatchDescriptorTransformer(BaseTransformer):
         """
         pass
 
-    @abc.abstractmethod
-    def get_descriptor_ops_from_batch(self, batch: AttributeDict,
-                                      batch_size: int):
+    def _infer_batch_size(self, batch_raw_properties: AttributeDict):
         """
-        Return the tensorflow graph for computing atomic descriptors from an
-        input batch.
+        Infer `batch_size` from `batch_raw_properties`.
+        """
+
+        for name, tensor in batch_raw_properties.items():
+            if isinstance(tensor, tf.Tensor):
+                batch_size = tensor.shape[0].value
+            elif isinstance(tensor, np.ndarray):
+                batch_size = tensor.shape[0]
+            else:
+                raise ValueError(
+                    f"batch_raw_properties.{name} is neither a `tf.Tensor` "
+                    f"nor an `np.ndarray`")
+            if batch_size is not None:
+                break
+        else:
+            raise ValueError("`batch_size` cannot be inferred!")
+
+        self._batch_size = batch_size
+
+    @abc.abstractmethod
+    def get_descriptors(self, batch_raw_properties: AttributeDict):
+        """
+        Return the Op to compute atomic descriptors from a batch of raw
+        properties (positions, volume, v2g_map, ...).
+
+        Parameters
+        ----------
+        batch_raw_properties : AttributeDict
+            A dict of batched raw properties.
 
         Returns
         -------
-        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict of (element, (value, mask)) where `element` is a symbol and
-            `value` is the Op to compute atomic descriptors and `mask` is the Op
-            to compute mask of `value`. `mask` may be a `tf.no_op`.
+        descriptors : tf.Tensor
+            The Op to compute atomic descriptors.
 
         """
         pass

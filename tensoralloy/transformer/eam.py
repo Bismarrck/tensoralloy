@@ -423,9 +423,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptor_ops_from_batch(self,
-                                      batch: AttributeDict,
-                                      batch_size: int):
+    def get_descriptors(self, batch_raw_properties: AttributeDict):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -435,9 +433,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         Parameters
         ----------
-        batch : AttributeDict
-            A of batch examples produced by `tf.data.Dataset`. Each example is
-            produced by the function `decode_protobuf`.
+        batch_raw_properties : AttributeDict
+            A Batch of raw properties provided by `tf.data.Dataset`. Each batch
+            is produced by the function `decode_protobuf`.
 
             Here are default keys:
 
@@ -456,29 +454,28 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
             If `self.stress` is `True`, these following keys will be provided:
 
-            * 'reduced_stress': float64, [batch_size, 6]
+            * 'stress': float64, [batch_size, 6]
             * 'total_pressure': float64, [batch_size, ]
-
-        batch_size : int
-            The size of the batch.
 
         Returns
         -------
-        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict of (element, (g, mask)) where `element` is the symbol of the
             element, `g` is the Op to compute atomic descriptors and `mask` is
             the Op to compute value masks.
 
         """
-        self._batch_size = batch_size
+        self._infer_batch_size(batch_raw_properties)
 
         inputs = AttributeDict(
-            ilist=batch.ilist, jlist=batch.jlist,
-            shift=batch.shift, v2g_map=batch.rv2g
+            ilist=batch_raw_properties.ilist,
+            jlist=batch_raw_properties.jlist,
+            shift=batch_raw_properties.shift,
+            v2g_map=batch_raw_properties.rv2g
         )
-        inputs.positions = batch.positions
-        inputs.cells = batch.cells
-        inputs.volume = batch.volume
+        inputs.positions = batch_raw_properties.positions
+        inputs.cells = batch_raw_properties.cells
+        inputs.volume = batch_raw_properties.volume
 
         return self.build_graph(inputs)
 

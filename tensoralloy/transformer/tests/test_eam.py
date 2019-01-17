@@ -112,7 +112,7 @@ def test_batch_eam_transformer():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
-        ops = clf.get_descriptor_ops_from_batch(batch, batch_size=1)
+        ops = clf.get_descriptors(batch)
 
         with tf.Session() as sess:
             results = sess.run(ops)

@@ -637,21 +637,18 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptor_ops_from_batch(self,
-                                      batch: AttributeDict,
-                                      batch_size: int):
+    def get_descriptors(self, batch_raw_properties: AttributeDict):
         """
-        Return the graph for calculating symmetry function descriptors for the
-        given batch of examples.
+        Return the Op to compute symmetry function descriptors.
 
         This function is necessary because nested dicts are not supported by
         `tf.data.Dataset.batch`.
 
         Parameters
         ----------
-        batch : AttributeDict
-            A of batch examples produced by `tf.data.Dataset`. Each example is
-            produced by the function `decode_protobuf`.
+        batch_raw_properties : AttributeDict
+            A Batch of raw properties provided by `tf.data.Dataset`. Each batch
+            is produced by the function `decode_protobuf`.
 
             Here are default keys:
 
@@ -683,40 +680,45 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'jk_shift': float64 or float32, [batch_size, nijk_max, 3]
             * 'av2g': int32, [batch_size, nijk_max, 3]
 
-        batch_size : int
-            The size of the batch.
-
         Returns
         -------
-        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict of (element, (value, mask)) where `element` is a symbol,
             `value` is the Op to compute its atomic descriptors and `mask` is a
             `tf.no_op`.
 
         """
-        self._batch_size = batch_size
+        self._infer_batch_size(batch_raw_properties)
 
         inputs = AttributeDict()
         inputs.g2 = AttributeDict(
-            ilist=batch.ilist, jlist=batch.jlist,
-            shift=batch.shift, v2g_map=batch.rv2g
+            ilist=batch_raw_properties.ilist,
+            jlist=batch_raw_properties.jlist,
+            shift=batch_raw_properties.shift,
+            v2g_map=batch_raw_properties.rv2g
         )
-        inputs.positions = batch.positions
-        inputs.cells = batch.cells
-        inputs.volume = batch.volume
+        inputs.positions = batch_raw_properties.positions
+        inputs.cells = batch_raw_properties.cells
+        inputs.volume = batch_raw_properties.volume
 
         if self._k_max == 3:
             inputs.g4 = AttributeDict(
                 ij=AttributeDict(
-                    ilist=batch.ij[..., 0], jlist=batch.ij[..., 1]),
+                    ilist=batch_raw_properties.ij[..., 0],
+                    jlist=batch_raw_properties.ij[..., 1]),
                 ik=AttributeDict(
-                    ilist=batch.ik[..., 0], klist=batch.ik[..., 1]),
+                    ilist=batch_raw_properties.ik[..., 0],
+                    klist=batch_raw_properties.ik[..., 1]),
                 jk=AttributeDict(
-                    jlist=batch.jk[..., 0], klist=batch.jk[..., 1]),
+                    jlist=batch_raw_properties.jk[..., 0],
+                    klist=batch_raw_properties.jk[..., 1]),
                 shift=AttributeDict(
-                    ij=batch.ij_shift, ik=batch.ik_shift, jk=batch.jk_shift,),
-                v2g_map=batch.av2g,
+                    ij=batch_raw_properties.ij_shift,
+                    ik=batch_raw_properties.ik_shift,
+                    jk=batch_raw_properties.jk_shift,),
+                v2g_map=batch_raw_properties.av2g,
             )
+
         return self.build_graph(inputs)
 
     def get_descriptor_normalization_weights(self, method):

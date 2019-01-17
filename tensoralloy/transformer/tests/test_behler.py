@@ -709,7 +709,7 @@ def test_batch_multi_elements():
         # Use a large delta because we use float32 in this test.
         delta = 1e-5
 
-        g = sf.get_descriptor_ops_from_batch(batch, batch_size)
+        g = sf.get_descriptors(batch)
         with tf.Session(graph=tf.get_default_graph()) as sess:
             tf.global_variables_initializer().run()
             results = sess.run(g)
