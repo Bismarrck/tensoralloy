@@ -80,6 +80,12 @@ def test_get_train_op():
         assert_equal(len(tf.moving_average_variables()), 9)
         assert_equal(len(tf.model_variables()), 9)
 
+        # varialbles 9, moving averged 9, 9 * 2
+        # global step 1
+        # adam 2
+        # 2 adam variables per variable, 9 * 2
+        assert_equal(len(tf.global_variables()), 9 * 2 + 1 + 2 + 9 * 2)
+
 
 if __name__ == "__main__":
     nose.main()
