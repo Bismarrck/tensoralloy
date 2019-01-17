@@ -9,7 +9,7 @@ import numpy as np
 import json
 import shutil
 
-from typing import List, Dict, Callable
+from typing import List, Dict
 from collections import namedtuple
 from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
@@ -22,6 +22,8 @@ from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook
 from tensoralloy.nn import losses as loss_ops
+from tensoralloy.transformer.base import BaseTransformer
+from tensoralloy.transformer.base import BatchDescriptorTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -161,6 +163,8 @@ class BasicNN:
         self._export_properties = list(export_properties)
         self._positive_energy_mode = positive_energy_mode
 
+        self._transformer: BaseTransformer = None
+
     @property
     def elements(self):
         """
@@ -211,6 +215,26 @@ class BasicNN:
             assert (sizes > 0).all()
             results[element] = sizes.tolist()
         return results
+
+    def attach_transformer(self, clf: BaseTransformer):
+        """
+        Attach a descriptor transformer to this NN.
+        """
+        self._transformer = clf
+
+    def _get_transformer(self):
+        """
+        Get the attached transformer.
+        """
+        return self._transformer
+
+    transformer = property(_get_transformer, attach_transformer)
+
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        raise NotImplementedError("This method must be overridden!")
 
     def _get_energy_op(self, outputs, features, name='energy', verbose=True):
         """
@@ -620,10 +644,12 @@ class BasicNN:
 
             return metrics
 
-    def _build_nn(self, features: AttributeDict, mode: tf.estimator.ModeKeys,
-                  verbose=False):
+    def _get_model_outputs(self,
+                           features: AttributeDict,
+                           mode: tf.estimator.ModeKeys,
+                           verbose=False):
         """
-        Build the neural network.
+        Build the NN model and return raw outputs.
         """
         raise NotImplementedError("This method must be overridden!")
 
@@ -631,28 +657,27 @@ class BasicNN:
         """
         Check the keys of `features` and `labels`.
         """
-        assert 'descriptors' in features
         assert 'positions' in features
         assert 'cells' in features
         assert 'mask' in features
         assert 'n_atoms' in features
         assert 'volume' in features
+        assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
             assert prop in labels
 
-    def build(self, features: AttributeDict, mode: tf.estimator.ModeKeys.TRAIN,
+    def build(self,
+              raw_properties: AttributeDict,
+              mode: tf.estimator.ModeKeys.TRAIN,
               verbose=True):
         """
         Build the atomic neural network.
 
         Parameters
         ----------
-        features : AttributeDict
-            A dict of input tensors:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is the mask of `value`.
+        raw_properties : AttributeDict
+            A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
@@ -670,7 +695,14 @@ class BasicNN:
             A dict of output tensors.
 
         """
-        outputs = self._build_nn(features, mode, verbose)
+
+        # 'descriptors', a dict of (element, (value, mask)) where `element`
+        # represents the symbol of an element, `value` is the descriptors of
+        # `element` and `mask` is the mask of `value`.
+        descriptors = self._transformer.get_descriptors(raw_properties)
+
+        features = AttributeDict(descriptors=descriptors, **raw_properties)
+        outputs = self._get_model_outputs(features, mode, verbose)
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             properties = self._export_properties
@@ -722,13 +754,14 @@ class BasicNN:
         """
         Initialize a model function for `tf.estimator.Estimator`.
 
+        In this method `features` are raw property (positions, cells, etc)
+        tensors. Because `tf.estimator.Estimator` requires a `features` as the
+        first arg of `model_fn`, we cannot change its name here.
+
         Parameters
         ----------
         features : AttributeDict
-            A dict of tensors:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is the mask of `value`.
+            A dict of raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
@@ -760,7 +793,7 @@ class BasicNN:
         """
         self._check_keys(features, labels)
 
-        predictions = self.build(features=features,
+        predictions = self.build(raw_properties=features,
                                  mode=mode,
                                  verbose=(mode == tf.estimator.ModeKeys.TRAIN))
 
@@ -793,27 +826,13 @@ class BasicNN:
                                           eval_metric_ops=eval_metrics_ops,
                                           evaluation_hooks=evaluation_hooks)
 
-    def export(self, input_fn_for_prediction: Callable, output_graph_path: str,
-               checkpoint=None, keep_tmp_files=True):
+    def export(self, output_graph_path: str, checkpoint=None,
+               keep_tmp_files=True):
         """
         Freeze the graph and export the model to a pb file.
 
         Parameters
         ----------
-        input_fn_for_prediction : Callable
-            A `Callable` function to return (features, params).
-
-            `features` should be a dict:
-                * 'descriptors', a dict of (element, (value, mask)) where
-                  `element` represents the symbol of an element, `value` is the
-                  descriptors of `element` and `mask` is the mask of `value`.
-                * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
-                * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
-            `params` should be a JSON dict returned by `Descriptor.as_dict`.
-
         output_graph_path : str
             The name of the output graph file.
         checkpoint : str or None
@@ -832,14 +851,28 @@ class BasicNN:
 
         with graph.as_default():
 
-            features, params = input_fn_for_prediction()
-            predictions = self.build(features,
-                                     mode=tf.estimator.ModeKeys.PREDICT)
+            if self._transformer is None:
+                raise ValueError("A transformer must be attached before "
+                                 "exporting to a pb file.")
+
+            if isinstance(self._transformer, BatchDescriptorTransformer):
+                clf = self._transformer.as_descriptor_transformer()
+            else:
+                clf = self._transformer
+
+            configs = self.as_dict()
+            configs.pop('class')
+
+            nn = self.__class__(**configs)
+            nn.attach_transformer(clf)
+            predictions = nn.build(clf.placeholders,
+                                   mode=tf.estimator.ModeKeys.PREDICT,
+                                   verbose=True)
 
             # Encode the JSON dict of the serialized transformer into the graph.
             with tf.name_scope("Transformer/"):
                 transformer_params = tf.constant(
-                    json.dumps(params), name='params')
+                    json.dumps(clf.as_dict()), name='params')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
