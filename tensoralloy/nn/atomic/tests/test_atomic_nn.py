@@ -23,6 +23,30 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def test_as_dict():
+    """
+    Test the method `AtomicNN.as_dict`.
+    """
+    elements = ['Al', 'Cu']
+    hidden_sizes = 32
+    old_nn = AtomicNN(elements, hidden_sizes,
+                      normalizer='linear',
+                      activation='tanh',
+                      minimize_properties=['energy', ],
+                      export_properties=['energy', ])
+
+    d = old_nn.as_dict()
+
+    assert_equal(d['class'], 'AtomicNN')
+    d.pop('class')
+
+    new_nn = AtomicNN(**d)
+
+    assert_list_equal(new_nn.elements, old_nn.elements)
+    assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
+    assert_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
+
+
 def test_inference():
     """
     Test the inference of `AtomicNN`.
@@ -121,34 +145,19 @@ def test_export_to_pb():
     """
     Test exporting an `AtomicNN` to a pb file.
 
-    # TODO: fix this test
+    TODO: update the checkpoint file.
 
     """
-
-    def input_fn():
-        """
-        An example of the `input_fn` for exporting an `AtomicNN` to a pb file.
-        """
-        clf = SymmetryFunctionTransformer(
-            rc=6.5, elements=['Ni'], angular=False,
-            eta=[0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0])
-        placeholders = clf.placeholders
-        descriptors = clf.get_graph()
-        features = AttributeDict(descriptors=descriptors,
-                                 positions=placeholders.positions,
-                                 n_atoms=placeholders.n_atoms,
-                                 cells=placeholders.cells,
-                                 composition=placeholders.composition,
-                                 mask=placeholders.mask,
-                                 volume=placeholders.volume)
-        return features, None
+    clf = SymmetryFunctionTransformer(
+        rc=6.5, elements=['Ni'], angular=False,
+        eta=[0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0])
 
     nn = AtomicNN(elements=['Ni'], hidden_sizes={'Ni': [64, 32]},
                   activation='leaky_relu',
                   export_properties=['energy', 'forces', 'stress'],
                   normalizer=None)
-    nn.export(input_fn,
-              output_graph_path=output_graph_path,
+    nn.attach_transformer(clf)
+    nn.export(output_graph_path=output_graph_path,
               checkpoint=checkpoint_path,
               keep_tmp_files=False)
 

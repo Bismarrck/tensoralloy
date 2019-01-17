@@ -64,6 +64,26 @@ class AtomicNN(BasicNN):
         """
         return self._hidden_sizes
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        if len(self._initial_normalizer_weights) == 0:
+            normalization_weights = None
+        else:
+            normalization_weights = {}
+            for key, value in self._initial_normalizer_weights.items():
+                normalization_weights = list(value)
+        return {"class": self.__class__.__name__,
+                "elements": self._elements,
+                "hidden_sizes": self._hidden_sizes,
+                "activation": self._activation,
+                "minimize_properties": self._minimize_properties,
+                "export_properties": self._export_properties,
+                "positive_energy_mode": self._positive_energy_mode,
+                "normalizer": self._normalizer.method,
+                "normalization_weights": normalization_weights}
+
     def _get_model_outputs(self,
                            features: AttributeDict,
                            mode: tf.estimator.ModeKeys,

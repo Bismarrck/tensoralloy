@@ -68,6 +68,19 @@ class AtomicResNN(AtomicNN):
         super(AtomicResNN, self)._check_keys(features, labels)
         assert 'composition' in features
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        d = super(AtomicResNN, self).as_dict()
+
+        if self._atomic_static_energy is not None:
+            d['atomic_static_energy'] = list(self._atomic_static_energy)
+        else:
+            d['atomic_static_energy'] = None
+
+        return d
+
     def _get_energy_op(self, outputs, features, name='energy', verbose=True):
         """
         Return the Op to compute total energy (eV).
