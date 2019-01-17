@@ -115,6 +115,9 @@ class AtomicResNN(AtomicNN):
                                     tf.GraphKeys.MODEL_VARIABLES],
                                 initializer=initializer)
             xz = tf.multiply(x, z, name='xz')
+            if self._positive_energy_mode:
+                xz = tf.negative(xz, name='xz/positive')
+
             if ndims == 1:
                 y_static = tf.reduce_sum(xz, keepdims=False, name='static')
             else:
