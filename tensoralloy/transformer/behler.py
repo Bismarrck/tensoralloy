@@ -637,7 +637,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptors(self, batch_raw_properties: AttributeDict):
+    def get_descriptors(self, batch_features: AttributeDict):
         """
         Return the Op to compute symmetry function descriptors.
 
@@ -646,8 +646,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         Parameters
         ----------
-        batch_raw_properties : AttributeDict
-            A Batch of raw properties provided by `tf.data.Dataset`. Each batch
+        batch_features : AttributeDict
+            A batch of raw properties provided by `tf.data.Dataset`. Each batch
             is produced by the function `decode_protobuf`.
 
             Here are default keys:
@@ -688,35 +688,35 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             `tf.no_op`.
 
         """
-        self._infer_batch_size(batch_raw_properties)
+        self._infer_batch_size(batch_features)
 
         inputs = AttributeDict()
         inputs.g2 = AttributeDict(
-            ilist=batch_raw_properties.ilist,
-            jlist=batch_raw_properties.jlist,
-            shift=batch_raw_properties.shift,
-            v2g_map=batch_raw_properties.rv2g
+            ilist=batch_features.ilist,
+            jlist=batch_features.jlist,
+            shift=batch_features.shift,
+            v2g_map=batch_features.rv2g
         )
-        inputs.positions = batch_raw_properties.positions
-        inputs.cells = batch_raw_properties.cells
-        inputs.volume = batch_raw_properties.volume
+        inputs.positions = batch_features.positions
+        inputs.cells = batch_features.cells
+        inputs.volume = batch_features.volume
 
         if self._k_max == 3:
             inputs.g4 = AttributeDict(
                 ij=AttributeDict(
-                    ilist=batch_raw_properties.ij[..., 0],
-                    jlist=batch_raw_properties.ij[..., 1]),
+                    ilist=batch_features.ij[..., 0],
+                    jlist=batch_features.ij[..., 1]),
                 ik=AttributeDict(
-                    ilist=batch_raw_properties.ik[..., 0],
-                    klist=batch_raw_properties.ik[..., 1]),
+                    ilist=batch_features.ik[..., 0],
+                    klist=batch_features.ik[..., 1]),
                 jk=AttributeDict(
-                    jlist=batch_raw_properties.jk[..., 0],
-                    klist=batch_raw_properties.jk[..., 1]),
+                    jlist=batch_features.jk[..., 0],
+                    klist=batch_features.jk[..., 1]),
                 shift=AttributeDict(
-                    ij=batch_raw_properties.ij_shift,
-                    ik=batch_raw_properties.ik_shift,
-                    jk=batch_raw_properties.jk_shift,),
-                v2g_map=batch_raw_properties.av2g,
+                    ij=batch_features.ij_shift,
+                    ik=batch_features.ik_shift,
+                    jk=batch_features.jk_shift,),
+                v2g_map=batch_features.av2g,
             )
 
         return self.build_graph(inputs)

@@ -423,7 +423,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptors(self, batch_raw_properties: AttributeDict):
+    def get_descriptors(self, batch_features: AttributeDict):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -433,8 +433,8 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         Parameters
         ----------
-        batch_raw_properties : AttributeDict
-            A Batch of raw properties provided by `tf.data.Dataset`. Each batch
+        batch_features : AttributeDict
+            A batch of raw properties provided by `tf.data.Dataset`. Each batch
             is produced by the function `decode_protobuf`.
 
             Here are default keys:
@@ -465,17 +465,17 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             the Op to compute value masks.
 
         """
-        self._infer_batch_size(batch_raw_properties)
+        self._infer_batch_size(batch_features)
 
         inputs = AttributeDict(
-            ilist=batch_raw_properties.ilist,
-            jlist=batch_raw_properties.jlist,
-            shift=batch_raw_properties.shift,
-            v2g_map=batch_raw_properties.rv2g
+            ilist=batch_features.ilist,
+            jlist=batch_features.jlist,
+            shift=batch_features.shift,
+            v2g_map=batch_features.rv2g
         )
-        inputs.positions = batch_raw_properties.positions
-        inputs.cells = batch_raw_properties.cells
-        inputs.volume = batch_raw_properties.volume
+        inputs.positions = batch_features.positions
+        inputs.cells = batch_features.cells
+        inputs.volume = batch_features.volume
 
         return self.build_graph(inputs)
 

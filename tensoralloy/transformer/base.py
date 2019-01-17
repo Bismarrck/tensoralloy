@@ -73,20 +73,20 @@ class BaseTransformer:
         pass
 
     @abc.abstractmethod
-    def get_descriptors(self, raw_properties: AttributeDict):
+    def get_descriptors(self, features: AttributeDict):
         """
         An abstract method. Return the Op to compute atomic descriptors from raw
         properties (positions, volume, v2g_map, ...).
 
         Parameters
         ----------
-        raw_properties : AttributeDict
-            A dict of raw properties.
+        features : AttributeDict
+            A dict of raw property tensors.
 
         Returns
         -------
-        descriptors : tf.Tensor
-            The Op to compute atomic descriptors.
+        descriptors : AttributeDict
+            A dict of Ops to get atomic descriptors.
 
         """
         pass
@@ -139,26 +139,11 @@ class DescriptorTransformer(BaseTransformer):
 
         Returns
         -------
-        descriptors : tf.Tensor
-            The Op to compute atomic descriptors.
+        descriptors : AttributeDict
+            A dict of Ops to get atomic descriptors.
 
         """
         return self.get_graph()
-
-    def get_features(self) -> AttributeDict:
-        """
-        Return the dict `features` that can be used to construct a `BasicNN`.
-        """
-        descriptors = self.get_graph()
-        placeholders = self._placeholders
-        features = AttributeDict(descriptors=descriptors,
-                                 positions=placeholders.positions,
-                                 n_atoms=placeholders.n_atoms,
-                                 cells=placeholders.cells,
-                                 composition=placeholders.composition,
-                                 mask=placeholders.mask,
-                                 volume=placeholders.volume)
-        return features
 
     def get_index_transformer(self, atoms: Atoms):
         """
@@ -413,20 +398,20 @@ class BatchDescriptorTransformer(BaseTransformer):
         self._batch_size = batch_size
 
     @abc.abstractmethod
-    def get_descriptors(self, batch_raw_properties: AttributeDict):
+    def get_descriptors(self, batch_features: AttributeDict):
         """
-        Return the Op to compute atomic descriptors from a batch of raw
+        An abstract method. Return the Op to compute atomic descriptors from raw
         properties (positions, volume, v2g_map, ...).
 
         Parameters
         ----------
-        batch_raw_properties : AttributeDict
-            A dict of batched raw properties.
+        batch_features : AttributeDict
+            A dict of batched raw property tensors.
 
         Returns
         -------
-        descriptors : tf.Tensor
-            The Op to compute atomic descriptors.
+        descriptors : AttributeDict
+            A dict of Ops to get atomic descriptors.
 
         """
         pass
