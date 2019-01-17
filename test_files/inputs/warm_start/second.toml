@@ -1,0 +1,43 @@
+[dataset]
+sqlite3 = "../../../datasets/snap-Ni.db"
+name = "snap_Ni"
+descriptor = "behler"
+rc = 4.6
+test_size = 61
+tfrecords_file = '.'
+
+[nn]
+minimize = ['energy']
+positive_energy_mode = true
+
+[nn.loss.l2]
+weight = 0.01
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = true
+
+[nn.atomic]
+arch = "AtomicNN"
+
+[nn.atomic.behler]
+trainable = false
+eta = [0.05, 0.4, 1.0, 2.0, 4.0, 8.0, 20.0, 40.0]
+
+[opt]
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.98
+
+[train]
+restart = false
+batch_size = 50
+shuffle = true
+model_dir = "./second"
+previous_checkpoint = false
+train_steps = 100
+max_checkpoints_to_keep = 2
+eval_steps = 100
+summary_steps = 100
+log_steps = 100
+profile_steps = 0
