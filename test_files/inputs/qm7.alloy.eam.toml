@@ -16,7 +16,7 @@ weight = 0.1
 [nn.eam]
 arch = "EamAlloyNN"
 
-[nn.eam.export]
+[nn.eam.setfl]
 nr = 10000
 dr = 0.00066
 nrho = 10000

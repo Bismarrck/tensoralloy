@@ -197,7 +197,6 @@ class InputReader:
             _safe_update("nn.atomic.behler.trainable")
             _safe_update("nn.atomic.arch")
             _safe_update("nn.atomic.input_normalizer")
-            _safe_update("nn.atomic.export")
 
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):
@@ -209,17 +208,17 @@ class InputReader:
 
         else:
             _safe_update("nn.eam.arch")
-            _safe_update("nn.eam.export.nr")
-            _safe_update("nn.eam.export.dr")
-            _safe_update("nn.eam.export.nrho")
-            _safe_update("nn.eam.export.drho")
-            _safe_update("nn.eam.export.checkpoint")
+            _safe_update("nn.eam.setfl.nr")
+            _safe_update("nn.eam.setfl.dr")
+            _safe_update("nn.eam.setfl.nrho")
+            _safe_update("nn.eam.setfl.drho")
+            _safe_update("nn.eam.setfl.checkpoint")
 
             for attr in ('constant', 'type'):
-                values = nested_get(configs, f"nn.eam.export.lattice.{attr}")
+                values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")
                 if isinstance(values, dict):
                     for element in values.keys():
-                        _safe_update(f"nn.eam.export.lattice.{attr}.{element}")
+                        _safe_update(f"nn.eam.setfl.lattice.{attr}.{element}")
 
             for func in ('embed', 'phi', 'rho'):
                 pots = nested_get(configs, f"nn.eam.{func}")

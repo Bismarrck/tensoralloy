@@ -6,20 +6,23 @@ rc = 6.5
 tfrecords_dir = "experiments/AlFe/fs"
 test_size = 1000
 
+[nn]
+export = ['energy', 'forces', 'hessian', 'stress']
+
 [nn.eam]
 arch = "EamFsNN"
 
-[nn.eam.export]
+[nn.eam.setfl]
 nr = 10000
 dr = 0.0006
 nrho = 10000
 drho = 0.002
 
-[nn.eam.export.lattice.constant]
+[nn.eam.setfl.lattice.constant]
 Al = 4.04527
 Fe = 2.855312
 
-[nn.eam.export.lattice.type]
+[nn.eam.setfl.lattice.type]
 Al = 'fcc'
 Fe = 'bcc'
 

@@ -14,6 +14,7 @@ test_size = 0.2
 [nn]
 activation = "leaky_relu"
 minimize = ['energy', 'forces']
+export = ['energy', 'forces']
 positive_energy_mode = false
 
 [nn.loss.energy]
@@ -35,7 +36,6 @@ weight = 0.01
 [nn.atomic]
 arch = "AtomicNN"
 input_normalizer = false
-export = ['energy', 'forces']
 
 [nn.atomic.behler]
 angular = false
@@ -55,11 +55,14 @@ arch = "EamAlloyNN"
 [nn.eam.phi]
 [nn.eam.embed]
 
-[nn.eam.export]
+[nn.eam.setfl]
 nr = 10000
 dr = 0.00065
 nrho = 10000
 drho = 0.001
+
+[nn.eam.setfl.lattice.constant]
+[nn.eam.setfl.lattice.type]
 
 [opt]
 method = "adam"

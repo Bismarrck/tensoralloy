@@ -182,17 +182,17 @@ class TrainingManager:
         """
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
+        export_properties = self._reader['nn.export']
         activation = self._reader['nn.activation']
         positive_energy_mode = self._reader['nn.positive_energy_mode']
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
+                  'export_properties': export_properties,
                   'activation': activation,
                   'positive_energy_mode': positive_energy_mode}
         if self._reader['dataset.descriptor'] == 'behler':
-            kwargs['export_properties'] = self._reader['nn.atomic.export']
             nn = self._get_atomic_nn(kwargs)
         else:
-            kwargs['export_properties'] = minimize_properties
             nn = self._get_eam_nn(kwargs)
 
         # Attach the transformer
@@ -323,7 +323,7 @@ class TrainingManager:
                         keep_tmp_files=False)
 
         if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
-            kwargs = self._reader['nn.eam.export']
+            kwargs = self._reader['nn.eam.setfl']
 
             if 'lattice' in kwargs:
                 lattice = kwargs.pop('lattice')

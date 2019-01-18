@@ -12,10 +12,8 @@ test_size = 1
 [nn]
 activation = "leaky_relu"
 minimize = ['energy']
-positive_energy_mode = true
-
-[nn.atomic]
 export = ['energy']
+positive_energy_mode = true
 
 [nn.atomic.behler]
 cutoff = 'polynomial'

@@ -76,8 +76,7 @@ def test_read_behler_angular_toml():
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.H'), [64, 32])
     assert_list_equal(nested_get(configs, 'nn.atomic.layers.N'), [64, 32])
     assert_list_equal(reader['nn.minimize'], ['energy'])
-    assert_list_equal(reader['nn.atomic.export'],
-                      ['energy', 'forces', 'hessian'])
+    assert_list_equal(reader['nn.export'], ['energy', 'forces', 'hessian'])
 
 
 def test_read_eam_alloy_toml():
@@ -114,8 +113,10 @@ def test_read_eam_fs_toml():
     assert_equal(nested_get(configs, 'train.batch_size'), 50)
     assert_equal(nested_get(configs, 'train.shuffle'), True)
     assert_equal(nested_get(configs, 'nn.activation'), 'leaky_relu')
-    assert_equal(nested_get(configs, 'nn.eam.export.lattice.type.Al'), 'fcc')
-    assert_equal(nested_get(configs, 'nn.eam.export.lattice.type.Fe'), 'bcc')
+    assert_list_equal(reader['nn.export'],
+                      ['energy', 'forces', 'hessian', 'stress'])
+    assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Al'), 'fcc')
+    assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Fe'), 'bcc')
     assert_equal(len(nested_get(configs, 'nn.eam.rho')), 4)
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 2)
     assert_list_equal(nested_get(configs, 'nn.eam.phi.AlFe'), [32, 32])
