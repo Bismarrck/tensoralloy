@@ -259,7 +259,7 @@ class EamFsNN(EamNN):
                         mask = tf.ones_like(value, name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.name_scope("Model"):
+            with tf.variable_scope("nnEAM"):
                 embed = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
