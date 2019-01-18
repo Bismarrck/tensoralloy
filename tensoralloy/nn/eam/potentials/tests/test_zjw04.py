@@ -14,7 +14,7 @@ import numpy as np
 import nose
 import math
 
-from nose.tools import assert_equal
+from nose.tools import assert_equal, assert_false
 
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.nn.eam.potentials.zjw04 import Zjw04
@@ -269,6 +269,26 @@ def test_embed():
 
         assert_array_equal(results[0], ref_al)
         assert_array_equal(results[1], ref_cu)
+
+
+def test_zero_grad():
+    """
+    Test the gradient of the embed function when `rho` is equal to `rho_e`.
+    """
+
+    with tf.Graph().as_default():
+
+        rho = tf.placeholder(tf.float32, shape=(None, ), name='rho')
+        layer = Zjw04()
+        embed = layer.embed(rho, "Al", variable_scope="Embed/Al")
+        grad = tf.gradients(embed, rho, name='g')[0]
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            special_value = np.atleast_1d(
+                [layer.defaults['Al']['rho_e']]).astype(np.float32)
+            result = sess.run(grad, feed_dict={rho: special_value})
+            assert_false(np.isnan(result).all())
 
 
 if __name__ == "__main__":
