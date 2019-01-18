@@ -27,7 +27,7 @@ class Zjw04(EamAlloyPotential):
 
     defaults = {
         'Al': {
-            're': 2.863924, 'fe': 1.403115, 
+            'r_eq': 2.863924, 'f_eq': 1.403115,
             'rho_e': 20.418205, 'rho_s': 23.195740, 
             'alpha': 6.613165, 'beta': 3.527021, 
             'A': 0.314873, 'B': 0.365551,
@@ -38,7 +38,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.785902, 'Fe': -2.824528,
         },
         'Cu': {
-            're': 2.556162, 'fe': 1.554485, 
+            'r_eq': 2.556162, 'f_eq': 1.554485,
             'rho_e': 21.175871, 'rho_s': 21.175395,
             'alpha': 8.127620, 'beta': 4.334731,
             'A': 0.396620, 'B': 0.548085,
@@ -49,7 +49,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.310490, 'Fe': -2.186568,
         },
         'Ni': {
-            're': 2.488746, 'fe': 2.007018,
+            'r_eq': 2.488746, 'f_eq': 2.007018,
             'rho_e': 27.562015, 'rho_s': 27.930410,
             'alpha': 8.383453, 'beta': 4.471175,
             'A': 0.429046, 'B': 0.633531,
@@ -60,7 +60,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.469000, 'Fe': -2.699486,
         },
         'Ag': {
-            're': 2.891814, 'fe': 1.106232,
+            'r_eq': 2.891814, 'f_eq': 1.106232,
             'rho_e': 14.604100, 'rho_s': 14.604144,
             'alpha': 9.132010, 'beta': 4.870405,
             'A': 0.277758, 'B': 0.419611,
@@ -71,7 +71,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.783924, 'Fe': -1.748423,
         },
         'Mo': {
-            're': 2.728100, 'fe': 2.723710,
+            'r_eq': 2.728100, 'f_eq': 2.723710,
             'rho_e': 29.354065, 'rho_s': 29.354065,
             'alpha': 8.393531, 'beta': 4.476550,
             'A': 0.708787, 'B': 1.120373,
@@ -82,7 +82,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.790879, 'Fe': -3.712093,
         },
         'Co': {
-            're': 2.505979, 'fe': 1.975299,
+            'r_eq': 2.505979, 'f_eq': 1.975299,
             'rho_e': 27.206789, 'rho_s': 27.206789,
             'alpha': 8.679625, 'beta': 4.629134,
             'A': 0.421378, 'B': 0.640107,
@@ -93,7 +93,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.694608, 'Fe': -2.559307,
         },
         'Mg': {
-            're': 3.196291, 'fe': 0.544323,
+            'r_eq': 3.196291, 'f_eq': 0.544323,
             'rho_e': 7.132600, 'rho_s': 7.132600,
             'alpha': 10.228708, 'beta': 5.455311,
             'A': 0.137518, 'B': 0.225930,
@@ -104,7 +104,7 @@ class Zjw04(EamAlloyPotential):
             'eta': 0.431425, 'Fe': -0.899702,
         },
         'Fe': {
-            're': 2.481987, 'fe': 1.885957,
+            'r_eq': 2.481987, 'f_eq': 1.885957,
             'rho_e': 20.041463, 'rho_s': 20.041463,
             'alpha': 9.818270, 'beta': 5.236411,
             'A': 0.392811, 'B': 0.646243,
@@ -120,7 +120,7 @@ class Zjw04(EamAlloyPotential):
         super(Zjw04, self).__init__()
 
     @staticmethod
-    def _exp_func(re, a, b, c, one, name=None):
+    def _exp_func(r_eq, a, b, c, one, name=None):
         def func(r):
             """
             A helper function to get a function of the form:
@@ -128,7 +128,7 @@ class Zjw04(EamAlloyPotential):
                 a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**20)
 
             """
-            r_re = tf.div(r, re)
+            r_re = tf.div(r, r_eq)
             upper = a * tf.exp(-b * (r_re - one))
             lower = one + tf.pow(r_re - c, 20)
             return tf.div(upper, lower, name=name)
@@ -159,7 +159,7 @@ class Zjw04(EamAlloyPotential):
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
         if el_a == el_b:
             with tf.name_scope(f"Zjw04/Phi/{el_a}"):
-                re = self._get_shared_variable('re', r.dtype, el_a)
+                re = self._get_shared_variable('r_eq', r.dtype, el_a)
                 A = self._get_shared_variable('A', r.dtype, el_a)
                 B = self._get_shared_variable('B', r.dtype, el_a)
                 alpha = self._get_shared_variable('alpha', r.dtype, el_a)
@@ -213,12 +213,12 @@ class Zjw04(EamAlloyPotential):
 
         """
         with tf.name_scope(f"Zjw04/Rho/{element}"):
-            re = self._get_shared_variable('re', r.dtype, element)
-            fe = self._get_shared_variable('fe', r.dtype, element)
+            r_eq = self._get_shared_variable('r_eq', r.dtype, element)
+            f_eq = self._get_shared_variable('f_eq', r.dtype, element)
             beta = self._get_shared_variable('beta', r.dtype, element)
             lamda = self._get_shared_variable('lamda', r.dtype, element)
             one = tf.constant(1.0, dtype=r.dtype, name='one')
-            rho = self._exp_func(re, fe, beta, lamda, one, name='rho')(r)
+            rho = self._exp_func(r_eq, f_eq, beta, lamda, one, name='rho')(r)
             if verbose:
                 log_tensor(rho)
             return rho
