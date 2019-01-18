@@ -148,7 +148,7 @@ def test_encode_atoms():
 
         assert_array_equal(
             atoms.get_stress(voigt=True) * atoms.get_volume(),
-            results['reduced_stress'])
+            results['stress'])
 
 
 if __name__ == "__main__":
