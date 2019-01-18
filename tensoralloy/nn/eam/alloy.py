@@ -223,12 +223,12 @@ class EamAlloyNN(EamNN):
             The lattice type, e.g 'fcc', for each type of element.
 
         """
+        dtype = get_float_dtype().as_numpy_dtype
         outdir = dirname(setfl)
-        rho = np.tile(np.arange(0.0, nrho * drho, drho,
-                                dtype=get_float_dtype().as_numpy_dtype),
+        rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
-        r = np.arange(0.0, nr * dr, dr).reshape((1, 1, 1, -1))
+        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
