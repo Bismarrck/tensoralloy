@@ -14,10 +14,11 @@ import os
 from unittest import skipUnless
 from os.path import join, exists
 from nose.tools import assert_equal, assert_less, assert_is_none, assert_in
-from nose.tools import with_setup
+from nose.tools import with_setup, assert_dict_equal
 
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
+from tensoralloy.nn import EamAlloyNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.tests.test_cutoff import polynomial_cutoff_simple
@@ -76,6 +77,41 @@ def test_initialization():
     assert_equal(manager.nn.positive_energy_mode, True)
 
     set_float_precision()
+
+
+def teardown_initialize_eam_training():
+    """
+    The cleanup function for `test_initialize_eam_training`.
+    """
+    model_dir = join(test_dir(), 'inputs', 'snap_Ni_zjw04')
+    if exists(model_dir):
+        shutil.rmtree(model_dir, ignore_errors=True)
+
+    tfrecords_dir = join(test_dir(), 'inputs', 'temp')
+    if exists(tfrecords_dir):
+        shutil.rmtree(tfrecords_dir, ignore_errors=True)
+
+
+@skipUnless(os.environ.get('TEST_EXPERIMENTS'),
+            "The flag 'TEST_EXPERIMENTS' is not set")
+@with_setup(teardown=teardown_initialize_eam_training)
+def test_initialize_eam_training():
+    """
+    Test initializing an EAM training experiment.
+    """
+    input_file = join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml')
+    manager = TrainingManager(input_file)
+
+    assert_equal(manager.dataset.cutoff_radius, 6.0)
+
+    nn = manager.nn
+    assert isinstance(nn, EamAlloyNN)
+
+    assert_dict_equal(nn.potentials, {"Ni": {"rho": "zjw04", "embed": "zjw04"},
+                                      "NiNi": {"phi": "zjw04"}})
+    assert_equal(nn.positive_energy_mode, False)
+
+    manager.train_and_evaluate()
 
 
 class DebugWarmStartFromVariablesHook(tf.train.SessionRunHook):
@@ -149,8 +185,8 @@ def teardown_warm_start():
         os.remove(afile)
 
 
-@skipUnless(os.environ.get('TEST_WARM_START'),
-            "The flag 'TEST_WARM_START' is not set")
+@skipUnless(os.environ.get('TEST_EXPERIMENTS'),
+            "The flag 'TEST_EXPERIMENTS' is not set")
 @with_setup(teardown=teardown_warm_start)
 def test_warm_start():
     """

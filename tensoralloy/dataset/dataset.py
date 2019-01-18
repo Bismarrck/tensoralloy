@@ -8,9 +8,10 @@ import tensorflow as tf
 import glob
 import sys
 import time
+import os
 
 from multiprocessing import cpu_count
-from os.path import join, splitext, basename
+from os.path import join, splitext, basename, exists, dirname
 from typing import Dict, List, Tuple
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
@@ -285,6 +286,10 @@ class Dataset:
             If True, the progress shall be logged.
 
         """
+        write_dir = dirname(filename)
+        if not exists(write_dir):
+            os.makedirs(write_dir)
+
         with tf.python_io.TFRecordWriter(filename) as writer:
 
             num_examples = len(indices)
