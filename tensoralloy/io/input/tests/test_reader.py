@@ -83,23 +83,23 @@ def test_read_eam_alloy_toml():
     """
     Test `InputReader` with file 'qm7.alloy.eam.toml' for an `eam/alloy` task.
     """
-    reader = InputReader(join(test_dir(), 'inputs', 'qm7.alloy.eam.toml'))
+    reader = InputReader(join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml'))
     configs = reader.configs
 
-    assert_equal(reader['precision'], 'high')
+    assert_equal(reader['precision'], 'medium')
 
     assert_equal(realpath(reader['train.model_dir']),
-                 realpath("/tmp/experiments/qm7-eam/train"))
-    assert_equal(realpath(reader['train.previous_checkpoint']),
-                 realpath(join(project_dir(True), "experiments", "qm7-eam",
-                               "train", "model.ckpt-10000")))
+                 realpath(join(test_dir(True), "inputs", "snap_Ni_zjw04")))
 
     assert_not_in('behler', configs)
     assert_not_in('atomic', configs['nn'])
-    assert_equal(len(nested_get(configs, 'nn.eam.rho')), 5)
-    assert_equal(len(nested_get(configs, 'nn.eam.embed')), 5)
-    assert_list_equal(reader['nn.minimize'], ['stress'])
-    assert_equal(reader['nn.loss.l2.weight'], 0.1)
+    assert_equal(len(nested_get(configs, 'nn.eam.rho')), 1)
+    assert_equal(len(nested_get(configs, 'nn.eam.embed')), 1)
+    assert_list_equal(reader['nn.minimize'], ['energy', 'forces'])
+    assert_list_equal(reader['nn.export'],
+                      ['energy', 'forces', 'stress', 'hessian'])
+    assert_equal(reader['nn.loss.l2.weight'], 0.01)
+    assert_equal(reader['nn.loss.forces.weight'], 3.0)
     assert_equal(reader['nn.loss.energy.weight'], 1.0)
 
 
