@@ -13,6 +13,7 @@ import warnings
 from typing import List
 
 from tensoralloy.nn.eam.potentials import EamFSPotential
+from tensoralloy.nn.utils import log_tensor
 from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -141,7 +142,8 @@ class AlFeMsah11(EamFSPotential):
             return tf.add_n(values, name='phi')
         return _phi
 
-    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
         """
         The pairwise potential function.
 
@@ -153,6 +155,8 @@ class AlFeMsah11(EamFSPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -267,10 +271,13 @@ class AlFeMsah11(EamFSPotential):
                         ])
                     ]
                 comput = self._pairwise_func(lowcuts, highcuts, c1, c2, coef)
-                return comput(r)
+                phi = comput(r)
+                if verbose:
+                    log_tensor(phi)
+                return phi
 
-
-    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
+    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -282,6 +289,8 @@ class AlFeMsah11(EamFSPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -336,9 +345,13 @@ class AlFeMsah11(EamFSPotential):
                     cutoffs = asarray([2.4, 2.5, 2.6, 2.8, 3.1,
                                        5.0, 6.2])
                     order = 4
-                return _density(factors, cutoffs, order)
+                rho = _density(factors, cutoffs, order)
+                if verbose:
+                    log_tensor(rho)
+                return rho
 
-    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
+              verbose=False):
         """
         Return the Op to compute the embedding energy F(rho(r)).
 
@@ -351,6 +364,8 @@ class AlFeMsah11(EamFSPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -373,7 +388,7 @@ class AlFeMsah11(EamFSPotential):
                     shape = tf.shape(rho, out_type=idx.dtype)
                     x = tf.gather_nd(rho, idx)
                     y = -tf.sqrt(x) + c1 * tf.pow(x, 2) - c2 * x * tf.log(x)
-                    return tf.scatter_nd(idx, y, shape, name='embed')
+                    embed = tf.scatter_nd(idx, y, shape, name='embed')
                 else:
                     c3 = tf.constant(
                         0.00067314115586063, dtype=rho.dtype, name='c3')
@@ -382,4 +397,7 @@ class AlFeMsah11(EamFSPotential):
                     y = tf.add(-tf.sqrt(rho),
                                -c3 * tf.pow(rho, 2) + c4 * tf.pow(rho, 4),
                                name='embed')
-                    return y
+                    embed = y
+                if verbose:
+                    log_tensor(embed)
+                return embed

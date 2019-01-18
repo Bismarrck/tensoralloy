@@ -179,7 +179,8 @@ class EmpiricalPotential:
     def rho(self,
             r: tf.Tensor,
             element_or_kbody_term: str,
-            variable_scope: str):
+            variable_scope: str,
+            verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
         """
@@ -189,7 +190,8 @@ class EmpiricalPotential:
     def phi(self,
             r: tf.Tensor,
             kbody_term: str,
-            variable_scope: str):
+            variable_scope: str,
+            verbose=False):
         """
         Return the Op to compute pairwise potential `phi(r)`.
 
@@ -201,6 +203,8 @@ class EmpiricalPotential:
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -214,7 +218,8 @@ class EmpiricalPotential:
     def embed(self,
               rho: tf.Tensor,
               element: str,
-              variable_scope: str):
+              variable_scope: str,
+              verbose=False):
         """
         Return the Op to compute the embedding energy F(rho(r)).
 
@@ -227,6 +232,8 @@ class EmpiricalPotential:
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -243,7 +250,8 @@ class EamAlloyPotential(EmpiricalPotential, ABC):
     This class represents an `EAM/Alloy` style empirical potential.
     """
 
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
+            verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -255,6 +263,8 @@ class EamAlloyPotential(EmpiricalPotential, ABC):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -271,7 +281,8 @@ class EamFSPotential(EmpiricalPotential, ABC):
     This class represents an `EAM/Finnis-Sinclair` style empirical potential.
     """
 
-    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
+    def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -283,6 +294,8 @@ class EamFSPotential(EmpiricalPotential, ABC):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------

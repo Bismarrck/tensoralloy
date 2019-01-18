@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
+from tensoralloy.nn.utils import log_tensor
 from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
@@ -133,7 +134,8 @@ class Zjw04(EamAlloyPotential):
             return tf.div(upper, lower, name=name)
         return func
 
-    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
         """
         The pairwise potential function.
 
@@ -145,6 +147,8 @@ class Zjw04(EamAlloyPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -163,24 +167,31 @@ class Zjw04(EamAlloyPotential):
                 kappa = self._get_shared_variable('kappa', r.dtype, el_a)
                 lamda = self._get_shared_variable('lamda', r.dtype, el_a)
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
-                return tf.subtract(
+                phi = tf.subtract(
                     self._exp_func(re, A, alpha, kappa, one, name='A')(r),
                     self._exp_func(re, B, beta, lamda, one, name='B')(r),
                     name='phi')
+                if verbose:
+                    log_tensor(phi)
+                return phi
         else:
             with tf.name_scope(f'{el_a}{el_a}'):
-                phi_a = self.phi(r, f'{el_a}{el_a}', variable_scope)
-                rho_a = self.rho(r, f'{el_a}', variable_scope)
+                phi_a = self.phi(r, f'{el_a}{el_a}', variable_scope, False)
+                rho_a = self.rho(r, f'{el_a}', variable_scope, False)
             with tf.name_scope(f"{el_b}{el_b}"):
-                phi_b = self.phi(r, f'{el_b}{el_b}', variable_scope)
-                rho_b = self.rho(r, f'{el_b}', variable_scope)
+                phi_b = self.phi(r, f'{el_b}{el_b}', variable_scope, False)
+                rho_b = self.rho(r, f'{el_b}', variable_scope, False)
             half = tf.constant(0.5, dtype=r.dtype, name='half')
-            return tf.multiply(half,
-                               tf.add(tf.div(rho_a, rho_b) * phi_b,
-                                      tf.div(rho_b, rho_a) * phi_a),
-                               name='phi')
+            phi = tf.multiply(half,
+                              tf.add(tf.div(rho_a, rho_b) * phi_b,
+                                     tf.div(rho_b, rho_a) * phi_a),
+                              name='phi')
+            if verbose:
+                log_tensor(phi)
+            return phi
 
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
+            verbose=False):
         """
         The electron density function rho(r).
 
@@ -192,6 +203,8 @@ class Zjw04(EamAlloyPotential):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -205,9 +218,13 @@ class Zjw04(EamAlloyPotential):
             beta = self._get_shared_variable('beta', r.dtype, element)
             lamda = self._get_shared_variable('lamda', r.dtype, element)
             one = tf.constant(1.0, dtype=r.dtype, name='one')
-            return self._exp_func(re, fe, beta, lamda, one, name='rho')(r)
+            rho = self._exp_func(re, fe, beta, lamda, one, name='rho')(r)
+            if verbose:
+                log_tensor(rho)
+            return rho
 
-    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
+              verbose=False):
         """
         The embedding energy function F(rho).
 
@@ -220,6 +237,8 @@ class Zjw04(EamAlloyPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
 
         Returns
         -------
@@ -289,4 +308,7 @@ class Zjw04(EamAlloyPotential):
                 tf.scatter_nd(idx2, embed2(tf.gather_nd(rho, idx2)), shape),
                 tf.scatter_nd(idx3, embed3(tf.gather_nd(rho, idx3)), shape),
             ]
-            return tf.add_n(values, name='embed')
+            embed = tf.add_n(values, name='embed')
+            if verbose:
+                log_tensor(embed)
+            return embed

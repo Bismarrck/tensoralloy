@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
+from tensoralloy.nn.utils import log_tensor
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -32,7 +33,8 @@ class AgSutton90(EamAlloyPotential):
         """
         super(AgSutton90, self).__init__()
 
-    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str):
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
         """
         The pairwise potential function:
 
@@ -44,9 +46,13 @@ class AgSutton90(EamAlloyPotential):
             b = self._get_variable('b', r.dtype, kbody_term, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            return tf.pow(b * r, 12, name='phi')
+            phi = tf.pow(b * r, 12, name='phi')
+            if verbose:
+                log_tensor(phi)
+            return phi
 
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str):
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
+            verbose=False):
         """
         The electron density function:
 
@@ -58,9 +64,13 @@ class AgSutton90(EamAlloyPotential):
             a = self._get_variable('a', r.dtype, element, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            return tf.pow(a * r, 6, name='rho')
+            rho = tf.pow(a * r, 6, name='rho')
+            if verbose:
+                log_tensor(rho)
+            return rho
 
-    def embed(self, rho: tf.Tensor, element: str, variable_scope: str):
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
+              verbose=False):
         """
         The embedding function:
 
@@ -68,4 +78,7 @@ class AgSutton90(EamAlloyPotential):
 
         """
         with tf.variable_scope('Sutton'):
-            return tf.negative(tf.sqrt(rho), name='embed')
+            embed = tf.negative(tf.sqrt(rho), name='embed')
+            if verbose:
+                log_tensor(embed)
+            return embed

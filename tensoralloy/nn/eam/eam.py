@@ -181,7 +181,8 @@ class EamNN(BasicNN):
         else:
             return partial(self._empirical_functions[name].embed,
                            element=element,
-                           variable_scope=variable_scope)
+                           variable_scope=variable_scope,
+                           verbose=verbose)
 
     def _get_rho_fn(self, element_or_kbody_term: str, variable_scope='Rho',
                     verbose=False):
@@ -201,11 +202,13 @@ class EamNN(BasicNN):
             if isinstance(pot, EamAlloyPotential):
                 return partial(pot.rho,
                                element=element_or_kbody_term,
-                               variable_scope=variable_scope)
+                               variable_scope=variable_scope,
+                               verbose=verbose)
             elif isinstance(pot, EamFSPotential):
                 return partial(pot.rho,
                                kbody_term=element_or_kbody_term,
-                               variable_scope=variable_scope)
+                               variable_scope=variable_scope,
+                               verbose=verbose)
             else:
                 raise ValueError(
                     f"Unknown EAM potential: {pot.__class__.__name__}")
@@ -225,7 +228,8 @@ class EamNN(BasicNN):
         else:
             return partial(self._empirical_functions[name].phi,
                            kbody_term=kbody_term,
-                           variable_scope=variable_scope)
+                           variable_scope=variable_scope,
+                           verbose=verbose)
 
     def _get_energy_op(self, outputs: tf.Tensor, features: AttributeDict,
                        name='energy', verbose=True):
