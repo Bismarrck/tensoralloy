@@ -12,6 +12,7 @@ from argparse import ArgumentParser, Namespace
 from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
 from typing import Union
+from tensorflow.python import debug as tf_debug
 
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
@@ -246,7 +247,7 @@ class TrainingManager:
                       f"was already deleted")
                 hparams.train.previous_checkpoint = None
 
-    def train_and_evaluate(self):
+    def train_and_evaluate(self, debug=False):
         """
         Initialize a model and train it with `tf.estimator.train_and_evalutate`.
         """
@@ -286,12 +287,18 @@ class TrainingManager:
                     session_config=session_config),
                 params=hparams)
 
+            if debug:
+                hooks = [tf_debug.LocalCLIDebugHook(ui_type="readline"), ]
+            else:
+                hooks = None
+
             train_spec = tf.estimator.TrainSpec(
                 input_fn=dataset.input_fn(
                     mode=tf.estimator.ModeKeys.TRAIN,
                     batch_size=hparams.train.batch_size,
                     shuffle=hparams.train.shuffle),
-                max_steps=hparams.train.train_steps)
+                max_steps=hparams.train.train_steps,
+                hooks=hooks)
 
             eval_spec = tf.estimator.EvalSpec(
                 input_fn=dataset.input_fn(
@@ -348,9 +355,11 @@ def main(args: Namespace):
     export_latest_only = args.export_latest_only
     validate_tfrecords = not export_latest_only
 
-    manager = TrainingManager(args.filename, validate_tfrecords)
+    manager = TrainingManager(
+        args.filename,
+        validate_tfrecords=validate_tfrecords)
     if not export_latest_only:
-        manager.train_and_evaluate()
+        manager.train_and_evaluate(debug=args.debug)
     manager.export()
 
 
@@ -368,6 +377,12 @@ def config_parser(parser: ArgumentParser):
         action='store_true',
         default=False,
         help="Directly export the lastest checkpoint to a model file and exit."
+    )
+    parser.add_argument(
+        "--debug",
+        action='store_true',
+        default=False,
+        help="Enabled the debugging mode.",
     )
     return parser
 
