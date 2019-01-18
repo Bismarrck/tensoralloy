@@ -18,7 +18,8 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
-           "ExamplesPerSecondHook", "WarmStartFromVariablesHook"]
+           "ExamplesPerSecondHook", "WarmStartFromVariablesHook",
+           "NanTensorHook"]
 
 
 class WarmStartFromVariablesHook(tf.train.SessionRunHook):
@@ -204,7 +205,7 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
         self._global_step_tensor = training_util.get_global_step()
         if self._global_step_tensor is None:
             raise RuntimeError(
-                'Global step should be created to use StepCounterHook.')
+                'Global step should be created to use ExamplesPerSecondHook.')
 
     def before_run(self, run_context):  # pylint: disable=unused-argument
         """
@@ -237,3 +238,64 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
                     'Average examples/sec', average_examples_per_sec,
                     current_examples_per_sec, self._total_steps,
                     'steps/minute', steps_per_min)
+
+
+class NanTensorHook(session_run_hook.SessionRunHook):
+    """
+    Monitors the loss tensor and stops training if loss is NaN.
+
+    Can either fail with exception or just stop training.
+
+    This is an improved version of `tf.train.NanTensorHook`.
+    """
+
+    def __init__(self, fail_on_nan_loss=True, **kwargs):
+        """
+        Initializes a `NanTensorHook`.
+
+        Parameters
+        ----------
+        fail_on_nan_loss : bool
+            A boolean, whether to raise exception when loss is NaN.
+
+        """
+        self._fail_on_nan_loss = fail_on_nan_loss
+        self._global_step_tensor = None
+
+        if len(kwargs) > 0:
+            self._optional_tensors = kwargs
+            assert all([isinstance(x, tf.Tensor) for x in kwargs.values()])
+        else:
+            self._optional_tensors = None
+
+    def begin(self):
+        """
+        Called once before using the session.
+        """
+        self._global_step_tensor = training_util.get_global_step()
+        if self._global_step_tensor is None:
+            raise RuntimeError(
+                'Global step should be created to use NanTensorHook.')
+
+    def before_run(self, run_context):  # pylint: disable=unused-argument
+        """
+        Called before each call to run().
+        """
+        args = {'global_step': self._global_step_tensor}
+        if self._optional_tensors is not None:
+            args.update(self._optional_tensors)
+        return basic_session_run_hooks.SessionRunArgs(args)
+
+    def after_run(self, run_context, run_values):
+        """
+        Called after each call to run().
+        """
+        step = run_values.results.pop('global_step')
+        nan_tensors = [key for key, value in run_values.results.items()
+                       if np.isnan(value)]
+        if len(nan_tensors) > 0:
+            logging.error(f"Model diverged with loss = NaN at step {step}")
+            logging.error(f"NaN tensors: {', '.join(nan_tensors)}")
+            if self._fail_on_nan_loss:
+                raise basic_session_run_hooks.NanLossDuringTrainingError
+            run_context.request_stop()

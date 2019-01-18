@@ -20,7 +20,7 @@ from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.ops import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
-from tensoralloy.nn.hooks import WarmStartFromVariablesHook
+from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -492,6 +492,7 @@ class BasicNN:
         return tensors
 
     def get_training_hooks(self,
+                           losses: AttributeDict,
                            ema: tf.train.ExponentialMovingAverage,
                            hparams) -> List[tf.train.SessionRunHook]:
         """
@@ -499,6 +500,9 @@ class BasicNN:
 
         Parameters
         ----------
+        losses : AttributeDict
+            A dict. The loss tensor for energy, forces and stress or total
+            pressure.
         ema : tf.train.ExponentialMovingAverage
             A function to obtain moving averaged variables.
         hparams : AttributeDict
@@ -518,14 +522,16 @@ class BasicNN:
                     batch_size=hparams.train.batch_size,
                     every_n_steps=hparams.train.log_steps)
 
-            hooks = [summary_saver_hook, examples_per_sec_hook]
+            with tf.name_scope("Nan"):
+                nan_tensor_hook = NanTensorHook(fail_on_nan_loss=True, **losses)
+
+            hooks = [summary_saver_hook, examples_per_sec_hook, nan_tensor_hook]
 
             if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
                 logging_tensor_hook = LoggingTensorHook(
                     tensors=self.get_logging_tensors(GraphKeys.TRAIN_METRICS),
                     every_n_iter=hparams.train.log_steps,
-                    at_end=True,
-                )
+                    at_end=True)
                 hooks.append(logging_tensor_hook)
 
             if hparams.train.profile_steps:
@@ -837,7 +843,10 @@ class BasicNN:
             minimize_properties=self._minimize_properties)
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            training_hooks = self.get_training_hooks(ema=ema, hparams=params)
+            training_hooks = self.get_training_hooks(
+                losses=losses,
+                ema=ema,
+                hparams=params)
             return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
