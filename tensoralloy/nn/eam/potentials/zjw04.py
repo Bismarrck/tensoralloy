@@ -261,10 +261,8 @@ class Zjw04(EamAlloyPotential):
             rho_e = self._get_shared_variable('rho_e', dtype, element)
             rho_s = self._get_shared_variable('rho_s', dtype, element)
             Fe = self._get_shared_variable('Fe', dtype, element)
-            rho_n = tf.convert_to_tensor(
-                self._params[element]['rho_e'] * 0.85, dtype, name='rho_n')
-            rho_0 = tf.convert_to_tensor(
-                self._params[element]['rho_e'] * 1.15, dtype, name='rho_0')
+            rho_n = tf.multiply(0.85, rho_e, name='rho_0')
+            rho_0 = tf.multiply(1.15, rho_e, name='rho_0')
             one = tf.constant(1.0, dtype, name='one')
 
             def embed1(_rho):
