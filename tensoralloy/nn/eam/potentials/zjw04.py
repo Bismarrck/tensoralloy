@@ -232,7 +232,7 @@ class Zjw04(EamAlloyPotential):
         ----------
         rho : tf.Tensor
             A 3D tensor of shape `[batch_size, max_n_element, 1]` where
-            `max_n_element` is the maximum occurace of `element`.
+            `max_n_element` is the maximum occurs of `element`.
         element : str
             An element symbol.
         variable_scope : str
@@ -262,7 +262,7 @@ class Zjw04(EamAlloyPotential):
             rho_s = self._get_shared_variable('rho_s', dtype, element)
             Fe = self._get_shared_variable('Fe', dtype, element)
             rho_n = tf.multiply(tf.constant(0.85, dtype=dtype, name='lb'),
-                                rho_e, name='rho_0')
+                                rho_e, name='rho_n')
             rho_0 = tf.multiply(tf.constant(1.15, dtype=dtype, name='ub'),
                                 rho_e, name='rho_0')
             one = tf.constant(1.0, dtype, name='one')

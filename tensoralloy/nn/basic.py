@@ -570,6 +570,15 @@ class BasicNN:
                         at_end=True)
                 hooks.append(logging_tensor_hook)
 
+            if len(tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)) > 0:
+                with tf.name_scope("EmpiricalPotential"):
+                    potential_values_hook = LoggingTensorHook(
+                        tensors=self.get_logging_tensors(
+                            GraphKeys.EAM_POTENTIAL_VARIABLES),
+                        every_n_iter=None,
+                        at_end=True)
+                hooks.append(potential_values_hook)
+
             with tf.name_scope("EMA"):
                 restore_ema_hook = RestoreEmaVariablesHook(ema=ema)
                 hooks.append(restore_ema_hook)

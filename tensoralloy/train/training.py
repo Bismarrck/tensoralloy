@@ -282,7 +282,7 @@ class TrainingManager:
                 config=tf.estimator.RunConfig(
                     save_checkpoints_steps=hparams.train.eval_steps,
                     tf_random_seed=hparams.seed,
-                    log_step_count_steps=None,
+                    log_step_count_steps=hparams.train.log_steps,
                     keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
                     session_config=session_config),
                 params=hparams)
