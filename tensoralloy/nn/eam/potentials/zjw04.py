@@ -283,16 +283,24 @@ class Zjw04(EamAlloyPotential):
 
                 Notes
                 -----
-                `x` here may be zero because 0.85 * rho_e <= rho < 1.15 * rho_e.
-                `tf.pow(0, 0)` is `nan` which leads to inf loss.
+                1. `x` may be zero because 0.85 * rho_e <= rho < 1.15 * rho_e
+                   and `tf.pow(0, 0)` is `nan` which leads to inf loss.
+                2. `x` will be differentiated twice when computing gradients of
+                   force loss w.r.t. Zjw04 parameters. However the current
+                   implementation of `tf.pow(x, y)` will return NaN but not zero
+                   when computing
+                       `tf.gradients(tf.gradientx(tf.pow(x, 1), x), x)`
+                   if `x` is zero.
+
+                TODO: fix `tf.pow` and create a pull request.
 
                 """
                 with tf.name_scope("e2"):
                     x = _rho / rho_e - one
-                    e2_123 = [F1 * tf.pow(x, 1, name='e2_1'),
-                              F2 * tf.pow(x, 2, name='e2_2'),
-                              F3 * tf.pow(x, 3, name='e2_3')]
-                    return tf.add(F0, tf.add_n(e2_123, name='e2_123'),
+                    e2 = [tf.multiply(F1, x, 'F1e1'),
+                          tf.multiply(F2, tf.pow(x, 2, name='e2_2'), 'F2e2'),
+                          tf.multiply(F3, tf.pow(x, 3, name='e2_3'), 'F3e3')]
+                    return tf.add(F0, tf.add_n(e2, name='e2_123'),
                                   name='e2')
 
             def embed3(_rho):

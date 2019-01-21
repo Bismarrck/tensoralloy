@@ -282,13 +282,18 @@ def test_zero_grad():
         layer = Zjw04()
         embed = layer.embed(rho, "Al", variable_scope="Embed/Al")
         grad = tf.gradients(embed, rho, name='g')[0]
+        y = tf.constant(1.0, name='y', dtype=rho.dtype)
+        loss = tf.squared_difference(y, grad, name='loss')
+        loss_grad = tf.gradients(loss, rho, name='loss_g')[0]
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             special_value = np.atleast_1d(
                 [layer.defaults['Al']['rho_e']]).astype(np.float32)
-            result = sess.run(grad, feed_dict={rho: special_value})
-            assert_false(np.isnan(result).all())
+            results = sess.run([grad, loss_grad],
+                               feed_dict={rho: special_value})
+            assert_false(np.all(np.isnan(results[0].values)))
+            assert_false(np.all(np.isnan(results[1].values)))
 
 
 if __name__ == "__main__":
