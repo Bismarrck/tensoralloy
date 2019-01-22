@@ -15,7 +15,7 @@ from tensorflow.python.framework import importer
 from typing import List, Tuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
-from tensoralloy.transformer import SymmetryFunctionTransformer
+from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
 
 __author__ = 'Xin Chen'
@@ -85,6 +85,8 @@ class TensorAlloyCalculator(Calculator):
             self._predict_properties = []
         if cls == 'SymmetryFunctionTransformer':
             return SymmetryFunctionTransformer(**params)
+        elif cls == 'EAMTransformer':
+            return EAMTransformer(**params)
         else:
             raise ValueError(f"Unknown transformer: {cls}")
 
