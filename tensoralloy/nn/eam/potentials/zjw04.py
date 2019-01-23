@@ -117,7 +117,14 @@ class Zjw04(EamAlloyPotential):
     }
 
     def __init__(self):
-        super(Zjw04, self).__init__()
+        """
+        Initialization method.
+
+        All `F1` parameters are fixed to zero.
+
+        """
+        fixed = {element: ['F1'] for element in Zjw04.defaults}
+        super(Zjw04, self).__init__(fixed=fixed)
 
     @staticmethod
     def _exp_func(r_eq, a, b, c, one, name=None):

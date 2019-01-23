@@ -270,6 +270,9 @@ def test_embed():
         assert_array_equal(results[0], ref_al)
         assert_array_equal(results[1], ref_cu)
 
+        assert_equal(len(tf.trainable_variables()), 22)
+        assert_equal(len(tf.global_variables()), 24)
+
 
 def test_zero_grad():
     """
