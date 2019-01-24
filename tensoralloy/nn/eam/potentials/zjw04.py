@@ -120,10 +120,14 @@ class Zjw04(EamAlloyPotential):
         """
         Initialization method.
 
-        All `F1` parameters are fixed to zero.
+        All embed function related parameters are fixed. The original embed
+        function is a piecewise function so direct optimizaition will break the
+        continuity at endpoints of segments.
 
         """
-        fixed = {element: ['F1'] for element in Zjw04.defaults}
+        fixed = {element: ['F0', 'F1', 'F2', 'F3', 'Fn0', 'Fn1', 'Fn2', 'Fn3',
+                           'Fe', 'eta', 'rho_e', 'rho_s']
+                 for element in Zjw04.defaults}
         super(Zjw04, self).__init__(fixed=fixed)
 
     @staticmethod
