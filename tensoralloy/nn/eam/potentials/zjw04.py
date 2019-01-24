@@ -339,3 +339,121 @@ class Zjw04(EamAlloyPotential):
             if verbose:
                 log_tensor(embed)
             return embed
+
+
+class Zjw04xc(Zjw04):
+    """
+    A modified implementation of `Zjw04`.
+    """
+
+    def __init__(self):
+        """
+        Initialization method.
+        """
+        super(Zjw04xc, self).__init__()
+        self._fixed = {}
+
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
+              verbose=False):
+        """
+        The embedding energy function F(rho).
+
+        Parameters
+        ----------
+        rho : tf.Tensor
+            A 3D tensor of shape `[batch_size, max_n_element, 1]` where
+            `max_n_element` is the maximum occurs of `element`.
+        element : str
+            An element symbol.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        dtype = rho.dtype
+
+        with tf.name_scope(f"Zjw04/Embed/{element}"):
+            one = tf.constant(1.0, dtype=dtype, name='one')
+            two = tf.constant(2.0, dtype=dtype, name='two')
+            Fn0 = self._get_shared_variable('Fn0', dtype, element)
+            Fn1 = self._get_shared_variable('Fn1', dtype, element)
+            Fn2 = self._get_shared_variable('Fn2', dtype, element)
+            Fn3 = self._get_shared_variable('Fn3', dtype, element)
+            F0 = self._get_shared_variable('F0', dtype, element)
+            F1 = self._get_shared_variable('F1', dtype, element)
+            F2 = self._get_shared_variable('F2', dtype, element)
+            F3 = self._get_shared_variable('F3', dtype, element)
+            eta = self._get_shared_variable('eta', dtype, element)
+            rho_e = self._get_shared_variable('rho_e', dtype, element)
+            rho_s = self._get_shared_variable('rho_s', dtype, element)
+            Fe = self._get_shared_variable('Fe', dtype, element)
+            rho_n = tf.multiply(tf.constant(0.85, dtype=dtype, name='lb'),
+                                rho_e, name='rho_n')
+            rho_0 = tf.multiply(tf.constant(1.15, dtype=dtype, name='ub'),
+                                rho_e, name='rho_0')
+
+            def embed1(_rho):
+                """
+                rho < rho_n
+                """
+                with tf.name_scope("e1"):
+                    x = tf.subtract(tf.div(_rho, rho_n), one, name='x')
+                    e1 = [tf.multiply(Fn1, x, 'Fn1e1'),
+                          tf.multiply(Fn2, tf.pow(x, 2, 'e1_2'), 'Fn2e2'),
+                          tf.multiply(Fn3, tf.pow(x, 3, 'e1_3'), 'Fn3e3')]
+                    return tf.add(Fn0, tf.add_n(e1, name='e1_123'), name='e1')
+
+            def embed2(_rho):
+                """
+                rho_n <= rho < rho_0
+
+                Notes
+                -----
+                1. `x` may be zero because 0.85 * rho_e <= rho < 1.15 * rho_e
+                   and `tf.pow(0, 0)` is `nan` which leads to inf loss.
+                2. `x` will be differentiated twice when computing gradients of
+                   force loss w.r.t. Zjw04 parameters. However the current
+                   implementation of `tf.pow(x, y)` will return NaN but not zero
+                   when computing
+                       `tf.gradients(tf.gradientx(tf.pow(x, 1), x), x)`
+                   if `x` is zero.
+
+                """
+                with tf.name_scope("e2"):
+                    x = tf.subtract(tf.div(_rho, rho_e), one, name='x')
+                    e2 = [tf.multiply(F1, x, 'F1e1'),
+                          tf.multiply(F2, tf.pow(x, 2, name='e2_2'), 'F2e2'),
+                          tf.multiply(F3, tf.pow(x, 3, name='e2_3'), 'F3e3')]
+                    return tf.add(F0, tf.add_n(e2, name='e2_123'),
+                                  name='e2')
+
+            def embed3(_rho):
+                """
+                rho_0 <= rho
+                """
+                with tf.name_scope("e3"):
+                    eps = tf.constant(1e-8, dtype, name='eps')
+                    x = tf.add(tf.div(_rho, rho_s), eps, name='x')
+                    lnx = tf.log(x)
+                    return tf.multiply(Fe * (one - eta * lnx),
+                                       tf.pow(x, eta), name='e3')
+
+            y1 = embed1(rho)
+            y2 = embed2(rho)
+            y3 = embed3(rho)
+
+            c1 = tf.sigmoid(tf.multiply(two, rho_n - rho))
+            c3 = tf.sigmoid(tf.multiply(two, rho - rho_0))
+            c2 = tf.subtract(one, tf.add(c1, c3))
+
+            embed = tf.add_n([tf.multiply(c1, y1, name='c1e1'),
+                              tf.multiply(c2, y2, name='c2e2'),
+                              tf.multiply(c3, y3, name='c3e3')], name='embed')
+
+            return embed

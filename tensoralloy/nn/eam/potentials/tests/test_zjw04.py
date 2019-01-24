@@ -14,10 +14,11 @@ import numpy as np
 import nose
 import math
 
+from tensorflow.python.framework.ops import IndexedSlicesValue
 from nose.tools import assert_equal, assert_false
 
-from tensoralloy.test_utils import assert_array_equal
-from tensoralloy.nn.eam.potentials.zjw04 import Zjw04
+from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
+from tensoralloy.nn.eam.potentials.zjw04 import Zjw04, Zjw04xc
 from tensoralloy.utils import GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
@@ -297,6 +298,45 @@ def test_zero_grad():
                                feed_dict={rho: special_value})
             assert_false(np.all(np.isnan(results[0].values)))
             assert_false(np.all(np.isnan(results[1].values)))
+
+
+def test_zjw04xc_embed():
+    """
+    Test the embed function of `Zjw04xc`.
+    """
+
+    with tf.Graph().as_default():
+        rho = tf.placeholder(tf.float32, shape=(None,), name='rho')
+        zjw04 = Zjw04()
+        zjw04xc = Zjw04xc()
+        old = zjw04.embed(rho, "Al", variable_scope="Old/Al")
+        new = zjw04xc.embed(rho, "Al", variable_scope='New/Al')
+        old_grad = tf.gradients(old, rho, name='g_old')[0]
+        new_grad = tf.gradients(new, rho, name='g_new')[0]
+        rho_e = zjw04.defaults['Al']['rho_e']
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+
+            special_values = np.array([0.0,
+                                       rho_e * 0.1,
+                                       rho_e * 0.85,
+                                       rho_e,
+                                       rho_e * 1.15,
+                                       rho_e * 2.0],
+                                      dtype=np.float32)
+            res_old, res_new, res_grad_old, res_grad_new = sess.run(
+                [old, new, old_grad, new_grad],
+                feed_dict={rho: special_values})
+
+            if isinstance(res_grad_old, IndexedSlicesValue):
+                res_grad_old = res_grad_old.values
+
+            if isinstance(res_grad_new, IndexedSlicesValue):
+                res_grad_new = res_grad_new.values
+
+            assert_array_almost_equal(res_old, res_new, 1e-4)
+            assert_array_almost_equal(res_grad_old, res_grad_new, 1e-3)
 
 
 if __name__ == "__main__":
