@@ -129,6 +129,7 @@ class Zjw04(EamAlloyPotential):
                            'Fe', 'eta', 'rho_e', 'rho_s']
                  for element in Zjw04.defaults}
         super(Zjw04, self).__init__(fixed=fixed)
+        self._name = 'Zjw04'
 
     @staticmethod
     def _exp_func(r_eq, a, b, c, one, name=None):
@@ -169,7 +170,7 @@ class Zjw04(EamAlloyPotential):
         """
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
         if el_a == el_b:
-            with tf.name_scope(f"Zjw04/Phi/{el_a}"):
+            with tf.name_scope(f"{self._name}/Phi/{el_a}"):
                 re = self._get_shared_variable('r_eq', r.dtype, el_a)
                 A = self._get_shared_variable('A', r.dtype, el_a)
                 B = self._get_shared_variable('B', r.dtype, el_a)
@@ -223,7 +224,7 @@ class Zjw04(EamAlloyPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        with tf.name_scope(f"Zjw04/Rho/{element}"):
+        with tf.name_scope(f"{self._name}/Rho/{element}"):
             r_eq = self._get_shared_variable('r_eq', r.dtype, element)
             f_eq = self._get_shared_variable('f_eq', r.dtype, element)
             beta = self._get_shared_variable('beta', r.dtype, element)
@@ -259,7 +260,7 @@ class Zjw04(EamAlloyPotential):
         """
         dtype = rho.dtype
 
-        with tf.name_scope(f"Zjw04/Embed/{element}"):
+        with tf.name_scope(f"{self._name}/Embed/{element}"):
             Fn0 = self._get_shared_variable('Fn0', dtype, element)
             Fn1 = self._get_shared_variable('Fn1', dtype, element)
             Fn2 = self._get_shared_variable('Fn2', dtype, element)
@@ -352,6 +353,7 @@ class Zjw04xc(Zjw04):
         """
         super(Zjw04xc, self).__init__()
         self._fixed = {}
+        self._name = 'Zjw04xc'
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
               verbose=False):
@@ -378,7 +380,7 @@ class Zjw04xc(Zjw04):
         """
         dtype = rho.dtype
 
-        with tf.name_scope(f"Zjw04/Embed/{element}"):
+        with tf.name_scope(f"{self._name}/Embed/{element}"):
             one = tf.constant(1.0, dtype=dtype, name='one')
             two = tf.constant(2.0, dtype=dtype, name='two')
             Fn0 = self._get_shared_variable('Fn0', dtype, element)
@@ -455,5 +457,8 @@ class Zjw04xc(Zjw04):
             embed = tf.add_n([tf.multiply(c1, y1, name='c1e1'),
                               tf.multiply(c2, y2, name='c2e2'),
                               tf.multiply(c3, y3, name='c3e3')], name='embed')
+
+            if verbose:
+                log_tensor(embed)
 
             return embed
