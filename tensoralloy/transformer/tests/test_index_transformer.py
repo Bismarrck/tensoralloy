@@ -32,7 +32,10 @@ class IndexTransformerTest(TestCase):
         self.clf = IndexTransformer(self.max_occurs, symbols)
 
     def test_forward(self):
-        assert_equal(len(self.clf.reference_symbols), 9)
+        assert_equal(len(self.clf.reference_chemical_symbols), 9)
+        assert_equal(len(self.clf.chemical_symbols), 5)
+        assert_equal(self.clf.n_atoms, 5)
+        assert_equal(self.clf.max_n_atoms, 9)
 
         array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
         results = self.clf.map_array(array, reverse=False).flatten().tolist()

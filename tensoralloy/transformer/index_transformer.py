@@ -13,8 +13,6 @@ from typing import List
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-# TODO: rename `n_atoms` to `max_n_atoms`
-
 
 class IndexTransformer:
     """
@@ -30,7 +28,7 @@ class IndexTransformer:
         """
         self._max_occurs = max_occurs
         self._symbols = symbols
-        self._n_atoms = sum(max_occurs.values()) + IndexTransformer._ISTART
+        self._max_n_atoms = sum(max_occurs.values())
 
         istart = IndexTransformer._ISTART
         elements = sorted(max_occurs.keys())
@@ -38,7 +36,7 @@ class IndexTransformer:
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
-        mask = np.zeros(self._n_atoms, dtype=bool)
+        mask = np.zeros(self._max_n_atoms + 1, dtype=bool)
         for i, symbol in enumerate(symbols):
             idx_old = i + istart
             idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
@@ -55,9 +53,18 @@ class IndexTransformer:
     @property
     def n_atoms(self):
         """
-        Return the number of atoms (including the virtual atom at index 0).
+        Return the number of atoms, excluding the 'virtual atom', that the
+        target `Atoms` of this transformer should have.
         """
-        return self._n_atoms
+        return len(self._symbols)
+
+    @property
+    def max_n_atoms(self):
+        """
+        Return the number of atoms, excluding the 'virtual atom', in the
+        reference system.
+        """
+        return self._max_n_atoms
 
     @property
     def max_occurs(self) -> Counter:
@@ -67,7 +74,7 @@ class IndexTransformer:
         return self._max_occurs
 
     @property
-    def symbols(self) -> List[str]:
+    def chemical_symbols(self) -> List[str]:
         """
         Return a list of str as the ordered chemical symbols of the target
         stoichiometry.
@@ -75,7 +82,7 @@ class IndexTransformer:
         return self._symbols
 
     @property
-    def reference_symbols(self) -> List[str]:
+    def reference_chemical_symbols(self) -> List[str]:
         """
         Return a list of str as the ordered chemical symbols of the reference
         (global) stoichiometry.
@@ -153,7 +160,7 @@ class IndexTransformer:
             for i in range(istart, istart + len(self._symbols)):
                 indices.append(self._index_map[i])
         else:
-            for i in range(self._n_atoms):
+            for i in range(self._max_n_atoms + 1):
                 indices.append(self._reverse_map.get(i, 0))
         output = array[:, indices]
         if rank == 2:
