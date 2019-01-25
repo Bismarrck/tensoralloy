@@ -13,6 +13,8 @@ from typing import List
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+# TODO: rename `n_atoms` to `max_n_atoms`
+
 
 class IndexTransformer:
     """
@@ -166,11 +168,27 @@ class IndexTransformer:
         """ A wrapper function. """
         return self.map_array(forces, reverse=reverse)
 
-    def reverse_map_hessian(self, hessian: np.ndarray):
+    def reverse_map_hessian(self, hessian: np.ndarray, phonopy_format=False):
         """
         Transform the [Np, 3, Np, 3] Hessian matrix to [3N, 3N] where N is the
         number of atoms (excluding the virtual atom) and Np is number of atoms
         in the projected frame.
+
+        Parameters
+        ----------
+        hessian : array_like
+            The original hessian matrix calculated by TensorFlow. The shape is
+            [self.max_n_atoms, 3, self.max_n_atoms, 3].
+        phonopy_format : bool
+            Return the phonopy-format `(N, N, 3, 3)` hessian matrix if True.
+
+        Returns
+        -------
+        hessian : array_like
+            The transformed hessian matrix. The shape is:
+                * [self.n_atoms * 3, self.n_atoms * 3]
+                * [self.n_atoms, self.n_atoms, 3, 3] if `phonopy_format` is True
+
         """
         rank = np.ndim(hessian)
         if rank != 4 or hessian.shape[1] != 3 or hessian.shape[3] != 3:
@@ -183,14 +201,24 @@ class IndexTransformer:
             indices.append(self._index_map[i])
 
         n = len(self._symbols)
-        h = np.zeros((n * 3, n * 3))
 
-        for i in range(n):
-            for alpha in range(3):
-                for j in range(n):
-                    for beta in range(3):
-                        row = i * 3 + alpha
-                        col = j * 3 + beta
-                        h[row, col] = h[indices[i], alpha, indices[j], beta]
+        if not phonopy_format:
+            h = np.zeros((n * 3, n * 3))
+            for i in range(n):
+                for alpha in range(3):
+                    for j in range(n):
+                        for beta in range(3):
+                            row = i * 3 + alpha
+                            col = j * 3 + beta
+                            h[row, col] = h[indices[i], alpha, indices[j], beta]
+
+        else:
+            h = np.zeros((n, n, 3, 3))
+            for i in range(n):
+                for alpha in range(3):
+                    for j in range(n):
+                        for beta in range(3):
+                            x = h[indices[i], alpha, indices[j], beta]
+                            h[i, j, alpha, beta] = x
 
         return h
