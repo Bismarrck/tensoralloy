@@ -103,7 +103,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
             self._placeholders.positions = _float_2d(3, 'positions')
             self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
-            self._placeholders.n_atoms = _int('n_atoms')
+            self._placeholders.n_atoms_plus_virt = _int('n_atoms_plus_virt')
             self._placeholders.volume = _float('volume')
             self._placeholders.mask = _float_1d('mask')
             self._placeholders.composition = _float_1d('composition')
@@ -196,7 +196,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
         numpy_float_dtype = get_float_dtype().as_numpy_dtype
 
         feed_dict[placeholders.positions] = positions.astype(numpy_float_dtype)
-        feed_dict[placeholders.n_atoms] = n_atoms
+        feed_dict[placeholders.n_atoms_plus_virt] = n_atoms + 1
         feed_dict[placeholders.nnl_max] = nnl_max
         feed_dict[placeholders.mask] = mask.astype(numpy_float_dtype)
         feed_dict[placeholders.cells] = cells.astype(numpy_float_dtype)

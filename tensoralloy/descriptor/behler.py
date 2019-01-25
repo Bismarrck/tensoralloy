@@ -230,8 +230,15 @@ class SymmetryFunction(AtomicDescriptor):
     def _get_g_shape(self, placeholders):
         """
         Return the shape of the descriptor matrix.
+
+        Parameters
+        ----------
+        placeholders : AttributeDict
+            The key 'n_atoms_plus_virt' must be provided.
+            'n_atoms_plus_virt' is 'n_atoms' plus one (the virtual atom).
+
         """
-        return [placeholders.n_atoms, self._ndim]
+        return [placeholders.n_atoms_plus_virt, self._ndim]
 
     def _get_v2g_map(self, placeholders, **kwargs):
         symm_func = kwargs['symmetry_function']
@@ -435,10 +442,33 @@ class SymmetryFunction(AtomicDescriptor):
                 masks = [tf.no_op(el) for el in self._elements]
             return dict(zip(self._elements, zip(blocks, masks)))
 
+    def _check_keys(self, placeholders: AttributeDict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'positions' in placeholders
+        assert 'cells' in placeholders
+        assert 'volume' in placeholders
+        assert 'g2' in placeholders
+        assert 'n_atoms_plus_virt' in placeholders
+        assert 'row_splits' in placeholders
+        assert 'ilist' in placeholders.g2
+        assert 'jlist' in placeholders.g2
+        assert 'shift' in placeholders.g2
+        assert 'v2g_map' in placeholders.g2
+
+        if self._angular:
+            assert 'g4' in placeholders
+            assert 'ij' in placeholders.g4
+            assert 'ik' in placeholders.g4
+            assert 'jk' in placeholders.g4
+
     def build_graph(self, placeholders: AttributeDict):
         """
         Get the tensorflow based computation graph of the Symmetry Function.
         """
+        self._check_keys(placeholders)
+
         with tf.variable_scope("Behler"):
             g = self._get_g2_graph(placeholders)
             if self._k_max == 3:
@@ -468,7 +498,7 @@ class BatchSymmetryFunction(SymmetryFunction):
             cutoff_function=cutoff_function)
 
         self._max_occurs = max_occurs
-        self._max_n_atoms = sum(max_occurs.values()) + 1
+        self._max_n_atoms = sum(max_occurs.values())
         self._nij_max = nij_max
         self._nijk_max = nijk_max
         self._batch_size = batch_size
@@ -526,7 +556,7 @@ class BatchSymmetryFunction(SymmetryFunction):
         """
         Return the shape of the descriptor matrix.
         """
-        return [self._batch_size, self._max_n_atoms, self._ndim]
+        return [self._batch_size, self._max_n_atoms + 1, self._ndim]
 
     def _get_v2g_map_batch_indexing_matrix(self, symmetry_function='g2'):
         """
@@ -570,6 +600,25 @@ class BatchSymmetryFunction(SymmetryFunction):
     @staticmethod
     def _get_column_split_axis():
         return 2
+
+    def _check_keys(self, placeholders: AttributeDict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'positions' in placeholders
+        assert 'cells' in placeholders
+        assert 'volume' in placeholders
+        assert 'g2' in placeholders
+        assert 'ilist' in placeholders.g2
+        assert 'jlist' in placeholders.g2
+        assert 'shift' in placeholders.g2
+        assert 'v2g_map' in placeholders.g2
+
+        if self._angular:
+            assert 'g4' in placeholders
+            assert 'ij' in placeholders.g4
+            assert 'ik' in placeholders.g4
+            assert 'jk' in placeholders.g4
 
     def build_graph(self, placeholders: AttributeDict):
         """

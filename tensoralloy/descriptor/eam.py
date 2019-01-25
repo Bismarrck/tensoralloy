@@ -53,7 +53,9 @@ class EAM(AtomicDescriptor):
         """
         Return the shape of the descriptor matrix.
         """
-        return [self._max_n_terms, placeholders.n_atoms, placeholders.nnl_max]
+        return [self._max_n_terms,
+                placeholders.n_atoms_plus_virt,
+                placeholders.nnl_max]
 
     def _get_v2g_map(self, placeholders, **kwargs):
         """
@@ -90,6 +92,21 @@ class EAM(AtomicDescriptor):
                 mask, row_split_sizes, axis=row_split_axis, name='masks')[1:]
             return dict(zip(self._elements, zip(rows, masks)))
 
+    def _check_keys(self, placeholders: AttributeDict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'positions' in placeholders
+        assert 'cells' in placeholders
+        assert 'volume' in placeholders
+        assert 'n_atoms_plus_virt' in placeholders
+        assert 'nnl_max' in placeholders
+        assert 'row_splits' in placeholders
+        assert 'ilist' in placeholders
+        assert 'jlist' in placeholders
+        assert 'shift' in placeholders
+        assert 'v2g_map' in placeholders
+
     def build_graph(self, placeholders: AttributeDict):
         """
         Get the tensorflow based computation graph of the EAM model.
@@ -100,6 +117,8 @@ class EAM(AtomicDescriptor):
             A dict.
         
         """
+        self._check_keys(placeholders)
+
         with tf.name_scope("EAM"):
             r = self._get_rij(placeholders.positions,
                               placeholders.cells,
@@ -220,3 +239,15 @@ class BatchEAM(EAM):
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         indexing = self._get_v2g_map_batch_indexing_matrix()
         return tf.add(v2g_map, indexing, name='v2g_map'), v2g_mask
+
+    def _check_keys(self, placeholders: AttributeDict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'positions' in placeholders
+        assert 'cells' in placeholders
+        assert 'volume' in placeholders
+        assert 'ilist' in placeholders
+        assert 'jlist' in placeholders
+        assert 'shift' in placeholders
+        assert 'v2g_map' in placeholders

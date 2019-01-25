@@ -634,7 +634,7 @@ def _compute_qm7m_descriptors_legacy(rc):
     trajectory.
     """
     batch_size = len(qm7m.trajectory)
-    n_atoms = sum(qm7m.max_occurs.values())
+    max_n_atoms = sum(qm7m.max_occurs.values())
     all_kbody_terms, kbody_terms, elements = get_kbody_terms(
         list(qm7m.max_occurs.keys()), k_max=3
     )
@@ -645,7 +645,7 @@ def _compute_qm7m_descriptors_legacy(rc):
         np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
 
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    targets = np.zeros((batch_size, n_atoms + 1, total_dim))
+    targets = np.zeros((batch_size, max_n_atoms + 1, total_dim))
     for i, atoms in enumerate(qm7m.trajectory):
         g, local_all_body_terms, local_sizes = \
             legacy_symmetry_function(atoms, rc)
