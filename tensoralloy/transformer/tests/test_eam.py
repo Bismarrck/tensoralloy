@@ -130,12 +130,12 @@ def test_encode_atoms():
     """
     Test the method `BatchEAMTransformer.encode`.
     """
-    db = connect(join(datasets_dir(), 'Ni.db'))
+    db = connect(join(datasets_dir(), 'snap-Ni.db'))
     atoms = db.get_atoms('id=1')
-    max_occurs = Counter({'Ni': 1})
-    rc = 6.5
-    nij_max = db.metadata['neighbors']['2']['6.50']['nij_max']
-    nnl_max = db.metadata['neighbors']['2']['6.50']['nnl_max']
+    max_occurs = Counter({'Ni': len(atoms) + 1})
+    rc = 6.0
+    nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
+    nnl_max = db.metadata['neighbors']['2']['6.00']['nnl_max']
 
     with tf.Graph().as_default():
         clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,

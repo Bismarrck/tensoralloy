@@ -150,7 +150,7 @@ class BatchEAM(EAM):
         super(BatchEAM, self).__init__(rc=rc, elements=elements)
 
         self._max_occurs = max_occurs
-        self._max_n_atoms = sum(max_occurs.values()) + 1
+        self._max_n_atoms = sum(max_occurs.values())
         self._nij_max = nij_max
         self._nnl_max = nnl_max
         self._batch_size = batch_size
@@ -200,7 +200,7 @@ class BatchEAM(EAM):
         """
         Return the shape of the descriptor matrix.
         """
-        return [self._batch_size, self._max_n_terms, self._max_n_atoms,
+        return [self._batch_size, self._max_n_terms, self._max_n_atoms + 1,
                 self._nnl_max]
 
     def _get_v2g_map_batch_indexing_matrix(self):

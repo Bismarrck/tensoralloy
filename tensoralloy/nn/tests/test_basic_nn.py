@@ -51,7 +51,7 @@ def test_convert_to_voigt_stress():
     """
     Test the method `BasicNN._convert_to_voigt_stress`.
     """
-    db = connect(join(datasets_dir(), 'Ni.db'))
+    db = connect(join(datasets_dir(), 'snap-Ni.db'))
     nn = BasicNN(elements=['Ni'], activation='leaky_relu',
                  minimize_properties=['stress'], export_properties=['stress'])
 

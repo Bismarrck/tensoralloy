@@ -478,13 +478,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         decoded = AttributeDict()
 
-        length = 3 * self._max_n_atoms
+        length = 3 * (self._max_n_atoms + 1)
         float_dtype = get_float_dtype()
 
         positions = tf.decode_raw(example['positions'], float_dtype)
         positions.set_shape([length])
         decoded.positions = tf.reshape(
-            positions, (self._max_n_atoms, 3), name='R')
+            positions, (self._max_n_atoms + 1, 3), name='R')
 
         n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
         decoded.n_atoms = n_atoms
@@ -502,7 +502,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         decoded.volume = tf.squeeze(volume, name='volume')
 
         mask = tf.decode_raw(example['mask'], float_dtype)
-        mask.set_shape([self._max_n_atoms, ])
+        mask.set_shape([self._max_n_atoms + 1, ])
         decoded.mask = mask
 
         composition = tf.decode_raw(example['composition'], float_dtype)
@@ -514,7 +514,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             # Ignore the forces of the virtual atom
             f_true.set_shape([length, ])
             decoded.f_true = tf.reshape(
-                f_true, (self._max_n_atoms, 3), name='f_true')
+                f_true, (self._max_n_atoms + 1, 3), name='f_true')
 
         if self._use_stress:
             stress = tf.decode_raw(
