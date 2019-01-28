@@ -15,6 +15,7 @@ from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
 from phonopy import Phonopy
+from phonopy import __version__ as phonopy_version
 from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
 from phonopy.interface import get_default_physical_units
@@ -26,6 +27,45 @@ from tensoralloy.nn.basic import exportable_properties
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def print_phononpy():
+    """
+    Print the phonopy logo.
+    """
+    print("""        _
+  _ __ | |__   ___  _ __   ___   _ __  _   _
+ | '_ \| '_ \ / _ \| '_ \ / _ \ | '_ \| | | |
+ | |_) | | | | (_) | | | | (_) || |_) | |_| |
+ | .__/|_| |_|\___/|_| |_|\___(_) .__/ \__, |
+ |_|                            |_|    |___/""")
+
+
+# noinspection PyUnresolvedReferences
+def print_phonopy_version():
+    """
+    Print phonopy version.
+    """
+    version = phonopy_version
+    version_text = ('%s' % version).rjust(44)
+    try:
+        import pkg_resources
+        dist = pkg_resources.get_distribution("phonopy")
+        if dist.has_version():
+            ver = dist.version.split('.')
+            if len(ver) > 3:
+                rev = ver[3]
+                version_text = ('%s-r%s' % (version, rev)).rjust(44)
+    except ImportError:
+        pass
+    except Exception as err:
+        if (err.__module__ == 'pkg_resources' and
+                err.__class__.__name__ == 'DistributionNotFound'):
+            pass
+        else:
+            raise
+    finally:
+        print(version_text)
 
 
 class TensorAlloyCalculator(Calculator):
@@ -166,7 +206,8 @@ class TensorAlloyCalculator(Calculator):
 
     def get_phonon_spectrum(self, atoms=None, supercell=(4, 4, 4),
                             primitive_axes=None, band_paths=None,
-                            band_labels=None, npoints=51, image_file=None):
+                            band_labels=None, npoints=51, image_file=None,
+                            verbose=False):
         """
         Plot the phonon spectrum of the target system.
 
@@ -197,6 +238,8 @@ class TensorAlloyCalculator(Calculator):
             Number of q-points in each path including end points.
         image_file : str or None
             A filepath for saving the phonon spectrum if provided.
+        verbose : bool
+            A boolean. If True, more intermediate details will be logged.
 
         """
         if not all(atoms.pbc):
@@ -223,6 +266,7 @@ class TensorAlloyCalculator(Calculator):
         symprec = 1e-5
         if primitive_axes is None or primitive_axes == 'auto':
             primitive_matrix = guess_primitive_matrix(atoms, symprec)
+            is_primitive_axes_auto = True
         else:
             primitive_matrix = primitive_axes
             auto_primitive_matrix = guess_primitive_matrix(atoms, symprec)
@@ -230,10 +274,12 @@ class TensorAlloyCalculator(Calculator):
                 warnings.warn("The primitive matrix differs from guessed "
                               "primitive matrix significantly",
                               category=UserWarning)
+            is_primitive_axes_auto = False
 
+        supercell_matrix = (np.eye(3) * supercell).astype(int)
         phonon = Phonopy(
             atoms,
-            supercell_matrix=(np.eye(3) * supercell).astype(int),
+            supercell_matrix=supercell_matrix,
             primitive_matrix=primitive_matrix,
             factor=physical_units['factor'],
             frequency_scale_factor=None,
@@ -242,13 +288,20 @@ class TensorAlloyCalculator(Calculator):
             symprec=symprec,
             is_symmetry=True,
             use_lapack_solver=False,
-            log_level=1)
+            log_level=0)
         phonon.set_force_constants(fc)
 
+        is_band_mode_auto = False
+
         if band_paths is None or band_paths == 'auto':
+            if verbose:
+                print("SeeK-path is used to generate band paths.")
+                print("About SeeK-path https://seekpath.readthedocs.io/ "
+                      "(citation there-in)")
             is_legacy = False
             bands, labels, path_connections = get_band_qpoints_by_seekpath(
                 phonon.primitive.to_tuple(), npoints)
+            is_band_mode_auto = True
         else:
             is_legacy = True
             bands = get_band_qpoints(band_paths, npoints)
@@ -257,6 +310,28 @@ class TensorAlloyCalculator(Calculator):
                 path_connections += [True, ] * (len(paths) - 2)
                 path_connections.append(False)
             labels = band_labels
+
+        if verbose:
+            print_phononpy()
+            print_phonopy_version()
+            if is_band_mode_auto:
+                print("Band structure mode (Auto)")
+            else:
+                print("Band structure mode")
+            print("Settings:")
+            print("  Supercell: %s" % np.diag(supercell_matrix))
+            if is_primitive_axes_auto:
+                print("  Primitive matrix (Auto):")
+            else:
+                print("  Primitive matrix:")
+            for v in primitive_matrix:
+                print("    %s" % v)
+            print("Spacegroup: %s" %
+                  phonon.get_symmetry().get_international_table())
+            print("Reciprocal space paths in reduced coordinates:")
+            for band in bands:
+                print("[%5.2f %5.2f %5.2f] --> [%5.2f %5.2f %5.2f]" %
+                      (tuple(band[0]) + tuple(band[-1])))
 
         phonon.set_band_structure(
             bands, is_eigenvectors=False, is_band_connection=False)
