@@ -30,8 +30,12 @@ the 3x3 cell tensor.
 * ase>=3.15.0
 * atsim.potentials==0.2.1
 * matplotlib>=2.1.0
+* toml==0.10.0
+* pymatgen>=2018.6
 * cython>=0.28.5
 * wheel
+* seekpath>=1.8.4
+* phonopy>=1.14.2
 
 Anaconda3 can install above packages without pain. However, the performance
 of conda-provided tensorflow is not that good. 
