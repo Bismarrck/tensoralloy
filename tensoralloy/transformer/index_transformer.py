@@ -217,7 +217,8 @@ class IndexTransformer:
                         for beta in range(3):
                             row = i * 3 + alpha
                             col = j * 3 + beta
-                            h[row, col] = h[indices[i], alpha, indices[j], beta]
+                            x = hessian[indices[i], alpha, indices[j], beta]
+                            h[row, col] = x
 
         else:
             h = np.zeros((n, n, 3, 3))
@@ -225,7 +226,7 @@ class IndexTransformer:
                 for alpha in range(3):
                     for j in range(n):
                         for beta in range(3):
-                            x = h[indices[i], alpha, indices[j], beta]
+                            x = hessian[indices[i], alpha, indices[j], beta]
                             h[i, j, alpha, beta] = x
 
         return h

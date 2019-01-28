@@ -9,10 +9,13 @@ import nose
 
 from collections import Counter
 from unittest import TestCase
+from os.path import join
+from ase.build import bulk
 from nose.tools import assert_equal, assert_list_equal, assert_less
 
 from tensoralloy.transformer.index_transformer import IndexTransformer
-from tensoralloy.test_utils import Pd3O2, Pd2O2Pd
+from tensoralloy.test_utils import Pd3O2, Pd2O2Pd, test_dir
+from tensoralloy.calculator import TensorAlloyCalculator
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -61,6 +64,26 @@ class IndexTransformerTest(TestCase):
                           [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
         assert_less(np.abs(clf.map_array(Pd2O2Pd.positions) -
                            self.clf.map_array(Pd3O2.positions)).max(), 1e-8)
+
+
+def test_reverse_map_hessian():
+    """
+    Test the method `IndexTransformer.reverse_map_hessian()`.
+    """
+    graph_model_path = join(test_dir(), 'Ni', 'Ni.zjw04xc.pb')
+    calc = TensorAlloyCalculator(graph_model_path)
+    atoms = bulk('Ni', crystalstructure='fcc', cubic=True) * [2, 2, 2]
+    atoms.calc = calc
+    calc.calculate(atoms)
+    original = calc.get_property('hessian', atoms)
+
+    clf = calc.transformer.get_index_transformer(atoms)
+
+    h = clf.reverse_map_hessian(original, phonopy_format=False)
+    assert_list_equal(list(h.shape), [96, 96])
+
+    h = clf.reverse_map_hessian(original, phonopy_format=True)
+    assert_list_equal(list(h.shape), [32, 32, 3, 3])
 
 
 if __name__ == "__main__":
