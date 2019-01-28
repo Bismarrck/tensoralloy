@@ -310,7 +310,7 @@ class TrainingManager:
                 start_delay_secs=300,
                 # Explicitly set these thresholds to lower values so that every
                 # checkpoint can be evaluated.
-                throttle_secs=120,
+                throttle_secs=60,
             )
             tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
