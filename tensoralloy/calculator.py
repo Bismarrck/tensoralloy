@@ -14,7 +14,6 @@ from ase.calculators.calculator import Calculator
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
-from phonopy import Phonopy
 from phonopy import __version__ as phonopy_version
 from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
@@ -24,6 +23,7 @@ from phonopy.structure.cells import guess_primitive_matrix
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
+from tensoralloy.phonony import Phonopy
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -207,6 +207,7 @@ class TensorAlloyCalculator(Calculator):
     def get_phonon_spectrum(self, atoms=None, supercell=(4, 4, 4),
                             primitive_axes=None, band_paths=None,
                             band_labels=None, npoints=51, image_file=None,
+                            use_wavenumber=False, plot_vertical_lines=False,
                             verbose=False):
         """
         Plot the phonon spectrum of the target system.
@@ -238,6 +239,13 @@ class TensorAlloyCalculator(Calculator):
             Number of q-points in each path including end points.
         image_file : str or None
             A filepath for saving the phonon spectrum if provided.
+        use_wavenumber : bool
+            If True, frequencies will be converted to cm-1. Defauls to False so
+            that THz will be used. The legacy plot function does not support
+            this.
+        plot_vertical_lines : bool
+            If True, vertical lines at each high-symmetry point will be plotted.
+            The legacy plot function does not support this.
         verbose : bool
             A boolean. If True, more intermediate details will be logged.
 
@@ -298,12 +306,10 @@ class TensorAlloyCalculator(Calculator):
                 print("SeeK-path is used to generate band paths.")
                 print("About SeeK-path https://seekpath.readthedocs.io/ "
                       "(citation there-in)")
-            is_legacy = False
             bands, labels, path_connections = get_band_qpoints_by_seekpath(
                 phonon.primitive.to_tuple(), npoints)
             is_band_mode_auto = True
         else:
-            is_legacy = True
             bands = get_band_qpoints(band_paths, npoints)
             path_connections = []
             for paths in band_paths:
@@ -339,7 +345,9 @@ class TensorAlloyCalculator(Calculator):
         plot = phonon.plot_band_structure(
             labels=labels,
             path_connections=path_connections,
-            is_legacy=is_legacy)
+            is_legacy=False,
+            use_wavenumber=use_wavenumber,
+            plot_vertical_lines=plot_vertical_lines)
         if image_file is not None:
             plot.savefig(image_file)
         else:
@@ -364,3 +372,49 @@ class TensorAlloyCalculator(Calculator):
             ops = {target: self._ops[target] for target in properties}
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
+
+
+def phonon_spectrum_example():
+    """
+    A demo of plotting phonon spectrum of Ni/fcc.
+    """
+    from ase.build import bulk
+    from os.path import join
+    from tensoralloy.test_utils import test_dir
+
+    band_paths = [
+        [np.array([0, 0, 0]),
+         np.array([1 / 2, 0, 1 / 2]),
+         np.array([1 / 2, 1 / 4, 3 / 4]),
+         np.array([1 / 2, 1 / 2, 1]),
+         np.array([3 / 8, 3 / 8, 3 / 4]),
+         np.array([0, 0, 0]),
+         np.array([1 / 2, 1 / 2, 1 / 2])]
+    ]
+
+    labels = [
+        r"$\Gamma$",
+        r"$\mathrm{X}$",
+        r"$\mathrm{W}$",
+        r"$\mathrm{X}$",
+        r"$\mathrm{K}$",
+        r"$\Gamma$",
+        r"$\mathrm{L}$",
+    ]
+
+    atoms = bulk('Ni')
+    calc = TensorAlloyCalculator(join(test_dir(), 'Ni', 'Ni.zjw04xc.pb'))
+    atoms.calc = calc
+    calc.get_phonon_spectrum(
+        atoms,
+        primitive_axes='auto',
+        supercell=(4, 4, 4),
+        band_paths=band_paths,
+        band_labels=labels,
+        npoints=101,
+        use_wavenumber=True, plot_vertical_lines=True,
+        verbose=True)
+
+
+if __name__ == "__main__":
+    phonon_spectrum_example()
