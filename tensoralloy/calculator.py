@@ -14,7 +14,7 @@ from ase.calculators.calculator import Calculator
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
-from phonopy import __version__ as phonopy_version
+
 from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
 from phonopy.interface import get_default_physical_units
@@ -23,49 +23,10 @@ from phonopy.structure.cells import guess_primitive_matrix
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
-from tensoralloy.phonony import Phonopy
+from tensoralloy.phonony import Phonopy, print_phonopy_version, print_phononpy
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def print_phononpy():
-    """
-    Print the phonopy logo.
-    """
-    print("""        _
-  _ __ | |__   ___  _ __   ___   _ __  _   _
- | '_ \| '_ \ / _ \| '_ \ / _ \ | '_ \| | | |
- | |_) | | | | (_) | | | | (_) || |_) | |_| |
- | .__/|_| |_|\___/|_| |_|\___(_) .__/ \__, |
- |_|                            |_|    |___/""")
-
-
-# noinspection PyUnresolvedReferences
-def print_phonopy_version():
-    """
-    Print phonopy version.
-    """
-    version = phonopy_version
-    version_text = ('%s' % version).rjust(44)
-    try:
-        import pkg_resources
-        dist = pkg_resources.get_distribution("phonopy")
-        if dist.has_version():
-            ver = dist.version.split('.')
-            if len(ver) > 3:
-                rev = ver[3]
-                version_text = ('%s-r%s' % (version, rev)).rjust(44)
-    except ImportError:
-        pass
-    except Exception as err:
-        if (err.__module__ == 'pkg_resources' and
-                err.__class__.__name__ == 'DistributionNotFound'):
-            pass
-        else:
-            raise
-    finally:
-        print(version_text)
 
 
 class TensorAlloyCalculator(Calculator):

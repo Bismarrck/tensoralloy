@@ -9,12 +9,52 @@ import numpy as np
 
 from phonopy import Phonopy as base_Phonopy
 from phonopy.phonon import band_structure
+from phonopy import __version__ as phonopy_version
 from mpl_toolkits.axes_grid1 import ImageGrid
 from matplotlib.ticker import MultipleLocator
 from typing import List
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def print_phononpy():
+    """
+    Print the phonopy logo.
+    """
+    print("""        _
+  _ __ | |__   ___  _ __   ___   _ __  _   _
+ | '_ \| '_ \ / _ \| '_ \ / _ \ | '_ \| | | |
+ | |_) | | | | (_) | | | | (_) || |_) | |_| |
+ | .__/|_| |_|\___/|_| |_|\___(_) .__/ \__, |
+ |_|                            |_|    |___/""")
+
+
+# noinspection PyUnresolvedReferences
+def print_phonopy_version():
+    """
+    Print phonopy version.
+    """
+    version = phonopy_version
+    version_text = ('%s' % version).rjust(44)
+    try:
+        import pkg_resources
+        dist = pkg_resources.get_distribution("phonopy")
+        if dist.has_version():
+            ver = dist.version.split('.')
+            if len(ver) > 3:
+                rev = ver[3]
+                version_text = ('%s-r%s' % (version, rev)).rjust(44)
+    except ImportError:
+        pass
+    except Exception as err:
+        if (err.__module__ == 'pkg_resources' and
+                err.__class__.__name__ == 'DistributionNotFound'):
+            pass
+        else:
+            raise
+    finally:
+        print(version_text)
 
 
 class BandStructure(band_structure.BandStructure):
