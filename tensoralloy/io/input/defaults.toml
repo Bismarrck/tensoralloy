@@ -14,7 +14,7 @@ test_size = 0.2
 [nn]
 activation = "leaky_relu"
 minimize = ['energy', 'forces']
-export = ['energy', 'forces']
+export = ['energy', 'forces', 'stress', 'hessian']
 positive_energy_mode = false
 
 [nn.loss.energy]
