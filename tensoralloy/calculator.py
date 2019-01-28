@@ -19,6 +19,7 @@ from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
 from phonopy.interface import get_default_physical_units
 from phonopy.structure.cells import guess_primitive_matrix
+from phonopy.units import VaspToCm
 
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
@@ -164,6 +165,40 @@ class TensorAlloyCalculator(Calculator):
         forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
         clf = self.transformer.get_index_transformer(atoms)
         return clf.map_forces(forces, reverse=True)
+
+    def get_frequencies_and_normal_modes(self, atoms=None):
+        """
+        Return the vibrational frequencies and normal modes.
+
+        If `atoms` is periodic, this method just calculates the vibrational
+        frequencies at the gamma point in the original unit cell.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `Atoms` object.
+
+        Returns
+        -------
+        frequencies : array_like
+            The vibrational frequencies in ascending order. The unit is cm-1.
+        normal_modes : array_like
+            The corresponding modes. Each row, `normal_modes[i]`, represents a
+            vibration mode.
+
+        """
+        hessian = self.get_hessian(atoms)
+        if atoms is None:
+            atoms = self.atoms
+        masses = atoms.get_masses()
+        inverse_matrix = np.zeros(len(atoms) * 3)
+        for i in range(len(atoms)):
+            inverse_matrix[i * 3: i * 3 + 3] = masses**(-0.5)
+        inverse_matrix = np.diag(inverse_matrix)
+        mass_weighted_hessian = inverse_matrix @ hessian @ inverse_matrix
+        eigvals, eigvecs = np.linalg.eigh(mass_weighted_hessian)
+        wave_numbers = eigvals * VaspToCm
+        return wave_numbers, eigvecs.transpose()
 
     def get_phonon_spectrum(self, atoms=None, supercell=(4, 4, 4),
                             primitive_axes=None, band_paths=None,
