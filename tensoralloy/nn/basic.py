@@ -268,11 +268,12 @@ class BasicNN:
             factor = tf.constant(1.0, dtype=energy.dtype, name='factor')
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
-            dEdhT = tf.transpose(tf.gradients(energy, cells)[0], name='dEdhT')
+            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdhT')
             if cells.shape.ndims == 2:
-                stress = tf.matmul(dEdhT, cells)
+                stress = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
+                                   name='stress')
             else:
-                stress = tf.einsum('ikj,ikl->ijl', dEdhT, cells)
+                stress = tf.einsum('ikj,ikl->ijl', dEdh, cells)
             stress = tf.multiply(factor, stress, name='full')
             return stress
 
