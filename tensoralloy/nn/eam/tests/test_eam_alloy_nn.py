@@ -506,9 +506,29 @@ def test_eam_alloy_zjw04():
                         lammps.get_potential_energy(atoms), delta=1e-6)
     assert_array_almost_equal(result['forces'],
                               lammps.get_forces(atoms), delta=1e-9)
-    # TODO: fix the stress
-    # assert_array_almost_equal(result['stress'],
-    #                           lammps.get_stress(atoms) * volume, delta=1e-5)
+
+    def voigt_to_full(tensor):
+        """
+        A helper function convert the Voigt tensor to a full 3x3 tensor.
+        """
+        assert len(tensor) == 6
+        xx, yy, zz, yz, xz, xy = tensor
+        return np.array([[xx, xy, xz],
+                         [xy, yy, yz],
+                         [xz, yz, zz]])
+
+    # TODO: a PR has been submitted to ase. The transformation below can be
+    #  removed once the PR was accepted.
+
+    lmp_voigt_stress = lammps.get_stress(atoms) * atoms.get_volume()
+    lmp_stress = voigt_to_full(lmp_voigt_stress)
+
+    rot = lammps.prism.R
+
+    stress = rot @ lmp_stress @ np.linalg.inv(rot)
+    assert_array_almost_equal(voigt_to_full(result['stress']),
+                              stress,
+                              delta=1e-5)
 
 
 if __name__ == "__main__":
