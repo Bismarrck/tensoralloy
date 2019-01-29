@@ -266,14 +266,13 @@ class BasicNN:
         """
         with tf.name_scope("Full"):
             factor = tf.constant(1.0, dtype=energy.dtype, name='factor')
-            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
-            # The cell tensor `h` in text books is column-major while in ASE
-            # is row-major. So the Voigt indices and the matrix multiplication
-            # below are transposed.
+            # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
+            # transposed.
+            dEdhT = tf.transpose(tf.gradients(energy, cells)[0], name='dEdhT')
             if cells.shape.ndims == 2:
-                stress = tf.matmul(dEdh, cells)
+                stress = tf.matmul(dEdhT, cells)
             else:
-                stress = tf.einsum('ijk,ikl->ijl', dEdh, cells)
+                stress = tf.einsum('ikj,ikl->ijl', dEdhT, cells)
             stress = tf.multiply(factor, stress, name='full')
             return stress
 
