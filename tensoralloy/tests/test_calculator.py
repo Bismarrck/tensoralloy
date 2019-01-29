@@ -54,7 +54,7 @@ def test_calculator_with_qm7():
         y_pred.append(calc.get_potential_energy(atoms))
 
     y_mae = mean_absolute_error(y_true, y_pred)
-    assert_almost_equal(y_mae, 0.12429088, delta=1e-7)
+    assert_almost_equal(y_mae, 0.2001322, delta=1e-7)
 
 
 _eam_slab_tmpdir = join(test_dir(), 'tmp')

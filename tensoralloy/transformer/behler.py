@@ -247,7 +247,10 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         numpy_float_dtype = get_float_dtype().as_numpy_dtype
 
         positions = index_transformer.map_positions(atoms.positions)
-        n_atoms = index_transformer.n_atoms
+
+        # `max_n_atoms` must be used because every element shall have at least
+        # one feature row (though it could be all zeros, a dummy or virtual row)
+        n_atoms = index_transformer.max_n_atoms
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         mask = index_transformer.mask
