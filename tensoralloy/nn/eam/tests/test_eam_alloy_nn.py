@@ -18,10 +18,13 @@ from collections import Counter
 from unittest import skipUnless, skip
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
+from ase.db import connect
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
-from tensoralloy.transformer import EAMTransformer
-from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal, test_dir
+from tensoralloy.io.neighbor import find_neighbor_sizes
+from tensoralloy.transformer import EAMTransformer, BatchEAMTransformer
+from tensoralloy.test_utils import assert_array_equal, datasets_dir
+from tensoralloy.test_utils import assert_array_almost_equal, test_dir
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults
 
 __author__ = 'Xin Chen'
@@ -529,6 +532,72 @@ def test_eam_alloy_zjw04():
     assert_array_almost_equal(voigt_to_full(result['stress']),
                               stress,
                               delta=1e-5)
+
+
+def test_batch_stress():
+    """
+    Test the batch implementation of `_get_reduced_full_stress_tensor`.
+    """
+    db = connect(join(datasets_dir(), 'snap-Ni.db'))
+    atoms = db.get_atoms('id=1')
+
+    volume = atoms.get_volume()
+    rc = 6.0
+    elements = ['Ni']
+    nn = EamAlloyNN(elements,
+                    custom_potentials={'Ni': {'rho': 'zjw04', 'embed': 'zjw04'},
+                                       'NiNi': {'phi': 'zjw04'}},
+                    minimize_properties=['energy', 'stress'],
+                    export_properties=['energy', 'forces', 'stress'])
+
+    with tf.Graph().as_default():
+        clf = EAMTransformer(rc=rc, elements=elements)
+        nn.attach_transformer(clf)
+        predictions = nn.build(features=clf.placeholders,
+                               mode=tf.estimator.ModeKeys.PREDICT,
+                               verbose=False)
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            s_true = sess.run(predictions.stress,
+                              feed_dict=clf.get_feed_dict(atoms)) * volume
+
+
+    with tf.Graph().as_default():
+        nij_max, _, nnl_max = find_neighbor_sizes(atoms, rc=rc, k_max=2)
+        max_occurs = Counter(atoms.get_chemical_symbols())
+        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
+                                  nnl_max=nnl_max, batch_size=1,
+                                  use_forces=True, use_stress=True)
+        protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
+        example = clf.decode_protobuf(protobuf)
+
+        batch = AttributeDict()
+        for key, tensor in example.items():
+            batch[key] = tf.expand_dims(
+                tensor, axis=0, name=tensor.op.name + '/batch')
+
+        descriptors = clf.get_descriptors(batch)
+        features = AttributeDict(positions=batch.positions,
+                                 n_atoms=batch.n_atoms,
+                                 cells=batch.cells,
+                                 composition=batch.composition,
+                                 mask=batch.mask,
+                                 volume=batch.volume)
+
+        outputs = nn._get_model_outputs(
+            features=features,
+            descriptors=AttributeDict(descriptors),
+            mode=tf.estimator.ModeKeys.EVAL,
+            verbose=False)
+        energy = nn._get_energy_op(outputs, features, verbose=False)
+        stress = nn._get_stress_op(energy, batch.cells, verbose=False)
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            s_pred = sess.run(stress) * volume
+
+        assert_array_almost_equal(s_true, s_pred, delta=1e-8)
+
 
 
 if __name__ == "__main__":
