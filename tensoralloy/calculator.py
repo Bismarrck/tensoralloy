@@ -24,7 +24,7 @@ from phonopy.units import VaspToCm
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
-from tensoralloy.phonony import Phonopy, print_phonopy_version, print_phononpy
+from tensoralloy.phonopy import Phonopy, print_phonopy_version, print_phonopy
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -314,7 +314,7 @@ class TensorAlloyCalculator(Calculator):
             labels = band_labels
 
         if verbose:
-            print_phononpy()
+            print_phonopy()
             print_phonopy_version()
             if is_band_mode_auto:
                 print("Band structure mode (Auto)")

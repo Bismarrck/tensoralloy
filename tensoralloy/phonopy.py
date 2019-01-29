@@ -18,7 +18,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def print_phononpy():
+def print_phonopy():
     """
     Print the phonopy logo.
     """
