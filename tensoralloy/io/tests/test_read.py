@@ -6,14 +6,17 @@ import nose
 
 from nose.tools import assert_equal, assert_almost_equal, assert_true
 from nose.tools import assert_dict_equal
+from os.path import join
+
 from tensoralloy.io.read import read_file
+from tensoralloy.test_utils import test_dir
 
 
 def test_read_xyz():
     """
     Test reading normal xyz files.
     """
-    xyzfile = 'test_files/B28.xyz'
+    xyzfile = join(test_dir(), 'B28.xyz')
     database = read_file(xyzfile, verbose=False, num_examples=2)
     atoms = database.get_atoms('id=2')
     assert_equal(len(database), 2)
@@ -26,7 +29,7 @@ def test_read_extxyz():
     """
     Test reading ext xyz files.
     """
-    xyzfile = 'test_files/examples.extxyz'
+    xyzfile = join(test_dir(), 'examples.extxyz')
     database = read_file(xyzfile, verbose=False)
     atoms = database.get_atoms('id=2')
     thres = 1e-6
@@ -38,6 +41,19 @@ def test_read_extxyz():
     assert_almost_equal(atoms.get_total_energy(), -17637.613286, delta=thres)
     assert_dict_equal(metadata['max_occurs'], max_occurs)
     assert_equal(metadata['periodic'], False)
+
+
+def test_read_snap_stress():
+    """
+    Test reading an example SNAP/Ni extxyz file.
+
+    The unit of the stress tensor in this file is kbar.
+    """
+    xyzfile = join(test_dir(), 'snap_Ni_id11.extxyz')
+    database = read_file(xyzfile, units={"stress": "kbar"}, verbose=False)
+    atoms = database.get_atoms(id=1)
+    stress = atoms.get_stress()
+    assert_almost_equal(stress[0], -0.01388831152640921, delta=1e-8)
 
 
 if __name__ == '__main__':

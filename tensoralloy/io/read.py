@@ -46,7 +46,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         The database for the given xyz file.
 
     """
-    to_eV, to_eV_Angstrom, to_GPa = get_conversion_units(units)
+    to_eV, to_eV_Angstrom, to_eV_Ang3 = get_conversion_units(units)
     count = 0
     max_occurs = Counter()
     stress = None
@@ -96,10 +96,10 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             if stress is None:
                 stress = bool('stress' in atoms.calc.results)
             if stress:
-                # Convert the unit of stress tensors to 'GPa':
+                # Convert the unit of stress tensors to 'eV / Angstrom**3':
                 # 1 eV/Angstrom**3 = 160.21766208 GPa
                 # 1 GPa = 10 kbar
-                atoms.calc.results['stress'] *= to_GPa
+                atoms.calc.results['stress'] *= to_eV_Ang3
 
             # `periodic` will be set to True if any of the `Atoms` is periodic.
             periodic = any(atoms.pbc) or periodic
@@ -130,7 +130,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         'periodic': periodic,
         'unit_conversion': {'energy': to_eV,
                             'forces': to_eV_Angstrom,
-                            'stress': to_GPa}}
+                            'stress': to_eV_Ang3}}
     return database
 
 
@@ -212,8 +212,8 @@ def config_parser(parser: ArgumentParser):
     parser.add_argument(
         '--stress-unit',
         type=str,
-        default='GPa',
-        choices=['GPa', 'kbar'],
+        default='eV/Angstrom**3',
+        choices=['GPa', 'kbar', 'eV/Angstrom**3'],
         help='The unit of the stress tensors in the file.',
     )
     return parser
