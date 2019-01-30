@@ -263,6 +263,8 @@ class EamNN(BasicNN):
             y_mask = tf.multiply(y_atomic, mask, name='mask')
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)
+        if self._positive_energy_mode:
+            energy = tf.negative(energy, name='positive')
         if verbose:
             log_tensor(energy)
         return energy
