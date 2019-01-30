@@ -32,6 +32,11 @@ def test_unit_conversion():
     })
     assert_almost_equal(to_eV_Ang3, 0.1 * GPa)
 
+    _, _, to_eV_Ang3 = get_conversion_units({
+        'stress': 'eV/Angstrom**3',
+    })
+    assert_almost_equal(to_eV_Ang3, 1.0)
+
     xyzfile = 'test_files/examples.extxyz'
     database = read_file(xyzfile, verbose=False,
                          units={'energy': 'kcal/mol'})
