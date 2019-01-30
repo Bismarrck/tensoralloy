@@ -18,7 +18,7 @@ def get_conversion_units(units: Dict[str, str]) -> (float, float, float):
     Return the conversion factors:
         * 'energy' should be converted to 'eV'
         * 'forces' should be converted to 'eV / Angstrom'
-        * 'stress' should be converted to 'GPa'
+        * 'stress' should be converted to 'eV / Angstrom**3'
 
     """
     _units = {
@@ -56,7 +56,6 @@ def get_conversion_units(units: Dict[str, str]) -> (float, float, float):
 
     eV = ase.units.eV
     Angstrom = ase.units.Angstrom
-    GPa = ase.units.GPa
 
     if 'energy' not in units:
         to_eV = 1.0
@@ -69,8 +68,8 @@ def get_conversion_units(units: Dict[str, str]) -> (float, float, float):
         to_eV_Angstrom = _parse_comb(units['forces']) / eV / Angstrom
 
     if 'stress' not in units:
-        to_GPa = 1.0
+        to_eV_Ang3 = 1.0
     else:
-        to_GPa = _parse_comb(units['stress']) / GPa
+        to_eV_Ang3 = _parse_comb(units['stress']) / eV / Angstrom**3
 
-    return to_eV, to_eV_Angstrom, to_GPa
+    return to_eV, to_eV_Angstrom, to_eV_Ang3
