@@ -133,7 +133,7 @@ output_graph_path = join(
     test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
 
 checkpoint_path = join(
-    test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-100000')
+    test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-10000')
 
 
 def _delete():

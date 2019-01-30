@@ -15,6 +15,7 @@ from collections import Counter
 from os.path import join
 
 from tensoralloy.io.neighbor import find_neighbor_sizes
+from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
@@ -134,7 +135,12 @@ def test_encode_atoms():
     atoms = db.get_atoms('id=1')
     max_occurs = Counter({'Ni': len(atoms) + 1})
     rc = 6.0
-    nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
+
+    try:
+        nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
+    except KeyError:
+        find_neighbor_size_limits(db, rc, k_max=2, verbose=False)
+        nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
     nnl_max = db.metadata['neighbors']['2']['6.00']['nnl_max']
 
     with tf.Graph().as_default():
