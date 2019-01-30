@@ -10,6 +10,7 @@ from os.path import join
 from tensoralloy.io.neighbor import find_neighbor_size_limits
 from tensoralloy.io.neighbor import convert_k_max_to_key
 from tensoralloy.io.neighbor import convert_rc_to_key
+from tensoralloy.dataset.utils import compute_atomic_static_energy
 from tensoralloy.test_utils import datasets_dir
 
 __author__ = 'Xin Chen'
@@ -45,19 +46,30 @@ def rebuild():
     Rebuild metadata of built-in datasets.
     """
     for name, config in built_in_datasets.items():
+
         print(f"Dataset: {name} @ {config['path']}")
         db = connect(config['path'])
+
         for index in range(len(config['rc'])):
             rc = config['rc'][index]
             k_max = config['k_max'][index]
             rc_key = convert_rc_to_key(rc)
             k_max_key = convert_k_max_to_key(k_max)
+
             try:
                 _ = db.metadata['neighbors'][k_max_key][rc_key]['nnl_max']
             except KeyError:
                 find_neighbor_size_limits(db, rc, k_max, verbose=True)
             else:
-                print(f"Skip {name} with rc={rc_key}, k_max={k_max_key}")
+                print(f"Skip {name}/neighbor with rc={rc_key}, "
+                      f"k_max={k_max_key}")
+
+            if 'atomic_static_energy' not in db.metadata:
+                elements = sorted(list(db.metadata['max_occurs'].keys()))
+                compute_atomic_static_energy(db, elements, verbose=True)
+            else:
+                print(f"Skip {name}/static_energy")
+
         print('Done.\n')
 
 
