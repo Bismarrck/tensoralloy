@@ -429,7 +429,7 @@ class Dataset:
 
         test_file, test_size = _load('test')
         train_file, train_size = _load('train')
-        success = test_file and train_file
+        success = bool(test_file) and bool(train_file)
 
         self._files = {tf.estimator.ModeKeys.TRAIN: train_file,
                        tf.estimator.ModeKeys.EVAL: test_file}
