@@ -11,6 +11,7 @@ import warnings
 
 from ase import Atoms
 from ase.calculators.calculator import Calculator
+from ase.units import GPa
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
@@ -165,6 +166,52 @@ class TensorAlloyCalculator(Calculator):
         forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
         clf = self.transformer.get_index_transformer(atoms)
         return clf.map_forces(forces, reverse=True)
+
+    def get_stress(self, atoms=None, voigt=True):
+        """
+        Return the stress tensor.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `Atoms` object.
+        voigt : bool
+            If True, return the stress tensor in Voigt order. Otherwise the 3x3
+            matrix will be returned.
+
+        Returns
+        -------
+        stress : array_like
+            The stress tensor in ASE internal unit, 'eV/Angstrom**3'.
+
+        """
+        if atoms is None:
+            atoms = self.atoms
+        stress = self.get_property('stress', atoms)
+        if voigt:
+            xx, yy, zz, yz, xz, xy = stress
+            stress = np.array([[xx, xy, xz],
+                               [xy, yy, yz],
+                               [xz, yz, zz]])
+        return stress
+    
+    def get_total_pressure(self, atoms=None):
+        """
+        Return the external pressure of the target `Atoms`.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `Atoms`.
+
+        Returns
+        -------
+        total_pressure : float
+            The total pressure, in GPa.
+
+        """
+        stress = self.get_stress(atoms)
+        return np.mean(stress[:3]) * (-1.0) / GPa
 
     def get_frequencies_and_normal_modes(self, atoms=None):
         """
@@ -368,6 +415,11 @@ class TensorAlloyCalculator(Calculator):
             ops = {target: self._ops[target] for target in properties}
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
+
+        # The unit of raw stress tensor is 'eV' (dE/dh @ h). The internal unit
+        # of stress tensors of ASE is 'eV/Angstrom**3'.
+        if 'stress' in self.results:
+            self.results['stress'] /= self.atoms.get_volume()
 
 
 def phonon_spectrum_example():
