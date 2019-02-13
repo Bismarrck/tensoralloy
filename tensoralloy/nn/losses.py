@@ -155,15 +155,21 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
         return loss
 
 
-def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
+def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
+                            use_mse=False):
     """
     Return the relative RMSE as the loss of atomic forces.
     """
     with tf.name_scope("Relative"):
-        axis = labels.shape.ndims - 1
-        diff = tf.subtract(labels, predictions, name='diff')
-        upper = tf.linalg.norm(diff, axis=axis, keepdims=False, name='upper')
-        lower = tf.linalg.norm(labels, axis=axis, keepdims=False, name='lower')
+        if use_mse:
+            diff = tf.squared_difference(labels, predictions, name='diff')
+            upper = tf.reduce_sum(diff, axis=1, keepdims=False, name='upper')
+            ll = tf.square(labels, name='ll')
+            lower = tf.reduce_sum(ll, axis=1, keepdims=False, name='lower')
+        else:
+            diff = tf.subtract(labels, predictions)
+            upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
+            lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
         ratio = tf.div(upper, lower, name='ratio')
         loss = tf.reduce_mean(ratio, name='loss')
     return loss

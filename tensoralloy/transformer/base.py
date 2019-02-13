@@ -348,7 +348,7 @@ class BatchDescriptorTransformer(BaseTransformer):
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar
             # reduced_stress (eV) = stress * volume
-            virial = atoms.get_stress(voigt=True).astype(numpy_dtype) * volume
+            virial = atoms.get_stress(voigt=True).astype(numpy_dtype)
             total_pressure = np.atleast_1d(
                 virial[:3].mean()).astype(numpy_dtype)
             feature_list['stress'] = bytes_feature(virial.tostring())

@@ -259,7 +259,7 @@ class BasicNN:
         return forces
 
     @staticmethod
-    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells):
+    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells, volume):
         """
         Return the Op to compute the reduced stress tensor `dE/dh @ h` where `h`
         is the cell tensor.
@@ -272,8 +272,12 @@ class BasicNN:
             if cells.shape.ndims == 2:
                 stress = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
                                    name='stress')
+                stress = tf.div(stress, volume, name='ase')
             else:
                 stress = tf.einsum('ikj,ikl->ijl', dEdh, cells)
+                stress = tf.div(tf.reshape(stress, (-1, 9)),
+                                tf.reshape(volume, (-1, 1)))
+                stress = tf.reshape(stress, (-1, 3, 3), name='ase')
             stress = tf.multiply(factor, stress, name='full')
             return stress
 
@@ -301,12 +305,12 @@ class BasicNN:
                 log_tensor(stress)
             return stress
 
-    def _get_stress_op(self, energy: tf.Tensor, cells, name='stress',
+    def _get_stress_op(self, energy: tf.Tensor, cells, volume, name='stress',
                        verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells)
+        stress = self._get_reduced_full_stress_tensor(energy, cells, volume)
         ndims = stress.shape.ndims
         batch_size = cells.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
@@ -314,15 +318,15 @@ class BasicNN:
         return self._convert_to_voigt_stress(
             stress, batch_size, name=name, verbose=verbose)
 
-    def _get_total_pressure_op(self, energy: tf.Tensor, cells, name='pressure',
-                               verbose=True):
+    def _get_total_pressure_op(self, energy: tf.Tensor, cells, volume,
+                               name='pressure', verbose=True):
         """
         Return the Op to compute the reduced total pressure (eV).
 
-            reduced_total_pressure = -0.5 * trace(dy/dC @ cells) / -3.0
+            reduced_total_pressure = -trace(full_stress) / 3.0
 
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells)
+        stress = self._get_reduced_full_stress_tensor(energy, cells, volume)
         three = tf.constant(-3.0, dtype=energy.dtype, name='three')
         total_pressure = tf.div(tf.trace(stress), three, name=name)
         if verbose:
@@ -731,6 +735,9 @@ class BasicNN:
 
         """
 
+        if self._transformer is None:
+            raise ValueError("A descriptor transformer must be attached.")
+
         # 'descriptors', a dict of (element, (value, mask)) where `element`
         # represents the symbol of an element, `value` is the descriptors of
         # `element` and `mask` is the mask of `value`.
@@ -771,13 +778,13 @@ class BasicNN:
                 with tf.name_scope("Pressure"):
                     predictions.total_pressure = \
                         self._get_total_pressure_op(
-                            predictions.energy, features.cells, name='pressure',
-                            verbose=verbose)
+                            predictions.energy, features.cells, features.volume,
+                            name='pressure', verbose=verbose)
             elif 'stress' in properties:
                 with tf.name_scope("Stress"):
                     predictions.stress = self._get_stress_op(
-                        predictions.energy, features.cells, name='stress',
-                        verbose=verbose)
+                        predictions.energy, features.cells, features.volume,
+                        name='stress', verbose=verbose)
 
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):

@@ -523,7 +523,7 @@ def test_eam_alloy_zjw04():
     # TODO: a PR has been submitted to ase. The transformation below can be
     #  removed once the PR was accepted.
 
-    lmp_voigt_stress = lammps.get_stress(atoms) * atoms.get_volume()
+    lmp_voigt_stress = lammps.get_stress(atoms)
     lmp_stress = voigt_to_full(lmp_voigt_stress)
 
     rot = lammps.prism.R
@@ -590,14 +590,14 @@ def test_batch_stress():
             mode=tf.estimator.ModeKeys.EVAL,
             verbose=False)
         energy = nn._get_energy_op(outputs, features, verbose=False)
-        stress = nn._get_stress_op(energy, batch.cells, verbose=False)
+        stress = nn._get_stress_op(energy, batch.cells, batch.volume,
+                                   verbose=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             s_pred = sess.run(stress) * volume
 
         assert_array_almost_equal(s_true, s_pred, delta=1e-8)
-
 
 
 if __name__ == "__main__":
