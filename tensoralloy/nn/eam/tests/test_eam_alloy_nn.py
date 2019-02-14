@@ -9,6 +9,7 @@ import numpy as np
 import nose
 import os
 import shutil
+import ase
 
 from nose.tools import assert_equal, assert_tuple_equal, assert_almost_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
@@ -520,15 +521,16 @@ def test_eam_alloy_zjw04():
                          [xy, yy, yz],
                          [xz, yz, zz]])
 
-    # TODO: a PR has been submitted to ase. The transformation below can be
-    #  removed once the PR was accepted.
 
     lmp_voigt_stress = lammps.get_stress(atoms)
     lmp_stress = voigt_to_full(lmp_voigt_stress)
 
-    rot = lammps.prism.R
+    if ase.__version__ < '3.18.0':
+        rot = lammps.prism.R
+        stress = rot @ lmp_stress @ np.linalg.inv(rot)
+    else:
+        stress = lmp_stress
 
-    stress = rot @ lmp_stress @ np.linalg.inv(rot)
     assert_array_almost_equal(voigt_to_full(result['stress']),
                               stress,
                               delta=1e-5)
