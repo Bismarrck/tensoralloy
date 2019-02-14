@@ -157,8 +157,9 @@ def test_nickel():
             # These are raw VASP output. The unit is '-eV', `-stress * volume`.
             xx, yy, zz, xy, yz, xz = \
                 -0.35196, -0.24978, -0.24978, 0.13262, -0.00305, 0.13262,
-            stress = [-xx, -yy, -zz, -yz, -xz, -xy]
-            total_pressure = -(xx + yy + zz) / 3.0
+            volume = result.volume
+            stress = np.asarray([-xx, -yy, -zz, -yz, -xz, -xy]) / volume
+            total_pressure = -(xx + yy + zz) / 3.0 / volume
 
             assert_less(np.abs(result.stress[0] - stress).max(), eps)
             assert_less(result.total_pressure[0] - total_pressure, eps)

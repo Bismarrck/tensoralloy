@@ -153,7 +153,7 @@ def test_encode_atoms():
             results = sess.run(example)
 
         assert_array_equal(
-            atoms.get_stress(voigt=True) * atoms.get_volume(),
+            atoms.get_stress(voigt=True),
             results['stress'])
 
 
