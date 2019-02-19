@@ -173,12 +173,7 @@ def test_export_setfl():
     """
     nn = EamFsNN(
         elements=['Al', 'Fe'],
-        custom_potentials={'Al': {'embed': 'msah11'},
-                           'Fe': {'embed': 'msah11'},
-                           'AlAl': {'phi': 'msah11', 'rho': 'msah11'},
-                           'AlFe': {'phi': 'msah11', 'rho': 'msah11'},
-                           'FeFe': {'phi': 'msah11', 'rho': 'msah11'},
-                           'FeAl': {'rho': 'msah11'}})
+        custom_potentials="msah11")
 
     nrho = 10000
     drho = 3.00000000000000E-2

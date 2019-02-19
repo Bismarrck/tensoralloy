@@ -103,6 +103,14 @@ class EamAlloyNN(EamNN):
             else:
                 return False
 
+        if isinstance(custom_potentials, str):
+            potentials = {el: {"rho": custom_potentials,
+                               "embed": custom_potentials}
+                          for el in self._elements}
+            potentials.update({kbody_term: {"phi": custom_potentials}
+                               for kbody_term in self._unique_kbody_terms})
+            return potentials
+
         potentials = {el: {"rho": "nn", "embed": "nn"} for el in self._elements}
         potentials.update({kbody_term: {"phi": "nn"}
                            for kbody_term in self._unique_kbody_terms})

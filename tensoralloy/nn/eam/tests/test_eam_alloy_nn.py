@@ -486,12 +486,7 @@ def test_eam_alloy_zjw04():
     with tf.Graph().as_default():
         clf = EAMTransformer(rc=rc, elements=elements)
         nn = EamAlloyNN(elements=elements, positive_energy_mode=True,
-                        custom_potentials={
-                            "Al": {"rho": "zjw04", "embed": "zjw04"},
-                            "Cu": {"rho": "zjw04", "embed": "zjw04"},
-                            "AlAl": {"phi": "zjw04"},
-                            "AlCu": {"phi": "zjw04"},
-                            "CuCu": {"phi": "zjw04"}},
+                        custom_potentials="zjw04",
                         export_properties=['energy', 'forces', 'stress'])
         nn.attach_transformer(clf)
         predictions = nn.build(

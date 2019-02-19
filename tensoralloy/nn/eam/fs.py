@@ -115,6 +115,15 @@ class EamFsNN(EamNN):
             else:
                 return False
 
+        if isinstance(custom_potentials, str):
+            potentials = {el: {"embed": custom_potentials}
+                          for el in self._elements}
+            potentials.update({kbody_term: {"phi": custom_potentials,
+                                            "rho": custom_potentials}
+                               for kbody_term in self._all_kbody_terms})
+
+            return potentials
+
         potentials = {el: {"embed": "nn"} for el in self._elements}
         potentials.update({kbody_term: {"phi": "nn", "rho": "nn"}
                            for kbody_term in self._all_kbody_terms})
