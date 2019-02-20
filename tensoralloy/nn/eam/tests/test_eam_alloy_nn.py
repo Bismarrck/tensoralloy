@@ -10,7 +10,11 @@ import nose
 import os
 import shutil
 import ase
+import unittest
 
+from pymatgen import Lattice, Structure
+from pymatgen.core.surface import SlabGenerator
+from pymatgen.io.ase import AseAtomsAdaptor
 from nose.tools import assert_equal, assert_tuple_equal, assert_almost_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
@@ -20,6 +24,7 @@ from unittest import skipUnless, skip
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 from ase.db import connect
+from ase.units import GPa
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.io.neighbor import find_neighbor_sizes
@@ -27,6 +32,7 @@ from tensoralloy.transformer import EAMTransformer, BatchEAMTransformer
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults
+from tensoralloy.calculator import TensorAlloyCalculator
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -435,100 +441,109 @@ def test_export_setfl_from_ckpt():
     pass
 
 
-# Setup the environment for `LAMMPS`
 if 'LAMMPS_COMMAND' not in os.environ:
-    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
+    lmp_bin = '/usr/local/bin/lmp_serial'
+    os.environ['LAMMPS_COMMAND'] = lmp_bin
 else:
-    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
+    lmp_bin = os.environ['LAMMPS_COMMAND']
 
 
-def get_lammps_calculator():
+def voigt_to_full(tensor):
     """
-    Return a LAMMPS calculator for Ag.
+    A helper function convert the Voigt tensor to a full 3x3 tensor.
     """
-    eam_file = join(test_dir(absolute=True), 'lammps', 'Zhou_AlCu.alloy.eam')
-    parameters = {'pair_style': 'eam/alloy',
-                  'pair_coeff': ['* * Zhou_AlCu.alloy.eam Al Cu']}
-    work_dir = join(test_dir(absolute=True), 'lammps', 'zjw04')
-    if not exists(work_dir):
-        os.makedirs(work_dir)
-
-    return LAMMPS(files=[eam_file], parameters=parameters, tmp_dir=work_dir,
-                  keep_tmp_files=True, keep_alive=False, no_data_file=False)
+    assert len(tensor) == 6
+    xx, yy, zz, yz, xz, xy = tensor
+    return np.array([[xx, xy, xz],
+                     [xy, yy, yz],
+                     [xz, yz, zz]])
 
 
-lammps = get_lammps_calculator()
-
-
-def teardown():
+class BulkStressOpTest(unittest.TestCase):
     """
-    Delete the tmp dir.
+    Test the stress calculation with a bulk Al-Cu using EAM with Zjw04
+    potential.
     """
-    if exists(lammps.tmp_dir):
-        shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
 
-
-@with_setup(teardown=None)
-@skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
-def test_eam_alloy_zjw04():
-    """
-    Test the total energy calculation of `EamAlloyNN` with `Zjw04`.
-    """
-    rc = 6.0
-
-    atoms = bulk('Cu') * [2, 2, 2]
-    symbols = atoms.get_chemical_symbols()
-    symbols[0: 2] = ['Al', 'Al']
-    atoms.set_chemical_symbols(symbols)
-    elements = sorted(set(symbols))
-
-    with tf.Graph().as_default():
-        clf = EAMTransformer(rc=rc, elements=elements)
-        nn = EamAlloyNN(elements=elements, positive_energy_mode=True,
-                        custom_potentials="zjw04",
-                        export_properties=['energy', 'forces', 'stress'])
-        nn.attach_transformer(clf)
-        predictions = nn.build(
-            features=clf.placeholders,
-            mode=tf.estimator.ModeKeys.PREDICT,
-            verbose=True)
-
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
-
-    atoms.calc = lammps
-    lammps.calculate(atoms)
-
-    assert_almost_equal(result['energy'],
-                        lammps.get_potential_energy(atoms), delta=1e-6)
-    assert_array_almost_equal(result['forces'],
-                              lammps.get_forces(atoms), delta=1e-9)
-
-    def voigt_to_full(tensor):
+    def setUp(self):
         """
-        A helper function convert the Voigt tensor to a full 3x3 tensor.
+        Setup this test.
         """
-        assert len(tensor) == 6
-        xx, yy, zz, yz, xz, xy = tensor
-        return np.array([[xx, xy, xz],
-                         [xy, yy, yz],
-                         [xz, yz, zz]])
+        work_dir = join(test_dir(True), 'lammps', 'zjw04')
+        if not exists(work_dir):
+            os.makedirs(work_dir)
 
+        self.work_dir = work_dir
+        self.lammps = self.get_lammps_calculator()
 
-    lmp_voigt_stress = lammps.get_stress(atoms)
-    lmp_stress = voigt_to_full(lmp_voigt_stress)
+    def get_lammps_calculator(self):
+        """
+        Return a LAMMPS calculator for Ag.
+        """
+        eam_file = join(test_dir(True), 'lammps', 'Zhou_AlCu.alloy.eam')
+        parameters = {'pair_style': 'eam/alloy',
+                      'pair_coeff': ['* * Zhou_AlCu.alloy.eam Al Cu']}
+        return LAMMPS(files=[eam_file], parameters=parameters,
+                      tmp_dir=self.work_dir, keep_tmp_files=True,
+                      keep_alive=False, no_data_file=False)
 
-    if ase.__version__ < '3.18.0':
-        rot = lammps.prism.R
-        stress = rot @ lmp_stress @ np.linalg.inv(rot)
-    else:
-        stress = lmp_stress
+    def tearDown(self):
+        """
+        Delete the tmp dir.
+        """
+        if exists(self.lammps.tmp_dir):
+            shutil.rmtree(self.lammps.tmp_dir, ignore_errors=True)
 
-    assert_array_almost_equal(voigt_to_full(result['stress']),
-                              stress,
-                              delta=1e-5)
+    @skipUnless(exists(lmp_bin), 'The environment var LAMMPS_COMMAND not set!')
+    def test_eam_alloy_zjw04_bulk(self):
+        """
+        Test the energy, forces and stress results of `EamAlloyNN` with `Zjw04`
+        potentials for bulk Al-Cu.
+        """
+        rc = 6.0
+
+        atoms = bulk('Cu') * [2, 2, 2]
+        symbols = atoms.get_chemical_symbols()
+        symbols[0: 2] = ['Al', 'Al']
+        atoms.set_chemical_symbols(symbols)
+        elements = sorted(set(symbols))
+
+        with tf.Graph().as_default():
+            clf = EAMTransformer(rc=rc, elements=elements)
+            nn = EamAlloyNN(elements=elements, positive_energy_mode=True,
+                            custom_potentials="zjw04",
+                            export_properties=['energy', 'forces', 'stress'])
+            nn.attach_transformer(clf)
+            predictions = nn.build(
+                features=clf.placeholders,
+                mode=tf.estimator.ModeKeys.PREDICT,
+                verbose=True)
+
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                result = sess.run(predictions,
+                                  feed_dict=clf.get_feed_dict(atoms))
+
+        atoms.calc = self.lammps
+        self.lammps.calculate(atoms)
+
+        assert_almost_equal(result['energy'],
+                            self.lammps.get_potential_energy(atoms), delta=1e-6)
+        assert_array_almost_equal(result['forces'],
+                                  self.lammps.get_forces(atoms), delta=1e-9)
+
+        lmp_voigt_stress = self.lammps.get_stress(atoms)
+        lmp_stress = voigt_to_full(lmp_voigt_stress)
+
+        if ase.__version__ < '3.18.0':
+            rot = self.lammps.prism.R
+            stress = rot @ lmp_stress @ np.linalg.inv(rot)
+        else:
+            stress = lmp_stress
+
+        assert_array_almost_equal(voigt_to_full(result['stress']),
+                                  stress,
+                                  delta=1e-5)
 
 
 def test_batch_stress():
@@ -595,6 +610,148 @@ def test_batch_stress():
             s_pred = sess.run(stress) * volume
 
         assert_array_almost_equal(s_true, s_pred, delta=1e-8)
+
+
+class Zjw04SurfaceStressTest(unittest.TestCase):
+    """
+    Test the stress results of built-in Zjw04 with the potential file generated
+    by Zhou's fortran code for a Mo surface.
+    """
+
+    def setUp(self):
+        """
+        Setup this test.
+        """
+        self.work_dir = join(test_dir(absolute=True), 'lammps', 'slabs')
+        if not exists(self.work_dir):
+            os.makedirs(self.work_dir)
+
+        lattice = Lattice.cubic(3.52)
+        structure = Structure(lattice, ['Ni', 'Ni', 'Ni', 'Ni'],
+                              coords=[[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
+                                      [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
+
+        slabs = {}
+        for miller_index in ((1, 0, 0), (2, 1, 1)):
+            key = "".join(map(str, miller_index))
+            slabgen = SlabGenerator(structure, miller_index, 10.0, 10.0)
+            all_slabs = slabgen.get_slabs()
+            slab = all_slabs[0]
+            slab.make_supercell((2, 2, 1))
+            slabs[key] = slab
+        self.slabs = slabs
+
+    def get_lammps_calculator(self, tag):
+        """
+        Return a LAMMPS calculator for Ag.
+        """
+        potential_file = join(test_dir(True), 'lammps', 'zjw04_Ni.alloy.eam')
+        parameters = {'pair_style': 'eam/alloy',
+                      'pair_coeff': ['* * zjw04_Ni.alloy.eam Ni']}
+        return LAMMPS(files=[potential_file], parameters=parameters,
+                      tmp_dir=join(self.work_dir, tag),
+                      keep_tmp_files=True, keep_alive=False, no_data_file=False)
+
+    @skipUnless(exists(lmp_bin), 'The environment var LAMMPS_COMMAND not set!')
+    def test_surface_slab(self):
+        """
+        Test the stress calculations for surface slabs.
+        """
+        np.set_printoptions(precision=6, suppress=True)
+
+        rc = 6.0
+        elements = ['Ni']
+        pb_file = join(self.work_dir, 'Ni.zjw04.pb')
+
+        with tf.Graph().as_default():
+
+            nn = EamAlloyNN(elements, custom_potentials='zjw04',
+                            export_properties=['energy', 'forces', 'stress'])
+            clf = EAMTransformer(rc, elements)
+            nn.attach_transformer(clf)
+
+            predictions = nn.build(
+                features=clf.placeholders,
+                mode=tf.estimator.ModeKeys.PREDICT,
+                verbose=True)
+
+            nn.export(pb_file)
+
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+
+                direct_results = {}
+                for key, slab in self.slabs.items():
+                    atoms = AseAtomsAdaptor.get_atoms(slab)
+                    direct_results[key] = sess.run(
+                        predictions,
+                        feed_dict=clf.get_feed_dict(atoms))['stress'] / GPa
+
+        calc = TensorAlloyCalculator(pb_file)
+        pb_results = {}
+        for key, slab in self.slabs.items():
+            atoms = AseAtomsAdaptor.get_atoms(slab)
+            pb_results[key] = calc.get_stress(atoms) / GPa
+
+        lmp_results = {}
+        for key, slab in self.slabs.items():
+            lmp = self.get_lammps_calculator(key)
+            atoms = AseAtomsAdaptor.get_atoms(slab)
+            atoms.calc = lmp
+            lmp.calculate(atoms)
+            lmp_stress = lmp.get_stress(atoms) / GPa
+
+            if ase.__version__ < '3.18.0':
+                rot = lmp.prism.R
+                lmp_stress = voigt_to_full(lmp_stress)
+                lmp_stress = rot @ lmp_stress @ np.linalg.inv(rot)
+                lmp_stress = lmp_stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
+            lmp_results[key] = lmp_stress
+
+        eps = 1e-3
+
+        print('pb:     ', pb_results)
+        print('direct: ', direct_results)
+        print('lmp:    ', lmp_results)
+
+        for key in self.slabs:
+            assert_array_almost_equal(pb_results[key], direct_results[key], eps)
+            assert_array_almost_equal(lmp_results[key], pb_results[key], eps)
+
+        # stress = calc.get_stress(self.atoms, voigt=True)
+        # energy = calc.get_potential_energy(atoms)
+
+        # stress_der = result['stress']
+        # forces_der = result['forces']
+        # positions = self.atoms.positions
+        #
+        # delta = np.zeros((3, 3))
+        # for i in range(len(self.atoms)):
+        #     delta -= np.tensordot(positions[i], forces_der[i], 0)
+        # print(delta)
+        # delta = delta / self.atoms.get_volume() / GPa
+        # delta = delta[[0, 1, 2, 2, 2, 1], [0, 1, 2, 1, 0, 0]]
+
+        # energy_der = result['energy']
+
+        # print(stress_original / GPa)
+        # print(stress_gen / GPa)
+        # print(stress / GPa)
+        # print(stress_der / GPa)
+        # print(stress_der / GPa + delta)
+        # print(self.atoms.get_stress() / GPa)
+
+        # print(energy_original)
+        # print(energy_gen)
+        # print(energy)
+        # print(energy_der)
+
+    def tearDown(self):
+        """
+        Cleanup this test.
+        """
+        if exists(self.work_dir):
+            shutil.rmtree(self.work_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
