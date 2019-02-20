@@ -602,8 +602,9 @@ def test_batch_stress():
             mode=tf.estimator.ModeKeys.EVAL,
             verbose=False)
         energy = nn._get_energy_op(outputs, features, verbose=False)
+        forces = nn._get_forces_op(energy, batch.positions, verbose=False)
         stress = nn._get_stress_op(energy, batch.cells, batch.volume,
-                                   verbose=False)
+                                   batch.positions, forces, verbose=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -708,43 +709,10 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
                 lmp_stress = lmp_stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
             lmp_results[key] = lmp_stress
 
-        eps = 1e-3
-
-        print('pb:     ', pb_results)
-        print('direct: ', direct_results)
-        print('lmp:    ', lmp_results)
-
+        eps = 1e-6
         for key in self.slabs:
             assert_array_almost_equal(pb_results[key], direct_results[key], eps)
             assert_array_almost_equal(lmp_results[key], pb_results[key], eps)
-
-        # stress = calc.get_stress(self.atoms, voigt=True)
-        # energy = calc.get_potential_energy(atoms)
-
-        # stress_der = result['stress']
-        # forces_der = result['forces']
-        # positions = self.atoms.positions
-        #
-        # delta = np.zeros((3, 3))
-        # for i in range(len(self.atoms)):
-        #     delta -= np.tensordot(positions[i], forces_der[i], 0)
-        # print(delta)
-        # delta = delta / self.atoms.get_volume() / GPa
-        # delta = delta[[0, 1, 2, 2, 2, 1], [0, 1, 2, 1, 0, 0]]
-
-        # energy_der = result['energy']
-
-        # print(stress_original / GPa)
-        # print(stress_gen / GPa)
-        # print(stress / GPa)
-        # print(stress_der / GPa)
-        # print(stress_der / GPa + delta)
-        # print(self.atoms.get_stress() / GPa)
-
-        # print(energy_original)
-        # print(energy_gen)
-        # print(energy)
-        # print(energy_der)
 
     def tearDown(self):
         """

@@ -260,27 +260,46 @@ class BasicNN:
         return forces
 
     @staticmethod
-    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells, volume):
+    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells, volume,
+                                        positions, forces):
         """
-        Return the Op to compute the reduced stress tensor `dE/dh @ h` where `h`
-        is the cell tensor.
+        Return the Op to compute the virial stress tensor.
+
+            stress * volume = (dE/dh)^T @ h - sum(tensordot(r, F, 0)^T)
+
+        where `E` denotes the total energy, `h` is the 3x3 row-major lattice
+        matrix, `r` and `F` are positions and total forces of the atoms.
         """
         with tf.name_scope("Full"):
-            factor = tf.constant(1.0, dtype=energy.dtype, name='factor')
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
             dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
             if cells.shape.ndims == 2:
-                stress = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
-                                   name='stress')
+                with tf.name_scope("Delta"):
+                    delta = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
+                                      name='delta')
+                with tf.name_scope("Primitive"):
+                    positions = tf.split(
+                        positions, [1, -1], axis=0, name='split')[1]
+                    primitive = tf.einsum('ij,ik->ikj', positions, forces)
+                    primitive = tf.reduce_sum(primitive, axis=0, keepdims=False)
+                    primitive = tf.negative(primitive, name='primitive')
+                stress = tf.add(primitive, delta, name='stress')
                 stress = tf.div(stress, volume, name='ase')
             else:
-                stress = tf.einsum('ikj,ikl->ijl', dEdh, cells)
+                with tf.name_scope("Delta"):
+                    delta = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='delta')
+                with tf.name_scope("Primitive"):
+                    positions = tf.split(
+                        positions, [1, -1], axis=1, name='split')[1]
+                    primitive = tf.einsum('ijk,ijl->ijlk', positions, forces)
+                    primitive = tf.reduce_sum(primitive, axis=1, keepdims=False)
+                    primitive = tf.negative(primitive, name='primitive')
+                stress = tf.add(delta, primitive, name='stress')
                 stress = tf.div(tf.reshape(stress, (-1, 9)),
                                 tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
-            stress = tf.multiply(factor, stress, name='full')
-            return stress
+            return tf.identity(stress, name='full')
 
     @staticmethod
     def _convert_to_voigt_stress(stress, batch_size, name='stress',
@@ -306,12 +325,13 @@ class BasicNN:
                 log_tensor(stress)
             return stress
 
-    def _get_stress_op(self, energy: tf.Tensor, cells, volume, name='stress',
-                       verbose=True):
+    def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
+                       forces, name='stress', verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells, volume)
+        stress = self._get_reduced_full_stress_tensor(energy, cells, volume,
+                                                      positions, forces)
         ndims = stress.shape.ndims
         batch_size = cells.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
@@ -320,14 +340,16 @@ class BasicNN:
             stress, batch_size, name=name, verbose=verbose)
 
     def _get_total_pressure_op(self, energy: tf.Tensor, cells, volume,
-                               name='pressure', verbose=True):
+                               positions, forces, name='pressure',
+                               verbose=True):
         """
         Return the Op to compute the reduced total pressure (eV).
 
             reduced_total_pressure = -trace(full_stress) / 3.0
 
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells, volume)
+        stress = self._get_reduced_full_stress_tensor(energy, cells, volume,
+                                                      positions, forces)
         three = tf.constant(-3.0, dtype=energy.dtype, name='three')
         total_pressure = tf.div(tf.trace(stress), three, name=name)
         if verbose:
@@ -769,7 +791,9 @@ class BasicNN:
                     predictions.energy = self._get_energy_op(
                         outputs, features, name='energy', verbose=verbose)
 
-            if 'forces' in properties:
+            if 'forces' in properties or \
+                    'stress' in properties or \
+                    'total_pressure' in properties:
                 with tf.name_scope("Forces"):
                     predictions.forces = self._get_forces_op(
                         predictions.energy, features.positions, name='forces',
@@ -780,12 +804,14 @@ class BasicNN:
                     predictions.total_pressure = \
                         self._get_total_pressure_op(
                             predictions.energy, features.cells, features.volume,
+                            features.positions, predictions.forces,
                             name='pressure', verbose=verbose)
             elif 'stress' in properties:
                 with tf.name_scope("Stress"):
                     predictions.stress = self._get_stress_op(
                         predictions.energy, features.cells, features.volume,
-                        name='stress', verbose=verbose)
+                        features.positions, predictions.forces, name='stress',
+                        verbose=verbose)
 
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
