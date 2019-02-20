@@ -188,7 +188,7 @@ class TensorAlloyCalculator(Calculator):
         if atoms is None:
             atoms = self.atoms
         stress = self.get_property('stress', atoms)
-        if voigt:
+        if not voigt:
             xx, yy, zz, yz, xz, xy = stress
             stress = np.array([[xx, xy, xz],
                                [xy, yy, yz],
