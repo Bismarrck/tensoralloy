@@ -416,11 +416,6 @@ class TensorAlloyCalculator(Calculator):
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
 
-        # The unit of raw stress tensor is 'eV' (dE/dh @ h). The internal unit
-        # of stress tensors of ASE is 'eV/Angstrom**3'.
-        if 'stress' in self.results:
-            self.results['stress'] /= self.atoms.get_volume()
-
 
 def phonon_spectrum_example():
     """
