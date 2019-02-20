@@ -24,6 +24,7 @@ from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer.base import DescriptorTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -268,7 +269,7 @@ class BasicNN:
             factor = tf.constant(1.0, dtype=energy.dtype, name='factor')
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
-            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdhT')
+            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
             if cells.shape.ndims == 2:
                 stress = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
                                    name='stress')
@@ -907,8 +908,14 @@ class BasicNN:
                                  "exporting to a pb file.")
             elif isinstance(self._transformer, BatchDescriptorTransformer):
                 clf = self._transformer.as_descriptor_transformer()
+            elif isinstance(self._transformer, DescriptorTransformer):
+                serialized = self._transformer.as_dict()
+                if 'class' in serialized:
+                    serialized.pop('class')
+                clf = self._transformer.__class__(**serialized)
             else:
-                clf = self._transformer
+                raise ValueError(
+                    "The attached transformer should not be a `BaseTransformer`")
 
             configs = self.as_dict()
             configs.pop('class')
