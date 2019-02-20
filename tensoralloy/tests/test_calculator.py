@@ -129,8 +129,8 @@ def test_calculator_with_eam_slab():
     lattice = Lattice.cubic(3.524)
     base_structure = Structure(
         lattice, ['Ni', 'Ni', 'Ni', 'Ni'],
-        coords=[[0.0, 0.0, 0.0], [0.0, 0.5, 0.0],
-                [0.5, 0.0, 0.0], [0.0, 0.0, 0.5]])
+        coords=[[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
+                [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
 
     miller_indices = [
         [1, 0, 0], [1, 1, 0], [1, 1, 1], [2, 1, 0],
@@ -159,7 +159,7 @@ def test_calculator_with_eam_slab():
         y_true.append(lammps.get_potential_energy(atoms))
         y_pred.append(clf.get_potential_energy(atoms))
 
-    assert_array_almost_equal(np.asarray(y_true), np.asarray(y_pred), 1e-6)
+    assert_array_almost_equal(np.asarray(y_true), np.asarray(y_pred), 1e-5)
 
 
 if __name__ == "__main__":
