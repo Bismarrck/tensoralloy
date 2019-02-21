@@ -383,10 +383,9 @@ class BasicNN:
                 return adict
 
         defaults = AttributeDict(
-            energy=AttributeDict(weight=1.0,
-                                 per_atom_loss=False),
+            energy=AttributeDict(weight=1.0, per_atom_loss=False),
             forces=AttributeDict(weight=1.0),
-            stress=AttributeDict(weight=1.0),
+            stress=AttributeDict(weight=1.0, use_rmse=True),
             total_pressure=AttributeDict(weight=1.0),
             l2=AttributeDict(weight=0.01))
 
@@ -451,6 +450,7 @@ class BasicNN:
                 - 'hparams.loss.energy.per_atom_loss'
                 - 'hparams.loss.forces.weight'
                 - 'hparams.loss.stress.weight'
+                - 'hparams.loss.stress.use_rmse'
                 - 'hparams.loss.total_pressure.weight'
                 - 'hparams.loss.l2.weight'
 
@@ -497,6 +497,7 @@ class BasicNN:
                     labels=labels.stress,
                     predictions=predictions.stress,
                     weight=hparams.loss.stress.weight,
+                    use_rmse=hparams.loss.stress.use_rmse,
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(

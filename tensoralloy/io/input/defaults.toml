@@ -26,6 +26,7 @@ weight = 1.0
 
 [nn.loss.stress]
 weight = 1.0
+use_rmse = true
 
 [nn.loss.total_pressure]
 weight = 1.0

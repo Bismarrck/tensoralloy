@@ -155,29 +155,23 @@ def get_forces_loss(labels, predictions, n_atoms, weight=1.0, collections=None):
         return loss
 
 
-def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
-                            use_mse=False):
+def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
     """
     Return the relative RMSE as the loss of atomic forces.
     """
     with tf.name_scope("Relative"):
-        if use_mse:
-            diff = tf.squared_difference(labels, predictions, name='diff')
-            upper = tf.reduce_sum(diff, axis=1, keepdims=False, name='upper')
-            ll = tf.square(labels, name='ll')
-            lower = tf.reduce_sum(ll, axis=1, keepdims=False, name='lower')
-        else:
-            diff = tf.subtract(labels, predictions)
-            upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
-            lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
+        diff = tf.subtract(labels, predictions)
+        upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
+        lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
         ratio = tf.div(upper, lower, name='ratio')
         loss = tf.reduce_mean(ratio, name='loss')
     return loss
 
 
-def get_stress_loss(labels, predictions, weight=1.0, collections=None):
+def get_stress_loss(labels, predictions, weight=1.0, use_rmse=True,
+                    collections=None):
     """
-    Return the relative RMSE loss of the stress.
+    Return the (relative) RMSE loss of the stress.
 
     Parameters
     ----------
@@ -187,6 +181,9 @@ def get_stress_loss(labels, predictions, weight=1.0, collections=None):
         A `float64` tensor of shape `[batch_size, 6]` as the predicted stress.
     weight : float or tf.Tensor
         The weight of the loss.
+    use_rmse : bool
+        A boolean. If True, the loss will be RMSE loss; Otherwise it will be the
+        relative RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -199,18 +196,25 @@ def get_stress_loss(labels, predictions, weight=1.0, collections=None):
     with tf.name_scope("Stress"):
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
-        raw_loss = _get_relative_rmse_loss(labels, predictions)
+
+        if use_rmse:
+            raw_loss, mae = _get_rmse_loss(labels, predictions, False)
+        else:
+            raw_loss = _get_relative_rmse_loss(labels, predictions)
+            mae = None
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:
             tf.add_to_collections(collections, raw_loss)
             tf.add_to_collections(collections, loss)
+            if mae is not None:
+                tf.add_to_collections(collections, mae)
         return loss
 
 
 def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
     """
-    Return the relative RMSE loss of the total pressure.
+    Return the RMSE loss of the total pressure.
 
     Parameters
     ----------
@@ -233,10 +237,12 @@ def get_total_pressure_loss(labels, predictions, weight=1.0, collections=None):
     with tf.name_scope("Pressure"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        raw_loss = _get_relative_rmse_loss(labels, predictions)
+        raw_loss, mae = _get_rmse_loss(labels, predictions,
+                                       is_per_atom_loss=False)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:
+            tf.add_to_collections(collections, mae)
             tf.add_to_collections(collections, raw_loss)
             tf.add_to_collections(collections, loss)
         return loss
