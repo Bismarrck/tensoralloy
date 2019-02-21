@@ -60,11 +60,10 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         """
         tf.logging.info('Initialize a Saver to restore EMA variables.')
 
-        if self._restart:
-            var_list = [var for var in self._ema.variables_to_restore()
-                        if var.op.name != 'global_step']
-        else:
-            var_list = self._ema.variables_to_restore()
+        var_list = self._ema.variables_to_restore()
+
+        if self._restart and 'global_step' in var_list:
+            var_list.pop('global_step')
 
         self._saver = tf.train.Saver(var_list=var_list)
 
