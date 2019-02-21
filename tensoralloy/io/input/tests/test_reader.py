@@ -115,6 +115,10 @@ def test_read_eam_fs_toml():
     assert_equal(nested_get(configs, 'nn.activation'), 'leaky_relu')
     assert_list_equal(reader['nn.export'],
                       ['energy', 'forces', 'hessian', 'stress'])
+    assert_list_equal(reader['nn.minimize'],
+                      ['energy', 'forces', 'stress'])
+    assert_equal(reader['nn.loss.stress.use_rmse'], True)
+
     assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Al'), 'fcc')
     assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Fe'), 'bcc')
     assert_equal(len(nested_get(configs, 'nn.eam.rho')), 4)
