@@ -377,17 +377,25 @@ class Dataset:
         ----------
         savedir : str
             The directory to save the converted tfrecords files.
-        test_size : float or int
-            The proportion (float) or size (int) of the dataset to include in
-            the test split.
+        test_size : float or int or List[int] or Tuple[int]
+            The proportion (float) or size (int) or indices (List[int]) of the
+            dataset to include in the test split.
         verbose : bool
             If True, the progress shall be logged.
 
         """
         signature = self._get_signature()
-        train, test = train_test_split(range(1, 1 + len(self)),
-                                       random_state=Defaults.seed,
-                                       test_size=test_size)
+
+        if isinstance(test_size, (list, tuple)):
+            test = list(test_size)
+            train = [x for x in range(1, 1 + len(self)) if x not in test]
+        else:
+            train, test = train_test_split(range(1, 1 + len(self)),
+                                           random_state=Defaults.seed,
+                                           test_size=test_size)
+        assert min(test) >= 1
+        assert min(train) >= 1
+
         self._write_subset(
             tf.estimator.ModeKeys.EVAL,
             check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
