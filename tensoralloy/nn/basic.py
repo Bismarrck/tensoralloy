@@ -574,7 +574,8 @@ class BasicNN:
                 with tf.name_scope("Restore"):
                     warm_start_hook = WarmStartFromVariablesHook(
                         previous_checkpoint=hparams.train.previous_checkpoint,
-                        ema=ema)
+                        ema=ema,
+                        restart=hparams.train.restart)
                 hooks.append(warm_start_hook)
 
         return hooks

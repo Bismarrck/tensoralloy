@@ -74,7 +74,7 @@ decay_steps = 1000
 staircase = false
 
 [train]
-restart = false
+restart = true
 batch_size = 50
 previous_checkpoint = false
 shuffle = true

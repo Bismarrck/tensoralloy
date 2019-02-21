@@ -10,6 +10,7 @@ test_size = 1000
 [nn]
 activation = "leaky_relu"
 minimize = ['energy']
+export = ['energy', 'forces', 'hessian']
 positive_energy_mode = true
 
 [nn.loss.energy]
@@ -28,7 +29,6 @@ eta = [0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0]
 [nn.atomic]
 input_normalizer = false
 arch = "AtomicResNN"
-export = ['energy', 'forces', 'hessian']
 
 [nn.atomic.layers]
 C = [64, 32]
@@ -43,7 +43,7 @@ decay_function = "exponential"
 decay_rate = 0.99
 
 [train]
-restart = false
+restart = true
 batch_size = 50
 model_dir = "train"
 train_steps = 100000

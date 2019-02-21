@@ -29,7 +29,8 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
 
     def __init__(self,
                  previous_checkpoint: str,
-                 ema: tf.train.ExponentialMovingAverage):
+                 ema: tf.train.ExponentialMovingAverage,
+                 restart=True):
         """
         Initialization method.
 
@@ -39,6 +40,11 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
             The previous checkpoint to load.
         ema : tf.train.ExponentialMovingAverage
             A function to obtain exponentially moving averaged variables.
+        restart : bool
+            A boolean. If True, the global step tensor will not be read and the
+            training will start only with weights inherited from the checkpoint.
+            If False, the global step tensor will also be loaded and the
+            previous training will be continued.
 
         """
         tf.logging.info("Create WarmStartFromVariablesHook.")
@@ -46,13 +52,21 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         self._previous_checkpoint = previous_checkpoint
         self._ema = ema
         self._saver = None
+        self._restart = restart
 
     def begin(self):
         """
         Create restoring operations before the graph been finalized.
         """
         tf.logging.info('Initialize a Saver to restore EMA variables.')
-        self._saver = tf.train.Saver(var_list=self._ema.variables_to_restore())
+
+        if self._restart:
+            var_list = [var for var in self._ema.variables_to_restore()
+                        if var.op.name != 'global_step']
+        else:
+            var_list = self._ema.variables_to_restore()
+
+        self._saver = tf.train.Saver(var_list=var_list)
 
     def after_create_session(self, session, coord):
         """

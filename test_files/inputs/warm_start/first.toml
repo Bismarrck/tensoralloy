@@ -30,7 +30,7 @@ decay_function = "exponential"
 decay_rate = 0.98
 
 [train]
-restart = false
+restart = true
 batch_size = 50
 shuffle = true
 model_dir = "./first"
