@@ -233,15 +233,17 @@ class TrainingManager:
         Check the `model_dir` and `previous_checkpoint` before training.
         """
         model_dir = hparams.train.model_dir
+        deleted = False
 
         if exists(model_dir):
-            shutil.rmtree(model_dir, ignore_errors=True)
-
-        tf.gfile.MakeDirs(hparams.train.model_dir)
+            if hparams.train.restart:
+                shutil.rmtree(model_dir, ignore_errors=True)
+                deleted = True
+            tf.gfile.MakeDirs(hparams.train.model_dir)
 
         if hparams.train.previous_checkpoint:
             ckpt_dir = dirname(hparams.train.previous_checkpoint)
-            if realpath(ckpt_dir) == realpath(model_dir):
+            if (realpath(ckpt_dir) == realpath(model_dir)) and deleted:
                 print(f"Warning: {hparams.train.previous_checkpoint} "
                       f"was already deleted")
                 hparams.train.previous_checkpoint = None
