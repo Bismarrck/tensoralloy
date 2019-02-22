@@ -352,8 +352,20 @@ class Zjw04xc(Zjw04):
         Initialization method.
         """
         super(Zjw04xc, self).__init__()
+
         self._fixed = {}
         self._name = 'Zjw04xc'
+
+        self.defaults['Ni'] = {
+            'r_eq': 2.12448, 'f_eq': 2.6332557,  'rho_e': 27.233315,
+            'rho_s': 26.392414, 'alpha': 8.452753, 'beta': 3.285651,
+            'A': 0.9802988, 'B': 0.8919016, 'kappa': 0.5685785,
+            'lamda': 1.1653832, 'Fn0': -3.4354472, 'Fn1': 0.3544341,
+            'Fn2': -2.5563858, 'Fn3': -7.1984844, 'F0': -3.236908,
+            'F1': 1.4576268, 'F2': 2.1785288, 'F3': -1.642411, 'eta': 4.305329,
+            'Fe': -3.6163342
+        }
+
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
               verbose=False):
