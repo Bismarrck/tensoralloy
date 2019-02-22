@@ -269,8 +269,7 @@ class TrainingManager:
 
             tf.logging.info(f'pid={os.getpid()}')
             tf.logging.info(f'seed={self._hparams.seed}')
-            tf.logging.info(
-                f'positive_energy_mode={self._nn.positive_energy_mode}')
+            tf.logging.info(f'input= \n{str(self._reader)}')
 
             gpu_options = tf.GPUOptions(allow_growth=True)
             session_config = tf.ConfigProto(allow_soft_placement=True,
