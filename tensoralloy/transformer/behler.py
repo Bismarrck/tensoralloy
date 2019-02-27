@@ -350,12 +350,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         transformer = self.get_index_transformer(atoms)
 
         ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        if self._k_max == 1:
-            cols = [i for i in range(len(ilist))
-                    if symbols[ilist[i]] == symbols[jlist[i]]]
-            ilist = ilist[cols]
-            jlist = jlist[cols]
-            Slist = Slist[cols]
         nij = len(ilist)
 
         tlist.fill(0)
