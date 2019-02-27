@@ -8,7 +8,6 @@ import tensorflow as tf
 import shutil
 import os
 
-from argparse import ArgumentParser, Namespace
 from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
 from typing import Union
@@ -348,47 +347,3 @@ class TrainingManager:
             self._nn.export_to_setfl(output_setfl, checkpoint=checkpoint,
                                      lattice_constants=lattice_constants,
                                      lattice_types=lattice_types, **kwargs)
-
-
-def main(args: Namespace):
-    """
-    The main function.
-    """
-    export_latest_only = args.export_latest_only
-    validate_tfrecords = not export_latest_only
-
-    manager = TrainingManager(
-        args.filename,
-        validate_tfrecords=validate_tfrecords)
-    if not export_latest_only:
-        manager.train_and_evaluate(debug=args.debug)
-    manager.export()
-
-
-def config_parser(parser: ArgumentParser):
-    """
-    Setup the `ArgumentParser`.
-    """
-    parser.add_argument(
-        'filename',
-        type=str,
-        help="A cfg file to read."
-    )
-    parser.add_argument(
-        '--export-latest-only',
-        action='store_true',
-        default=False,
-        help="Directly export the lastest checkpoint to a model file and exit."
-    )
-    parser.add_argument(
-        "--debug",
-        action='store_true',
-        default=False,
-        help="Enabled the debugging mode.",
-    )
-    return parser
-
-
-if __name__ == "__main__":
-
-    main(config_parser(ArgumentParser()).parse_args().filename)
