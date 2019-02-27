@@ -126,6 +126,9 @@ class InputReader:
     def __getitem__(self, keypath):
         return nested_get(self._configs, keypath)
 
+    def __setitem__(self, keypath, value):
+        nested_set(self._configs, keypath, value)
+
     @staticmethod
     def _merge(defaults: dict, configs: dict, choices: dict, input_dir: str):
         """
