@@ -4,9 +4,16 @@ This module defines the command-line main function of `tensoralloy`.
 """
 from __future__ import print_function, absolute_import
 
+import tensorflow as tf
 import argparse
+import glob
+import warnings
+
+from os.path import exists, dirname, join, basename, splitext
 
 from tensoralloy.io.read import read_file
+from tensoralloy.io.input import InputReader
+from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
 
 
@@ -158,6 +165,82 @@ class BuildDatabaseProgram(CLIProgram):
         super(BuildDatabaseProgram, self).config_subparser(subparser)
 
 
+class ExportModelProgram(CLIProgram):
+    """
+    The program for exporting models from checkpoint files.
+    """
+
+    @property
+    def name(self):
+        return "export"
+
+    @property
+    def help(self):
+        return "Export a tensorflow checkpoint to model file(s)."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'ckpt',
+            type=str,
+            help="The checkpoint file or 'latest'"
+        )
+        subparser.add_argument(
+            '-i', '--input',
+            type=str,
+            default=None,
+            help="The corresponding input toml file."
+        )
+
+        super(ExportModelProgram, self).config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        def func(args: argparse.Namespace):
+            if args.ckpt.lower() == 'latest':
+                ckpt = tf.train.latest_checkpoint(".")
+            else:
+                ckpt = args.ckpt
+
+            if not tf.train.checkpoint_exists(ckpt):
+                raise IOError(f"The checkpoint file {ckpt} cannot be accessed!")
+
+            if args.input is None:
+                model_dir = dirname(ckpt)
+                candidates = list(glob.glob(join(model_dir, "*.toml")))
+                if len(candidates) > 1:
+                    warnings.warn(f"More than one TOML file in {model_dir}. "
+                                  f"Only {candidates[0]} will be used.")
+                filename = candidates[0]
+            else:
+                filename = args.input
+                model_dir = dirname(filename)
+
+            step_tag = splitext(basename(ckpt).split('-')[-1])[0]
+
+            configs = InputReader(filename)
+            database_file = configs['dataset.sqlite3']
+            database_name = basename(database_file)
+
+            if not exists(database_file):
+                if exists(join(model_dir, database_name)):
+                    database_file = join(model_dir, database_name)
+                elif exists(join(datasets_dir(), database_name)):
+                    database_file = join(datasets_dir(), database_name)
+                else:
+                    raise IOError(f"The Sqlite3 database {database_file} "
+                                  f"cannot be accessed!")
+
+            configs['train.model_dir'] = model_dir
+            configs['dataset.sqlite3'] = database_file
+
+            manager = TrainingManager(configs, validate_tfrecords=False)
+            manager.export(ckpt, tag=step_tag)
+        return func
+
+
 def main():
     """
     The main function.
@@ -170,7 +253,8 @@ def main():
     )
 
     for prog in (BuildDatabaseProgram(),
-                 RunExperimentProgram()):
+                 RunExperimentProgram(),
+                 ExportModelProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
