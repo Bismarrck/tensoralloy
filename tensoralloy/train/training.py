@@ -33,20 +33,27 @@ class TrainingManager:
     from a TOML input file.
     """
 
-    def __init__(self, input_file: str, validate_tfrecords=True):
+    def __init__(self,
+                 input_file: Union[str, InputReader],
+                 validate_tfrecords=True):
         """
         Initialization method.
 
         Parameters
         ----------
-        input_file : str
-            The input job file to read.
+        input_file : str or InputReader
+            The input TOML file to read or an `InputReader`.
         validate_tfrecords : bool
             If True, the corresponding tfrecords files will be created if
             missing.
 
         """
-        self._reader = InputReader(input_file)
+        if isinstance(input_file, str):
+            self._reader = InputReader(input_file)
+        elif isinstance(input_file, InputReader):
+            self._reader = input_file
+        else:
+            raise ValueError("`input_file` should be a str or InputReader!")
 
         set_float_precision(self._reader['precision'])
 
@@ -78,14 +85,17 @@ class TrainingManager:
 
     def _backup_input_file(self):
         """
-        Copy the input file to `model_dir` for back up.
+        Copy the input TOML file and the sqlite3 database  to `model_dir`.
         """
-        dst = join(self._hparams.train.model_dir, basename(self._input_file))
-        if realpath(dst) == realpath(self._input_file):
-            dst += '.bak'
-        if exists(dst):
-            os.remove(dst)
-        shutil.copyfile(self._input_file, dst)
+        files = (self._input_file, self._reader['dataset.sqlite3'])
+
+        for src in files:
+            dst = join(self._hparams.train.model_dir, basename(src))
+            if realpath(dst) == realpath(src):
+                dst += '.bak'
+            if exists(dst):
+                os.remove(dst)
+            shutil.copyfile(src, dst)
 
     def _get_hparams(self):
         """
@@ -315,7 +325,7 @@ class TrainingManager:
             )
             tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
-    def export(self, checkpoint=None):
+    def export(self, checkpoint=None, tag=None):
         """
         Export the trained model.
         """
@@ -323,10 +333,13 @@ class TrainingManager:
             checkpoint = tf.train.latest_checkpoint(
                 self._hparams.train.model_dir)
 
-        output_graph_path = join(self._hparams.train.model_dir,
-                                 f'{self._dataset.name}.pb')
+        if tag is not None:
+            graph_name = f'{self._dataset.name}.{tag}.pb'
+        else:
+            graph_name = f'{self._dataset.name}.pb'
 
-        self._nn.export(output_graph_path=output_graph_path,
+        self._nn.export(output_graph_path=join(self._hparams.train.model_dir,
+                                               graph_name),
                         checkpoint=checkpoint,
                         keep_tmp_files=False)
 
@@ -341,9 +354,12 @@ class TrainingManager:
                 lattice_constants = None
                 lattice_types = None
 
-            output_setfl = join(self._hparams.train.model_dir,
-                                f'{self._dataset.name}.{self._nn.tag}.eam')
+            if tag is not None:
+                setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+            else:
+                setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
 
-            self._nn.export_to_setfl(output_setfl, checkpoint=checkpoint,
+            self._nn.export_to_setfl(join(self._hparams.train.model_dir, setfl),
+                                     checkpoint=checkpoint,
                                      lattice_constants=lattice_constants,
                                      lattice_types=lattice_types, **kwargs)
