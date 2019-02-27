@@ -24,14 +24,20 @@ class AgSutton90(EamAlloyPotential):
 
     """
 
-    defaults = {'Ag': {'a': 2.928323832},
-                'AgAg': {'b': 2.485883762}}
-
     def __init__(self):
         """
         Initialization method.
         """
         super(AgSutton90, self).__init__()
+
+    @property
+    def defaults(self):
+        """
+        The default parameters.
+        """
+        defaults = {'Ag': {'a': 2.928323832},
+                    'AgAg': {'b': 2.485883762}}
+        return defaults
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
             verbose=False):

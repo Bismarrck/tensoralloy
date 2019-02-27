@@ -29,7 +29,6 @@ class AlFeMsah11(EamFSPotential):
     M.I. Mendelev, et al., J. Mater. Res. 20 (2011) 208.
 
     """
-    defaults = {"Al": {}, "Fe": {}}
 
     def __init__(self):
         """
@@ -39,6 +38,14 @@ class AlFeMsah11(EamFSPotential):
 
         if get_float_dtype() == tf.float32:
             warnings.warn("It's not recommended to use float32 for MSAH11.")
+
+    @property
+    def defaults(self):
+        """
+        The Msah11 potential does not have trainable parameters.
+        """
+        defaults = {"Al": {}, "Fe": {}}
+        return defaults
 
     @staticmethod
     def _pairwise_func(lowcuts: np.ndarray, highcuts: np.ndarray,

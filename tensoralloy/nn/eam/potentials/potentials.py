@@ -45,10 +45,6 @@ class EmpiricalPotential:
     empirical EAM potential.
     """
 
-    # The default parameters and (initial) values. Only scalar values are
-    # supported.
-    defaults = {}
-
     def __init__(self, params=None, fixed=None):
         """
         Initialization method.
@@ -62,6 +58,8 @@ class EmpiricalPotential:
             str as the fixed (non-trainable) parameters for `kbody_term`.
 
         """
+        super(EmpiricalPotential, self).__init__()
+
         fixed = safe_select(fixed, {})
         params = safe_select(params, {})
 
@@ -78,7 +76,13 @@ class EmpiricalPotential:
             if self.__contains__(section):
                 self._fixed[section] = list(fixed[section])
 
-        self._shared_variables = {}
+    @property
+    def defaults(self):
+        """
+        The default parameters and (initial) values. Only scalar values are
+        supported.
+        """
+        return {}
 
     @property
     def params(self):
