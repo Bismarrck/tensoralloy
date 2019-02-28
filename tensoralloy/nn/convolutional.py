@@ -152,7 +152,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
             if verbose:
                 log_tensor(_x)
         layer = Conv(rank=rank, filters=1, kernel_size=1,
-                     strides=1, use_bias=False, activation=activation_fn,
+                     strides=1, use_bias=False, activation=None,
                      kernel_initializer=kernel_initializer,
                      kernel_regularizer=regularizer,
                      name='Output',
