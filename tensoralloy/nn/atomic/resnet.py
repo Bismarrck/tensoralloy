@@ -43,7 +43,7 @@ class AtomicResNN(AtomicNN):
                  activation=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces'),
-                 normalizer='linear',
+                 normalizer=None,
                  normalization_weights=None,
                  positive_energy_mode=False,
                  atomic_static_energy=None):
