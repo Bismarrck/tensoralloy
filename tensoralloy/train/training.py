@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import shutil
 import os
+import platform
 
 from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
@@ -299,7 +300,12 @@ class TrainingManager:
                 params=hparams)
 
             if debug:
-                hooks = [tf_debug.LocalCLIDebugHook(ui_type="readline"), ]
+                system = platform.system().lower()
+                if system == 'darwin' or system == 'linux':
+                    ui_type = 'curses'
+                else:
+                    ui_type = 'readline'
+                hooks = [tf_debug.LocalCLIDebugHook(ui_type=ui_type), ]
             else:
                 hooks = None
 
