@@ -16,6 +16,8 @@ from typing import Dict, List, Tuple
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.data import shuffle_and_repeat
+from ase.db.sqlite import SQLite3Database
+from ase.db import connect
 
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer import BatchEAMTransformer
@@ -47,7 +49,7 @@ class Dataset:
 
         Parameters
         ----------
-        database : SQLite3Database
+        database : SQLite3Database or str
             A `SQLite3Database` created by `file_io.read`.
         name : str
             The name of this dataset.
@@ -63,7 +65,12 @@ class Dataset:
             the `descriptor`.
 
         """
-        self._database = database
+        if isinstance(database, str):
+            self._database = connect(database)
+        elif isinstance(database, SQLite3Database):
+            self._database = database
+        else:
+            raise ValueError("`database` must be a SQLite3Database or a str!")
         self._name = name
         self._descriptor = descriptor
         self._rc = rc
