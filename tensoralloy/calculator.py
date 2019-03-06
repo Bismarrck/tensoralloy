@@ -87,6 +87,16 @@ class TensorAlloyCalculator(Calculator):
         """
         return self._predict_properties
 
+    def get_model_timestamp(self):
+        """
+        Return the timestamp when the graph model was generated or None.
+        """
+        try:
+            op = self._graph.get_tensor_by_name('Metadata/timestamp:0')
+        except Exception:
+            return None
+        return self._sess.run(op).decode('utf-8')
+
     def _get_transformer(self):
         """
         Recover a `DescriptorTransformer` from the graph.

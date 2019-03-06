@@ -9,6 +9,7 @@ import numpy as np
 import json
 import shutil
 
+from datetime import datetime
 from typing import List, Dict
 from collections import namedtuple
 from os.path import join, dirname
@@ -959,6 +960,10 @@ class BasicNN:
                 transformer_params = tf.constant(
                     json.dumps(clf.as_dict()), name='params')
 
+            # Add a timestamp to the graph
+            with tf.name_scope("Metadata/"):
+                timestamp = tf.constant(str(datetime.today()), name='timestamp')
+
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
 
@@ -985,7 +990,10 @@ class BasicNN:
             clear_devices = True
             input_meta_graph = saved_model_meta
 
-            output_node_names = [transformer_params.op.name]
+            output_node_names = [
+                transformer_params.op.name,
+                timestamp.op.name
+            ]
 
             for tensor in predictions.values():
                 output_node_names.append(tensor.op.name)

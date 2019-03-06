@@ -9,9 +9,11 @@ import numpy as np
 import nose
 import shutil
 import os
+import unittest
 
+from datetime import datetime
 from nose.tools import assert_almost_equal, with_setup, assert_equal
-from nose.tools import assert_list_equal
+from nose.tools import assert_list_equal, assert_is_not_none, assert_less
 from os.path import join, exists
 from ase.db import connect
 from ase.calculators.lammpsrun import LAMMPS
@@ -30,6 +32,41 @@ from tensoralloy.test_utils import assert_array_almost_equal
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+
+class ModelTimeStampTest(unittest.TestCase):
+
+    def setUp(self):
+        """
+        Setup this test case.
+        """
+        self.pb_file = 'Ni.test.pb'
+
+    def test_get_model_timestamp(self):
+        """
+        Test the method `get_model_timestamp`.
+        """
+        nn = EamAlloyNN(['Ni'], 'zjw04xc',
+                        export_properties=['energy', 'forces', 'stress', 'hessian'])
+        nn.attach_transformer(EAMTransformer(6.0, ['Ni']))
+        nn.export(self.pb_file)
+
+        calc = TensorAlloyCalculator(self.pb_file)
+        timestamp = calc.get_model_timestamp()
+        assert_is_not_none(timestamp)
+
+        encoded = datetime.fromisoformat(timestamp)
+        now = datetime.now()
+
+        assert_less((now - encoded).total_seconds(), 30)
+
+    def tearDown(self):
+        """
+        The cleanup function for this test case.
+        """
+        if exists(self.pb_file):
+            os.remove(self.pb_file)
 
 
 def test_calculator_with_qm7():
