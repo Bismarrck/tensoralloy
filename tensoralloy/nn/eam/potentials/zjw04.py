@@ -107,6 +107,21 @@ zjw04_defaults = {
 }
 
 
+def _zjw04_exp_func(r_eq, a, b, c, one, name=None):
+    def func(r):
+        """
+        A helper function to get a function of the form:
+
+            a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**20)
+
+        """
+        r_re = tf.div(r, r_eq)
+        upper = a * tf.exp(-b * (r_re - one))
+        lower = one + tf.pow(r_re - c, 20)
+        return tf.div(upper, lower, name=name)
+    return func
+
+
 class Zjw04(EamAlloyPotential):
     """
     A set of eam/alloy potentials proposed by Zhou et al. at 2004.
@@ -139,21 +154,6 @@ class Zjw04(EamAlloyPotential):
         """
         return zjw04_defaults
 
-    @staticmethod
-    def _exp_func(r_eq, a, b, c, one, name=None):
-        def func(r):
-            """
-            A helper function to get a function of the form:
-
-                a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**20)
-
-            """
-            r_re = tf.div(r, r_eq)
-            upper = a * tf.exp(-b * (r_re - one))
-            lower = one + tf.pow(r_re - c, 20)
-            return tf.div(upper, lower, name=name)
-        return func
-
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
             verbose=False):
         """
@@ -179,7 +179,7 @@ class Zjw04(EamAlloyPotential):
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
         if el_a == el_b:
             with tf.name_scope(f"{self._name}/Phi/{el_a}"):
-                re = self._get_shared_variable('r_eq', r.dtype, el_a)
+                r_eq = self._get_shared_variable('r_eq', r.dtype, el_a)
                 A = self._get_shared_variable('A', r.dtype, el_a)
                 B = self._get_shared_variable('B', r.dtype, el_a)
                 alpha = self._get_shared_variable('alpha', r.dtype, el_a)
@@ -188,8 +188,8 @@ class Zjw04(EamAlloyPotential):
                 lamda = self._get_shared_variable('lamda', r.dtype, el_a)
                 one = tf.constant(1.0, dtype=r.dtype, name='one')
                 phi = tf.subtract(
-                    self._exp_func(re, A, alpha, kappa, one, name='A')(r),
-                    self._exp_func(re, B, beta, lamda, one, name='B')(r),
+                    _zjw04_exp_func(r_eq, A, alpha, kappa, one, name='A')(r),
+                    _zjw04_exp_func(r_eq, B, beta, lamda, one, name='B')(r),
                     name='phi')
                 if verbose:
                     log_tensor(phi)
@@ -238,7 +238,7 @@ class Zjw04(EamAlloyPotential):
             beta = self._get_shared_variable('beta', r.dtype, element)
             lamda = self._get_shared_variable('lamda', r.dtype, element)
             one = tf.constant(1.0, dtype=r.dtype, name='one')
-            rho = self._exp_func(r_eq, f_eq, beta, lamda, one, name='rho')(r)
+            rho = _zjw04_exp_func(r_eq, f_eq, beta, lamda, one, name='rho')(r)
             if verbose:
                 log_tensor(rho)
             return rho
