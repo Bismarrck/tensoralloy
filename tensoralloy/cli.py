@@ -8,6 +8,8 @@ import tensorflow as tf
 import argparse
 import glob
 import warnings
+import re
+import os
 
 from os.path import exists, dirname, join, basename, splitext
 
@@ -241,6 +243,60 @@ class ExportModelProgram(CLIProgram):
         return func
 
 
+class StopExperimentProgram(CLIProgram):
+    """
+    Stop an experiment by directly terminating the corresponding process.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "stop"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Terminate a running experiment."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            "model_dir",
+            type=str,
+            help="The model dir of the experiment."
+        )
+
+        super(StopExperimentProgram, self).config_subparser(subparser)
+
+    def main_func(self):
+        def func(args: argparse.Namespace):
+            logfile = join(args.model_dir, "logfile")
+            if not exists(logfile):
+                raise IOError(f"{logfile} cannot be accessed")
+            pid_patt = re.compile(r".*tensorflow\s+INFO\s+pid=(\d+)")
+            with open(logfile) as fp:
+                for number, line in enumerate(fp):
+                    m = pid_patt.search(line)
+                    if m:
+                        pid = m.group(1)
+                        break
+                    if number == 10:
+                        raise IOError(f"{logfile} maybe corrupted!")
+            code = os.system(f'kill -9 {pid}')
+            if code == 0:
+                print(f"pid={pid} killed. "
+                      f"The experiment in {args.model_dir} terminated.")
+            else:
+                print(f"Failed to stop {args.model_dir}: error_code = {code}")
+        return func
+
+
 def main():
     """
     The main function.
@@ -254,7 +310,8 @@ def main():
 
     for prog in (BuildDatabaseProgram(),
                  RunExperimentProgram(),
-                 ExportModelProgram()):
+                 ExportModelProgram(),
+                 StopExperimentProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
