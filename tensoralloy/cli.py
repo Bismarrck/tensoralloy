@@ -274,6 +274,7 @@ class StopExperimentProgram(CLIProgram):
 
         super(StopExperimentProgram, self).config_subparser(subparser)
 
+    @property
     def main_func(self):
         def func(args: argparse.Namespace):
             logfile = join(args.model_dir, "logfile")
