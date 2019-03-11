@@ -5,6 +5,7 @@ This module defines the command-line main function of `tensoralloy`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 import argparse
 import glob
 import warnings
@@ -298,6 +299,140 @@ class StopExperimentProgram(CLIProgram):
         return func
 
 
+class PrintEvaluationSummaryProgram(CLIProgram):
+    """
+    Print the summary of all evaluations of an experiment.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "print"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Print the summary of the evaluation results."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'logfile',
+            type=str,
+            help="The logfile of an experiment."
+        )
+
+        super(PrintEvaluationSummaryProgram, self).config_subparser(subparser)
+
+    @staticmethod
+    def print_evaluation_summary(logfile, eval_forces=False, eval_stress=False):
+        """
+        Summarize the evalutaion results of the logfile.
+        """
+        e_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
+                            r"Energy/mae/atom\s=\s([0-9.]+),.*")
+
+        ef_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
+                             r"Energy/mae/atom\s=\s([0-9.]+),.*"
+                             r"Forces/mae\s=\s([0-9.]+),.*")
+
+        efs_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
+                              r"Energy/mae/atom\s=\s([0-9.]+),.*"
+                              r"Forces/mae\s=\s([0-9.]+),.*"
+                              r"Stress/mae\s=\s([0-9.]+),.*")
+
+        if not eval_forces:
+            patt = e_patt
+        elif not eval_stress:
+            patt = ef_patt
+        else:
+            patt = efs_patt
+
+        energy = []
+        forces = []
+        stress = []
+        steps = []
+
+        with open(logfile) as fp:
+            for line in fp:
+                line = line.strip()
+                m = patt.search(line)
+                if m:
+                    steps.append(int(m.group(1)))
+                    energy.append(float(m.group(2)))
+                    if eval_forces:
+                        forces.append(float(m.group(3)))
+                    if eval_stress:
+                        stress.append(float(m.group(4)))
+
+        if len(energy) == 0:
+            return
+
+        idx_y_min = np.argmin(energy)
+
+        if eval_forces:
+            idx_f_min = np.argmin(forces)
+        else:
+            idx_f_min = -1
+
+        if eval_stress:
+            idx_s_min = np.argmin(stress)
+        else:
+            idx_s_min = -1
+
+        for i in range(len(steps)):
+            if forces:
+                if eval_stress:
+                    vals = (steps[i], energy[i], forces[i], stress[i])
+                    fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f} " \
+                          "s_mae = {:6.4f}"
+                else:
+                    vals = (steps[i], energy[i], forces[i])
+                    fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f}"
+            else:
+                vals = (steps[i], energy[i])
+                fmt = "Step = {:7d} y_mae/atom = {:8.5f}"
+            if i == idx_y_min:
+                fmt += " Y_MIN"
+            if i == idx_f_min:
+                fmt += " F_MIN"
+            if i == idx_s_min:
+                fmt += " S_MIN"
+            print(fmt.format(*vals))
+
+    @property
+    def main_func(self):
+        def func(args: argparse.Namespace):
+            logfile = args.logfile
+            if not exists(logfile):
+                raise IOError(f"The logfile {logfile} cannot be accessed!")
+            model_dir = dirname(logfile)
+            if model_dir == "":
+                model_dir = "."
+            toml_files = list(glob.glob(f"{model_dir}/*.toml"))
+            if len(toml_files) == 0:
+                print(f"Warning: no TOML file found in {model_dir}. "
+                      f"Only energy evalutation results will be summarized.")
+                eval_forces = False
+                eval_stress = False
+            else:
+                if len(toml_files) > 1:
+                    print(f"Warning: more than one TOML file found in "
+                          f"{model_dir}. Only {toml_files[0]} will be used.")
+                config = InputReader(toml_files[0])
+                minimize_properties = config['nn.minimize']
+                eval_forces = "forces" in minimize_properties
+                eval_stress = "stress" in minimize_properties
+            self.print_evaluation_summary(logfile, eval_forces, eval_stress)
+        return func
+
+
 def main():
     """
     The main function.
@@ -312,7 +447,8 @@ def main():
     for prog in (BuildDatabaseProgram(),
                  RunExperimentProgram(),
                  ExportModelProgram(),
-                 StopExperimentProgram()):
+                 StopExperimentProgram(),
+                 PrintEvaluationSummaryProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
