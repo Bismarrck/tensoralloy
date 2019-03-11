@@ -10,15 +10,16 @@ import nose
 import shutil
 import glob
 import os
+import unittest
 
 from unittest import skipUnless
 from os.path import join, exists
 from nose.tools import assert_equal, assert_less, assert_is_none, assert_in
-from nose.tools import with_setup, assert_dict_equal
+from nose.tools import with_setup, assert_dict_equal, assert_true
 
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
-from tensoralloy.nn import EamAlloyNN
+from tensoralloy.nn import EamAlloyNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.descriptor.tests.test_cutoff import polynomial_cutoff_simple
@@ -28,55 +29,59 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def teardown_initialization():
-    """
-    The cleanup function for `test_initialization`.
-    """
-    model_dir = join(test_dir(), 'inputs', 'model')
-    if exists(model_dir):
-        shutil.rmtree(model_dir, ignore_errors=True)
+class InitializationTest(unittest.TestCase):
 
+    def tearDown(self):
+        """
+        The cleanup function.
+        """
+        model_dir = join(test_dir(), 'inputs', 'model')
+        if exists(model_dir):
+            shutil.rmtree(model_dir, ignore_errors=True)
 
-@with_setup(teardown=teardown_initialization)
-def test_initialization():
-    """
-    Test the initialization of a `TrainingManager`.
-    """
-    input_file = join(test_dir(), 'inputs', 'Ni.behler.k2.toml')
-    manager = TrainingManager(input_file)
-    transformer = manager.dataset.transformer
-    hparams = manager.hparams
+    def test_initialization(self):
+        """
+        Test the initialization of a `TrainingManager`.
+        """
+        input_file = join(test_dir(), 'inputs', 'Ni.behler.k2.toml')
+        manager = TrainingManager(input_file)
+        transformer = manager.dataset.transformer
+        hparams = manager.hparams
 
-    assert_equal(get_float_dtype(), tf.float32)
+        assert_equal(get_float_dtype(), tf.float32)
 
-    assert_equal(manager.dataset.descriptor, 'behler')
-    assert_equal(manager.dataset.test_size, 1)
-    assert_equal(manager.dataset.cutoff_radius, 6.0)
+        assert_equal(manager.dataset.descriptor, 'behler')
+        assert_equal(manager.dataset.test_size, 1)
+        assert_equal(manager.dataset.cutoff_radius, 6.0)
 
-    assert isinstance(transformer, BatchSymmetryFunctionTransformer)
-    assert_equal(transformer.trainable, True)
+        assert isinstance(transformer, BatchSymmetryFunctionTransformer)
+        assert_equal(transformer.trainable, True)
 
-    with tf.Session() as sess:
-        rc = transformer.rc
-        gamma = 5.0
-        r = np.linspace(1.0, 10.0, num=91, endpoint=True)
-        x = np.asarray([polynomial_cutoff_simple(ri, rc, gamma) for ri in r])
-        y = sess.run(
-            transformer._cutoff_fn(
-                tf.convert_to_tensor(r, dtype=tf.float64),
-                name='cutoff'))
+        with tf.Session() as sess:
+            rc = transformer.rc
+            gamma = 5.0
+            r = np.linspace(1.0, 10.0, num=91, endpoint=True)
+            x = np.asarray(
+                [polynomial_cutoff_simple(ri, rc, gamma) for ri in r])
+            y = sess.run(
+                transformer._cutoff_fn(
+                    tf.convert_to_tensor(r, dtype=tf.float64),
+                    name='cutoff'))
 
-        assert_less(np.abs(x - y).max(), 1e-8)
+            assert_less(np.abs(x - y).max(), 1e-8)
 
-    assert_equal(hparams.opt.method, 'adam')
-    assert_equal(hparams.opt.learning_rate, 0.01)
-    assert_is_none(hparams.opt.decay_function)
-    assert_equal(hparams.precision, 'medium')
-    assert_equal(hparams.seed, 1958)
+        assert_equal(hparams.opt.method, 'adam')
+        assert_equal(hparams.opt.learning_rate, 0.01)
+        assert_is_none(hparams.opt.decay_function)
+        assert_equal(hparams.precision, 'medium')
+        assert_equal(hparams.seed, 1958)
 
-    assert_equal(manager.nn.positive_energy_mode, True)
+        nn = manager.nn
+        assert_true(isinstance(nn, AtomicResNN))
+        assert_true(nn.positive_energy_mode)
+        assert_true(nn.fixed_static_energy)
 
-    set_float_precision()
+        set_float_precision()
 
 
 def teardown_initialize_eam_training():

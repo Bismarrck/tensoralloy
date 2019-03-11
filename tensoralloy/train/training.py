@@ -151,6 +151,8 @@ class TrainingManager:
         else:
             kwargs['atomic_static_energy'] = \
                 self._dataset.atomic_static_energy
+            kwargs['fixed_static_energy'] = \
+                self._reader['nn.atomic.resnet.fixed_static_energy']
             return AtomicResNN(**kwargs)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:

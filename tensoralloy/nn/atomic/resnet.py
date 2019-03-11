@@ -46,7 +46,8 @@ class AtomicResNN(AtomicNN):
                  normalizer=None,
                  normalization_weights=None,
                  positive_energy_mode=False,
-                 atomic_static_energy=None):
+                 atomic_static_energy=None,
+                 fixed_static_energy=False):
         """
         Initialization method.
         """
@@ -61,6 +62,14 @@ class AtomicResNN(AtomicNN):
             positive_energy_mode=positive_energy_mode)
 
         self._atomic_static_energy: Dict[str, float] = atomic_static_energy
+        self._fixed_static_energy = fixed_static_energy
+
+    @property
+    def fixed_static_energy(self):
+        """
+        Return True if the static energy parameters are fixed.
+        """
+        return self._fixed_static_energy
 
     def _check_keys(self, features: AttributeDict, labels: AttributeDict):
         """
@@ -75,6 +84,7 @@ class AtomicResNN(AtomicNN):
         """
         d = super(AtomicResNN, self).as_dict()
         d['atomic_static_energy'] = self._atomic_static_energy
+        d['fixed_static_energy'] = self._fixed_static_energy
         return d
 
     def _get_energy_op(self, outputs, features, name='energy', verbose=True):
@@ -99,10 +109,11 @@ class AtomicResNN(AtomicNN):
                     [self._atomic_static_energy[e] for e in self._elements],
                     dtype=x.dtype.as_numpy_dtype)
             initializer = tf.constant_initializer(values, dtype=x.dtype)
+            trainable = not self._fixed_static_energy
             z = tf.get_variable("weights",
                                 shape=len(self._elements),
                                 dtype=x.dtype,
-                                trainable=True,
+                                trainable=trainable,
                                 collections=[
                                     GraphKeys.ATOMIC_RES_NN_VARIABLES,
                                     GraphKeys.TRAIN_METRICS,

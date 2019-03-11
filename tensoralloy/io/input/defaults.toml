@@ -39,6 +39,9 @@ weight = 0.01
 arch = "AtomicNN"
 input_normalizer = false
 
+[nn.atomic.resnet]
+fixed_static_energy = false
+
 [nn.atomic.behler]
 angular = false
 cutoff = 'cosine'

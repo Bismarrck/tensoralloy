@@ -15,6 +15,13 @@ minimize = ['energy']
 export = ['energy']
 positive_energy_mode = true
 
+[nn.atomic]
+arch = "AtomicResNN"
+input_normalizer = false
+
+[nn.atomic.resnet]
+fixed_static_energy = true
+
 [nn.atomic.behler]
 cutoff = 'polynomial'
 trainable = true
