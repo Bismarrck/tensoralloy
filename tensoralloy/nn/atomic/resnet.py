@@ -110,16 +110,17 @@ class AtomicResNN(AtomicNN):
                     dtype=x.dtype.as_numpy_dtype)
             initializer = tf.constant_initializer(values, dtype=x.dtype)
             trainable = not self._fixed_static_energy
+            collections = [GraphKeys.ATOMIC_RES_NN_VARIABLES,
+                           GraphKeys.TRAIN_METRICS,
+                           tf.GraphKeys.GLOBAL_VARIABLES,
+                           tf.GraphKeys.MODEL_VARIABLES]
+            if trainable:
+                collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
             z = tf.get_variable("weights",
                                 shape=len(self._elements),
                                 dtype=x.dtype,
                                 trainable=trainable,
-                                collections=[
-                                    GraphKeys.ATOMIC_RES_NN_VARIABLES,
-                                    GraphKeys.TRAIN_METRICS,
-                                    tf.GraphKeys.TRAINABLE_VARIABLES,
-                                    tf.GraphKeys.GLOBAL_VARIABLES,
-                                    tf.GraphKeys.MODEL_VARIABLES],
+                                collections=collections,
                                 initializer=initializer)
             xz = tf.multiply(x, z, name='xz')
             if self._positive_energy_mode:
