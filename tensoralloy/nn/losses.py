@@ -28,6 +28,9 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
         suffix = ""
     mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse' + suffix)
     mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
+    dtype = get_float_dtype()
+    eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
+    mse = tf.add(mse, eps, name='mse/safe')
     loss = tf.sqrt(mse, name='rmse' + suffix)
     return loss, mae
 
