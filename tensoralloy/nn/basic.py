@@ -266,37 +266,36 @@ class BasicNN:
         """
         Return the Op to compute the virial stress tensor.
 
-            stress * volume = (dE/dh)^T @ h - sum(tensordot(r, F, 0)^T)
+            stress * volume = -F^T @ R + (dE/dh)^T @ h
 
         where `E` denotes the total energy, `h` is the 3x3 row-major lattice
-        matrix, `r` and `F` are positions and total forces of the atoms.
+        matrix, `R` and `F` are positions and total forces of the atoms.
         """
         with tf.name_scope("Full"):
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
             dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
             if cells.shape.ndims == 2:
-                with tf.name_scope("Delta"):
-                    delta = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
-                                      name='delta')
-                with tf.name_scope("Primitive"):
+                with tf.name_scope("Right"):
+                    right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
+                                      name='right')
+                with tf.name_scope("Left"):
                     positions = tf.split(
                         positions, [1, -1], axis=0, name='split')[1]
-                    primitive = tf.einsum('ij,ik->ikj', positions, forces)
-                    primitive = tf.reduce_sum(primitive, axis=0, keepdims=False)
-                    primitive = tf.negative(primitive, name='primitive')
-                stress = tf.add(primitive, delta, name='stress')
+                    left = tf.matmul(tf.transpose(forces), positions)
+                    left = tf.negative(left, name='left')
+                stress = tf.add(left, right, name='stress')
                 stress = tf.div(stress, volume, name='ase')
             else:
-                with tf.name_scope("Delta"):
-                    delta = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='delta')
-                with tf.name_scope("Primitive"):
+                with tf.name_scope("Right"):
+                    right = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='right')
+                with tf.name_scope("Left"):
                     positions = tf.split(
                         positions, [1, -1], axis=1, name='split')[1]
-                    primitive = tf.einsum('ijk,ijl->ijlk', positions, forces)
-                    primitive = tf.reduce_sum(primitive, axis=1, keepdims=False)
-                    primitive = tf.negative(primitive, name='primitive')
-                stress = tf.add(delta, primitive, name='stress')
+                    left = tf.einsum('ijk,ijl->ijlk', positions, forces)
+                    left = tf.reduce_sum(left, axis=1, keepdims=False)
+                    left = tf.negative(left, name='left')
+                stress = tf.add(left, right, name='stress')
                 stress = tf.div(tf.reshape(stress, (-1, 9)),
                                 tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
