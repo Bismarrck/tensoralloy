@@ -50,7 +50,7 @@ class ModelTimeStampTest(unittest.TestCase):
         nn = EamAlloyNN(['Ni'], 'zjw04xc',
                         export_properties=['energy', 'forces', 'stress', 'hessian'])
         nn.attach_transformer(EAMTransformer(6.0, ['Ni']))
-        nn.export(self.pb_file)
+        nn.export(self.pb_file, keep_tmp_files=False)
 
         calc = TensorAlloyCalculator(self.pb_file)
         timestamp = calc.get_model_timestamp()
