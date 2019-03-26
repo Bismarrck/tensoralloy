@@ -18,7 +18,7 @@ from tensorflow.python.framework.ops import IndexedSlicesValue
 from nose.tools import assert_equal, assert_false
 
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
-from tensoralloy.nn.eam.potentials.zjw04 import Zjw04, Zjw04xc
+from tensoralloy.nn.eam.potentials.zjw04 import Zjw04, Zjw04xc, Zjw04uxc
 from tensoralloy.utils import GraphKeys, AttributeDict
 
 __author__ = 'Xin Chen'
@@ -355,6 +355,15 @@ def test_fixed():
                 else:
                     trainable = True
                 assert_equal(trainable, p._is_trainable(name, element))
+
+    with tf.Graph().as_default():
+        p = Zjw04uxc()
+        elements = p.defaults.keys()
+        names = p.defaults['Al'].keys()
+
+        for element in elements:
+            for name in names:
+                assert_equal(True, p._is_trainable(name, element))
 
 
 if __name__ == "__main__":

@@ -479,3 +479,20 @@ class Zjw04xc(Zjw04):
                 log_tensor(embed)
 
             return embed
+
+
+class Zjw04uxc(Zjw04xc):
+    """
+    An unrestricted implementation of `Zjw04xc`. `r_eq` is treated as a plain
+    variable, but not the equilibrium spacing between neighbors, in this
+    potential.
+    """
+
+    def __init__(self):
+        """
+        Initialization method.
+        """
+        super(Zjw04uxc, self).__init__()
+
+        self._fixed = {}
+        self._name = 'Zjw04uxc'
