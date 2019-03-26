@@ -142,7 +142,7 @@ class Zjw04(EamAlloyPotential):
 
         """
         fixed = {element: ['F0', 'F1', 'F2', 'F3', 'Fn0', 'Fn1', 'Fn2', 'Fn3',
-                           'Fe', 'eta', 'rho_e', 'rho_s']
+                           'Fe', 'eta', 'rho_e', 'rho_s', 'r_eq']
                  for element in zjw04_defaults}
         super(Zjw04, self).__init__(fixed=fixed)
         self._name = 'Zjw04'
@@ -361,7 +361,7 @@ class Zjw04xc(Zjw04):
         """
         super(Zjw04xc, self).__init__()
 
-        self._fixed = {}
+        self._fixed = {element: ['r_eq'] for element in self.defaults.keys()}
         self._name = 'Zjw04xc'
 
     @property
@@ -370,24 +370,6 @@ class Zjw04xc(Zjw04):
         The default parameters of Zjw04xc.
         """
         params = zjw04_defaults.copy()
-        params['Ni'] = {
-            'r_eq': 2.12448, 'f_eq': 2.6332557, 'rho_e': 27.233315,
-            'rho_s': 26.392414, 'alpha': 8.452753, 'beta': 3.285651,
-            'A': 0.9802988, 'B': 0.8919016, 'kappa': 0.5685785,
-            'lamda': 1.1653832, 'Fn0': -3.4354472, 'Fn1': 0.3544341,
-            'Fn2': -2.5563858, 'Fn3': -7.1984844, 'F0': -3.236908,
-            'F1': 1.4576268, 'F2': 2.1785288, 'F3': -1.642411, 'eta': 4.305329,
-            'Fe': -3.6163342
-        }
-        params['Mo'] = {
-            'r_eq': 3.5982313, 'f_eq': 1.3116773, 'rho_e': 45.641903,
-            'rho_s': 29.26929, 'alpha': 10.343318, 'beta': 8.146616,
-            'A': 0.072647296, 'B': 0.34474567, 'kappa': -0.17378105,
-            'lamda': 0.31335586, 'Fn0': -4.451359, 'Fn1': 1.5897412,
-            'Fn2': 2.912189, 'Fn3': 3.0667038, 'F0': -4.2008414,
-            'F1': 1.9524245, 'F2': 1.0301584, 'F3': -1.2100494,
-            'eta': 0.7612869, 'Fe': -4.4739966
-        }
         return params
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,

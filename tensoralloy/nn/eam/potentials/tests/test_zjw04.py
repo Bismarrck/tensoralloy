@@ -339,5 +339,23 @@ def test_zjw04xc_embed():
             assert_array_almost_equal(res_grad_old, res_grad_new, 1e-3)
 
 
+def test_fixed():
+    """
+    Only `r_eq` should be fixed. Others are all adjustable parameters.
+    """
+    with tf.Graph().as_default():
+        p = Zjw04xc()
+        elements = p.defaults.keys()
+        names = p.defaults['Al'].keys()
+
+        for element in elements:
+            for name in names:
+                if name == 'r_eq':
+                    trainable = False
+                else:
+                    trainable = True
+                assert_equal(trainable, p._is_trainable(name, element))
+
+
 if __name__ == "__main__":
     nose.run()
