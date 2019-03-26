@@ -3,6 +3,7 @@ from __future__ import print_function
 import numpy as np
 import re
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 examples_per_second = {
     'GPU': {
@@ -63,7 +64,7 @@ def read_traj(filename, batch_size: int, sf: str):
     speed = examples_per_second['GPU'][sf][batch_size]
     factor = 1.0 / (speed / batch_size * 3600)
     with open(filename) as fp:
-        head = []
+        data = []
         tail = []
         for line in fp:
             line = line.strip()
@@ -72,14 +73,9 @@ def read_traj(filename, batch_size: int, sf: str):
                 step = float(m.group(1))
                 x = step * factor
                 y = float(m.group(2)) * 1000.0
-                if x <= 1.0:
-                    head.append([x, y])
-                else:
-                    tail.append([x, y])
-        head = np.asarray(head)
-        tail = np.asarray(tail)
-        tail = np.concatenate((np.atleast_2d(head[-1]), tail), 0)
-        return head, tail
+                data.append([x, y])
+        data = np.asarray(data)
+        return data
 
 
 speed_flatten = []
@@ -90,13 +86,13 @@ for (device, sf) in orders:
 
 traj = []
 for (batch_size, sf, tag, filename) in traj_files:
-    head, tail = read_traj(filename, batch_size, sf)
-    traj.append((tag, head, tail))
+    traj.append((tag, read_traj(filename, batch_size, sf)))
 
 
-fig, axes = plt.subplots(1, 2, figsize=[12, 5])
+fig = plt.figure(figsize=[12, 10])
+grid_spec = GridSpec(2, 24)
 
-ax = axes[0]
+ax = plt.subplot(grid_spec[0, 0: 11])
 
 n_groups = 5
 bar_width = 0.2
@@ -107,19 +103,16 @@ ax.bar(
     np.array(speed_flatten[0]), 
     bar_width, 
     alpha=0.4, color='r', label=f"{orders[0][0]}/{orders[0][1]}")
-
 ax.bar(
     index + bar_width * 1,
     np.array(speed_flatten[2]),
     bar_width,
     alpha=0.4, color='g', label=f"{orders[2][0]}/{orders[2][1]}")
-
 ax.bar(
     index + bar_width * 2,
     np.array(speed_flatten[1]),
     bar_width,
     alpha=0.4, color='b', label=f"{orders[1][0]}/{orders[1][1]}")
-
 ax.bar(
     index + bar_width * 3,
     np.array(speed_flatten[3]),
@@ -128,46 +121,47 @@ ax.bar(
 
 ax.set_xticks(index + bar_width * 1.5)
 ax.set_xticklabels(('1', '10', '20', '50', '100'))
-
 ax.set_xlabel(r"Batch Size", fontsize=16)
-ax.set_ylabel(r"Structures per Second", fontsize=14)
-
+ax.set_ylabel(r"Structures per Second", fontsize=16)
 ax.legend(frameon=False, fontsize=12)
+ax.text(-0.1, 1.05, "a)", transform=ax.transAxes, size=16, weight='bold')
 
-ax = axes[1]
+ax = plt.subplot(grid_spec[0, 13: 24])
 
 ax.plot(traj[0][1][:, 0], traj[0][1][:, 1], 'r-', label=traj_files[0][2])
-ax.plot(traj[0][2][:, 0], traj[0][2][:, 1], 'r-')
-
 ax.plot(traj[3][1][:, 0], traj[3][1][:, 1], 'r--', label=traj_files[3][2])
-ax.plot(traj[3][2][:, 0], traj[3][2][:, 1], 'r--')
-
 ax.plot(traj[1][1][:, 0], traj[1][1][:, 1], 'g-', label=traj_files[1][2])
-ax.plot(traj[1][2][:, 0], traj[1][2][:, 1], 'g-')
-
 ax.plot(traj[4][1][:, 0], traj[4][1][:, 1], 'g--', label=traj_files[4][2])
-ax.plot(traj[4][2][:, 0], traj[4][2][:, 1], 'g--')
-
 ax.plot(traj[2][1][:, 0], traj[2][1][:, 1], 'b-', label=traj_files[2][2])
-ax.plot(traj[2][2][:, 0], traj[2][2][:, 1], 'b-')
-
 ax.plot(traj[5][1][:, 0], traj[5][1][:, 1], 'b--', label=traj_files[5][2])
-ax.plot(traj[5][2][:, 0], traj[5][2][:, 1], 'b--')
-
 ax.set_xlabel(r"GPU Hour", fontsize=16)
 ax.set_ylabel(r"MAE (meV/atom)", fontsize=16)
-
 ax.set_xlim([0.0, 1.2])
 ax.set_ylim([0, 50])
 ax.legend(frameon=False, fontsize=12)
+ax.text(-0.1, 1.05, "b)", transform=ax.transAxes, size=16, weight='bold')
 
-for n, ax in enumerate(axes):
-    if n == 0:
-        tag = "a)"
-    else:
-        tag = "b)"
-    ax.text(-0.1, 1.1, tag, transform=ax.transAxes, size=16, weight='bold')
 
-plt.tight_layout()
+ax = plt.subplot(grid_spec[1, 7: 17])
+
+ax.plot(traj[5][1][:, 0], traj[5][1][:, 1], 'b--',
+        label="AtomicResNN")
+
+ann_traj = [
+    (read_traj("fig4-traj/g4.100.gpu.ann.traj", 100, "Angular"), 
+     "AtomicNN")
+]
+ax.plot(ann_traj[0][0][:, 0], ann_traj[0][0][:, 1], '--', color="orange", 
+        label=ann_traj[0][1])
+
+ax.set_xlabel(r"GPU Hour (Angular, Batch Size 100)", fontsize=16)
+ax.set_ylabel(r"MAE (meV/atom)", fontsize=16)
+ax.set_xlim([0.0, 1.2])
+ax.set_ylim([0, 100])
+ax.text(-0.2, 0.95, "c)", transform=ax.transAxes, size=16, weight='bold')
+ax.legend(frameon=False, fontsize=12, loc='upper center')
+
+grid_spec.tight_layout(fig, pad=0)
+
 plt.savefig("Fig4-qm7.pdf")
 plt.show()
