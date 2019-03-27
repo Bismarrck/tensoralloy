@@ -33,7 +33,11 @@ def get_activation_fn(fn_name: str):
         return tf.nn.softsign
     elif fn_name.lower() == 'softmax':
         return tf.nn.softmax
-    raise ValueError("The function '{}' cannot be recognized!".format(fn_name))
+    elif fn_name.lower() == "elu":
+        return tf.nn.elu
+    else:
+        raise ValueError(
+            f"The activation function '{fn_name}' cannot be recognized!")
 
 
 def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
