@@ -164,8 +164,7 @@ class BasicNN:
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
         self._positive_energy_mode = positive_energy_mode
-
-        self._transformer: BaseTransformer = None
+        self._transformer = None
 
     @property
     def elements(self):
@@ -684,6 +683,11 @@ class BasicNN:
                     ops_dict = {
                         'Stress/mae': tf.metrics.mean_absolute_error(x, y),
                         'Stress/mse': tf.metrics.mean_squared_error(x, y)}
+                    with tf.name_scope("rRMSE"):
+                        upper = tf.linalg.norm(x - y, axis=-1)
+                        lower = tf.linalg.norm(x, axis=-1)
+                        ops_dict['Stress/relative'] = \
+                            tf.metrics.mean(upper / lower)
                     metrics.update(ops_dict)
 
             return metrics

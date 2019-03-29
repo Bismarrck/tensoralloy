@@ -345,7 +345,8 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         efs_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
                               r"Energy/mae/atom\s=\s([0-9.]+),.*"
                               r"Forces/mae\s=\s([0-9.]+),.*"
-                              r"Stress/mae\s=\s([0-9.]+),.*")
+                              r"Stress/mae\s=\s([0-9.]+),.*"
+                              r"Stress/relative\s=\s([0-9.]+),.*")
 
         if not eval_forces:
             patt = e_patt
@@ -357,6 +358,7 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         energy = []
         forces = []
         stress = []
+        stress_rel = []
         steps = []
 
         with open(logfile) as fp:
@@ -370,6 +372,7 @@ class PrintEvaluationSummaryProgram(CLIProgram):
                         forces.append(float(m.group(3)))
                     if eval_stress:
                         stress.append(float(m.group(4)))
+                        stress_rel.append(float(m.group(5)))
 
         if len(energy) == 0:
             return
@@ -386,12 +389,15 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         else:
             idx_s_min = -1
 
+        np.set_printoptions(precision=6, suppress=True)
+
         for i in range(len(steps)):
             if forces:
                 if eval_stress:
-                    vals = (steps[i], energy[i], forces[i], stress[i])
+                    vals = (steps[i], energy[i], forces[i], stress[i],
+                            stress_rel[i] * 100.0)
                     fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f} " \
-                          "s_mae = {:6.4f}"
+                          "s_mae = {:6.4f} s_rel = {:6.2}%%"
                 else:
                     vals = (steps[i], energy[i], forces[i])
                     fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f}"
