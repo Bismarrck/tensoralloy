@@ -269,7 +269,12 @@ def get_l2_regularization_loss(weight=1.0, collections=None):
 
     """
     with tf.name_scope("L2"):
-        l2 = tf.losses.get_regularization_loss()
+        name = 'total_regularization_loss'
+        losses = tf.losses.get_regularization_losses()
+        if losses:
+            l2 = tf.add_n(losses, name=name)
+        else:
+            l2 = tf.constant(0.0, dtype=get_float_dtype(), name=name)
         weight = tf.convert_to_tensor(weight, l2.dtype, name='weight')
         loss = tf.multiply(l2, weight, name='weighted/loss')
         if collections is not None:
