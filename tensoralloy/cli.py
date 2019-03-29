@@ -397,7 +397,7 @@ class PrintEvaluationSummaryProgram(CLIProgram):
                     vals = (steps[i], energy[i], forces[i], stress[i],
                             stress_rel[i] * 100.0)
                     fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f} " \
-                          "s_mae = {:6.4f} s_rel = {:6.2}%%"
+                          "s_mae = {:6.4f} s_rel = {:6.2f} %"
                 else:
                     vals = (steps[i], energy[i], forces[i])
                     fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f}"
