@@ -496,3 +496,18 @@ class Zjw04uxc(Zjw04xc):
 
         self._fixed = {}
         self._name = 'Zjw04uxc'
+
+
+class Zjw04xcp(Zjw04xc):
+    """
+    A modified version of `Zjw04xc`. The embedding function is fixed.
+    """
+
+    def __init__(self):
+        super(Zjw04xcp, self).__init__()
+
+        self._name = "Zjw04xcp"
+        self._fixed = {
+            element: ['F0', 'F1', 'F2', 'F3', 'Fn0', 'Fn1', 'Fn2', 'Fn3',
+                      'Fe', 'eta', 'rho_e', 'rho_s', 'r_eq']
+            for element in zjw04_defaults.keys()}
