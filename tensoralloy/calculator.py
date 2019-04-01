@@ -26,6 +26,7 @@ from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.phonopy import Phonopy, print_phonopy_version, print_phonopy
+from tensoralloy.dtypes import set_float_precision, get_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -63,7 +64,7 @@ class TensorAlloyCalculator(Calculator):
                 graph=graph)
             self._graph = graph
             self._transformer = self._get_transformer()
-            self._ops = self._get_ops()
+            self._ops, self._fp_precision = self._get_ops()
             self.implemented_properties = self._predict_properties
 
     @property
@@ -136,11 +137,12 @@ class TensorAlloyCalculator(Calculator):
                 ops[prop] = graph.get_tensor_by_name(name)
             except KeyError:
                 continue
-        if not self._predict_properties:
-            self._predict_properties = list(ops.keys())
+        self._predict_properties = list(ops.keys())
+        if ops['energy'].dtype == tf.float32:
+            fp_precision = 'medium'
         else:
-            assert set(self._predict_properties) == set(ops.keys())
-        return ops
+            fp_precision = 'high'
+        return ops, fp_precision
 
     def get_magnetic_moment(self, atoms=None):
         """
@@ -419,12 +421,15 @@ class TensorAlloyCalculator(Calculator):
             are: 'energy', 'atomic', '1body' and 'kbody'.
 
         """
-        Calculator.calculate(self, atoms, properties, *args)
+        original = get_float_precision()
 
+        Calculator.calculate(self, atoms, properties, *args)
         with self._graph.as_default():
+            set_float_precision(self._fp_precision)
             ops = {target: self._ops[target] for target in properties}
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
+            set_float_precision(original)
 
 
 def phonon_spectrum_example():
