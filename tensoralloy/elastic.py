@@ -12,7 +12,10 @@ import spglib as spg
 import re
 
 from numpy import array
+from typing import Callable
 from ase import Atoms
+from ase.units import GPa
+from matplotlib.pyplot import Axes
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -526,3 +529,92 @@ def get_elastic_tensor(cryst, systems):
     else:
         Cij = None
     return Cij, Bij
+
+
+def plot_cubic_elastic_constants(crystal: Atoms, get_calc_fn: Callable,
+                                 ax: Axes, method: str):
+    """
+    Plot fitting curves of the elastic constants c11, c12 and c44 for cubic
+    crystals.
+
+    Parameters
+    ----------
+    crystal : Atoms
+        The target crystal object.
+    get_calc_fn : Callable
+        The function to get a `Calculator` capable of predicting stress.
+    ax : Axes
+        The `matplotlib.pyplot.Axes` to plot the fitting curve.
+    method : str
+        The stress calculation method.
+
+    """
+    crystal.calc = get_calc_fn()
+
+    # Create 10 deformation points on the a axis
+    systems = {
+        0: [],
+        3: []
+    }
+    for axis in systems.keys():
+        if axis == 3:
+            delta = 0.4
+        else:
+            delta = 0.2
+        for d in np.linspace(-delta, delta, 11, endpoint=True):
+            systems[axis].append(
+                get_cart_deformed_cell(crystal, axis=axis, size=d))
+
+    # Calculate the systems and collect the stress tensor for each system
+    ss = {
+        0: [],
+        3: []
+    }
+    for axis in systems.keys():
+        for s in systems[axis]:
+            s.calc = get_calc_fn()
+            ss[axis].append([get_strain(s, crystal), s.get_stress()])
+
+    for axis in systems.keys():
+        ss[axis] = np.array(ss[axis])
+
+    lo = min(ss[0][:, 0, 0])
+    hi = max(ss[0][:, 0, 0])
+    mi = (lo + hi) / 2
+    wi = (hi - lo) / 2
+    xa = np.linspace(mi - 1.1 * wi, mi + 1.1 * wi, 50)
+
+    # Make a plot
+    ax.plot(ss[0][:, 0, 0], ss[0][:, 1, 0] / GPa, 'r.')
+    ax.plot(ss[0][:, 0, 0], ss[0][:, 1, 1] / GPa, 'g.')
+    ax.plot(ss[3][:, 0, 3], ss[3][:, 1, 3] / GPa, 'b.')
+
+    ax.axvline(0, ls='--')
+    ax.axhline(0, ls='--')
+
+    # Now fit the polynomials to the data to get elastic constants
+    # C11 component
+    f = np.polyfit(ss[0][:, 0, 0], ss[0][:, 1, 0], 3)
+    c11 = f[-2] / GPa
+
+    # Plot the fitted function
+    ax.plot(xa, np.polyval(f, xa) / GPa, 'r-', label=r'$C_{11}$=%.0f GPa' % c11)
+
+    # C12 component
+    f = np.polyfit(ss[0][:, 0, 0], ss[0][:, 1, 1], 3)
+    c12 = f[-2] / GPa
+
+    # Plot the fitted function
+    ax.plot(xa, np.polyval(f, xa) / GPa, 'g-', label=r'$C_{12}$=%.0f GPa' % c12)
+
+    # C44 component
+    f = np.polyfit(ss[3][:, 0, 3], ss[3][:, 1, 3], 3)
+    c44 = f[-2] / GPa / 2
+
+    # Plot the fitted function
+    ax.plot(xa, np.polyval(f, xa) / GPa, 'b-', label=r'$C_{44}$=%.0f GPa' % c44)
+
+    ax.set_xlabel('Relative strain')
+    ax.set_ylabel('Stress componnent (GPa)')
+    ax.set_title(f'Ni, Strain-Stress Relation, {method}')
+    ax.legend(loc='best')
