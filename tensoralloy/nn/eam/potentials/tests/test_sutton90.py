@@ -8,6 +8,7 @@ import tensorflow as tf
 import nose
 import os
 
+from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from collections import Counter
@@ -100,7 +101,7 @@ def test_eam_sutton90_batch_transformer():
         outputs = nn._get_model_outputs(
             features=features,
             descriptors=AttributeDict(descriptors),
-            mode=tf.estimator.ModeKeys.EVAL,
+            mode=tf_estimator.ModeKeys.EVAL,
             verbose=False)
         prediction = AttributeDict(energy=nn._get_energy_op(outputs, features))
 
@@ -135,7 +136,7 @@ def test_eam_sutton90():
         nn.attach_transformer(clf)
         prediction = nn.build(
             features=clf.placeholders,
-            mode=tf.estimator.ModeKeys.PREDICT,
+            mode=tf_estimator.ModeKeys.PREDICT,
             verbose=True)
 
         with tf.Session() as sess:

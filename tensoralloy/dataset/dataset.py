@@ -16,6 +16,7 @@ from typing import Dict, List, Tuple
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow.contrib.data import shuffle_and_repeat
+from tensorflow_estimator import estimator as tf_estimator
 from ase.db.sqlite import SQLite3Database
 from ase.db import connect
 
@@ -152,14 +153,14 @@ class Dataset:
         """
         Return the size of the training dataset.
         """
-        return self._file_sizes.get(tf.estimator.ModeKeys.TRAIN, 0)
+        return self._file_sizes.get(tf_estimator.ModeKeys.TRAIN, 0)
 
     @property
     def test_size(self):
         """
         Return the size of the evaluation dataset.
         """
-        return self._file_sizes.get(tf.estimator.ModeKeys.EVAL, 0)
+        return self._file_sizes.get(tf_estimator.ModeKeys.EVAL, 0)
 
     @property
     def atomic_static_energy(self) -> Dict[str, float]:
@@ -276,14 +277,14 @@ class Dataset:
         self._atomic_static_energy = \
             self._database.metadata['atomic_static_energy']
 
-    def _write_subset(self, mode: tf.estimator.ModeKeys, filename: str,
+    def _write_subset(self, mode: tf_estimator.ModeKeys, filename: str,
                       indices: List[int], verbose=False):
         """
         Write a subset of this dataset to the given file.
 
         Parameters
         ----------
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             The purpose of this subset.
         filename : str
             The file to write.
@@ -404,14 +405,14 @@ class Dataset:
         assert min(train) >= 1
 
         self._write_subset(
-            tf.estimator.ModeKeys.EVAL,
+            tf_estimator.ModeKeys.EVAL,
             check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
                 self._name, signature, len(test), self._descriptor,))),
             test,
             verbose=verbose,
         )
         self._write_subset(
-            tf.estimator.ModeKeys.TRAIN,
+            tf_estimator.ModeKeys.TRAIN,
             check_path(join(savedir, '{}-train-{}-{}.{}.tfrecords'.format(
                 self._name, signature, len(train), self._descriptor,))),
             train,
@@ -446,24 +447,24 @@ class Dataset:
         train_file, train_size = _load('train')
         success = bool(test_file) and bool(train_file)
 
-        self._files = {tf.estimator.ModeKeys.TRAIN: train_file,
-                       tf.estimator.ModeKeys.EVAL: test_file}
-        self._file_sizes = {tf.estimator.ModeKeys.TRAIN: train_size,
-                            tf.estimator.ModeKeys.EVAL: test_size}
+        self._files = {tf_estimator.ModeKeys.TRAIN: train_file,
+                       tf_estimator.ModeKeys.EVAL: test_file}
+        self._file_sizes = {tf_estimator.ModeKeys.TRAIN: train_size,
+                            tf_estimator.ModeKeys.EVAL: test_size}
 
         return success
 
-    def input_fn(self, mode: tf.estimator.ModeKeys, batch_size=25,
+    def input_fn(self, mode: tf_estimator.ModeKeys, batch_size=25,
                  num_epochs=None, shuffle=False):
         """
-        Return a Callable input function for `tf.estimator.Estimator`.
+        Return a Callable input function for `tf_estimator.Estimator`.
         """
-        if mode == tf.estimator.ModeKeys.PREDICT:
+        if mode == tf_estimator.ModeKeys.PREDICT:
             raise ValueError("The PREDICT does not need an `input_fn`.")
 
         def _input_fn() -> Tuple[AttributeDict, AttributeDict]:
             """
-            The input function for `tf.estimator.Estimator`.
+            The input function for `tf_estimator.Estimator`.
 
             Returns
             -------
@@ -491,7 +492,7 @@ class Dataset:
 
         return _input_fn
 
-    def next_batch(self, mode=tf.estimator.ModeKeys.TRAIN, batch_size=25,
+    def next_batch(self, mode=tf_estimator.ModeKeys.TRAIN, batch_size=25,
                    num_epochs=None, shuffle=False):
         """
         Return batch inputs of this dataset.

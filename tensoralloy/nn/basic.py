@@ -15,6 +15,7 @@ from collections import namedtuple
 from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
@@ -695,7 +696,7 @@ class BasicNN:
     def _get_model_outputs(self,
                            features: AttributeDict,
                            descriptors: AttributeDict,
-                           mode: tf.estimator.ModeKeys,
+                           mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
         Build the NN model and return raw outputs.
@@ -713,7 +714,7 @@ class BasicNN:
         descriptors : AttributeDict
             A dict of Ops to get atomic descriptors. This should be produced by
             an overrided `BaseTransformer.get_descriptors()`.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -737,7 +738,7 @@ class BasicNN:
 
     def build(self,
               features: AttributeDict,
-              mode: tf.estimator.ModeKeys.TRAIN,
+              mode: tf_estimator.ModeKeys.TRAIN,
               verbose=True):
         """
         Build the atomic neural network.
@@ -752,7 +753,7 @@ class BasicNN:
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -778,7 +779,7 @@ class BasicNN:
             mode=mode,
             verbose=verbose)
 
-        if mode == tf.estimator.ModeKeys.PREDICT:
+        if mode == tf_estimator.ModeKeys.PREDICT:
             properties = self._export_properties
         else:
             properties = self._minimize_properties
@@ -830,13 +831,13 @@ class BasicNN:
     def model_fn(self,
                  features: AttributeDict,
                  labels: AttributeDict,
-                 mode: tf.estimator.ModeKeys,
+                 mode: tf_estimator.ModeKeys,
                  params: AttributeDict):
         """
-        Initialize a model function for `tf.estimator.Estimator`.
+        Initialize a model function for `tf_estimator.Estimator`.
 
         In this method `features` are raw property (positions, cells, etc)
-        tensors. Because `tf.estimator.Estimator` requires a `features` as the
+        tensors. Because `tf_estimator.Estimator` requires a `features` as the
         first arg of `model_fn`, we cannot change its name here.
 
         Parameters
@@ -858,7 +859,7 @@ class BasicNN:
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
                   'total_pressure' should be minimized.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
         params : AttributeDict
@@ -866,7 +867,7 @@ class BasicNN:
 
         Returns
         -------
-        spec : tf.estimator.EstimatorSpec
+        spec : tf_estimator.EstimatorSpec
             Ops and objects returned from a `model_fn` and passed to an
             `Estimator`. `EstimatorSpec` fully defines the model to be run
             by an `Estimator`.
@@ -876,10 +877,10 @@ class BasicNN:
 
         predictions = self.build(features=features,
                                  mode=mode,
-                                 verbose=(mode == tf.estimator.ModeKeys.TRAIN))
+                                 verbose=(mode == tf_estimator.ModeKeys.TRAIN))
 
-        if mode == tf.estimator.ModeKeys.PREDICT:
-            return tf.estimator.EstimatorSpec(mode=mode,
+        if mode == tf_estimator.ModeKeys.PREDICT:
+            return tf_estimator.EstimatorSpec(mode=mode,
                                               predictions=predictions)
 
         total_loss, losses = self.get_total_loss(predictions=predictions,
@@ -891,12 +892,12 @@ class BasicNN:
             hparams=params,
             minimize_properties=self._minimize_properties)
 
-        if mode == tf.estimator.ModeKeys.TRAIN:
+        if mode == tf_estimator.ModeKeys.TRAIN:
             training_hooks = self.get_training_hooks(
                 losses=losses,
                 ema=ema,
                 hparams=params)
-            return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss,
+            return tf_estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
@@ -905,7 +906,7 @@ class BasicNN:
             labels=labels,
             n_atoms=features.n_atoms)
         evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
-        return tf.estimator.EstimatorSpec(mode=mode,
+        return tf_estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,
                                           evaluation_hooks=evaluation_hooks)
@@ -955,7 +956,7 @@ class BasicNN:
             nn = self.__class__(**configs)
             nn.attach_transformer(clf)
             predictions = nn.build(clf.placeholders,
-                                   mode=tf.estimator.ModeKeys.PREDICT,
+                                   mode=tf_estimator.ModeKeys.PREDICT,
                                    verbose=True)
 
             # Encode the JSON dict of the serialized transformer into the graph.

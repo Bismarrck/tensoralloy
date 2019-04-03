@@ -24,7 +24,7 @@ __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
 
 class WarmStartFromVariablesHook(tf.train.SessionRunHook):
     """
-    This hook can be used to replace `tf.estimator.WarmStartSettings`.
+    This hook can be used to replace `tf_estimator.WarmStartSettings`.
     """
 
     def __init__(self,

@@ -10,6 +10,7 @@ import nose
 from ase.db import connect
 from os.path import join
 from nose.tools import assert_equal
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import AttributeDict
 from tensoralloy.test_utils import test_dir
@@ -33,7 +34,7 @@ def _get_train_op(trainable=False):
         dataset.to_records(work_dir, test_size=1)
     assert_equal(dataset.test_size, 1)
 
-    input_fn = dataset.input_fn(mode=tf.estimator.ModeKeys.TRAIN,
+    input_fn = dataset.input_fn(mode=tf_estimator.ModeKeys.TRAIN,
                                 batch_size=1,
                                 num_epochs=None,
                                 shuffle=False)
@@ -50,7 +51,7 @@ def _get_train_op(trainable=False):
     nn = AtomicNN(elements=dataset.transformer.elements)
     nn.attach_transformer(dataset.transformer)
 
-    predictions = nn.build(features, tf.estimator.ModeKeys.TRAIN)
+    predictions = nn.build(features, tf_estimator.ModeKeys.TRAIN)
     total_loss, losses = nn.get_total_loss(
         predictions, labels, features.n_atoms, hparams)
 

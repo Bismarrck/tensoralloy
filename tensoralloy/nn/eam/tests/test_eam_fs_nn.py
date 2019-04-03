@@ -10,6 +10,7 @@ import nose
 import os
 import shutil
 
+from tensorflow_estimator import estimator as tf_estimator
 from unittest import skipUnless, skip
 from nose.tools import assert_list_equal, assert_dict_equal, with_setup
 from nose.tools import assert_equal, assert_almost_equal
@@ -75,7 +76,7 @@ def test_inference():
     with tf.Graph().as_default():
 
         data = Data()
-        mode = tf.estimator.ModeKeys.EVAL
+        mode = tf_estimator.ModeKeys.EVAL
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
         max_n_elements = {
@@ -278,7 +279,7 @@ def test_eam_fs_msah11():
         nn.attach_transformer(clf)
         predictions = nn.build(
             features=clf.placeholders,
-            mode=tf.estimator.ModeKeys.PREDICT,
+            mode=tf_estimator.ModeKeys.PREDICT,
             verbose=True)
 
         with tf.Session() as sess:

@@ -12,6 +12,7 @@ import shutil
 import ase
 import unittest
 
+from tensorflow_estimator import estimator as tf_estimator
 from pymatgen import Lattice, Structure
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -183,7 +184,7 @@ def test_dynamic_partition():
     with tf.Graph().as_default():
 
         data = AlCuData()
-        mode = tf.estimator.ModeKeys.TRAIN
+        mode = tf_estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
                         export_properties=['energy'])
@@ -309,7 +310,7 @@ def test_inference_nn():
     with tf.Graph().as_default():
 
         data = AlCuData()
-        mode = tf.estimator.ModeKeys.TRAIN
+        mode = tf_estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
                         export_properties=['energy'])
@@ -332,7 +333,7 @@ def test_inference_mixed():
         data = AlCuData()
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
-        mode = tf.estimator.ModeKeys.TRAIN
+        mode = tf_estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements,
                         custom_potentials={
@@ -516,7 +517,7 @@ class BulkStressOpTest(unittest.TestCase):
             nn.attach_transformer(clf)
             predictions = nn.build(
                 features=clf.placeholders,
-                mode=tf.estimator.ModeKeys.PREDICT,
+                mode=tf_estimator.ModeKeys.PREDICT,
                 verbose=True)
 
             with tf.Session() as sess:
@@ -566,7 +567,7 @@ def test_batch_stress():
         clf = EAMTransformer(rc=rc, elements=elements)
         nn.attach_transformer(clf)
         predictions = nn.build(features=clf.placeholders,
-                               mode=tf.estimator.ModeKeys.PREDICT,
+                               mode=tf_estimator.ModeKeys.PREDICT,
                                verbose=False)
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -599,7 +600,7 @@ def test_batch_stress():
         outputs = nn._get_model_outputs(
             features=features,
             descriptors=AttributeDict(descriptors),
-            mode=tf.estimator.ModeKeys.EVAL,
+            mode=tf_estimator.ModeKeys.EVAL,
             verbose=False)
         energy = nn._get_energy_op(outputs, features, verbose=False)
         forces = nn._get_forces_op(energy, batch.positions, verbose=False)
@@ -673,7 +674,7 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
 
             predictions = nn.build(
                 features=clf.placeholders,
-                mode=tf.estimator.ModeKeys.PREDICT,
+                mode=tf_estimator.ModeKeys.PREDICT,
                 verbose=True)
 
             nn.export(pb_file)

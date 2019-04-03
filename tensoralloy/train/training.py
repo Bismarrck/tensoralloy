@@ -13,6 +13,7 @@ from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
 from typing import Union
 from tensorflow.python import debug as tf_debug
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
@@ -264,7 +265,7 @@ class TrainingManager:
 
     def train_and_evaluate(self, debug=False):
         """
-        Initialize a model and train it with `tf.estimator.train_and_evalutate`.
+        Initialize a model and train it with `tf_estimator.train_and_evalutate`.
         """
 
         graph = tf.Graph()
@@ -289,11 +290,11 @@ class TrainingManager:
             session_config = tf.ConfigProto(allow_soft_placement=True,
                                             gpu_options=gpu_options)
 
-            estimator = tf.estimator.Estimator(
+            estimator = tf_estimator.Estimator(
                 model_fn=nn.model_fn,
                 warm_start_from=None,
                 model_dir=hparams.train.model_dir,
-                config=tf.estimator.RunConfig(
+                config=tf_estimator.RunConfig(
                     save_checkpoints_steps=hparams.train.eval_steps,
                     tf_random_seed=hparams.seed,
                     log_step_count_steps=hparams.train.log_steps,
@@ -311,17 +312,17 @@ class TrainingManager:
             else:
                 hooks = None
 
-            train_spec = tf.estimator.TrainSpec(
+            train_spec = tf_estimator.TrainSpec(
                 input_fn=dataset.input_fn(
-                    mode=tf.estimator.ModeKeys.TRAIN,
+                    mode=tf_estimator.ModeKeys.TRAIN,
                     batch_size=hparams.train.batch_size,
                     shuffle=hparams.train.shuffle),
                 max_steps=hparams.train.train_steps,
                 hooks=hooks)
 
-            eval_spec = tf.estimator.EvalSpec(
+            eval_spec = tf_estimator.EvalSpec(
                 input_fn=dataset.input_fn(
-                    mode=tf.estimator.ModeKeys.EVAL,
+                    mode=tf_estimator.ModeKeys.EVAL,
                     batch_size=hparams.train.eval_batch_size,
                     num_epochs=1,
                     shuffle=False),
@@ -331,7 +332,7 @@ class TrainingManager:
                 # checkpoint can be evaluated.
                 throttle_secs=60,
             )
-            tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+            tf_estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None):
         """

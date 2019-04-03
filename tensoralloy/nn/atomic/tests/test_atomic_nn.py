@@ -13,6 +13,7 @@ from ase.db import connect
 from os.path import exists, join, dirname
 from nose.tools import assert_equal, assert_list_equal, with_setup
 from nose.tools import assert_true, assert_false
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, datasets_dir
@@ -90,7 +91,7 @@ def test_inference():
         outputs = nn._get_model_outputs(
             features=features,
             descriptors=descriptors,
-            mode=tf.estimator.ModeKeys.TRAIN,
+            mode=tf_estimator.ModeKeys.TRAIN,
             verbose=True)
         predictions = AttributeDict(energy=nn._get_energy_op(
             outputs, features, verbose=False))
@@ -117,7 +118,7 @@ def test_inference_from_transformer():
                          normalizer=None)
         nn.transformer = clf
         prediction = nn.build(features=clf.placeholders,
-                              mode=tf.estimator.ModeKeys.PREDICT)
+                              mode=tf_estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)

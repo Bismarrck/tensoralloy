@@ -13,6 +13,7 @@ from datetime import datetime
 from ase.data import atomic_masses, atomic_numbers
 from atsim.potentials import writeSetFLFinnisSinclair, Potential, EAMPotential
 from typing import Dict, List
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
@@ -154,7 +155,7 @@ class EamFsNN(EamNN):
 
     def _build_rho_nn(self,
                       partitions: AttributeDict,
-                      mode: tf.estimator.ModeKeys,
+                      mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -169,7 +170,7 @@ class EamFsNN(EamNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -207,7 +208,7 @@ class EamFsNN(EamNN):
                         log_tensor(rho)
                     outputs[kbody_term] = rho
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf.estimator.ModeKeys.PREDICT:
+            if mode == tf_estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
@@ -246,7 +247,7 @@ class EamFsNN(EamNN):
         r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
-        mode = tf.estimator.ModeKeys.EVAL
+        mode = tf_estimator.ModeKeys.EVAL
 
         with tf.Graph().as_default():
 

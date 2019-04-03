@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import List, Dict
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
@@ -87,7 +88,7 @@ class AtomicNN(BasicNN):
     def _get_model_outputs(self,
                            features: AttributeDict,
                            descriptors: AttributeDict,
-                           mode: tf.estimator.ModeKeys,
+                           mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
@@ -106,7 +107,7 @@ class AtomicNN(BasicNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is None.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -120,7 +121,7 @@ class AtomicNN(BasicNN):
             for element, (value, _) in descriptors.items():
                 with tf.variable_scope(element):
                     x = tf.identity(value, name='input')
-                    if mode == tf.estimator.ModeKeys.PREDICT:
+                    if mode == tf_estimator.ModeKeys.PREDICT:
                         assert x.shape.ndims == 2
                         x = tf.expand_dims(x, axis=0, name='2to3')
                     if self._normalizer.enabled:

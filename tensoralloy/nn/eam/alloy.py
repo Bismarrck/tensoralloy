@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
+from tensorflow_estimator import estimator as tf_estimator
 from datetime import datetime
 from os.path import dirname, join
 from ase import data
@@ -136,7 +137,7 @@ class EamAlloyNN(EamNN):
 
     def _build_rho_nn(self,
                       partitions: AttributeDict,
-                      mode: tf.estimator.ModeKeys,
+                      mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -151,7 +152,7 @@ class EamAlloyNN(EamNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -200,7 +201,7 @@ class EamAlloyNN(EamNN):
                     outputs[kbody_term] = rho
 
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf.estimator.ModeKeys.PREDICT:
+            if mode == tf_estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
@@ -272,17 +273,17 @@ class EamAlloyNN(EamNN):
                 embed = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL,
+                    mode=tf_estimator.ModeKeys.EVAL,
                     verbose=False)
                 _, rho = self._build_rho_nn(
                     partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL,
+                    mode=tf_estimator.ModeKeys.EVAL,
                     verbose=False)
                 _, phi = self._build_phi_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf.estimator.ModeKeys.EVAL,
+                    mode=tf_estimator.ModeKeys.EVAL,
                     verbose=False)
 
             sess = tf.Session()

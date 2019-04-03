@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import nose
 
+from tensorflow_estimator import estimator as tf_estimator
 from ase.db import connect
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
@@ -63,7 +64,7 @@ def test_qm7m():
         assert_true(dataset.load_tfrecords(savedir))
 
         # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
-        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.EVAL,
+        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.EVAL,
                                         batch_size=1,
                                         num_epochs=1,
                                         shuffle=False)
@@ -100,7 +101,7 @@ def test_ethanol():
         assert_true(dataset.load_tfrecords(savedir))
 
         # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
-        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.TRAIN,
+        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
                                         batch_size=5,
                                         num_epochs=1,
                                         shuffle=False)
@@ -144,7 +145,7 @@ def test_nickel():
         dataset.to_records(savedir, test_size=1)
         assert_true(dataset.load_tfrecords(savedir))
 
-        next_batch = dataset.next_batch(mode=tf.estimator.ModeKeys.TRAIN,
+        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
                                         batch_size=1,
                                         num_epochs=1,
                                         shuffle=False)

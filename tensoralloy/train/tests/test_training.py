@@ -12,6 +12,7 @@ import glob
 import os
 import unittest
 
+from tensorflow_estimator import estimator as tf_estimator
 from unittest import skipUnless
 from os.path import join, exists
 from nose.tools import assert_equal, assert_less, assert_is_none, assert_in
@@ -39,7 +40,8 @@ class InitializationTest(unittest.TestCase):
         if exists(model_dir):
             shutil.rmtree(model_dir, ignore_errors=True)
 
-    def test_initialization(self):
+    @staticmethod
+    def test_initialization():
         """
         Test the initialization of a `TrainingManager`.
         """
@@ -121,7 +123,7 @@ def test_initialize_eam_training():
 
 class DebugWarmStartFromVariablesHook(tf.train.SessionRunHook):
     """
-    This hook can be used to replace `tf.estimator.WarmStartSettings`.
+    This hook can be used to replace `tf_estimator.WarmStartSettings`.
     """
 
     def __init__(self,
@@ -233,11 +235,11 @@ def test_warm_start():
         if exists(hparams.train.model_dir):
             shutil.rmtree(hparams.train.model_dir)
 
-        estimator = tf.estimator.Estimator(
+        estimator = tf_estimator.Estimator(
             model_fn=nn.model_fn,
             warm_start_from=None,
             model_dir=hparams.train.model_dir,
-            config=tf.estimator.RunConfig(
+            config=tf_estimator.RunConfig(
                 save_checkpoints_steps=hparams.train.eval_steps,
                 tf_random_seed=Defaults.seed,
                 log_step_count_steps=None,
@@ -245,9 +247,9 @@ def test_warm_start():
                 session_config=tf.ConfigProto(allow_soft_placement=True)),
             params=hparams)
 
-        train_spec = tf.estimator.TrainSpec(
+        train_spec = tf_estimator.TrainSpec(
             input_fn=dataset.input_fn(
-                mode=tf.estimator.ModeKeys.TRAIN,
+                mode=tf_estimator.ModeKeys.TRAIN,
                 batch_size=hparams.train.batch_size,
                 shuffle=hparams.train.shuffle),
             max_steps=hparams.train.train_steps)

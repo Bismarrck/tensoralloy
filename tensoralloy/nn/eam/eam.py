@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 from collections import Counter
 from functools import partial
 from typing import List, Dict, Callable
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.nn.convolutional import convolution1x1
@@ -270,7 +271,7 @@ class EamNN(BasicNN):
         return energy
 
     def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
-                      mode: tf.estimator.ModeKeys, verbose=False):
+                      mode: tf_estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -285,7 +286,7 @@ class EamNN(BasicNN):
             `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -331,14 +332,14 @@ class EamNN(BasicNN):
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
 
-            if mode == tf.estimator.ModeKeys.PREDICT:
+            if mode == tf_estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
 
             return atomic, values
 
     def _build_rho_nn(self,
                       partitions: AttributeDict,
-                      mode: tf.estimator.ModeKeys,
+                      mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -353,7 +354,7 @@ class EamNN(BasicNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -374,7 +375,7 @@ class EamNN(BasicNN):
             "This method must be overridden by its subclass")
 
     def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
-                        mode: tf.estimator.ModeKeys, verbose=True):
+                        mode: tf_estimator.ModeKeys, verbose=True):
         """
         Return the embedding energy, `F(rho)`.
 
@@ -385,7 +386,7 @@ class EamNN(BasicNN):
             axis has the size `n_atoms_max`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -398,7 +399,7 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
-        if mode == tf.estimator.ModeKeys.PREDICT:
+        if mode == tf_estimator.ModeKeys.PREDICT:
             split_axis = 0
             squeeze_axis = 1
         else:
@@ -425,7 +426,7 @@ class EamNN(BasicNN):
 
     def _dynamic_partition(self,
                            descriptors: AttributeDict,
-                           mode: tf.estimator.ModeKeys,
+                           mode: tf_estimator.ModeKeys,
                            merge_symmetric=True):
         """
         Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
@@ -446,7 +447,7 @@ class EamNN(BasicNN):
                   `[batch_size, max_n_terms, max_n_element, nnl]`.
                 * If `mode` is PREDICT, both should be 3D tensors of shape
                   `[max_n_terms, max_n_element, nnl]`.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         merge_symmetric : bool
             A bool.
@@ -478,7 +479,7 @@ class EamNN(BasicNN):
                     values, masks = descriptors[element]
                     values = tf.convert_to_tensor(values, name='values')
                     masks = tf.convert_to_tensor(masks, name='masks')
-                    if mode == tf.estimator.ModeKeys.PREDICT:
+                    if mode == tf_estimator.ModeKeys.PREDICT:
                         assert values.shape.ndims == 3
                         values = tf.expand_dims(values, axis=0)
                         masks = tf.expand_dims(masks, axis=0)
@@ -552,7 +553,7 @@ class EamNN(BasicNN):
     def _get_model_outputs(self,
                            features: AttributeDict,
                            descriptors: AttributeDict,
-                           mode: tf.estimator.ModeKeys,
+                           mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
         Return raw NN-EAM model outputs.
@@ -570,7 +571,7 @@ class EamNN(BasicNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
-        mode : tf.estimator.ModeKeys
+        mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
