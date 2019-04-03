@@ -26,6 +26,7 @@ from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 from ase.db import connect
 from ase.units import GPa
+from ase.io import read
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.io.neighbor import find_neighbor_sizes
@@ -451,13 +452,102 @@ else:
 
 def voigt_to_full(tensor):
     """
-    A helper function convert the Voigt tensor to a full 3x3 tensor.
+    A helper function converting the Voigt tensor to a full 3x3 tensor.
     """
     assert len(tensor) == 6
     xx, yy, zz, yz, xz, xy = tensor
     return np.array([[xx, xy, xz],
                      [xy, yy, yz],
                      [xz, yz, zz]])
+
+
+def rotate_lammps_stress(stress, rot):
+    """
+    A helper function converting the orientation of LAMMPS stress tensor.
+    """
+    full = voigt_to_full(stress)
+    return rot @ full @ np.linalg.inv(rot)
+
+
+class NiMoAlloyTest(unittest.TestCase):
+    """
+    Test energy, force and stress calculations of Ni3Mo and Ni4Mo alloys.
+    """
+
+    def setUp(self):
+        """
+        Setup this test.
+        """
+        work_dir = join(test_dir(True), 'crystals', 'zjw04')
+        if not exists(work_dir):
+            os.makedirs(work_dir)
+
+        self.work_dir = work_dir
+        self.pb_file = join(work_dir, 'NiMo.pb')
+        self.lammps = self.get_lammps_calculator()
+
+        elements = ['Mo', 'Ni']
+        nn = EamAlloyNN(elements, 'zjw04',
+                        export_properties=['energy', 'forces', 'stress'])
+        clf = EAMTransformer(6.5, elements)
+        nn.attach_transformer(clf)
+        nn.export(self.pb_file, keep_tmp_files=True)
+
+    def get_lammps_calculator(self):
+        """
+        Return a LAMMPS calculator for Ag.
+        """
+        eam_file = join(test_dir(True), 'lammps', 'MoNi_Zhou04.eam.alloy')
+        parameters = {'pair_style': 'eam/alloy',
+                      'pair_coeff': ['* * MoNi_Zhou04.eam.alloy Mo Ni']}
+        return LAMMPS(files=[eam_file], parameters=parameters,
+                      tmp_dir=self.work_dir, keep_tmp_files=True,
+                      keep_alive=False, no_data_file=False)
+
+    def test(self):
+        """
+        The main tests.
+        """
+        calc = TensorAlloyCalculator(self.pb_file)
+
+        crysts_dir = join(test_dir(), 'crystals')
+        files = {
+            'Ni3Mo': 'Ni3Mo_mp-11506_primitive.cif',
+            'Ni4Mo': 'Ni4Mo_mp-11507_primitive.cif'
+        }
+
+        e_eps = 1e-5
+        f_eps = 1e-5
+        s_eps = 1e-5
+
+        for name, cif in files.items():
+
+            cryst = read(join(crysts_dir, cif))
+            volume = cryst.get_volume()
+
+            lmp = self.get_lammps_calculator()
+            lmp.calculate(cryst)
+            rot = lmp.prism.R
+
+            energy = lmp.get_potential_energy(cryst)
+            forces = lmp.get_forces(cryst)
+            stress = rotate_lammps_stress(lmp.get_stress(cryst), rot)
+
+            calc.calculate(cryst)
+
+            assert_almost_equal(energy, calc.get_potential_energy(cryst),
+                                delta=e_eps, msg=f'{name}.energy')
+            assert_array_almost_equal(forces, calc.get_forces(cryst),
+                                      delta=f_eps, msg=f'{name}.forces')
+            assert_array_almost_equal(stress, calc.get_stress(cryst, False),
+                                      delta=s_eps, msg=f'{name}.stress')
+
+    def tearDown(self):
+        """
+        Delete the tmp dir.
+        """
+        if exists(self.lammps.tmp_dir):
+            shutil.rmtree(self.lammps.tmp_dir, ignore_errors=True)
 
 
 class BulkStressOpTest(unittest.TestCase):
@@ -534,13 +624,12 @@ class BulkStressOpTest(unittest.TestCase):
                                   self.lammps.get_forces(atoms), delta=1e-9)
 
         lmp_voigt_stress = self.lammps.get_stress(atoms)
-        lmp_stress = voigt_to_full(lmp_voigt_stress)
 
         if ase.__version__ < '3.18.0':
             rot = self.lammps.prism.R
-            stress = rot @ lmp_stress @ np.linalg.inv(rot)
+            stress = rotate_lammps_stress(lmp_voigt_stress, rot)
         else:
-            stress = lmp_stress
+            stress = voigt_to_full(lmp_voigt_stress)
 
         assert_array_almost_equal(voigt_to_full(result['stress']),
                                   stress,
@@ -705,8 +794,7 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
 
             if ase.__version__ < '3.18.0':
                 rot = lmp.prism.R
-                lmp_stress = voigt_to_full(lmp_stress)
-                lmp_stress = rot @ lmp_stress @ np.linalg.inv(rot)
+                lmp_stress = rotate_lammps_stress(lmp_stress, rot)
                 lmp_stress = lmp_stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
             lmp_results[key] = lmp_stress
 
