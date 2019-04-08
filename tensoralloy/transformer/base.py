@@ -104,13 +104,6 @@ class DescriptorTransformer(BaseTransformer):
         super(DescriptorTransformer, self).__init__()
         self._placeholders = AttributeDict()
 
-    @property
-    def placeholders(self) -> AttributeDict:
-        """
-        Return a dict of names and placeholders.
-        """
-        return self._placeholders
-
     @abc.abstractmethod
     def get_feed_dict(self, atoms: Atoms):
         """
@@ -119,9 +112,16 @@ class DescriptorTransformer(BaseTransformer):
         pass
 
     @abc.abstractmethod
-    def get_graph(self):
+    def get_placeholder_features(self):
         """
-        Return the graph for computing atomic descriptors.
+        Return the dict of feature placeholders.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_constant_features(self, atoms: Atoms):
+        """
+        Return a dict of constant feature tensors for the given `Atoms`.
         """
         pass
 
@@ -132,10 +132,16 @@ class DescriptorTransformer(BaseTransformer):
         """
         pass
 
-    def get_descriptors(self, _):
+    @abc.abstractmethod
+    def get_descriptors(self, features):
         """
         An abstract method. Return the Op to compute atomic descriptors from raw
         properties (positions, volume, v2g_map, ...).
+
+        Parameters
+        ----------
+        features : AttributeDict
+            A dict of raw property tensors.
 
         Returns
         -------
@@ -143,7 +149,7 @@ class DescriptorTransformer(BaseTransformer):
             A dict of Ops to get atomic descriptors.
 
         """
-        return self.get_graph()
+        pass
 
     def get_index_transformer(self, atoms: Atoms):
         """
