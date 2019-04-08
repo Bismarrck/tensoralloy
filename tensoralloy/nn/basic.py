@@ -24,6 +24,7 @@ from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
 from tensoralloy.nn import losses as loss_ops
+from tensoralloy.nn.elastic import get_elastic_constant_loss
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -93,6 +94,7 @@ exportable_properties = (
     Property('stress', True),
     Property('total_pressure', True),
     Property('hessian', False),
+    Property('elastic', True)
 )
 
 available_properties = tuple(
@@ -387,7 +389,9 @@ class BasicNN:
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0, use_rmse=True),
             total_pressure=AttributeDict(weight=1.0),
-            l2=AttributeDict(weight=0.01))
+            l2=AttributeDict(weight=0.01),
+            elastic=AttributeDict(weight=1.0, crystals=[]),
+        )
 
         if hparams is None:
             hparams = AttributeDict(loss=defaults)
@@ -413,6 +417,7 @@ class BasicNN:
                 _check_section('stress')
                 _check_section('total_pressure')
                 _check_section('l2')
+                _check_section('elastic')
 
         return hparams
 
@@ -453,6 +458,7 @@ class BasicNN:
                 - 'hparams.loss.stress.use_rmse'
                 - 'hparams.loss.total_pressure.weight'
                 - 'hparams.loss.l2.weight'
+                - 'hparams.loss.elastic'
 
         Returns
         -------
@@ -503,6 +509,12 @@ class BasicNN:
             losses.l2 = loss_ops.get_l2_regularization_loss(
                 weight=hparams.loss.l2.weight,
                 collections=collections)
+
+            if 'elastic' in self._minimize_properties:
+                losses.elastic = get_elastic_constant_loss(
+                    nn=self,
+                    list_of_crystal=hparams.loss.elastic.crystals,
+                    weight=hparams.loss.elastic.weight)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -734,6 +746,8 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
+            if prop == 'elastic':
+                continue
             assert prop in labels
 
     def build(self,
@@ -955,7 +969,7 @@ class BasicNN:
 
             nn = self.__class__(**configs)
             nn.attach_transformer(clf)
-            predictions = nn.build(clf.placeholders,
+            predictions = nn.build(clf.get_placeholder_features(),
                                    mode=tf_estimator.ModeKeys.PREDICT,
                                    verbose=True)
 
