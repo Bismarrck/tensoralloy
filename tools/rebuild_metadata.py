@@ -24,18 +24,18 @@ built_in_datasets = {
         'path': join(datasets_dir(), 'qm7.db'),
     },
     'snap-Ni': {
-        'rc': [4.6, 4.6, 6.0],
-        'k_max': [2, 3, 2],
+        'rc': [4.6, 4.6, 6.0, 6.5],
+        'k_max': [2, 3, 2, 2],
         'path': join(datasets_dir(), 'snap-Ni.db'),
     },
     'snap-Mo': {
-        'rc': [4.6, 4.6, 6.0],
-        'k_max': [2, 3, 2],
+        'rc': [4.6, 4.6, 6.0, 6.5],
+        'k_max': [2, 3, 2, 2],
         'path': join(datasets_dir(), 'snap-Mo.db'),
     },
     'snap': {
-        'rc': [4.6, 4.6, 6.0],
-        'k_max': [2, 3, 2],
+        'rc': [4.6, 4.6, 6.0, 6.5],
+        'k_max': [2, 3, 2, 2],
         'path': join(datasets_dir(), 'snap.db'),
     }
 }
