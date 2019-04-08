@@ -202,7 +202,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
         feed_dict[placeholders.n_atoms_plus_virt] = n_atoms + 1
         feed_dict[placeholders.nnl_max] = nnl_max
         feed_dict[placeholders.mask] = mask.astype(numpy_float_dtype)
-        feed_dict[placeholders.cells] = cells.astype(numpy_float_dtype)
+        feed_dict[placeholders.cells] = cells.array.astype(numpy_float_dtype)
         feed_dict[placeholders.volume] = numpy_float_dtype(volume)
         feed_dict[placeholders.composition] = composition
         feed_dict[placeholders.row_splits] = splits

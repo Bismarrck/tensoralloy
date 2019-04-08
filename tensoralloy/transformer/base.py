@@ -325,7 +325,7 @@ class BatchDescriptorTransformer(BaseTransformer):
         clf = self.get_index_transformer(atoms)
         numpy_dtype = get_float_dtype().as_numpy_dtype
         positions = clf.map_positions(atoms.positions).astype(numpy_dtype)
-        cells = atoms.get_cell(complete=True).astype(numpy_dtype)
+        cells = atoms.get_cell(complete=True).array.astype(numpy_dtype)
         volume = np.atleast_1d(atoms.get_volume()).astype(numpy_dtype)
         y_true = np.atleast_1d(atoms.get_total_energy()).astype(numpy_dtype)
         composition = self._get_composition(atoms)

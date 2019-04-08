@@ -483,7 +483,7 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
 
     with tf.Graph().as_default():
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
-        cell = tf.constant(atoms.cell, tf.float64, name='cell')
+        cell = tf.constant(atoms.cell.array, tf.float64, name='cell')
         rmap = legacy_build_radial_v2g_map(atoms, rc, Defaults.n_etas,
                                            all_kbody_terms, kbody_sizes)
         amap = legacy_build_angular_v2g_map(atoms, rmap, all_kbody_terms,
@@ -698,7 +698,7 @@ def test_batch_multi_elements():
             positions.append(
                 clf.map_positions(atoms.positions).astype(numpy_float_dtype))
             cells.append(
-                atoms.get_cell(complete=True).astype(numpy_float_dtype))
+                atoms.get_cell(complete=True).array.astype(numpy_float_dtype))
             volumes.append(numpy_float_dtype(atoms.get_volume()))
 
         batch = _merge_indexed_slices(indexed_slices)
