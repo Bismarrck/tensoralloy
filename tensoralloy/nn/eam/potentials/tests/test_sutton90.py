@@ -135,7 +135,7 @@ def test_eam_sutton90():
                             "AgAg": {"phi": "sutton90"}})
         nn.attach_transformer(clf)
         prediction = nn.build(
-            features=clf.placeholders,
+            features=clf.get_placeholder_features(),
             mode=tf_estimator.ModeKeys.PREDICT,
             verbose=True)
 

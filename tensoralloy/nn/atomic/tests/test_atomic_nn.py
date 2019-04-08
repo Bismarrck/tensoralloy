@@ -117,7 +117,7 @@ def test_inference_from_transformer():
         nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'],
                          normalizer=None)
         nn.transformer = clf
-        prediction = nn.build(features=clf.placeholders,
+        prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction.energy.shape.as_list(), [])
 

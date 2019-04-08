@@ -76,8 +76,8 @@ def test_eam_transformer():
         clf = EAMTransformer(rc=6.5, elements=elements)
 
         with tf.Session() as sess:
-            results = sess.run(clf.get_graph(),
-                               feed_dict=clf.get_feed_dict(atoms))
+            results = sess.run(
+                clf.get_descriptors(clf.get_constant_features(atoms)))
 
         g_h, mask_h = results['H']
         g_c, mask_c = results['C']

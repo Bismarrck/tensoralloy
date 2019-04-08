@@ -557,7 +557,7 @@ def test_legacy_and_new_flexible():
 
     with tf.Graph().as_default():
         sf = SymmetryFunctionTransformer(rc=rc, elements=['B'], angular=True)
-        g = sf.get_graph()
+        g = sf.get_descriptors(sf.get_placeholder_features())
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -582,7 +582,7 @@ def test_manybody_k():
     for k_max in (2, 3):
         with tf.Graph().as_default():
             sf = SymmetryFunctionTransformer(rc, elements, angular=(k_max == 3))
-            g = sf.get_graph()
+            g = sf.get_descriptors(sf.get_placeholder_features())
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
@@ -740,10 +740,10 @@ def test_splits():
     with tf.Graph().as_default():
 
         sf = SymmetryFunctionTransformer(rc, elements, angular=True)
-        g = sf.get_graph()
+        g = sf.get_descriptors(sf.get_constant_features(Pd3O2))
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
+            values = sess.run(g)
 
         assert_array_equal(values['O'][0], ref[3:, :20])
         assert_array_equal(values['Pd'][0], ref[:3, 20:])
@@ -760,19 +760,19 @@ def test_as_dict():
 
     with tf.Graph().as_default():
         old = SymmetryFunctionTransformer(rc, elements, angular=True)
-        old_g = old.get_graph()
+        old_g = old.get_descriptors(old.get_constant_features(Pd3O2))
 
         params = old.as_dict()
         cls = params.pop('class')
         assert_equal(cls, "SymmetryFunctionTransformer")
 
         new = SymmetryFunctionTransformer(**params)
-        new_g = new.get_graph()
+        new_g = new.get_descriptors(new.get_constant_features(Pd3O2))
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            old_vals = sess.run(old_g, feed_dict=old.get_feed_dict(Pd3O2))
-            new_vals = sess.run(new_g, feed_dict=new.get_feed_dict(Pd3O2))
+            old_vals = sess.run(old_g)
+            new_vals = sess.run(new_g)
 
         assert_array_equal(old_vals['O'][0], new_vals['O'][0])
         assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])
@@ -785,7 +785,7 @@ def test_reuse_descriptor_variables():
     with tf.Graph().as_default():
         sf = SymmetryFunctionTransformer(rc=6.0, elements=['Al', 'Cu'],
                                          trainable=True, angular=True)
-        sf.get_graph()
+        sf.get_descriptors(sf.get_placeholder_features())
         assert_equal(len(tf.model_variables()), 9)
 
 

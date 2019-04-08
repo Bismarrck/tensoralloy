@@ -606,7 +606,7 @@ class BulkStressOpTest(unittest.TestCase):
                             export_properties=['energy', 'forces', 'stress'])
             nn.attach_transformer(clf)
             predictions = nn.build(
-                features=clf.placeholders,
+                features=clf.get_placeholder_features(),
                 mode=tf_estimator.ModeKeys.PREDICT,
                 verbose=True)
 
@@ -655,7 +655,7 @@ def test_batch_stress():
     with tf.Graph().as_default():
         clf = EAMTransformer(rc=rc, elements=elements)
         nn.attach_transformer(clf)
-        predictions = nn.build(features=clf.placeholders,
+        predictions = nn.build(features=clf.get_placeholder_features(),
                                mode=tf_estimator.ModeKeys.PREDICT,
                                verbose=False)
         with tf.Session() as sess:
@@ -762,7 +762,7 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
             nn.attach_transformer(clf)
 
             predictions = nn.build(
-                features=clf.placeholders,
+                features=clf.get_placeholder_features(),
                 mode=tf_estimator.ModeKeys.PREDICT,
                 verbose=True)
 
