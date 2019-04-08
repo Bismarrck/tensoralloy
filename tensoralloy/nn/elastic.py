@@ -16,11 +16,10 @@ from os.path import join
 from collections import namedtuple
 from typing import List, Union
 
-from tensoralloy.nn.basic import BasicNN
-from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.utils import GraphKeys
 from tensoralloy.test_utils import test_dir
+from tensoralloy.nn.utils import log_tensor
 
 
 __author__ = 'Xin Chen'
@@ -43,10 +42,10 @@ class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
                 name: str,
                 atoms: Atoms,
                 elastic_constants: List[ElasticConstant]):
-        return super(Crystal, cls).__new__(cls, atoms, elastic_constants)
+        return super(Crystal, cls).__new__(cls, name, atoms, elastic_constants)
 
 
-_built_in_crystals = {
+built_in_crystals = {
     "Ni": Crystal("Ni", bulk("Ni"),
                   [ElasticConstant([0, 0, 0, 0], 276),
                    ElasticConstant([0, 0, 1, 1], 159),
@@ -58,9 +57,9 @@ _built_in_crystals = {
     "Ni4Mo": Crystal("Ni4Mo", read(join(test_dir(),
                                         'crystals',
                                         'Ni4Mo_mp-11507_primitive.cif')),
-                    [ElasticConstant([0, 0, 0, 0], 472),
-                     ElasticConstant([0, 0, 1, 1], 158),
-                     ElasticConstant([1, 2, 1, 2], 106)]),
+                     [ElasticConstant([0, 0, 0, 0], 472),
+                      ElasticConstant([0, 0, 1, 1], 158),
+                      ElasticConstant([1, 2, 1, 2], 106)]),
     "Ni3Mo": Crystal("Ni3Mo", read(join(test_dir(),
                                         'crystals',
                                         'Ni3Mo_mp-11506_primitive.cif')),
@@ -88,7 +87,9 @@ def voigt_notation(i, j):
         return 6
 
 
-def get_elastic_constant_loss(nn: BasicNN, list_of_crystal: List[Crystal]):
+def get_elastic_constant_loss(nn,
+                              list_of_crystal: List[Union[Crystal, str]],
+                              weight=1.0):
     """
     Return a special loss: RMSE (GPa) of certain elastic constants of
     certain bulk solids.
@@ -96,18 +97,29 @@ def get_elastic_constant_loss(nn: BasicNN, list_of_crystal: List[Crystal]):
     Parameters
     ----------
     nn : BasicNN
-
-    list_of_crystal : List[Crystal]
+        A `BasicNN`. Its weights will be reused.
+    list_of_crystal : List[Crystal] or List[str]
+        A list of `Crystal` objects. It can also be a list of str as the names
+        of the built-in crystals.
+    weight : float
+        The weight of the loss.
 
     """
     configs = nn.as_dict()
     configs.pop('class')
-    clf = nn.transformer
-    assert isinstance(clf, BatchDescriptorTransformer)
+
+    for key in ('elastic', 'hessian'):
+        if key in configs['export_properties']:
+            configs['export_properties'].remove(key)
 
     with tf.name_scope("Elastic/"):
 
         for crystal in list_of_crystal:
+            if isinstance(crystal, str):
+                crystal = built_in_crystals[crystal]
+            elif not isinstance(crystal, Crystal):
+                raise ValueError(
+                    "`crystal` must be a str or a `Crystal` object!")
 
             symbols = set(crystal.atoms.get_chemical_symbols())
             for symbol in symbols:
@@ -119,12 +131,15 @@ def get_elastic_constant_loss(nn: BasicNN, list_of_crystal: List[Crystal]):
 
             with tf.name_scope(f"{crystal.name}"):
                 elastic_nn = nn.__class__(**configs)
-                elastic_clf = clf.as_descriptor_transformer()
+                elastic_clf = nn.transformer.as_descriptor_transformer()
                 elastic_nn.attach_transformer(elastic_clf)
+
+                features = elastic_clf.get_constant_features(crystal.atoms)
+
                 elastic_nn.build(
-                    features=elastic_clf.get_constant_feed(crystal.atoms),
+                    features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
-                    verbose=False)
+                    verbose=True)
 
                 right = tf.get_default_graph().get_tensor_by_name(
                     f'Elastic/{crystal.name}/Output/Stress/Full/Right/right:0')
@@ -134,17 +149,19 @@ def get_elastic_constant_loss(nn: BasicNN, list_of_crystal: List[Crystal]):
                         i, j, k, l = elastic_constant.ijkl
                         dsdhij = tf.identity(tf.gradients(
                             right[i, j],
-                            elastic_clf.placeholders.cells)[0],
-                                             name=f'dsdh{i}{j}')
+                            features.cells)[0], name=f'dsdh{i}{j}')
                         cij = tf.matmul(
                             tf.transpose(dsdhij),
-                            tf.identity(elastic_clf.placeholders.cells),
+                            tf.identity(features.cells),
                             name=f'h_dsdh{i}{j}')
-                        cij = tf.div(cij, elastic_clf.placeholders.volume)
+                        cij = tf.div(cij, features.volume)
                         cij = tf.div(cij, GPa, name=f'c{i}{j}')
                         vi = voigt_notation(i, j)
                         vj = voigt_notation(k, l)
-                        cijkl = tf.gather_nd(cij, [k, l], name=f'C{vi}{vj}')
+                        cijkl = tf.identity(cij[k, l], name=f'C{vi}{vj}')
+
+                        log_tensor(cijkl)
+
                         predictions.append(cijkl)
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
@@ -162,9 +179,12 @@ def get_elastic_constant_loss(nn: BasicNN, list_of_crystal: List[Crystal]):
         dtype = get_float_dtype()
         eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
         mse = tf.add(mse, eps, name='mse/safe')
-        loss = tf.sqrt(mse, name='rmse')
+        weight = tf.convert_to_tensor(weight, dtype, name='weight')
+        raw_loss = tf.sqrt(mse, name='rmse')
+        loss = tf.multiply(raw_loss, weight, name='weighted/loss')
 
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, raw_loss)
 
         return loss
