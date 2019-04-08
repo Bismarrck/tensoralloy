@@ -38,14 +38,6 @@ class EAMTransformer(EAM, DescriptorTransformer):
         EAM.__init__(self, rc=rc, elements=elements)
         DescriptorTransformer.__init__(self)
 
-    def get_graph(self):
-        """
-        Return the graph to compute symmetry function descriptors.
-        """
-        if not self._placeholders:
-            self._initialize_placeholders()
-        return self.build_graph(self._placeholders)
-
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this transformer.
@@ -54,13 +46,6 @@ class EAMTransformer(EAM, DescriptorTransformer):
              'rc': self._rc,
              'elements': self._elements}
         return d
-
-    @property
-    def placeholders(self) -> AttributeDict:
-        """
-        Return a dict of placeholders.
-        """
-        return self._placeholders
 
     def _initialize_placeholders(self):
         """
@@ -114,6 +99,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
             self._placeholders.jlist = _int_1d('jlist')
             self._placeholders.shift = _float_2d(3, 'shift')
             self._placeholders.v2g_map = _int_2d(4, 'v2g_map')
+            self._placeholders.is_constant = False
 
         return self._placeholders
 
@@ -171,15 +157,11 @@ class EAMTransformer(EAM, DescriptorTransformer):
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
-    def get_feed_dict(self, atoms: Atoms):
+    def _get_np_features(self, atoms: Atoms):
         """
-        Return the feed dict.
+        Return a dict of features (Numpy or Python objects).
         """
-        feed_dict = {}
-
-        if not self._placeholders:
-            self._initialize_placeholders()
-        placeholders = self._placeholders
+        np_dtype = get_float_dtype().as_numpy_dtype
 
         index_transformer = self.get_index_transformer(atoms)
         g2 = self._get_indexed_slices(atoms, index_transformer)
@@ -196,21 +178,46 @@ class EAMTransformer(EAM, DescriptorTransformer):
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
 
-        numpy_float_dtype = get_float_dtype().as_numpy_dtype
+        feed_dict = AttributeDict()
 
-        feed_dict[placeholders.positions] = positions.astype(numpy_float_dtype)
-        feed_dict[placeholders.n_atoms_plus_virt] = n_atoms + 1
-        feed_dict[placeholders.nnl_max] = nnl_max
-        feed_dict[placeholders.mask] = mask.astype(numpy_float_dtype)
-        feed_dict[placeholders.cells] = cells.array.astype(numpy_float_dtype)
-        feed_dict[placeholders.volume] = numpy_float_dtype(volume)
-        feed_dict[placeholders.composition] = composition
-        feed_dict[placeholders.row_splits] = splits
-        feed_dict[placeholders.v2g_map] = g2.v2g_map
-        feed_dict[placeholders.ilist] = g2.ilist
-        feed_dict[placeholders.jlist] = g2.jlist
-        feed_dict[placeholders.shift] = g2.shift
+        feed_dict.positions = positions
+        feed_dict.n_atoms_plus_virt = np.int32(n_atoms + 1)
+        feed_dict.nnl_max = np.int32(nnl_max)
+        feed_dict.mask = mask.astype(np_dtype)
+        feed_dict.cells = cells.array.astype(np_dtype)
+        feed_dict.volume = np_dtype(volume)
+        feed_dict.composition = composition
+        feed_dict.row_splits = np.int32(splits)
+        feed_dict.v2g_map = g2.v2g_map
+        feed_dict.ilist = g2.ilist
+        feed_dict.jlist = g2.jlist
+        feed_dict.shift = g2.shift
 
+        return feed_dict
+
+    def get_feed_dict(self, atoms: Atoms):
+        """
+        Return the feed dict.
+        """
+        feed_dict = {}
+
+        if not self._placeholders:
+            self._initialize_placeholders()
+        placeholders = self._placeholders
+
+        for key, value in self._get_np_features(atoms).items():
+            feed_dict[placeholders[key]] = value
+
+        return feed_dict
+
+    def get_constant_features(self, atoms: Atoms):
+        """
+        Return a dict of constant feature tensors for the given `Atoms`.
+        """
+        feed_dict = AttributeDict()
+        with tf.name_scope("Constants"):
+            for key, val in self._get_np_features(atoms).items():
+                feed_dict[key] = tf.convert_to_tensor(val, name=key)
         return feed_dict
 
 

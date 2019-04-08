@@ -112,13 +112,6 @@ class DescriptorTransformer(BaseTransformer):
         pass
 
     @abc.abstractmethod
-    def get_placeholder_features(self):
-        """
-        Return the dict of feature placeholders.
-        """
-        pass
-
-    @abc.abstractmethod
     def get_constant_features(self, atoms: Atoms):
         """
         Return a dict of constant feature tensors for the given `Atoms`.
@@ -132,7 +125,6 @@ class DescriptorTransformer(BaseTransformer):
         """
         pass
 
-    @abc.abstractmethod
     def get_descriptors(self, features):
         """
         An abstract method. Return the Op to compute atomic descriptors from raw
@@ -149,7 +141,22 @@ class DescriptorTransformer(BaseTransformer):
             A dict of Ops to get atomic descriptors.
 
         """
+        return getattr(self, "build_graph")(features)
+
+    @abc.abstractmethod
+    def _initialize_placeholders(self):
+        """
+        A helper function to initialize placeholders.
+        """
         pass
+
+    def get_placeholder_features(self):
+        """
+        Return the dict of placeholder features.
+        """
+        if not self._placeholders:
+            self._initialize_placeholders()
+        return self._placeholders
 
     def get_index_transformer(self, atoms: Atoms):
         """
