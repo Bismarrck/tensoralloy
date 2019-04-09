@@ -26,8 +26,25 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+# **Materials Project**
+# https://wiki.materialsproject.org/Elasticity_calculations
+#
+# Note that in this work, conventional unit cells, obtained using
+# `pymatgen.symmetry.SpacegroupAnalyzer.get_conventional_standard_structure`
+# are employed for all elastic constant calculations. In our experience, these
+# cells typically yield more accurate and better converged elastic constants
+# than primitive cells, at the cost of more computational time. We suspect this
+# has to do with the fact that unit cells often exhibit higher symmetries and
+# simpler Brillouin zones than primitive cells (an example is face centered
+# cubic cells).
+_identifier = "conventional_standard"
+
+
 # noinspection PyTypeChecker,PyArgumentList
 class ElasticConstant(namedtuple('ElasticConstant', ('ijkl', 'value'))):
+    """
+    This class represents a specifi C_{ijkl}.
+    """
 
     def __new__(cls,
                 ijkl: Union[List[int], np.ndarray],
@@ -37,6 +54,9 @@ class ElasticConstant(namedtuple('ElasticConstant', ('ijkl', 'value'))):
 
 # noinspection PyTypeChecker,PyArgumentList
 class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
+    """
+    A container class for a crystal.
+    """
 
     def __new__(cls,
                 name: str,
@@ -46,23 +66,23 @@ class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
 
 
 built_in_crystals = {
-    "Ni": Crystal("Ni", bulk("Ni"),
+    "Ni": Crystal("Ni", bulk("Ni", cubic=True),
                   [ElasticConstant([0, 0, 0, 0], 276),
                    ElasticConstant([0, 0, 1, 1], 159),
                    ElasticConstant([1, 2, 1, 2], 132)]),
-    "Mo": Crystal("Mo", bulk("Mo"),
+    "Mo": Crystal("Mo", bulk("Mo", cubic=True),
                   [ElasticConstant([0, 0, 0, 0], 472),
                    ElasticConstant([0, 0, 1, 1], 158),
                    ElasticConstant([1, 2, 1, 2], 106)]),
     "Ni4Mo": Crystal("Ni4Mo", read(join(test_dir(),
                                         'crystals',
-                                        'Ni4Mo_mp-11507_primitive.cif')),
+                                        f'Ni4Mo_mp-11507_{_identifier}.cif')),
                      [ElasticConstant([0, 0, 0, 0], 472),
                       ElasticConstant([0, 0, 1, 1], 158),
                       ElasticConstant([1, 2, 1, 2], 106)]),
     "Ni3Mo": Crystal("Ni3Mo", read(join(test_dir(),
                                         'crystals',
-                                        'Ni3Mo_mp-11506_primitive.cif')),
+                                        f'Ni3Mo_mp-11506_{_identifier}.cif')),
                      [ElasticConstant([0, 0, 0, 0], 385),
                       ElasticConstant([0, 0, 0, 1], 166),
                       ElasticConstant([0, 0, 0, 2], 145),
@@ -89,7 +109,8 @@ def voigt_notation(i, j):
 
 def get_elastic_constant_loss(nn,
                               list_of_crystal: List[Union[Crystal, str]],
-                              weight=1.0):
+                              weight=1.0,
+                              constraint_weight=1.0):
     """
     Return a special loss: RMSE (GPa) of certain elastic constants of
     certain bulk solids.
@@ -102,7 +123,9 @@ def get_elastic_constant_loss(nn,
         A list of `Crystal` objects. It can also be a list of str as the names
         of the built-in crystals.
     weight : float
-        The weight of the loss.
+        The weight of the loss contributed by elastic constants.
+    constraint_weight : float
+        The weight of the loss contributed by the constraints.
 
     """
     configs = nn.as_dict()
@@ -128,6 +151,7 @@ def get_elastic_constant_loss(nn,
 
             predictions = []
             labels = []
+            constraints = []
 
             with tf.name_scope(f"{crystal.name}"):
                 elastic_nn = nn.__class__(**configs)
@@ -136,13 +160,18 @@ def get_elastic_constant_loss(nn,
 
                 features = elastic_clf.get_constant_features(crystal.atoms)
 
-                elastic_nn.build(
+                output = elastic_nn.build(
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=True)
 
                 stress = tf.get_default_graph().get_tensor_by_name(
                     f'Elastic/{crystal.name}/Output/Stress/Full/stress:0')
+
+                with tf.name_scope("Constraints"):
+                    constraints.extend([
+                        tf.linalg.norm(output.forces, name='forces'),
+                        tf.linalg.norm(stress, name='stress')])
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
@@ -170,21 +199,36 @@ def get_elastic_constant_loss(nn,
 
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
 
-        predictions = tf.stack(predictions, name='predictions')
-        labels = tf.stack(labels, name='labels')
+        with tf.name_scope("Loss"):
 
-        mse = tf.reduce_mean(tf.squared_difference(predictions, labels),
-                             name='mse')
-        mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
-        dtype = get_float_dtype()
-        eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-        mse = tf.add(mse, eps, name='mse/safe')
-        weight = tf.convert_to_tensor(weight, dtype, name='weight')
-        raw_loss = tf.sqrt(mse, name='rmse')
-        loss = tf.multiply(raw_loss, weight, name='weighted/loss')
+            # Loss contribution from elastic constants
+            with tf.name_scope("Elastic"):
+                predictions = tf.stack(predictions, name='predictions')
+                labels = tf.stack(labels, name='labels')
+
+                mse = tf.reduce_mean(tf.squared_difference(predictions, labels),
+                                     name='mse')
+                mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
+                dtype = get_float_dtype()
+                eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
+                mse = tf.add(mse, eps, name='mse/safe')
+                weight = tf.convert_to_tensor(weight, dtype, name='weight')
+                raw_loss = tf.sqrt(mse, name='rmse')
+                loss = tf.multiply(raw_loss, weight, name='weighted/loss')
+
+            # Loss contribution from constraints because the 2-norm of the total
+            # forces and stress of the crystal structure should be zero.
+            with tf.name_scope("Constraint"):
+                c_loss = tf.add_n(constraints, name='loss')
+                weight = tf.convert_to_tensor(
+                    constraint_weight, dtype, name='weight')
+                c_loss = tf.multiply(c_loss, weight, name='weighted/loss')
+
+        total_loss = tf.add(raw_loss, c_loss, name='total_loss')
 
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, raw_loss)
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
 
-        return loss
+        return total_loss
