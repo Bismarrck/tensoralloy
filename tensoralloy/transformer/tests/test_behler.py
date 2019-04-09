@@ -384,7 +384,7 @@ def radial_function(R, rc, v2g_map, cell, etas, ilist, jlist, Slist, total_dim):
             Dlist = Rj - Ri + tf.matmul(Slist, cell)
             r = tf.norm(Dlist, axis=1, name='r')
             r2 = tf.square(r, name='r2')
-            r2c = tf.div(r2, rc2, name='div')
+            r2c = tf.math.truediv(r2, rc2, name='div')
 
         with tf.name_scope("fc"):
             fc_r = cosine_cutoff(r, rc=rc, name='fc_r')
@@ -435,7 +435,7 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
         with tf.name_scope("cosine"):
             upper = tf.square(r_ij) + tf.square(r_ik) - tf.square(r_jk)
             lower = two * tf.multiply(r_ij, r_ik, name='bc')
-            theta = tf.div(upper, lower, name='theta')
+            theta = tf.math.truediv(upper, lower, name='theta')
 
         # Compute the damping term: $f_c(r_{ij}) * f_c(r_{ik}) * f_c(r_{jk})$
         with tf.name_scope("fc"):
@@ -450,7 +450,7 @@ def angular_function(R, rc, v2g_map, cell, params_grid, ij, ik, jk, ijS, ikS,
             r2_ik = tf.square(r_ik, name='r2_ik')
             r2_jk = tf.square(r_jk, name='r2_jk')
             r2 = r2_ij + r2_ik + r2_jk
-            r2c = tf.div(r2, rc2, name='r2_rc2')
+            r2c = tf.math.truediv(r2, rc2, name='r2_rc2')
 
         with tf.name_scope("features"):
             shape = tf.constant((R.shape[0], total_dim), tf.int32, name='shape')

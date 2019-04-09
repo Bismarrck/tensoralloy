@@ -512,8 +512,8 @@ class NiMoAlloyTest(unittest.TestCase):
 
         crysts_dir = join(test_dir(), 'crystals')
         files = {
-            'Ni3Mo': 'Ni3Mo_mp-11506_primitive.cif',
-            'Ni4Mo': 'Ni4Mo_mp-11507_primitive.cif'
+            'Ni3Mo': 'Ni3Mo_mp-11506_conventional_standard.cif',
+            'Ni4Mo': 'Ni4Mo_mp-11507_conventional_standard.cif'
         }
 
         e_eps = 1e-5
@@ -523,7 +523,6 @@ class NiMoAlloyTest(unittest.TestCase):
         for name, cif in files.items():
 
             cryst = read(join(crysts_dir, cif))
-            volume = cryst.get_volume()
 
             lmp = self.get_lammps_calculator()
             lmp.calculate(cryst)

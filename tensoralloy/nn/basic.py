@@ -293,7 +293,7 @@ class BasicNN:
                     left = tf.matmul(tf.transpose(forces), positions)
                     left = tf.negative(left, name='left')
                 stress = tf.add(left, right, name='stress')
-                stress = tf.div(stress, volume, name='ase')
+                stress = tf.math.truediv(stress, volume, name='ase')
             else:
                 with tf.name_scope("Right"):
                     right = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='right')
@@ -304,8 +304,8 @@ class BasicNN:
                     left = tf.reduce_sum(left, axis=1, keepdims=False)
                     left = tf.negative(left, name='left')
                 stress = tf.add(left, right, name='stress')
-                stress = tf.div(tf.reshape(stress, (-1, 9)),
-                                tf.reshape(volume, (-1, 1)))
+                stress = tf.math.truediv(tf.reshape(stress, (-1, 9)),
+                                         tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
             return tf.identity(stress, name='full')
 
@@ -359,7 +359,7 @@ class BasicNN:
         stress = self._get_reduced_full_stress_tensor(energy, cells, volume,
                                                       positions, forces)
         three = tf.constant(-3.0, dtype=energy.dtype, name='three')
-        total_pressure = tf.div(tf.trace(stress), three, name=name)
+        total_pressure = tf.math.truediv(tf.trace(stress), three, name=name)
         if verbose:
             log_tensor(total_pressure)
         return total_pressure
@@ -429,7 +429,8 @@ class BasicNN:
         return hparams
 
     def get_total_loss(self, predictions, labels, n_atoms,
-                       hparams: AttributeDict):
+                       hparams: AttributeDict,
+                       mode=tf_estimator.ModeKeys.TRAIN):
         """
         Get the total loss tensor.
 
@@ -468,6 +469,8 @@ class BasicNN:
                 - 'hparams.loss.elastic.weight'
                 - 'hparams.loss.elastic.constraint_weight'
                 - 'hparams.loss.elastic.crystals'
+        mode : tf_estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
 
         Returns
         -------
@@ -519,7 +522,9 @@ class BasicNN:
                 weight=hparams.loss.l2.weight,
                 collections=collections)
 
-            if 'elastic' in self._minimize_properties:
+            # Elastic constants will only be computed during training.
+            if mode == tf_estimator.ModeKeys.TRAIN and \
+                    'elastic' in self._minimize_properties:
                 losses.elastic = get_elastic_constant_loss(
                     nn=self,
                     list_of_crystal=hparams.loss.elastic.crystals,
@@ -679,8 +684,8 @@ class BasicNN:
                         n_max = tf.convert_to_tensor(
                             x.shape[1].value, dtype=x.dtype, name='n_max')
                         one = tf.constant(1.0, dtype=x.dtype, name='one')
-                        weight = tf.div(one, tf.reduce_mean(n_atoms / n_max),
-                                        name='weight')
+                        weight = tf.math.truediv(
+                            one, tf.reduce_mean(n_atoms / n_max), name='weight')
                         x = tf.multiply(weight, x)
                         y = tf.multiply(weight, y)
                     ops_dict = {
@@ -909,7 +914,8 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms,
-                                                 hparams=params)
+                                                 hparams=params,
+                                                 mode=mode)
         ema, train_op = get_train_op(
             losses=losses,
             hparams=params,

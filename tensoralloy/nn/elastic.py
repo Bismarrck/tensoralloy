@@ -180,8 +180,8 @@ def get_elastic_constant_loss(nn,
                             tf.transpose(dsdhij),
                             tf.identity(features.cells),
                             name=f'h_dsdh{i}{j}')
-                        cij = tf.div(cij, features.volume)
-                        cij = tf.div(cij, GPa, name=f'c{i}{j}')
+                        cij = tf.math.truediv(cij, features.volume)
+                        cij = tf.math.truediv(cij, GPa, name=f'c{i}{j}')
                         vi = voigt_notation(i, j)
                         vj = voigt_notation(k, l)
                         cijkl = tf.identity(cij[k, l], name=f'C{vi}{vj}')

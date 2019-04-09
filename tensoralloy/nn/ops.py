@@ -106,7 +106,7 @@ def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
             tf.reshape(grad, (-1,)),
             tf.reshape(energy_grad, (-1,)), axes=1)
         norm = tf.norm(grad) * tf.norm(energy_grad) + eps
-        cos_dist = tf.div(dot, norm, name=var.op.name + '/cos_dist')
+        cos_dist = tf.math.truediv(dot, norm, name=var.op.name + '/cos_dist')
         tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
 
 
@@ -182,6 +182,8 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
         total_norms = {}
 
         for prop in minimize_properties:
+            if prop not in losses:
+                continue
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
                 g = optimizer.compute_gradients(losses[prop])
@@ -194,8 +196,7 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
                 tf.summary.histogram(var.op.name + '/hist', var)
 
         gradients = sum_of_grads_and_vars(
-            list_of_grads_and_vars=[grads_and_vars[prop]
-                                    for prop in minimize_properties])
+            list_of_grads_and_vars=[g for prop, g in grads_and_vars.items()])
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
@@ -210,12 +211,11 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
 
     # Use an absolute name scope for cosine distances.
     with tf.name_scope("CosDist"):
-        if 'energy' in minimize_properties:
-            for prop in minimize_properties:
+        if 'energy' in grads_and_vars:
+            for prop, g in grads_and_vars.items():
                 if prop == 'energy':
                     continue
                 with tf.name_scope(prop):
-                    add_gradients_cos_dist_summary(
-                        grads_and_vars['energy'], grads_and_vars[prop])
+                    add_gradients_cos_dist_summary(grads_and_vars['energy'], g)
 
     return ema, variable_averages_op

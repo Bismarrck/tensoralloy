@@ -96,7 +96,8 @@ class AlFeMsah11(EamFSPotential):
                 shape = tf.shape(r, out_type=idx.dtype)
                 b = factors[1::2]
                 c = factors[2::2]
-                scale = tf.div(tf.convert_to_tensor(factors[0], dtype=dtype), x)
+                scale = tf.math.truediv(
+                    tf.convert_to_tensor(factors[0], dtype=dtype), x)
                 values = []
                 for i in range(len(factors) // 2):
                     bi = tf.convert_to_tensor(b[i], dtype=dtype)

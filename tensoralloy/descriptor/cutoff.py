@@ -41,7 +41,7 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
         #  this module was cythonized.
         r = ops.convert_to_tensor(r, name='r')
         rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
-        ratio = math_ops.div(r, rc, name='ratio')
+        ratio = math_ops.truediv(r, rc, name='ratio')
         one = ops.convert_to_tensor(1.0, dtype=r.dtype, name='one')
         half = ops.convert_to_tensor(0.5, dtype=r.dtype, name='half')
         z = math_ops.minimum(ratio, one, name='minimum')
@@ -80,7 +80,7 @@ def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=5.0, name=None):
         gamma = ops.convert_to_tensor(gamma, dtype=r.dtype, name='gamma')
         rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
         one = ops.convert_to_tensor(1.0, dtype=r.dtype, name='one')
-        div = math_ops.div(r, rc, name='ratio')
+        div = math_ops.truediv(r, rc, name='ratio')
         div = math_ops.minimum(one, div)
         z = gamma * div**(gamma + one) - (gamma + one) * div**gamma
         return tf.add(z, one, name=name)

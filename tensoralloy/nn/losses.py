@@ -68,8 +68,8 @@ def get_energy_loss(labels, predictions, n_atoms, weight=1.0, collections=None,
         assert predictions.shape.ndims == 1
         if per_atom_loss:
             n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
-            x = tf.div(labels, n_atoms, name='labels')
-            y = tf.div(predictions, n_atoms, name='labels')
+            x = tf.math.truediv(labels, n_atoms, name='labels')
+            y = tf.math.truediv(predictions, n_atoms, name='labels')
         else:
             x = tf.identity(labels, name='labels')
             y = tf.identity(predictions, name='predictions')
@@ -109,7 +109,8 @@ def _absolute_forces_loss(labels: tf.Tensor, predictions: tf.Tensor,
             n_max = tf.convert_to_tensor(
                 labels.shape[1].value, dtype=labels.dtype, name='n_max')
             one = tf.constant(1.0, dtype=dtype, name='one')
-            weight = tf.div(one, tf.reduce_mean(n_reals / n_max), name='weight')
+            weight = tf.math.truediv(one, tf.reduce_mean(n_reals / n_max),
+                                     name='weight')
         mse = tf.multiply(mse, weight, name='mse')
     mae = tf.multiply(mae, weight, name='mae')
     loss = tf.sqrt(mse, name='rmse')
@@ -166,7 +167,7 @@ def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
         diff = tf.subtract(labels, predictions)
         upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
         lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
-        ratio = tf.div(upper, lower, name='ratio')
+        ratio = tf.math.truediv(upper, lower, name='ratio')
         loss = tf.reduce_mean(ratio, name='loss')
     return loss
 

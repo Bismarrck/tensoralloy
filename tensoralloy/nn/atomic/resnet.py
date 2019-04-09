@@ -150,7 +150,8 @@ class AtomicResNN(AtomicNN):
         energy = tf.add(y_static, y_res, name=name)
 
         with tf.name_scope("Ratio"):
-            ratio = tf.reduce_mean(tf.div(y_static, energy, name='ratio'),
+            ratio = tf.reduce_mean(tf.math.truediv(y_static, energy,
+                                                   name='ratio'),
                                    name='avg')
             tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
             tf.summary.scalar(ratio.op.name + '/summary', ratio)

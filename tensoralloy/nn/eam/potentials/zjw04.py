@@ -115,10 +115,10 @@ def _zjw04_exp_func(r_eq, a, b, c, one, name=None):
             a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**20)
 
         """
-        r_re = tf.div(r, r_eq)
+        r_re = tf.math.truediv(r, r_eq)
         upper = a * tf.exp(-b * (r_re - one))
         lower = one + tf.pow(r_re - c, 20)
-        return tf.div(upper, lower, name=name)
+        return tf.math.truediv(upper, lower, name=name)
     return func
 
 
@@ -203,8 +203,8 @@ class Zjw04(EamAlloyPotential):
                 rho_b = self.rho(r, f'{el_b}', variable_scope, False)
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             phi = tf.multiply(half,
-                              tf.add(tf.div(rho_a, rho_b) * phi_b,
-                                     tf.div(rho_b, rho_a) * phi_a),
+                              tf.add(tf.math.truediv(rho_a, rho_b) * phi_b,
+                                     tf.math.truediv(rho_b, rho_a) * phi_a),
                               name='phi')
             if verbose:
                 log_tensor(phi)
@@ -422,7 +422,7 @@ class Zjw04xc(Zjw04):
                 rho < rho_n
                 """
                 with tf.name_scope("e1"):
-                    x = tf.subtract(tf.div(_rho, rho_n), one, name='x')
+                    x = tf.subtract(tf.math.truediv(_rho, rho_n), one, name='x')
                     e1 = [tf.multiply(Fn1, x, 'Fn1e1'),
                           tf.multiply(Fn2, tf.pow(x, 2, 'e1_2'), 'Fn2e2'),
                           tf.multiply(Fn3, tf.pow(x, 3, 'e1_3'), 'Fn3e3')]
@@ -445,7 +445,7 @@ class Zjw04xc(Zjw04):
 
                 """
                 with tf.name_scope("e2"):
-                    x = tf.subtract(tf.div(_rho, rho_e), one, name='x')
+                    x = tf.subtract(tf.math.truediv(_rho, rho_e), one, name='x')
                     e2 = [tf.multiply(F1, x, 'F1e1'),
                           tf.multiply(F2, tf.pow(x, 2, name='e2_2'), 'F2e2'),
                           tf.multiply(F3, tf.pow(x, 3, name='e2_3'), 'F3e3')]
@@ -458,7 +458,7 @@ class Zjw04xc(Zjw04):
                 """
                 with tf.name_scope("e3"):
                     eps = tf.constant(1e-8, dtype, name='eps')
-                    x = tf.add(tf.div(_rho, rho_s), eps, name='x')
+                    x = tf.add(tf.math.truediv(_rho, rho_s), eps, name='x')
                     lnx = tf.log(x)
                     return tf.multiply(Fe * (one - eta * lnx),
                                        tf.pow(x, eta), name='e3')

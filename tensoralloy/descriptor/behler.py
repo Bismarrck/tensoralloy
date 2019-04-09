@@ -259,7 +259,7 @@ class SymmetryFunction(AtomicDescriptor):
                               name='rij')
             r2 = tf.square(r, name='r2')
             rc2 = tf.constant(self._rc**2, dtype=r.dtype, name='rc2')
-            r2c = tf.div(r2, rc2, name='div')
+            r2c = tf.math.truediv(r2, rc2, name='div')
             fc_r = self._cutoff_fn(r, name='fc_r')
 
             with tf.name_scope("Map"):
@@ -358,13 +358,13 @@ class SymmetryFunction(AtomicDescriptor):
             rjk2 = tf.square(rjk, name='rjk2')
             rc2 = tf.constant(self._rc ** 2, dtype=rij.dtype, name='rc2')
             r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
-            r2c = tf.div(r2, rc2, name='r2_rc2')
+            r2c = tf.math.truediv(r2, rc2, name='r2_rc2')
 
             with tf.name_scope("Theta"):
                 two = tf.constant(2.0, dtype=rij.dtype, name='two')
                 upper = tf.subtract(rij2 + rik2, rjk2, name='upper')
                 lower = tf.multiply(two * rij, rik, name='lower')
-                theta = tf.div(upper, lower, name='theta')
+                theta = tf.math.truediv(upper, lower, name='theta')
 
             with tf.name_scope("Cutoff"):
                 fc_rij = self._cutoff_fn(rij, name='fc_rij')
