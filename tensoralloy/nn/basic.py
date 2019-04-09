@@ -390,7 +390,8 @@ class BasicNN:
             stress=AttributeDict(weight=1.0, use_rmse=True),
             total_pressure=AttributeDict(weight=1.0),
             l2=AttributeDict(weight=0.01),
-            elastic=AttributeDict(weight=1.0, crystals=[]),
+            elastic=AttributeDict(weight=0.1, crystals=[],
+                                  constraint_weight=10.0),
         )
 
         if hparams is None:
@@ -458,7 +459,9 @@ class BasicNN:
                 - 'hparams.loss.stress.use_rmse'
                 - 'hparams.loss.total_pressure.weight'
                 - 'hparams.loss.l2.weight'
-                - 'hparams.loss.elastic'
+                - 'hparams.loss.elastic.weight'
+                - 'hparams.loss.elastic.constraint_weight'
+                - 'hparams.loss.elastic.crystals'
 
         Returns
         -------

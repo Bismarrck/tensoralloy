@@ -92,7 +92,8 @@ def test_check_hparams():
             stress=AttributeDict(weight=1.0, use_rmse=True),
             total_pressure=AttributeDict(weight=1.0),
             l2=AttributeDict(weight=0.01),
-            elastic=AttributeDict(weight=1.0, crystals=[])))
+            elastic=AttributeDict(weight=0.1, crystals=[],
+                                  constraint_weight=10.0)))
 
     # noinspection PyTypeChecker
     hparams = nn._check_loss_hparams(None)
