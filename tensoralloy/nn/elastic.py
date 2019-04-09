@@ -130,10 +130,7 @@ def get_elastic_constant_loss(nn,
     """
     configs = nn.as_dict()
     configs.pop('class')
-
-    for key in ('elastic', 'hessian'):
-        if key in configs['export_properties']:
-            configs['export_properties'].remove(key)
+    configs['export_properties'] = ['energy', 'forces', 'stress']
 
     with tf.name_scope("Elastic/"):
 

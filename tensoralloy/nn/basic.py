@@ -37,37 +37,37 @@ class _PropertyError(ValueError):
     """
     This error shall be raised if the given property is not valid.
     """
-    tag = "valid"
+    label = "valid"
 
     def __init__(self, name):
         super(_PropertyError, self).__init__()
         self.name = name
 
     def __str__(self):
-        return f"'{self.name}' is not a '{self.tag}' property."
+        return f"'{self.name}' is not a '{self.label}' property."
 
 
 class MinimizablePropertyError(_PropertyError):
     """
     This error shall be raised if the given property cannot be minimized.
     """
-    tag = "minimizable"
+    label = "minimizable"
 
 
 class ExportablePropertyError(_PropertyError):
     """
     This error shall be raised if the given property cannot be exported.
     """
-    tag = "exportable"
+    label = "exportable"
 
 
 # noinspection PyTypeChecker,PyArgumentList
-class Property(namedtuple('Property', ('name', 'minimizable'))):
+class Property(namedtuple('Property', ('name', 'minimizable', 'exportable'))):
     """
     A property of a strucutre.
     """
 
-    def __new__(cls, name: str, minimizable: bool):
+    def __new__(cls, name: str, minimizable: bool, exportable: bool):
         """
         Initialization method.
 
@@ -77,9 +77,11 @@ class Property(namedtuple('Property', ('name', 'minimizable'))):
             The name of this property.
         minimizable : bool
             A boolean indicating whether this property can be minimized or not.
+        exportable : bool
+            A boolean indicating whether this property can be exported or not.
 
         """
-        return super(Property, cls).__new__(cls, name, minimizable)
+        return super(Property, cls).__new__(cls, name, minimizable, exportable)
 
     def __eq__(self, other):
         if hasattr(other, "name"):
@@ -88,18 +90,22 @@ class Property(namedtuple('Property', ('name', 'minimizable'))):
             return str(other) == self.name
 
 
-exportable_properties = (
-    Property('energy', True),
-    Property('forces', True),
-    Property('stress', True),
-    Property('total_pressure', True),
-    Property('hessian', False),
-    Property('elastic', True)
+all_properties = (
+    Property(name='energy', minimizable=True, exportable=True),
+    Property(name='forces', minimizable=True, exportable=True),
+    Property(name='stress', minimizable=True, exportable=True),
+    Property(name='total_pressure', minimizable=True, exportable=True),
+    Property(name='hessian', minimizable=False, exportable=True),
+    Property(name='elastic', minimizable=True, exportable=False)
 )
 
-available_properties = tuple(
-    prop for prop in exportable_properties if prop.minimizable
-)
+exportable_properties = [
+    prop for prop in all_properties if prop.exportable
+]
+
+minimizable_properties = [
+    prop for prop in all_properties if prop.minimizable
+]
 
 
 class BasicNN:
@@ -157,7 +163,7 @@ class BasicNN:
             raise ValueError("At least one property should be minimized.")
 
         for prop in minimize_properties:
-            if prop not in available_properties:
+            if prop not in minimizable_properties:
                 raise MinimizablePropertyError(prop)
 
         for prop in export_properties:
