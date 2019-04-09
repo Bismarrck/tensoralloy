@@ -224,8 +224,6 @@ def get_elastic_constant_loss(nn,
         total_loss = tf.add(raw_loss, c_loss, name='total_loss')
 
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, raw_loss)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
 
         return total_loss
