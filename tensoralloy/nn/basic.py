@@ -19,7 +19,7 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.nn.ops import get_train_op
+from tensoralloy.nn.opt import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
