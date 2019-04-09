@@ -180,13 +180,13 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
         feed_dict = AttributeDict()
 
-        feed_dict.positions = positions
+        feed_dict.positions = positions.astype(np_dtype)
         feed_dict.n_atoms_plus_virt = np.int32(n_atoms + 1)
         feed_dict.nnl_max = np.int32(nnl_max)
         feed_dict.mask = mask.astype(np_dtype)
         feed_dict.cells = cells.array.astype(np_dtype)
         feed_dict.volume = np_dtype(volume)
-        feed_dict.composition = composition
+        feed_dict.composition = composition.astype(np_dtype)
         feed_dict.row_splits = np.int32(splits)
         feed_dict.v2g_map = g2.v2g_map
         feed_dict.ilist = g2.ilist
