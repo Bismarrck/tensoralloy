@@ -15,7 +15,6 @@ from os.path import join, splitext, basename, exists, dirname
 from typing import Dict, List, Tuple
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
-from tensorflow.contrib.data import shuffle_and_repeat
 from tensorflow_estimator import estimator as tf_estimator
 from ase.db.sqlite import SQLite3Database
 from ase.db import connect
@@ -528,9 +527,11 @@ class Dataset:
             if shuffle:
                 size = self._file_sizes[mode]
                 min_queue_examples = int(size * 0.4) + 10 * batch_size
-                dataset = dataset.apply(
-                    shuffle_and_repeat(min_queue_examples, count=num_epochs,
-                                       seed=Defaults.seed))
+                dataset = dataset.shuffle(min_queue_examples,
+                                          seed=Defaults.seed,
+                                          reshuffle_each_iteration=True)
+                dataset = dataset.repeat(num_epochs)
+
             else:
                 # Repeat the dataset
                 dataset = dataset.repeat(count=num_epochs)
