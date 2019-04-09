@@ -141,14 +141,14 @@ def get_elastic_constant_loss(nn,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=True)
 
-                right = tf.get_default_graph().get_tensor_by_name(
-                    f'Elastic/{crystal.name}/Output/Stress/Full/Right/right:0')
+                stress = tf.get_default_graph().get_tensor_by_name(
+                    f'Elastic/{crystal.name}/Output/Stress/Full/stress:0')
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
                         dsdhij = tf.identity(tf.gradients(
-                            right[i, j],
+                            stress[i, j],
                             features.cells)[0], name=f'dsdh{i}{j}')
                         cij = tf.matmul(
                             tf.transpose(dsdhij),
@@ -165,7 +165,7 @@ def get_elastic_constant_loss(nn,
                         predictions.append(cijkl)
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
-                                                 dtype=right.dtype,
+                                                 dtype=stress.dtype,
                                                  name=f'refC{vi}{vj}'))
 
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
