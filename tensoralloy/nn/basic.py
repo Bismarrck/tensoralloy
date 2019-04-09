@@ -528,7 +528,8 @@ class BasicNN:
                 losses.elastic = get_elastic_constant_loss(
                     nn=self,
                     list_of_crystal=hparams.loss.elastic.crystals,
-                    weight=hparams.loss.elastic.weight)
+                    weight=hparams.loss.elastic.weight,
+                    constraint_weight=hparams.loss.elastic.constraint_weight)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)

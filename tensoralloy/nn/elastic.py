@@ -211,7 +211,7 @@ def get_elastic_constant_loss(nn,
                 mse = tf.add(mse, eps, name='mse/safe')
                 weight = tf.convert_to_tensor(weight, dtype, name='weight')
                 raw_loss = tf.sqrt(mse, name='rmse')
-                loss = tf.multiply(raw_loss, weight, name='weighted/loss')
+                e_loss = tf.multiply(raw_loss, weight, name='weighted/loss')
 
             # Loss contribution from constraints because the 2-norm of the total
             # forces and stress of the crystal structure should be zero.
@@ -221,9 +221,9 @@ def get_elastic_constant_loss(nn,
                     constraint_weight, dtype, name='weight')
                 c_loss = tf.multiply(c_loss, weight, name='weighted/loss')
 
-        total_loss = tf.add(raw_loss, c_loss, name='total_loss')
+        total_loss = tf.add(e_loss, c_loss, name='total_loss')
 
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
 
         return total_loss
