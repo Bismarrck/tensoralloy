@@ -202,6 +202,7 @@ class InputReader:
             _safe_update("nn.atomic.behler.angular")
             _safe_update("nn.atomic.behler.cutoff")
             _safe_update("nn.atomic.behler.eta")
+            _safe_update("nn.atomic.behler.omega")
             _safe_update("nn.atomic.behler.gamma")
             _safe_update("nn.atomic.behler.beta")
             _safe_update("nn.atomic.behler.zeta")

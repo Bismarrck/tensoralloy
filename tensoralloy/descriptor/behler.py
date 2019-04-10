@@ -23,8 +23,8 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["SymmetryFunction", "BatchSymmetryFunction", "compute_dimension"]
 
 
-def compute_dimension(all_kbody_terms: List[str], n_etas, n_betas, n_gammas,
-                      n_zetas):
+def compute_dimension(all_kbody_terms: List[str], n_etas, n_omegas, n_betas,
+                      n_gammas, n_zetas):
     """
     Compute the total dimension of the feature vector.
 
@@ -34,6 +34,8 @@ def compute_dimension(all_kbody_terms: List[str], n_etas, n_betas, n_gammas,
         A list of str as all k-body terms.
     n_etas : int
         The number of `eta` for radial functions.
+    n_omegas : int
+        The number of `omega` for radial functions.
     n_betas : int
         The number of `beta` for angular functions.
     n_gammas : int
@@ -54,7 +56,7 @@ def compute_dimension(all_kbody_terms: List[str], n_etas, n_betas, n_gammas,
     for kbody_term in all_kbody_terms:
         k = len(get_elements_from_kbody_term(kbody_term))
         if k == 2:
-            n = n_etas
+            n = n_etas * n_omegas
         else:
             n = n_gammas * n_betas * n_zetas
         total_dim += n
@@ -71,8 +73,9 @@ class SymmetryFunction(AtomicDescriptor):
     gather_fn = staticmethod(tf.gather)
 
     def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=True,
-                 trainable=False, periodic=True, cutoff_function='cosine'):
+                 gamma=Defaults.gamma, zeta=Defaults.zeta, omega=Defaults.omega,
+                 angular=True, trainable=False, periodic=True,
+                 cutoff_function='cosine'):
         """
         Initialization method.
 
@@ -110,7 +113,12 @@ class SymmetryFunction(AtomicDescriptor):
         super(SymmetryFunction, self).__init__(rc, elements, k_max, periodic)
 
         ndim, kbody_sizes = compute_dimension(
-            self._all_kbody_terms, len(eta), len(beta), len(gamma), len(zeta))
+            self._all_kbody_terms,
+            n_etas=len(eta),
+            n_omegas=len(omega),
+            n_betas=len(beta),
+            n_gammas=len(gamma),
+            n_zetas=len(zeta))
 
         self._kbody_sizes = kbody_sizes
         self._ndim = ndim
@@ -118,17 +126,23 @@ class SymmetryFunction(AtomicDescriptor):
                              for kbody_term in self._all_kbody_terms}
         self._offsets = np.insert(np.cumsum(kbody_sizes), 0, 0)
         self._eta = np.asarray(eta)
+        self._omega = np.asarray(omega)
         self._gamma = np.asarray(gamma)
         self._beta = np.asarray(beta)
         self._zeta = np.asarray(zeta)
-        self._indices_grid = ParameterGrid({
+        self._radial_indices_grid = ParameterGrid({
+            'eta': np.arange(len(self._eta), dtype=int),
+            'omega': np.arange(len(self._omega), dtype=int)}
+        )
+        self._angular_indices_grid = ParameterGrid({
             'beta': np.arange(len(self._beta), dtype=int),
             'gamma': np.arange(len(self._gamma), dtype=int),
             'zeta': np.arange(len(self._zeta), dtype=int)}
         )
         self._angular = angular
-        self._initial_values = {'eta': self._eta, 'gamma': self._gamma,
-                                'beta': self._beta, 'zeta': self._zeta}
+        self._initial_values = {'eta': self._eta, 'omega': self._omega,
+                                'gamma': self._gamma, 'beta': self._beta,
+                                'zeta': self._zeta}
         self._trainable = trainable
 
         self._cutoff_function = cutoff_function
@@ -197,7 +211,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         return tf.constant([0, index], dtype=tf.int32, name='delta')
 
-    def _get_g2_graph_for_eta(self, shape, index, r2c, fc_r, v2g_map):
+    def _get_g2_graph_for_eta(self, shape, index, r, rc2, fc_r, v2g_map):
         """
         Return the subgraph to compute G2 with the given `eta`.
 
@@ -207,10 +221,12 @@ class SymmetryFunction(AtomicDescriptor):
             The shape of the output tensor.
         index : int
             The index of the `eta` to use.
-        r2c : tf.Tensor
-            The `float64` tensor of `r**2 / rc**2`.
+        r : tf.Tensor
+            The float tensor of `r`.
+        rc2 : tf.Tensor or float
+            Square of the cutoff radius `rc`.
         fc_r : tf.Tensor
-            The `float64` tensor of `cutoff(r)`.
+            The float tensor of `cutoff(r)`.
         v2g_map : tf.Tensor
             The `int32` tensor as the mapping from 'v' to 'g'.
 
@@ -221,8 +237,11 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"eta{index}"):
-            eta = self._get_variable('eta', index=index, dtype=r2c.dtype)
+            eta, omega = self._extract_radial_variables(
+                indices=self._radial_indices_grid[index],
+                dtype=r.dtype)
             delta = self._get_v2g_map_delta(index)
+            r2c = tf.math.truediv(tf.square(r - omega), rc2, name='r2c')
             v_index = tf.exp(-tf.multiply(eta, r2c, 'eta_r2c')) * fc_r
             v2g_map_index = tf.add(v2g_map, delta, f'v2g_map_{index}')
             return tf.scatter_nd(v2g_map_index, v_index, shape, f"g{index}")
@@ -245,6 +264,18 @@ class SymmetryFunction(AtomicDescriptor):
         assert symm_func in ('g2', 'g4')
         return tf.identity(placeholders[symm_func].v2g_map, name='v2g_map')
 
+    def _extract_radial_variables(self, indices, dtype=tf.float64):
+        """
+        A helper function to get `eta` and `omega`.
+        """
+        eta_index = indices['eta']
+        omega_index = indices['omega']
+
+        eta = self._get_variable('eta', index=eta_index, dtype=dtype)
+        omega = self._get_variable('omega', index=omega_index, dtype=dtype)
+
+        return eta, omega
+
     def _get_g2_graph(self, placeholders: AttributeDict):
         """
         The implementation of Behler's G2 symmetry function.
@@ -257,9 +288,7 @@ class SymmetryFunction(AtomicDescriptor):
                               placeholders.g2.jlist,
                               placeholders.g2.shift,
                               name='rij')
-            r2 = tf.square(r, name='r2')
             rc2 = tf.constant(self._rc**2, dtype=r.dtype, name='rc2')
-            r2c = tf.math.truediv(r2, rc2, name='div')
             fc_r = self._cutoff_fn(r, name='fc_r')
 
             with tf.name_scope("Map"):
@@ -268,13 +297,13 @@ class SymmetryFunction(AtomicDescriptor):
 
             shape = self._get_g_shape(placeholders)
             values = []
-            for index in range(len(self._eta)):
+            for index in range(len(self._radial_indices_grid)):
                 values.append(
                     self._get_g2_graph_for_eta(
-                        shape, index, r2c, fc_r, v2g_map))
+                        shape, index, r, rc2, fc_r, v2g_map))
             return tf.add_n(values, name='g')
 
-    def _extract_variables(self, indices, dtype=tf.float64):
+    def _extract_angular_variables(self, indices, dtype=tf.float64):
         """
         A helper function to get `beta`, `gamma` and `zeta`.
         """
@@ -316,8 +345,8 @@ class SymmetryFunction(AtomicDescriptor):
 
         """
         with tf.name_scope(f"grid{index}"):
-            beta, gamma, zeta = self._extract_variables(
-                self._indices_grid[index],
+            beta, gamma, zeta = self._extract_angular_variables(
+                self._angular_indices_grid[index],
                 dtype=r2c.dtype
             )
             delta = self._get_v2g_map_delta(index)
@@ -378,7 +407,7 @@ class SymmetryFunction(AtomicDescriptor):
 
             shape = self._get_g_shape(placeholders)
             values = []
-            for index in range(len(self._indices_grid)):
+            for index in range(len(self._angular_indices_grid)):
                 values.append(
                     self._get_g4_graph_for_params(
                         shape, index, theta, r2c, fc_r, v2g_map))
@@ -487,15 +516,15 @@ class BatchSymmetryFunction(SymmetryFunction):
     def __init__(self, rc, max_occurs: Counter, elements: List[str],
                  nij_max: int, nijk_max: int, batch_size: int, eta=Defaults.eta,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 angular=True, trainable=False, periodic=True,
-                 cutoff_function='cosine'):
+                 omega=Defaults.omega, angular=True, trainable=False,
+                 periodic=True, cutoff_function='cosine'):
         """
         Initialization method.
         """
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, angular=angular, periodic=periodic, trainable=trainable,
-            cutoff_function=cutoff_function)
+            zeta=zeta, omega=omega, angular=angular, periodic=periodic,
+            trainable=trainable, cutoff_function=cutoff_function)
 
         self._max_occurs = max_occurs
         self._max_n_atoms = sum(max_occurs.values())

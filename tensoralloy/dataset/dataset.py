@@ -250,15 +250,16 @@ class Dataset:
             beta = safe_select(kwargs.get('beta', None), Defaults.beta)
             gamma = safe_select(kwargs.get('gamma', None), Defaults.gamma)
             zeta = safe_select(kwargs.get('zeta', None), Defaults.zeta)
+            omega = safe_select(kwargs.get('omega', None), Defaults.omega)
             cutoff_function = safe_select(kwargs.get('cutoff', None),
                                           Defaults.cutoff_function)
             trainable = safe_select(kwargs.get('trainable', None), False)
 
             transformer = BatchSymmetryFunctionTransformer(
                 rc=self._rc,  max_occurs=max_occurs, angular=(k_max == 3),
-                nij_max=nij_max, nijk_max=nijk_max, eta=eta, beta=beta,
-                gamma=gamma, zeta=zeta, trainable=trainable, periodic=periodic,
-                use_stress=stress, use_forces=forces,
+                nij_max=nij_max, nijk_max=nijk_max, eta=eta, omega=omega,
+                beta=beta, gamma=gamma, zeta=zeta, trainable=trainable,
+                periodic=periodic, use_stress=stress, use_forces=forces,
                 cutoff_function=cutoff_function)
         else:
             transformer = BatchEAMTransformer(

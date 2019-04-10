@@ -478,8 +478,12 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
     symbols = atoms.get_chemical_symbols()
     all_kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
     total_dim, kbody_sizes = compute_dimension(
-        all_kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
-        Defaults.n_zetas)
+        all_kbody_terms,
+        n_etas=Defaults.n_etas,
+        n_omegas=Defaults.n_omegas,
+        n_betas=Defaults.n_betas,
+        n_gammas=Defaults.n_gammas,
+        n_zetas=Defaults.n_zetas)
 
     with tf.Graph().as_default():
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
@@ -639,8 +643,12 @@ def _compute_qm7m_descriptors_legacy(rc):
         list(qm7m.max_occurs.keys()), k_max=3
     )
     total_dim, kbody_sizes = compute_dimension(
-        all_kbody_terms, Defaults.n_etas, Defaults.n_betas, Defaults.n_gammas,
-        Defaults.n_zetas)
+        all_kbody_terms,
+        n_etas=Defaults.n_etas,
+        n_omegas=Defaults.n_omegas,
+        n_betas=Defaults.n_betas,
+        n_gammas=Defaults.n_gammas,
+        n_zetas=Defaults.n_zetas)
     element_offsets = np.insert(
         np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
 
@@ -786,7 +794,7 @@ def test_reuse_descriptor_variables():
         sf = SymmetryFunctionTransformer(rc=6.0, elements=['Al', 'Cu'],
                                          trainable=True, angular=True)
         sf.get_descriptors(sf.get_placeholder_features())
-        assert_equal(len(tf.model_variables()), 9)
+        assert_equal(len(tf.model_variables()), 10)
 
 
 if __name__ == "__main__":

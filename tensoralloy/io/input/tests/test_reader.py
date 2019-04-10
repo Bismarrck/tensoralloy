@@ -69,6 +69,8 @@ def test_read_behler_angular_toml():
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
     assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
                       [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0])
+    assert_list_equal(reader['nn.atomic.behler.omega'],
+                      [0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
     assert_equal(nested_get(configs, 'nn.atomic.behler.angular'), True)
     assert_equal(nested_get(configs, 'nn.atomic.behler.cutoff'), 'polynomial')
     assert_not_in('eam', configs['nn'])

@@ -202,6 +202,7 @@ class Defaults:
     k_max = 2
 
     eta = np.array([0.05, 4.0, 20.0, 80.0])
+    omega = np.array([0.0])
     beta = np.array([0.005, ])
     gamma = np.array([1.0, -1.0])
     zeta = np.array([1.0, 4.0])
@@ -212,6 +213,7 @@ class Defaults:
     n_betas = 1
     n_gammas = 2
     n_zetas = 2
+    n_omegas = 1
 
     seed = RANDOM_STATE
 

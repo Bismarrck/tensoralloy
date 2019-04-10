@@ -36,16 +36,17 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
     descriptors of an `Atoms` object.
     """
 
-    def __init__(self, rc, elements, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=False,
-                 periodic=True, trainable=False, cutoff_function='cosine'):
+    def __init__(self, rc, elements, eta=Defaults.eta, omega=Defaults.omega,
+                 beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
+                 angular=False, periodic=True, trainable=False,
+                 cutoff_function='cosine'):
         """
         Initialization method.
         """
         SymmetryFunction.__init__(
-            self, rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, angular=angular, periodic=periodic, trainable=trainable,
-            cutoff_function=cutoff_function)
+            self, rc=rc, elements=elements, eta=eta, omega=omega, beta=beta,
+            gamma=gamma, zeta=zeta, angular=angular, periodic=periodic,
+            trainable=trainable, cutoff_function=cutoff_function)
         DescriptorTransformer.__init__(self)
 
     def as_dict(self):
@@ -55,8 +56,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         d = {'class': self.__class__.__name__, 'rc': self._rc,
              'elements': self._elements, 'angular': self._angular,
              'periodic': self._periodic, 'eta': self._eta.tolist(),
-             'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
-             'beta': self._beta.tolist(), 'trainable': self._trainable,
+             'omega': self._omega.tolist(), 'gamma': self._gamma.tolist(),
+             'zeta': self._zeta.tolist(), 'beta': self._beta.tolist(),
+             'trainable': self._trainable,
              'cutoff_function': self._cutoff_function}
         return d
 
@@ -348,10 +350,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     """
 
     def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
-                 batch_size=None, eta=Defaults.eta, beta=Defaults.beta,
-                 gamma=Defaults.gamma, zeta=Defaults.zeta, angular=False,
-                 periodic=True, trainable=False, cutoff_function='cosine',
-                 use_forces=True, use_stress=False):
+                 batch_size=None, eta=Defaults.eta, omega=Defaults.omega,
+                 beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
+                 angular=False, periodic=True, trainable=False,
+                 cutoff_function='cosine', use_forces=True, use_stress=False):
         """
         Initialization method.
 
@@ -370,7 +372,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         BatchSymmetryFunction.__init__(
             self, rc=rc, max_occurs=max_occurs, elements=elements,
             nij_max=nij_max, nijk_max=nijk_max, batch_size=batch_size, eta=eta,
-            beta=beta, gamma=gamma, zeta=zeta, angular=angular,
+            omega=omega, beta=beta, gamma=gamma, zeta=zeta, angular=angular,
             trainable=trainable, periodic=periodic,
             cutoff_function=cutoff_function)
 
@@ -390,8 +392,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         return SymmetryFunctionTransformer(
             rc=self._rc, elements=self._elements, eta=self._eta,
-            beta=self._beta, gamma=self._gamma, zeta=self._zeta,
-            angular=self._angular, trainable=self._trainable,
+            omega=self._omega, beta=self._beta, gamma=self._gamma,
+            zeta=self._zeta, angular=self._angular, trainable=self._trainable,
             periodic=self._periodic, cutoff_function=self._cutoff_function)
 
     def get_g2_indexed_slices(self, atoms: Atoms):
@@ -803,9 +805,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             values = []
             for kbody_term in kbody_terms:
                 if len(get_elements_from_kbody_term(kbody_term)) == 2:
-                    values.extend(self._eta.tolist())
+                    for p in self._radial_indices_grid:
+                        values.append(p['eta'])
                 else:
-                    for p in self._indices_grid:
+                    for p in self._angular_indices_grid:
                         values.append(p['beta'])
             values = np.asarray(values, dtype=get_float_dtype().as_numpy_dtype)
             weights[element] = 0.25 / np.exp(-values * 0.25**2)
