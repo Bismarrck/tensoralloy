@@ -209,6 +209,16 @@ def int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
+def _get_confidence(atoms: Atoms) -> np.ndarray:
+    """
+    Return the confidence array.
+    """
+    if 'data' in atoms.info:
+        return atoms.info['data'].get("weights", np.ones(3))
+    else:
+        return atoms.info.get("weights", np.ones(3))
+
+
 class BatchDescriptorTransformer(BaseTransformer):
     """
     This class represents atomic descriptor transformers for batch training and
@@ -336,37 +346,43 @@ class BatchDescriptorTransformer(BaseTransformer):
         Encode the basic properties of an `Atoms` object.
         """
         clf = self.get_index_transformer(atoms)
-        numpy_dtype = get_float_dtype().as_numpy_dtype
-        positions = clf.map_positions(atoms.positions).astype(numpy_dtype)
-        cells = atoms.get_cell(complete=True).array.astype(numpy_dtype)
-        volume = np.atleast_1d(atoms.get_volume()).astype(numpy_dtype)
-        y_true = np.atleast_1d(atoms.get_total_energy()).astype(numpy_dtype)
+        np_dtype = get_float_dtype().as_numpy_dtype
+        positions = clf.map_positions(atoms.positions).astype(np_dtype)
+        cells = atoms.get_cell(complete=True).array.astype(np_dtype)
+        volume = np.atleast_1d(atoms.get_volume()).astype(np_dtype)
+        y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         composition = self._get_composition(atoms)
-        mask = clf.mask.astype(numpy_dtype)
+        mask = clf.mask.astype(np_dtype)
+        confidences = np.reshape(
+            _get_confidence(atoms).astype(np_dtype), (3, 1))
+
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
             'cells': bytes_feature(cells.tostring()),
             'n_atoms': int64_feature(len(atoms)),
             'volume': bytes_feature(volume.tostring()),
             'y_true': bytes_feature(y_true.tostring()),
+            'y_conf': bytes_feature(confidences[0].tostring()),
             'mask': bytes_feature(mask.tostring()),
             'composition': bytes_feature(composition.tostring()),
         }
         if self.use_forces:
-            f_true = clf.map_forces(atoms.get_forces()).astype(numpy_dtype)
+            f_true = clf.map_forces(atoms.get_forces()).astype(np_dtype)
             feature_list['f_true'] = bytes_feature(f_true.tostring())
+            feature_list['f_conf'] = bytes_feature(confidences[1].tostring())
 
         if self.use_stress:
             # Convert the unit of the stress tensor to 'eV' for simplification:
             # 1 eV/Angstrom**3 = 160.21766208 GPa
             # 1 GPa = 10 kbar
             # reduced_stress (eV) = stress * volume
-            virial = atoms.get_stress(voigt=True).astype(numpy_dtype)
+            virial = atoms.get_stress(voigt=True).astype(np_dtype)
             total_pressure = np.atleast_1d(
-                virial[:3].mean()).astype(numpy_dtype)
+                virial[:3].mean()).astype(np_dtype)
             feature_list['stress'] = bytes_feature(virial.tostring())
             feature_list['total_pressure'] = bytes_feature(
                 np.atleast_1d(total_pressure).tostring())
+            feature_list['s_conf'] = bytes_feature(confidences[2].tostring())
         return feature_list
 
     @abc.abstractmethod

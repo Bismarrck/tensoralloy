@@ -546,6 +546,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         y_true.set_shape([1])
         decoded.y_true = tf.squeeze(y_true, name='y_true')
 
+        y_conf = tf.decode_raw(example['y_conf'], float_dtype)
+        y_conf.set_shape([1])
+        decoded.y_conf = tf.squeeze(y_conf, name='y_conf')
+
         cells = tf.decode_raw(example['cells'], float_dtype)
         cells.set_shape([9])
         decoded.cells = tf.reshape(cells, (3, 3), name='cells')
@@ -569,6 +573,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             decoded.f_true = tf.reshape(
                 f_true, (self._max_n_atoms + 1, 3), name='f_true')
 
+            f_conf = tf.decode_raw(example['f_conf'], float_dtype)
+            f_conf.set_shape([1])
+            decoded.f_conf = tf.squeeze(f_conf, name='f_conf')
+
         if self._use_stress:
             stress = tf.decode_raw(
                 example['stress'], float_dtype, name='stress')
@@ -579,6 +587,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 example['total_pressure'], float_dtype, name='stress')
             total_pressure.set_shape([1])
             decoded.total_pressure = total_pressure
+
+            s_conf = tf.decode_raw(example['s_conf'], float_dtype)
+            s_conf.set_shape([1])
+            decoded.s_conf = tf.squeeze(s_conf, name='s_conf')
 
         return decoded
 
@@ -667,6 +679,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'cells': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
+                'y_conf': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
@@ -674,12 +687,14 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+                feature_list['f_conf'] = tf.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
                 feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
+                feature_list['s_conf'] = tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:
                 feature_list.update({
@@ -710,7 +725,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64 or float32, [batch_size, ]
+            * 'y_conf': float64 or float32, [batch_size, ]
             * 'f_true': float64 or float32, [batch_size, max_n_atoms + 1, 3]
+            * 'f_true': float64 or float32, [batch_size, ]
             * 'composition': float64 or float32, [batch_size, n_elements]
             * 'mask': float64 or float32, [batch_size, max_n_atoms + 1]
             * 'ilist': int32, [batch_size, nij_max]
@@ -722,6 +739,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             * 'stress': float64 or float32, [batch_size, 6]
             * 'total_pressure': float64 or float32, [batch_size, ]
+            * 's_true': float64 or float32, [batch_size, ]
 
             If `self.angular` is `True`, these following keys will be provided:
 

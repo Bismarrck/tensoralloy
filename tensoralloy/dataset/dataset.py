@@ -336,7 +336,10 @@ class Dataset:
                 for istart, istop in brange(0, num_examples, batch_size):
                     trajectory = []
                     for atoms_id in indices[istart: istop]:
-                        trajectory.append(self._database.get_atoms(id=atoms_id))
+                        trajectory.append(
+                            self._database.get_atoms(
+                                id=atoms_id,
+                                add_additional_information=True))
                     examples = Parallel(n_jobs=n_cpus)(
                         delayed(pipeline)(atoms, precision)
                         for atoms in trajectory
@@ -349,7 +352,9 @@ class Dataset:
                                 logstr.format(istop, num_examples, speed))
             else:
                 for index, atoms_id in enumerate(indices):
-                    atoms = self._database.get_atoms(id=atoms_id)
+                    atoms = self._database.get_atoms(
+                        id=atoms_id,
+                        add_additional_information=True)
                     example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
                     if (index + 1) % 10 == 0 and verbose:
@@ -481,11 +486,14 @@ class Dataset:
                     shape = batch_of_tensors.shape.as_list()
                     if shape[0] is None:
                         batch_of_tensors.set_shape([batch_size] + shape[1:])
-            labels = AttributeDict(energy=batch.pop('y_true'))
+            labels = AttributeDict(energy=batch.pop('y_true'),
+                                   energy_confidence=batch.pop('y_conf'))
             if self._use_forces:
                 labels['forces'] = batch.pop('f_true')
+                labels['forces_confidence'] = batch.pop('f_conf')
             if self._use_stress:
                 labels['stress'] = batch.pop('stress')
+                labels['stress_confidence'] = batch.pop('s_conf')
                 labels['total_pressure'] = batch.pop('total_pressure')
             return batch, labels
 

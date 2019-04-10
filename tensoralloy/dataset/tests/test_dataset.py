@@ -20,6 +20,7 @@ from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import qm7m, test_dir
 from tensoralloy.dtypes import set_float_precision, get_float_dtype
+from tensoralloy.io.read import read_file
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -74,11 +75,12 @@ def test_qm7m():
             res = sess.run(next_batch)
             eps = 1e-8
 
-            assert_equal(len(res.keys()), 12)
+            assert_equal(len(res.keys()), 14)
             assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
             assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
             assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
             assert_less(np.abs(res.rv2g[0] - ref.g2[0].v2g_map).max(), eps)
+            assert_equal(res.y_conf[0], 1.0)
 
 
 def test_ethanol():
@@ -136,7 +138,7 @@ def test_nickel():
     with tf.Graph().as_default():
 
         savedir = join(test_dir(), 'Ni')
-        database = connect(join(savedir, 'Ni.db'))
+        database = read_file(join(savedir, "Ni.extxyz"), verbose=False)
         dataset = Dataset(database, 'Ni', angular=False, serial=True)
 
         assert_equal(len(dataset), 2)
@@ -164,6 +166,10 @@ def test_nickel():
 
             assert_less(np.abs(result.stress[0] - stress).max(), eps)
             assert_less(result.total_pressure[0] - total_pressure, eps)
+
+            assert_equal(result.y_conf[0], 0.0)
+            assert_equal(result.f_conf[0], 1.0)
+            assert_equal(result.s_conf[0], 0.5)
 
 
 if __name__ == "__main__":
