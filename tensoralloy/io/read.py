@@ -106,7 +106,9 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             # Write the `Atoms` object to the database.
             weights = atoms.info.get('weights', np.ones(3))
             assert len(weights) == 3
-            database.write(atoms, data={'weights': weights})
+            source = atoms.info.get('source', '')
+            database.write(atoms, data={'weights': weights},
+                           key_value_pairs={'source': source})
             count += 1
 
             # Update the dict of `max_occurs` and print the parsing progress.

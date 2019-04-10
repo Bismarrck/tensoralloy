@@ -46,6 +46,7 @@ def test_read_extxyz():
     assert_equal(weights[0], 1.0)
     assert_equal(weights[1], 1.0)
     assert_equal(weights[2], 1.0)
+    assert_equal(atoms.info['key_value_pairs']['source'], '')
 
 
 def test_read_snap_stress():
@@ -57,13 +58,15 @@ def test_read_snap_stress():
     xyzfile = join(test_dir(), 'snap_Ni_id11.extxyz')
     database = read_file(xyzfile, units={"stress": "kbar"}, verbose=False)
     atoms = database.get_atoms(id=1, add_additional_information=True)
+    assert isinstance(atoms, Atoms)
     stress = atoms.get_stress()
     weights = atoms.info['data']['weights']
-    assert isinstance(atoms, Atoms)
+    source = atoms.info['key_value_pairs']['source']
     assert_almost_equal(stress[0], -0.01388831152640921, delta=1e-8)
     assert_equal(weights[0], 1.0)
     assert_equal(weights[1], 1.0)
     assert_equal(weights[2], 0.0)
+    assert_equal(source, "Ni.AIMD.0")
 
 
 if __name__ == '__main__':
