@@ -19,9 +19,10 @@ from itertools import product
 from typing import List, Union, Tuple
 from collections import Counter
 from dataclasses import dataclass
+from os.path import join
 
 from tensoralloy.dtypes import set_float_precision, Precision, get_float_dtype
-from tensoralloy.test_utils import Pd3O2, qm7m
+from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.utils import get_kbody_terms, AttributeDict, Defaults
@@ -142,7 +143,7 @@ def get_neighbour_list(r, rc):
 def get_radial_fingerprints_v1(coords, r, rc, etas):
     """
     Calculate the fingerprints from the radial functions for a mono-atomic
-    molecule.
+    molecule. Only `eta` is used. `omega` (Rs) is fixed to zero.
 
     Args:
       coords: a `[N, 3]` array as the cartesian coordinates.
@@ -172,6 +173,46 @@ def get_radial_fingerprints_v1(coords, r, rc, etas):
                     continue
                 rs = coords[j]
                 ris = np.sum(np.square(ri - rs))
+                v += np.exp(-etak * ris / rc2) * fr[i, j]
+            x[i, k] = v
+    return x
+
+
+def get_radial_fingerprints_v2(coords, r, rc, etas, omegas):
+    """
+    Calculate the fingerprints from the radial functions for a mono-atomic
+    molecule. Both `eta` and `omega` (Rs) are used.
+
+    Args:
+      coords: a `[N, 3]` array as the cartesian coordinates.
+      r: a `[N, N]` array as the pairwise distance matrix.
+      rc: a float as the cutoff radius.
+      etas: a `List[float]` as the `eta` in the radial functions.
+      omegas: a `List[float]` as the `omega` in the radial functions.
+
+    Returns:
+      x: a `[N, M]` array as the radial fingerprints.
+
+    """
+
+    params = np.array(list(product(etas, omegas)))
+    ndim = len(params)
+    natoms = len(coords)
+    x = np.zeros((natoms, ndim))
+    nl = get_neighbour_list(r, rc)
+    rc2 = rc ** 2
+    fr = cutoff_fxn(r, rc)
+
+    for k, (etak, omegak) in enumerate(params):
+        for i in range(natoms):
+            v = 0.0
+            ri = coords[i]
+            for j in range(natoms):
+                if not nl[i, j]:
+                    continue
+                rj = coords[j]
+                rij = np.linalg.norm(rj - ri)
+                ris = (rij - omegak)**2
                 v += np.exp(-etak * ris / rc2) * fr[i, j]
             x[i, k] = v
     return x
@@ -521,6 +562,33 @@ def test_monoatomic_molecule():
     z = np.hstack((zr, za))
     g, _, _ = legacy_symmetry_function(atoms, rc=rc)
     assert_array_equal(z, g)
+
+
+def test_monoatomic_molecule_with_omega():
+    """
+    Test computing descriptors (eta and omega) of a single mono-atomic molecule.
+    """
+    atoms = read(join(test_dir(), 'B28.xyz'), index=0, format='xyz')
+    atoms.set_cell([20.0, 20.0, 20.0])
+    atoms.set_pbc([False, False, False])
+
+    omegas = np.array([0.0, 1.0, 2.0])
+
+    coords = atoms.get_positions()
+    rr = pairwise_distances(coords)
+    rc = 6.0
+    z = get_radial_fingerprints_v2(coords, rr, rc, Defaults.eta, omegas)
+
+    with tf.Graph().as_default():
+        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'], eta=Defaults.eta,
+                                         omega=omegas, angular=False)
+        g = sf.get_descriptors(sf.get_placeholder_features())
+
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            values = sess.run(g, feed_dict=sf.get_feed_dict(atoms))
+
+        assert_array_equal(values['B'][0], z)
 
 
 def test_single_structure():
