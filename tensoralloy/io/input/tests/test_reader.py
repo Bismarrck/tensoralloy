@@ -101,6 +101,7 @@ def test_read_eam_alloy_toml():
     assert_equal(reader['nn.loss.l2.weight'], 0.01)
     assert_equal(reader['nn.loss.forces.weight'], 3.0)
     assert_equal(reader['nn.loss.energy.weight'], 1.0)
+    assert_equal(reader['nn.loss.equivalently_trusted'], False)
 
 
 def test_read_eam_fs_toml():

@@ -185,6 +185,7 @@ class InputReader:
                     continue
                 _safe_update(f"{section}.{key}", required=(val == 'required'))
 
+        _safe_update("nn.loss")
         _safe_update("nn.loss.energy")
         _safe_update("nn.loss.forces")
         _safe_update("nn.loss.stress")

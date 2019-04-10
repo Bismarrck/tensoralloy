@@ -87,6 +87,7 @@ def test_check_hparams():
     
     defaults = AttributeDict(
         loss=AttributeDict(
+            equivalently_trusted=True,
             energy=AttributeDict(weight=1.0, per_atom_loss=False),
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0, use_rmse=True),
@@ -106,9 +107,11 @@ def test_check_hparams():
     assert_dict_equal(defaults, hparams)
 
     hparams = nn._check_loss_hparams(
-        AttributeDict(loss={'energy': {'weight': 3.0}}))
+        AttributeDict(loss={'energy': {'weight': 3.0},
+                            'equivalently_trusted': False}))
     assert_equal(hparams.loss.energy.weight, 3.0)
     assert_equal(hparams.loss.forces.weight, 1.0)
+    assert_equal(hparams.loss.equivalently_trusted, False)
 
 
 if __name__ == "__main__":

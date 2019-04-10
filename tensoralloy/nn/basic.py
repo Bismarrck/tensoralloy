@@ -391,6 +391,7 @@ class BasicNN:
                 return adict
 
         defaults = AttributeDict(
+            equivalently_trusted=True,
             energy=AttributeDict(weight=1.0, per_atom_loss=False),
             forces=AttributeDict(weight=1.0),
             stress=AttributeDict(weight=1.0, use_rmse=True),
@@ -418,6 +419,9 @@ class BasicNN:
                         for key, value in defaults[section].items():
                             if key not in hparams.loss[section]:
                                 hparams.loss[section][key] = value
+
+                if 'equivalently_trusted' not in hparams.loss:
+                    hparams.loss.equivalently_trusted = True
 
                 _check_section('energy')
                 _check_section('forces')
@@ -454,6 +458,11 @@ class BasicNN:
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
                   'total_pressure' should be minimized.
+                * 'energy_confidence' of shape `[batch_size, ]` is required
+                * 'forces_confidence' of shape `[batch_size, ]` is required if
+                  'forces' should be minimized.
+                * 'stress_confidence' of shape `[batch_size, ]` is required if
+                  'stress' should be minimized.
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
         hparams : AttributeDict
@@ -469,6 +478,7 @@ class BasicNN:
                 - 'hparams.loss.elastic.weight'
                 - 'hparams.loss.elastic.constraint_weight'
                 - 'hparams.loss.elastic.crystals'
+                - 'hparams.loss.equivalently_trusted'
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
 
@@ -481,6 +491,14 @@ class BasicNN:
             pressure.
 
         """
+
+        def _get_confidence(key):
+            if mode == tf_estimator.ModeKeys.TRAIN and \
+                    (not hparams.loss.equivalently_trusted):
+                return labels[f"{key}_confidence"]
+            else:
+                return None
+
         with tf.name_scope("Loss"):
 
             collections = [GraphKeys.TRAIN_METRICS]
@@ -491,6 +509,7 @@ class BasicNN:
                 labels=labels.energy,
                 predictions=predictions.energy,
                 n_atoms=n_atoms,
+                confidences=_get_confidence('energy'),
                 weight=hparams.loss.energy.weight,
                 per_atom_loss=hparams.loss.energy.per_atom_loss,
                 collections=collections)
@@ -500,6 +519,7 @@ class BasicNN:
                     labels=labels.forces,
                     predictions=predictions.forces,
                     n_atoms=n_atoms,
+                    confidences=_get_confidence('forces'),
                     weight=hparams.loss.forces.weight,
                     collections=collections)
 
@@ -507,6 +527,7 @@ class BasicNN:
                 losses.total_pressure = loss_ops.get_total_pressure_loss(
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
+                    confidences=_get_confidence('stress'),
                     weight=hparams.loss.total_pressure.weight,
                     collections=collections)
 
@@ -514,6 +535,7 @@ class BasicNN:
                 losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
+                    confidences=_get_confidence("stress"),
                     weight=hparams.loss.stress.weight,
                     use_rmse=hparams.loss.stress.use_rmse,
                     collections=collections)
@@ -888,6 +910,11 @@ class BasicNN:
                   'stress' should be minimized.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
                   'total_pressure' should be minimized.
+                * 'energy_confidence' of shape `[batch_size, ]` is required
+                * 'forces_confidence' of shape `[batch_size, ]` is required if
+                  'forces' should be minimized.
+                * 'stress_confidence' of shape `[batch_size, ]` is required if
+                  'stress' should be minimized.
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
