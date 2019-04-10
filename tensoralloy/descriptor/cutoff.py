@@ -84,3 +84,18 @@ def polynomial_cutoff(r: tf.Tensor, rc: float, gamma=5.0, name=None):
         div = math_ops.minimum(one, div)
         z = gamma * div**(gamma + one) - (gamma + one) * div**gamma
         return tf.add(z, one, name=name)
+
+
+def meam_cutoff(x: tf.Tensor, name=None):
+    """
+    The MEAM cutoff function.
+                1                       x >= 1
+        f(x) =  (1 - (1 - x)**4)**2     0 < x < 1
+                0                       x <= 0
+
+    """
+    with ops.name_scope(name, "MeamCutoff", [x]) as name:
+        one = ops.convert_to_tensor(1.0, dtype=x.dtype, name='one')
+        x = tf.nn.relu(x)
+        x = tf.minimum(x, one)
+        return tf.square(one - (one - x)**4, name=name)

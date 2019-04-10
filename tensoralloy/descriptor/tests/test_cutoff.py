@@ -12,6 +12,7 @@ from nose.tools import assert_less
 
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.descriptor.cutoff import polynomial_cutoff
+from tensoralloy.descriptor.cutoff import meam_cutoff
 from tensoralloy.dtypes import get_float_dtype, set_float_precision, Precision
 
 __author__ = 'Xin Chen'
@@ -82,6 +83,33 @@ def test_polynomial_cutoff():
                               name='cutoff'))
 
         assert_less(np.abs(x - y).max(), 1e-8)
+
+
+def meam_cutoff_simple(x: float):
+    """
+    A simple implementation of the MEAM cutoff function.
+    """
+    if x >= 1.0:
+        return 1.0
+    elif x <= 0.0:
+        return 0.0
+    else:
+        return (1 - (1 - x)**4)**2
+
+
+def test_meam_cutoff():
+    """
+    Test the MEAM cutoff function.
+    """
+    x = np.linspace(-1.0, 2.0, num=11, endpoint=True)
+    y = np.asarray([meam_cutoff_simple(xi) for xi in x])
+    print(y)
+
+    with tf.Session() as sess:
+        z = sess.run(meam_cutoff(
+            tf.convert_to_tensor(x, dtype=tf.float64, name='x')))
+        print(z)
+        assert_less(np.abs(y - z).max(), 1e-8)
 
 
 if __name__ == "__main__":
