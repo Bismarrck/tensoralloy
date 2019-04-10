@@ -122,7 +122,7 @@ def test_inference_from_transformer():
         assert_list_equal(prediction.energy.shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        assert_equal(len(collection), 15)
+        assert_equal(len(collection), 16)
 
         assert_equal(len(tf.trainable_variables()), 11)
 
@@ -155,7 +155,8 @@ def test_export_to_pb():
 
     clf = SymmetryFunctionTransformer(
         rc=6.5, elements=elements, angular=False, trainable=True,
-        eta=[0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0])
+        eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
+        omega=[0.0, 3.2])
 
     nn = AtomicResNN(elements=elements,
                      hidden_sizes=[64, 32],

@@ -10,8 +10,7 @@ test_size = 1000
 [nn]
 activation = "leaky_relu"
 minimize = ['energy']
-export = ['energy', 'forces', 'hessian']
-positive_energy_mode = true
+positive_energy_mode = false
 
 [nn.loss.energy]
 weight = 1.0
@@ -24,7 +23,8 @@ weight = 0.01
 angular = false
 trainable = true
 cutoff = "cosine"
-eta = [0.05, 0.4, 2.0, 4.0, 8.0, 20.0, 40.0, 80.0]
+eta = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0]
+omega = [0.0, 3.2]
 
 [nn.atomic]
 input_normalizer = false
@@ -38,18 +38,20 @@ O = [64, 32]
 S = [64, 32]
 
 [opt]
-learning_rate = 0.001
+learning_rate = 0.01
 decay_function = "exponential"
 decay_rate = 0.99
+decay_steps = 2000
+staircase = false
 
 [train]
 restart = true
 batch_size = 50
+shuffle = true
 model_dir = "train"
-train_steps = 100000
+train_steps = 10000
 max_checkpoints_to_keep = 10
-eval_steps = 5000
-eval_dir = "eval"
+eval_steps = 10000
 summary_steps = 100
 log_steps = 100
-profile_steps = 5000
+profile_steps = 10000
