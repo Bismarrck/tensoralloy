@@ -287,7 +287,7 @@ class SymmetryFunction(AtomicDescriptor):
                               placeholders.g2.ilist,
                               placeholders.g2.jlist,
                               placeholders.g2.shift,
-                              name='rij')
+                              name='rij')[0]
             rc2 = tf.constant(self._rc**2, dtype=r.dtype, name='rc2')
             fc_r = self._cutoff_fn(r, name='fc_r')
 
@@ -368,19 +368,19 @@ class SymmetryFunction(AtomicDescriptor):
                                 placeholders.g4.ij.ilist,
                                 placeholders.g4.ij.jlist,
                                 placeholders.g4.shift.ij,
-                                name='rij')
+                                name='rij')[0]
             rik = self._get_rij(placeholders.positions,
                                 placeholders.cells,
                                 placeholders.g4.ik.ilist,
                                 placeholders.g4.ik.klist,
                                 placeholders.g4.shift.ik,
-                                name='rik')
+                                name='rik')[0]
             rjk = self._get_rij(placeholders.positions,
                                 placeholders.cells,
                                 placeholders.g4.jk.jlist,
                                 placeholders.g4.jk.klist,
                                 placeholders.g4.shift.jk,
-                                name='rjk')
+                                name='rjk')[0]
 
             rij2 = tf.square(rij, name='rij2')
             rik2 = tf.square(rik, name='rik2')

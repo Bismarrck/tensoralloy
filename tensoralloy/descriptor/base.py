@@ -120,7 +120,16 @@ class AtomicDescriptor:
 
     def _get_rij(self, R, cells, ilist, jlist, shift, name):
         """
-        Return the subgraph to compute `rij`.
+        Return the interatomic distances array, `rij`, and the corresponding
+        differences.
+
+        Returns
+        -------
+        rij : tf.Tensor
+            The interatomic distances.
+        dij : tf.Tensor
+            The differences of `Rj - Ri`.
+
         """
         with tf.name_scope(name):
             dtype = get_float_dtype()
@@ -133,8 +142,9 @@ class AtomicDescriptor:
             # By adding `eps` to the reduced sum NaN can be eliminated.
             with tf.name_scope("safe_norm"):
                 eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-                return tf.sqrt(tf.reduce_sum(
+                rij = tf.sqrt(tf.reduce_sum(
                     tf.square(Dij, name='Dij2'), axis=-1) + eps)
+                return rij, Dij
 
     def _get_g_shape(self, placeholders):
         """

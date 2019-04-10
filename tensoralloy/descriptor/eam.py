@@ -125,7 +125,7 @@ class EAM(AtomicDescriptor):
                               placeholders.ilist,
                               placeholders.jlist,
                               placeholders.shift,
-                              name='rij')
+                              name='rij')[0]
             shape = self._get_g_shape(placeholders)
             v2g_map, v2g_mask = self._get_v2g_map(placeholders)
             g = tf.scatter_nd(v2g_map, r, shape, name='g')
