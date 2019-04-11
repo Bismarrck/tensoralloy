@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from abc import ABC
 
 from tensoralloy.utils import GraphKeys, safe_select
@@ -39,7 +39,7 @@ def get_variable(name,
                            validate_shape=validate_shape)
 
 
-class EmpiricalPotential:
+class EamEmpiricalPotential:
     """
     An `EmpiricalPotential` represents a tensorflow based implemetation of an
     empirical EAM potential.
@@ -58,7 +58,7 @@ class EmpiricalPotential:
             str as the fixed (non-trainable) parameters for `kbody_term`.
 
         """
-        super(EmpiricalPotential, self).__init__()
+        super(EamEmpiricalPotential, self).__init__()
 
         fixed = safe_select(fixed, {})
         params = safe_select(params, {})
@@ -75,6 +75,16 @@ class EmpiricalPotential:
         for section in fixed:
             if self.__contains__(section):
                 self._fixed[section] = list(fixed[section])
+
+        self._implemented_potentials = ('rho', 'phi', 'embed')
+
+    @property
+    def implemented_potentials(self) -> Tuple:
+        """
+        Return a tuple of str as the implemented potentials,
+            e.g. ['rho', 'phi', 'embed'].
+        """
+        return self._implemented_potentials
 
     @property
     def defaults(self):
@@ -248,8 +258,64 @@ class EmpiricalPotential:
         raise NotImplementedError(
             "This method must be overridden by its subclass!")
 
+    def dipole(self,
+               r: tf.Tensor,
+               kbody_term: str,
+               variable_scope: str,
+               verbose=False):
+        """
+        Return the Op to compute pairwise dipole potential `u(r)`.
 
-class EamAlloyPotential(EmpiricalPotential, ABC):
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        raise NotImplementedError(
+            "This method must be overridden by its subclass!")
+
+    def quadrupole(self,
+                   r: tf.Tensor,
+                   kbody_term: str,
+                   variable_scope: str,
+                   verbose=False):
+        """
+        Return the Op to compute pairwise quadrupole potential `w(r)`.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        raise NotImplementedError(
+            "This method must be overridden by its subclass!")
+
+
+class EamAlloyPotential(EamEmpiricalPotential, ABC):
     """
     This class represents an `EAM/Alloy` style empirical potential.
     """
@@ -280,7 +346,7 @@ class EamAlloyPotential(EmpiricalPotential, ABC):
             "This method must be overridden by its subclass!")
 
 
-class EamFSPotential(EmpiricalPotential, ABC):
+class EamFSPotential(EamEmpiricalPotential, ABC):
     """
     This class represents an `EAM/Finnis-Sinclair` style empirical potential.
     """

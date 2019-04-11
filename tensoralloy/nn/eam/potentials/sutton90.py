@@ -88,3 +88,25 @@ class AgSutton90(EamAlloyPotential):
             if verbose:
                 log_tensor(embed)
             return embed
+
+    def dipole(self,
+               r: tf.Tensor,
+               kbody_term: str,
+               variable_scope: str,
+               verbose=False):
+        """
+        Ag/Sutton90 does not support calculating dipole.
+        """
+        raise Exception(
+            f"{self.__class__.__name__} does not have dipole term.")
+
+    def quadrupole(self,
+                   r: tf.Tensor,
+                   kbody_term: str,
+                   variable_scope: str,
+                   verbose=False):
+        """
+        Ag/Sutton90 does not support calculating dipole.
+        """
+        raise Exception(
+            f"{self.__class__.__name__} does not have quadrupole term.")

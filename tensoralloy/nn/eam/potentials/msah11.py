@@ -409,3 +409,25 @@ class AlFeMsah11(EamFSPotential):
                 if verbose:
                     log_tensor(embed)
                 return embed
+
+    def dipole(self,
+               r: tf.Tensor,
+               kbody_term: str,
+               variable_scope: str,
+               verbose=False):
+        """
+        AlFeMsah11 does not support calculating dipole.
+        """
+        raise Exception(
+            f"{self.__class__.__name__} does not have dipole term.")
+
+    def quadrupole(self,
+                   r: tf.Tensor,
+                   kbody_term: str,
+                   variable_scope: str,
+                   verbose=False):
+        """
+        AlFeMsah11 does not support calculating dipole.
+        """
+        raise Exception(
+            f"{self.__class__.__name__} does not have quadrupole term.")
