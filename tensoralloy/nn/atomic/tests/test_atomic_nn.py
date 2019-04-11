@@ -18,6 +18,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
+from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys, AttributeDict
 from tensoralloy.dtypes import set_float_precision
 
@@ -47,6 +48,41 @@ def test_as_dict():
     assert_list_equal(new_nn.elements, old_nn.elements)
     assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
     assert_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
+
+
+def test_as_dict_advanced():
+    """
+    Test the method `AtomicResNN.as_dict`.
+    """
+    db = connect(join(datasets_dir(), 'qm7.db'))
+    max_occurs = db.metadata['max_occurs']
+
+    eta = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0]
+    omega = [0.0, 3.2]
+    rc = 6.5
+    nij_max = 506
+    batch_size = 10
+
+    bsf = BatchSymmetryFunctionTransformer(rc=rc, max_occurs=max_occurs,
+                                           nij_max=nij_max, nijk_max=0,
+                                           batch_size=batch_size, eta=eta,
+                                           omega=omega, use_forces=False,
+                                           use_stress=False)
+
+    nn = AtomicResNN(max_occurs.keys())
+    nn.attach_transformer(bsf)
+
+    configs = nn.as_dict()
+    assert_equal(configs.pop('class'), 'AtomicResNN')
+
+    gen = nn.__class__(**configs)
+    sf = bsf.as_descriptor_transformer()
+    assert isinstance(sf, SymmetryFunctionTransformer)
+
+    assert_list_equal(nn.elements, gen.elements)
+    assert_equal(bsf.rc, sf.rc)
+    assert_list_equal(bsf._omega.tolist(), sf._omega.tolist())
+    assert_list_equal(bsf._eta.tolist(), sf._eta.tolist())
 
 
 def test_inference():

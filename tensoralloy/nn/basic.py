@@ -154,7 +154,7 @@ class BasicNN:
         True.
 
         """
-        self._elements = elements
+        self._elements = sorted(list(elements))
         self._hidden_sizes = self._get_hidden_sizes(
             safe_select(hidden_sizes, Defaults.hidden_sizes))
         self._activation = safe_select(activation, Defaults.activation)
@@ -789,7 +789,7 @@ class BasicNN:
 
     def build(self,
               features: AttributeDict,
-              mode: tf_estimator.ModeKeys.TRAIN,
+              mode=tf_estimator.ModeKeys.TRAIN,
               verbose=True):
         """
         Build the atomic neural network.
