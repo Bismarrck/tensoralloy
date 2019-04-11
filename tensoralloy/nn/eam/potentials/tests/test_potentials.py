@@ -5,16 +5,17 @@ This module defines unit tests for the module `tensoralloy.nn.layers.layers`.
 from __future__ import print_function, absolute_import
 
 import nose
+
 from nose.tools import assert_dict_equal
 
-from ..potentials import EmpiricalPotential
+from tensoralloy.nn.eam.potentials.potentials import EamEmpiricalPotential
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
 # noinspection PyAbstractClass
-class _ParamPotential(EmpiricalPotential):
+class _ParamPotential(EamEmpiricalPotential):
     """
     A layer with default parameters 'a', 'b', 'c' and 'd'.
     """
@@ -28,7 +29,7 @@ def test_layer_init():
     """
     Test the initialization of `PotentialFunctionLayer`.
     """
-    layer = EmpiricalPotential()
+    layer = EamEmpiricalPotential()
 
     assert_dict_equal(layer.params, {})
     assert_dict_equal(layer.fixed, {})
