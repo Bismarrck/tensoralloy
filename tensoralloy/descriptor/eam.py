@@ -79,17 +79,20 @@ class EAM(AtomicDescriptor):
         """
         return 1
 
-    def _split_descriptors(self, g, mask, placeholders):
+    def _split_descriptors(self, placeholders, g, mask, *args):
         """
         Split the descriptors into `N_element` subsets.
         """
         with tf.name_scope("Split"):
-            row_split_sizes = self._get_row_split_sizes(placeholders)
-            row_split_axis = self._get_row_split_axis()
-            rows = tf.split(
-                g, row_split_sizes, axis=row_split_axis, name='rows')[1:]
-            masks = tf.split(
-                mask, row_split_sizes, axis=row_split_axis, name='masks')[1:]
+            split_sizes = self._get_row_split_sizes(placeholders)
+            axis = self._get_row_split_axis()
+
+            # `axis` should increase by one for `g` because `g` is created by
+            # `tf.concat((gr, gx, gy, gz), axis=0, name='g')`
+            rows = tf.split(g, split_sizes, axis=axis + 1, name='rows')[1:]
+
+            # Use the original axis
+            masks = tf.split(mask, split_sizes, axis=axis, name='masks')[1:]
             return dict(zip(self._elements, zip(rows, masks)))
 
     def _check_keys(self, placeholders: AttributeDict):
@@ -114,25 +117,40 @@ class EAM(AtomicDescriptor):
         Returns
         -------
         ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict.
+            A dict of {element: (descriptor, mask)}.
+
+            * `descriptor`: [4, max_n_terms, n_atoms_plus_virt, nnl_max]
+                Represents th
         
         """
         self._check_keys(placeholders)
 
         with tf.name_scope("EAM"):
-            r = self._get_rij(placeholders.positions,
-                              placeholders.cells,
-                              placeholders.ilist,
-                              placeholders.jlist,
-                              placeholders.shift,
-                              name='rij')[0]
+            rr, dij = self._get_rij(placeholders.positions,
+                                    placeholders.cells,
+                                    placeholders.ilist,
+                                    placeholders.jlist,
+                                    placeholders.shift,
+                                    name='rij')
             shape = self._get_g_shape(placeholders)
             v2g_map, v2g_mask = self._get_v2g_map(placeholders)
-            g = tf.scatter_nd(v2g_map, r, shape, name='g')
+
+            dx = tf.identity(dij[..., 0], name='dijx')
+            dy = tf.identity(dij[..., 1], name='dijy')
+            dz = tf.identity(dij[..., 2], name='dijz')
+
+            gr = tf.expand_dims(tf.scatter_nd(v2g_map, rr, shape), 0, name='gr')
+            gx = tf.expand_dims(tf.scatter_nd(v2g_map, dx, shape), 0, name='gx')
+            gy = tf.expand_dims(tf.scatter_nd(v2g_map, dy, shape), 0, name='gy')
+            gz = tf.expand_dims(tf.scatter_nd(v2g_map, dz, shape), 0, name='gz')
+
+            g = tf.concat((gr, gx, gy, gz), axis=0, name='g')
+
             v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
             mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
-            mask = tf.cast(mask, dtype=r.dtype, name='mask')
-            return self._split_descriptors(g, mask, placeholders)
+            mask = tf.cast(mask, dtype=rr.dtype, name='mask')
+
+            return self._split_descriptors(placeholders, g, mask)
 
 
 class BatchEAM(EAM):

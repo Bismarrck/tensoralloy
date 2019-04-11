@@ -444,9 +444,15 @@ class EamNN(BasicNN):
             where where `value` represents the descriptors and `mask` is
             the value mask. `value` and `mask` have the same shape.
                 * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
-                  `[batch_size, max_n_terms, max_n_element, nnl]`.
+                  `[4, batch_size, max_n_terms, max_n_element, nnl]`.
                 * If `mode` is PREDICT, both should be 3D tensors of shape
-                  `[max_n_terms, max_n_element, nnl]`.
+                  `[4, max_n_terms, max_n_element, nnl]`.
+            The size of the first axis is fixed to 4. Here 4 denotes:
+                * r  = 0
+                * dx = 1
+                * dy = 2
+                * dz = 3
+            and `r = sqrt(dx * dx + dy * dy + dz * dz)`
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         merge_symmetric : bool
@@ -473,25 +479,31 @@ class EamNN(BasicNN):
             name_scope = "Partition"
 
         with tf.name_scope(name_scope):
+
             for element in self._elements:
+
                 with tf.name_scope(f"{element}"):
                     kbody_terms = self._kbody_terms[element]
-                    values, masks = descriptors[element]
-                    values = tf.convert_to_tensor(values, name='values')
+                    raw_values, masks = descriptors[element]
+                    raw_values = tf.convert_to_tensor(raw_values, name='values')
                     masks = tf.convert_to_tensor(masks, name='masks')
+
                     if mode == tf_estimator.ModeKeys.PREDICT:
-                        assert values.shape.ndims == 3
-                        values = tf.expand_dims(values, axis=0)
+                        assert raw_values.shape.ndims == 4
+                        values = tf.expand_dims(raw_values[0], axis=0)
                         masks = tf.expand_dims(masks, axis=0)
                         max_occurs[element] = tf.shape(values)[2]
                     else:
-                        assert values.shape.ndims == 4
+                        assert raw_values.shape.ndims == 5
+                        values = raw_values[0]
                         max_occurs[element] = values.shape[2].value
+
                     num = len(kbody_terms)
                     glists = tf.split(
                         values, num_or_size_splits=num, axis=1, name='glist')
                     mlists = tf.split(
                         masks, num_or_size_splits=num, axis=1, name='mlist')
+
                     for i, (value, mask) in enumerate(zip(glists, mlists)):
                         kbody_term = kbody_terms[i]
                         if merge_symmetric:

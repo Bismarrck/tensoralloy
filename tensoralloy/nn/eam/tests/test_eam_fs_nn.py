@@ -28,9 +28,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class Data:
+class AlFeFakeData:
     """
-    A private data container for unit tests of this module.
+    A fake dataset for unit tests in this module.
     """
 
     def __init__(self):
@@ -45,13 +45,21 @@ class Data:
         self.nnl = 10
         self.elements = sorted(['Fe', 'Al'])
 
-        shape_al = (self.batch_size, self.max_n_terms, self.max_n_al, self.nnl)
-        shape_fe = (self.batch_size, self.max_n_terms, self.max_n_fe, self.nnl)
+        shape_al = (4,
+                    self.batch_size,
+                    self.max_n_terms,
+                    self.max_n_al,
+                    self.nnl)
+        shape_fe = (4,
+                    self.batch_size,
+                    self.max_n_terms,
+                    self.max_n_fe,
+                    self.nnl)
 
         self.g_al = np.random.randn(*shape_al)
-        self.m_al = np.random.randint(0, 2, shape_al).astype(np.float64)
+        self.m_al = np.random.randint(0, 2, shape_al[1:]).astype(np.float64)
         self.g_fe = np.random.randn(*shape_fe)
-        self.m_fe = np.random.randint(0, 2, shape_fe).astype(np.float64)
+        self.m_fe = np.random.randint(0, 2, shape_fe[1:]).astype(np.float64)
 
         with tf.name_scope("Inputs"):
             self.descriptors = AttributeDict(
@@ -75,7 +83,7 @@ def test_inference():
     """
     with tf.Graph().as_default():
 
-        data = Data()
+        data = AlFeFakeData()
         mode = tf_estimator.ModeKeys.EVAL
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms

@@ -82,8 +82,8 @@ def test_eam_transformer():
         g_h, mask_h = results['H']
         g_c, mask_c = results['C']
 
-        assert_array_equal(ref['g'][0, :, 3: 9, :], g_h)
-        assert_array_equal(ref['g'][0, :, 1: 3, :], g_c)
+        assert_array_equal(ref['g'][0, :, 3: 9, :], g_h[0])
+        assert_array_equal(ref['g'][0, :, 1: 3, :], g_c[0])
         assert_array_equal(ref['mask'][0, :, 3: 9, :], mask_h)
         assert_array_equal(ref['mask'][0, :, 1: 3, :], mask_c)
 
@@ -121,8 +121,8 @@ def test_batch_eam_transformer():
         g_h, mask_h = results['H']
         g_c, mask_c = results['C']
 
-        assert_array_equal(ref['g'][:, :, 3: 7, :], g_h)
-        assert_array_equal(ref['g'][:, :, 1: 3, :], g_c)
+        assert_array_equal(ref['g'][:, :, 3: 7, :], g_h[0])
+        assert_array_equal(ref['g'][:, :, 1: 3, :], g_c[0])
         assert_array_equal(ref['mask'][:, :, 3: 7, :], mask_h)
         assert_array_equal(ref['mask'][:, :, 1: 3, :], mask_c)
 

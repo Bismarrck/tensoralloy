@@ -40,9 +40,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class AlCuData:
+class AlCuFakeData:
     """
-    A private data container for unit tests of this module.
+    A fake dataset for unit tests in this module.
     """
 
     def __init__(self):
@@ -58,13 +58,23 @@ class AlCuData:
         self.nnl = 10
         self.elements = sorted(['Cu', 'Al'])
 
-        shape_al = (self.batch_size, self.max_n_terms, self.max_n_al, self.nnl)
-        shape_cu = (self.batch_size, self.max_n_terms, self.max_n_cu, self.nnl)
+        shape_al = (4,
+                    self.batch_size,
+                    self.max_n_terms,
+                    self.max_n_al,
+                    self.nnl)
+        shape_cu = (4,
+                    self.batch_size,
+                    self.max_n_terms,
+                    self.max_n_cu,
+                    self.nnl)
 
         self.g_al = np.random.randn(*shape_al)
-        self.m_al = np.random.randint(0, 2, shape_al).astype(np.float64)
         self.g_cu = np.random.randn(*shape_cu)
-        self.m_cu = np.random.randint(0, 2, shape_cu).astype(np.float64)
+
+        # The shape of `mask` does not expand.
+        self.m_al = np.random.randint(0, 2, shape_al[1:]).astype(np.float64)
+        self.m_cu = np.random.randint(0, 2, shape_cu[1:]).astype(np.float64)
 
         self.y_alal = np.random.randn(self.batch_size, self.max_n_al)
         self.y_alcu = np.random.randn(self.batch_size, self.max_n_al)
@@ -105,7 +115,7 @@ def test_dynamic_stitch_2el():
     """
     with tf.Graph().as_default():
 
-        data = AlCuData()
+        data = AlCuFakeData()
         max_occurs = data.max_occurs
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
@@ -184,7 +194,7 @@ def test_dynamic_partition():
     """
     with tf.Graph().as_default():
 
-        data = AlCuData()
+        data = AlCuFakeData()
         mode = tf_estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
@@ -199,10 +209,10 @@ def test_dynamic_partition():
             assert_equal(max_occurs['Al'], data.max_n_al)
             assert_equal(max_occurs['Cu'], data.max_n_cu)
             assert_equal(len(results), 4)
-            assert_array_equal(results['AlAl'][0], data.g_al[:, [0]])
-            assert_array_equal(results['AlCu'][0], data.g_al[:, [1]])
-            assert_array_equal(results['CuCu'][0], data.g_cu[:, [0]])
-            assert_array_equal(results['CuAl'][0], data.g_cu[:, [1]])
+            assert_array_equal(results['AlAl'][0], data.g_al[0][:, [0]])
+            assert_array_equal(results['AlCu'][0], data.g_al[0][:, [1]])
+            assert_array_equal(results['CuCu'][0], data.g_cu[0][:, [0]])
+            assert_array_equal(results['CuAl'][0], data.g_cu[0][:, [1]])
 
             assert_array_equal(results['AlAl'][1], data.m_al[:, [0]])
             assert_array_equal(results['AlCu'][1], data.m_al[:, [1]])
@@ -214,15 +224,15 @@ def test_dynamic_partition():
             results = sess.run(partitions_op)
 
             assert_equal(len(results), 3)
-            assert_array_equal(results['AlAl'][0], data.g_al[:, [0]])
-            assert_array_equal(results['CuCu'][0], data.g_cu[:, [0]])
+            assert_array_equal(results['AlAl'][0], data.g_al[0][:, [0]])
+            assert_array_equal(results['CuCu'][0], data.g_cu[0][:, [0]])
 
             assert_array_equal(results['AlAl'][1], data.m_al[:, [0]])
             assert_array_equal(results['CuCu'][1], data.m_cu[:, [0]])
 
             assert_array_equal(results['AlCu'][0],
-                               np.concatenate((data.g_al[:, [1]],
-                                               data.g_cu[:, [1]]), 2))
+                               np.concatenate((data.g_al[0][:, [1]],
+                                               data.g_cu[0][:, [1]]), 2))
             assert_array_equal(results['AlCu'][1],
                                np.concatenate((data.m_al[:, [1]],
                                                data.m_cu[:, [1]]), 2))
@@ -262,7 +272,7 @@ def test_custom_potentials():
     """
     with tf.Graph().as_default():
 
-        data = AlCuData()
+        data = AlCuFakeData()
         custom_potentials = {
             'AlCu': {'phi': 'zjw04'},
             'Al': {'rho': 'zjw04'},
@@ -282,7 +292,7 @@ def test_as_dict():
     """
     Test the inherited `EamAlloyNN.as_dict().
     """
-    data = AlCuData()
+    data = AlCuFakeData()
     custom_potentials = {
         'AlCu': {'phi': 'zjw04'},
         'Al': {'rho': 'zjw04'},
@@ -310,7 +320,7 @@ def test_inference_nn():
     """
     with tf.Graph().as_default():
 
-        data = AlCuData()
+        data = AlCuFakeData()
         mode = tf_estimator.ModeKeys.TRAIN
 
         nn = EamAlloyNN(elements=data.elements, minimize_properties=['energy'],
@@ -331,7 +341,7 @@ def test_inference_mixed():
     """
     with tf.Graph().as_default():
 
-        data = AlCuData()
+        data = AlCuFakeData()
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
         mode = tf_estimator.ModeKeys.TRAIN
