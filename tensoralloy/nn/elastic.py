@@ -167,8 +167,7 @@ def get_elastic_constant_loss(nn,
 
                 with tf.name_scope("Constraints"):
                     constraints.extend([
-                        tf.linalg.norm(output.forces, name='forces'),
-                        tf.linalg.norm(stress, name='stress')])
+                        tf.linalg.norm(output.forces, name='forces')])
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
@@ -205,7 +204,6 @@ def get_elastic_constant_loss(nn,
 
                 mse = tf.reduce_mean(tf.squared_difference(predictions, labels),
                                      name='mse')
-                mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
                 dtype = get_float_dtype()
                 eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
                 mse = tf.add(mse, eps, name='mse/safe')
