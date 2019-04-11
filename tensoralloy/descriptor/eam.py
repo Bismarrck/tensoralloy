@@ -48,6 +48,7 @@ class EAM(AtomicDescriptor):
 
         self._max_n_terms = max(map(len, self._kbody_terms.values()))
         self._kbody_index = kbody_index
+        self._graph_scope_name = "EAM"
 
     def _get_g_shape(self, placeholders):
         """
@@ -79,7 +80,7 @@ class EAM(AtomicDescriptor):
         """
         return 1
 
-    def _split_descriptors(self, placeholders, g, mask, *args):
+    def _split_descriptors(self, placeholders, g, mask):
         """
         Split the descriptors into `N_element` subsets.
         """
@@ -125,7 +126,7 @@ class EAM(AtomicDescriptor):
         """
         self._check_keys(placeholders)
 
-        with tf.name_scope("EAM"):
+        with tf.name_scope(f"{self._graph_scope_name}"):
             rr, dij = self._get_rij(placeholders.positions,
                                     placeholders.cells,
                                     placeholders.ilist,

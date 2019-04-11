@@ -28,7 +28,7 @@ __all__ = ["BatchEAMTransformer", "EAMTransformer"]
 
 class EAMTransformer(EAM, DescriptorTransformer):
     """
-    The feature transformer for the EAM model.
+    The feature transformer for the EAM potential.
     """
 
     def __init__(self, rc: float, elements: List[str]):
@@ -223,7 +223,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
 class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
     """
-    A batch implementation of feature tranformer for the EAM model.
+    A batch implementation of feature transformer for the EAM potential.
     """
 
     def __init__(self, rc: float, max_occurs: Counter, nij_max: int,
