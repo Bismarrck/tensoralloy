@@ -72,22 +72,22 @@ def test_get_train_op():
 
         assert_equal(len(tf.trainable_variables()), 5)
         assert_equal(len(tf.moving_average_variables()), 5)
-        assert_equal(len(tf.model_variables()), 9)
+        assert_equal(len(tf.model_variables()), 10)
 
     graph = tf.Graph()
 
     with graph.as_default():
         _get_train_op(trainable=True)
 
-        assert_equal(len(tf.trainable_variables()), 9)
-        assert_equal(len(tf.moving_average_variables()), 9)
-        assert_equal(len(tf.model_variables()), 9)
+        assert_equal(len(tf.trainable_variables()), 10)
+        assert_equal(len(tf.moving_average_variables()), 10)
+        assert_equal(len(tf.model_variables()), 10)
 
-        # varialbles 9, moving averged 9, 9 * 2
+        # varialbles 10, moving averged 10, 10 * 2
         # global step 1
         # adam 2
-        # 2 adam variables per variable, 9 * 2
-        assert_equal(len(tf.global_variables()), 9 * 2 + 1 + 2 + 9 * 2)
+        # 2 adam variables per variable, 10 * 2
+        assert_equal(len(tf.global_variables()), 10 * 2 + 1 + 2 + 10 * 2)
 
 
 if __name__ == "__main__":
