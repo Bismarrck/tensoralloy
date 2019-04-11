@@ -27,6 +27,17 @@ def convert_rc_to_key(rc):
     return "{:.2f}".format(round(rc, 4))
 
 
+def read_neighbor_sizes(db: SQLite3Database, k_max, rc):
+    """
+    Read `nij_max`, `nijk_max` and `nnl_max` from a database given `k_max` and
+    `rc`.
+    """
+    rc = convert_rc_to_key(rc)
+    k_max = convert_k_max_to_key(k_max)
+    details = db.metadata["neighbors"][k_max][rc]
+    return details['nij_max'], details['nijk_max'], details['nnl_max']
+
+
 def find_neighbor_sizes(atoms, rc, k_max):
     """
     A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
