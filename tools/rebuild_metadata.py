@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 from ase.db import connect
 from os.path import join
 
-from tensoralloy.io.neighbor import find_neighbor_size_limits
+from tensoralloy.io.neighbor import find_neighbor_size_maximums
 from tensoralloy.io.neighbor import convert_k_max_to_key
 from tensoralloy.io.neighbor import convert_rc_to_key
 from tensoralloy.dataset.utils import compute_atomic_static_energy
@@ -59,7 +59,7 @@ def rebuild():
             try:
                 _ = db.metadata['neighbors'][k_max_key][rc_key]['nnl_max']
             except KeyError:
-                find_neighbor_size_limits(db, rc, k_max, verbose=True)
+                find_neighbor_size_maximums(db, rc, k_max, verbose=True)
             else:
                 print(f"Skip {name}/neighbor with rc={rc_key}, "
                       f"k_max={k_max_key}")

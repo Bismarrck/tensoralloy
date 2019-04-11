@@ -38,7 +38,7 @@ def read_neighbor_sizes(db: SQLite3Database, k_max, rc):
     return details['nij_max'], details['nijk_max'], details['nnl_max']
 
 
-def find_neighbor_sizes(atoms, rc, k_max):
+def find_neighbor_size_of_atoms(atoms, rc, k_max):
     """
     A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
     """
@@ -79,8 +79,8 @@ def find_neighbor_sizes(atoms, rc, k_max):
     return nij, nijk, nnl
 
 
-def find_neighbor_size_limits(database: SQLite3Database, rc: float,
-                              k_max=3, n_jobs=-1, verbose=True):
+def find_neighbor_size_maximums(database: SQLite3Database, rc: float,
+                                k_max=3, n_jobs=-1, verbose=True):
     """
     Find `nij_max`, `nijk_max` and 'nnl_max' of all `Atoms` objects in the
     database.
@@ -104,7 +104,7 @@ def find_neighbor_size_limits(database: SQLite3Database, rc: float,
     """
 
     def _find_wrapper(aid):
-        return find_neighbor_sizes(database.get_atoms(f'id={aid}'), rc, k_max)
+        return find_neighbor_size_of_atoms(database.get_atoms(f'id={aid}'), rc, k_max)
 
     if verbose:
         print('Start finding neighbors for rc = {} and k_max = {}. This may '

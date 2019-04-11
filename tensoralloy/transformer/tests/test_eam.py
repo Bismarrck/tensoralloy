@@ -14,8 +14,8 @@ from ase.neighborlist import neighbor_list
 from collections import Counter
 from os.path import join
 
-from tensoralloy.io.neighbor import find_neighbor_sizes
-from tensoralloy.io.neighbor import find_neighbor_size_limits
+from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.io.neighbor import find_neighbor_size_maximums
 from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
@@ -68,7 +68,7 @@ def test_eam_transformer():
     rc = 6.5
     elements = ['C', 'H']
     max_occurs = Counter({'C': 2, 'H': 6})
-    nij, _, nnl = find_neighbor_sizes(atoms, rc=rc, k_max=2)
+    nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
     ref = eam(atoms, max_occurs, nnl=nnl, rc=rc)
 
     with tf.Graph().as_default():
@@ -96,7 +96,7 @@ def test_batch_eam_transformer():
     atoms = db.get_atoms('id=1')
     rc = 6.5
     max_occurs = Counter({'C': 2, 'H': 4})
-    nij, _, nnl = find_neighbor_sizes(atoms, rc=rc, k_max=2)
+    nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
     nij_max = nij + 10
     nnl_max = nnl + 2
     ref = eam(atoms, max_occurs, nnl=nnl_max, rc=rc)
@@ -139,7 +139,7 @@ def test_encode_atoms():
     try:
         nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
     except KeyError:
-        find_neighbor_size_limits(db, rc, k_max=2, verbose=False)
+        find_neighbor_size_maximums(db, rc, k_max=2, verbose=False)
         nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
     nnl_max = db.metadata['neighbors']['2']['6.00']['nnl_max']
 

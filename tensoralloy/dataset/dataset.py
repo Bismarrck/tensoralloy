@@ -24,7 +24,7 @@ from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import AttributeDict, Defaults, safe_select, check_path
 from tensoralloy.io.neighbor import convert_k_max_to_key, convert_rc_to_key
-from tensoralloy.io.neighbor import find_neighbor_size_limits
+from tensoralloy.io.neighbor import find_neighbor_size_maximums
 from tensoralloy.dataset.utils import compute_atomic_static_energy
 from tensoralloy.dataset.utils import should_be_serial
 from tensoralloy.dataset.utils import brange
@@ -234,8 +234,8 @@ class Dataset:
             k_max = 3
 
         if self._should_find_neighbor_sizes(k_max):
-            find_neighbor_size_limits(self._database, self._rc, n_jobs=n_jobs,
-                                      k_max=k_max, verbose=True)
+            find_neighbor_size_maximums(self._database, self._rc, n_jobs=n_jobs,
+                                        k_max=k_max, verbose=True)
 
         periodic = self._database.metadata['periodic']
         forces = self._database.metadata['forces']
