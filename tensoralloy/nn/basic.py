@@ -292,8 +292,8 @@ class BasicNN:
                         positions, [1, -1], axis=0, name='split')[1]
                     left = tf.matmul(tf.transpose(forces), positions)
                     left = tf.negative(left, name='left')
-                stress = tf.add(left, right, name='stress')
-                stress = tf.math.truediv(stress, volume, name='ase')
+                total_stress = tf.add(left, right, name='stress')
+                stress = tf.math.truediv(total_stress, volume, name='ase')
             else:
                 with tf.name_scope("Right"):
                     right = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='right')
@@ -303,11 +303,11 @@ class BasicNN:
                     left = tf.einsum('ijk,ijl->ijlk', positions, forces)
                     left = tf.reduce_sum(left, axis=1, keepdims=False)
                     left = tf.negative(left, name='left')
-                stress = tf.add(left, right, name='stress')
-                stress = tf.math.truediv(tf.reshape(stress, (-1, 9)),
+                total_stress = tf.add(left, right, name='stress')
+                stress = tf.math.truediv(tf.reshape(total_stress, (-1, 9)),
                                          tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
-            return tf.identity(stress, name='full')
+            return tf.identity(stress, name='unit'), total_stress
 
     @staticmethod
     def _convert_to_voigt_stress(stress, batch_size, name='stress',
@@ -338,14 +338,16 @@ class BasicNN:
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells, volume,
-                                                      positions, forces)
-        ndims = stress.shape.ndims
+        stress_per_volume, total_stress = \
+            self._get_reduced_full_stress_tensor(energy, cells, volume,
+                                                 positions, forces)
+        ndims = stress_per_volume.shape.ndims
         batch_size = cells.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
-        return self._convert_to_voigt_stress(
-            stress, batch_size, name=name, verbose=verbose)
+        voigt = self._convert_to_voigt_stress(
+            stress_per_volume, batch_size, name=name, verbose=verbose)
+        return voigt, total_stress
 
     def _get_total_pressure_op(self, energy: tf.Tensor, cells, volume,
                                positions, forces, name='pressure',
@@ -356,13 +358,15 @@ class BasicNN:
             reduced_total_pressure = -trace(full_stress) / 3.0
 
         """
-        stress = self._get_reduced_full_stress_tensor(energy, cells, volume,
-                                                      positions, forces)
+        stress_per_volume, total_stress = \
+            self._get_reduced_full_stress_tensor(energy, cells, volume,
+                                                 positions, forces)
         three = tf.constant(-3.0, dtype=energy.dtype, name='three')
-        total_pressure = tf.math.truediv(tf.trace(stress), three, name=name)
+        total_pressure = tf.math.truediv(tf.trace(stress_per_volume),
+                                         three, name=name)
         if verbose:
             log_tensor(total_pressure)
-        return total_pressure
+        return total_pressure, total_stress
 
     @staticmethod
     def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
@@ -446,9 +450,13 @@ class BasicNN:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
-                  'stress' should be minimized.
+                  'stress' should be minimized. Its unit should be `eV/Ang**3`.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
                   'total_pressure' should be minimized.
+
+            The following prediction is included and required for computing
+            elastic loss:
+                * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
         labels : AttributeDict
             A dict of reference tensors.
                 * 'energy' of shape `[batch_size, ]` is required.
@@ -812,7 +820,20 @@ class BasicNN:
         Returns
         -------
         predictions : AttributeDict
-            A dict of output tensors.
+            A dict of tensors as the predictions. If `mode` is PREDICT, the
+            first axes (batch size) are ignored.
+
+                * 'energy' of shape `[batch_size, ]` is required.
+                * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+                  required if 'forces' should be minimized.
+                * 'stress' of shape `[batch_size, 6]` is required if
+                  'stress' should be minimized. Its unit should be `eV/Ang**3`.
+                * 'total_pressure' of shape `[batch_size, ]` is required if
+                  'total_pressure' should be minimized.
+
+            The following prediction is included and required for computing
+            elastic constants:
+                * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
 
         """
 
@@ -859,17 +880,21 @@ class BasicNN:
 
             if 'total_pressure' in properties:
                 with tf.name_scope("Pressure"):
-                    predictions.total_pressure = \
+                    total_pressure, total_stress = \
                         self._get_total_pressure_op(
                             predictions.energy, features.cells, features.volume,
                             features.positions, predictions.forces,
                             name='pressure', verbose=verbose)
+                    predictions.total_pressure = total_pressure
+                    predictions.total_stress = total_stress
             elif 'stress' in properties:
                 with tf.name_scope("Stress"):
-                    predictions.stress = self._get_stress_op(
+                    voigt_stress, total_stress = self._get_stress_op(
                         predictions.energy, features.cells, features.volume,
                         features.positions, predictions.forces, name='stress',
                         verbose=verbose)
+                    predictions.stress = voigt_stress
+                    predictions.total_stress = total_stress
 
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
@@ -907,7 +932,7 @@ class BasicNN:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
-                  'stress' should be minimized.
+                  'stress' should be minimized. Its unit should be `eV/Ang**3`.
                 * 'total_pressure' of shape `[batch_size, ]` is required if
                   'total_pressure' should be minimized.
                 * 'energy_confidence' of shape `[batch_size, ]` is required

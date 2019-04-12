@@ -702,14 +702,17 @@ def test_batch_stress():
             verbose=False)
         energy = nn._get_energy_op(outputs, features, verbose=False)
         forces = nn._get_forces_op(energy, batch.positions, verbose=False)
-        stress = nn._get_stress_op(energy, batch.cells, batch.volume,
-                                   batch.positions, forces, verbose=False)
+        stress, total_stress = nn._get_stress_op(energy, batch.cells,
+                                                 batch.volume, batch.positions,
+                                                 forces, verbose=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            s_pred = sess.run(stress) * volume
+            y1, y2 = sess.run([stress, total_stress])
+            y2 = y2[0][[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
 
-        assert_array_almost_equal(s_true, s_pred, delta=1e-8)
+        assert_array_almost_equal(s_true, y1 * volume, delta=1e-8)
+        assert_array_almost_equal(s_true, y2, delta=1e-8)
 
 
 class Zjw04SurfaceStressTest(unittest.TestCase):
