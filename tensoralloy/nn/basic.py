@@ -24,7 +24,7 @@ from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
 from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
 from tensoralloy.nn import losses as loss_ops
-from tensoralloy.nn.elastic import get_elastic_constant_loss
+from tensoralloy.nn import elastic as elastic_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -96,7 +96,7 @@ all_properties = (
     Property(name='stress', minimizable=True, exportable=True),
     Property(name='total_pressure', minimizable=True, exportable=True),
     Property(name='hessian', minimizable=False, exportable=True),
-    Property(name='elastic', minimizable=True, exportable=False)
+    Property(name='elastic', minimizable=True, exportable=True)
 )
 
 exportable_properties = [
@@ -555,7 +555,7 @@ class BasicNN:
             # Elastic constants will only be computed during training.
             if mode == tf_estimator.ModeKeys.TRAIN and \
                     'elastic' in self._minimize_properties:
-                losses.elastic = get_elastic_constant_loss(
+                losses.elastic = elastic_ops.get_elastic_constant_loss(
                     nn=self,
                     list_of_crystal=hparams.loss.elastic.crystals,
                     weight=hparams.loss.elastic.weight,
@@ -901,6 +901,16 @@ class BasicNN:
                     predictions.hessian = self._get_hessian_op(
                         predictions.energy, features.positions, name='hessian',
                         verbose=verbose)
+
+            if mode == tf_estimator.ModeKeys.PREDICT and \
+                    'elastic' in properties:
+                with tf.name_scope("Elastic"):
+                    predictions.elastic = \
+                        elastic_ops.get_elastic_constat_tensor_op(
+                            predictions.total_stress,
+                            features.cells,
+                            features.volume,
+                            name='elastic', verbose=verbose)
 
             return predictions
 

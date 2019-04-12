@@ -15,6 +15,7 @@ from ase.io import read
 from os.path import join
 from collections import namedtuple
 from typing import List, Union
+from itertools import product
 
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.utils import GraphKeys
@@ -93,18 +94,88 @@ built_in_crystals = {
 }
 
 
-def voigt_notation(i, j):
+def voigt_notation(i, j, py_index=False):
     """
     Return the Voigt notation given two indices (start from zero).
     """
     if i == j:
-        return i + 1
+        idx = i + 1
     elif (i == 1 and j == 2) or (i == 2 and j == 1):
-        return 4
+        idx = 4
     elif (i == 0 and j == 2) or (i == 2 and j == 0):
-        return 5
+        idx = 5
     else:
-        return 6
+        idx = 6
+    if py_index:
+        return idx - 1
+    else:
+        return idx
+
+
+def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
+                  i: int, j: int, k: int, l: int):
+    """
+    Return the Op to compute C_{ijkl}.
+    """
+    dsdhij = tf.identity(tf.gradients(
+        total_stress[i, j],
+        cell)[0], name=f'dsdh{i}{j}')
+    cij = tf.matmul(
+        tf.transpose(dsdhij),
+        tf.identity(cell),
+        name=f'h_dsdh{i}{j}')
+    cij = tf.math.truediv(cij, volume)
+    cij = tf.math.truediv(
+        cij, tf.convert_to_tensor(GPa, dtype=cell.dtype, name='GPa'),
+        name=f'c{i}{j}')
+    return tf.identity(cij[k, l], name=f'c{i}{j}{k}{l}')
+
+
+def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
+                                  volume: tf.Tensor, name='elastic',
+                                  verbose=False):
+    """
+    Return the Op to compute the full elastic constant tensor.
+
+    Parameters
+    ----------
+    total_stress : tf.Tensor
+        The total stress (with unit 'eV') tensor. The shape should be `[3, 3]`.
+    cell : tf.Tensor
+        The 3x3 lattice tensor. The shape should be `[3, 3]`.
+    volume : tf.Tensor
+        The lattice volume tensor.
+    name : str
+        The name of the output tensor.
+    verbose : bool
+        A boolean flag.
+
+    Returns
+    -------
+    cijkl : tf.Tensor
+        The full elastic constant tensor of shape `[6, 6]` with unit GPa.
+
+    """
+    with tf.name_scope("Cijkl"):
+        assert total_stress.shape.as_list() == [3, 3]
+        assert cell.shape.as_list() == [3, 3]
+        components = []
+        v2c_map = []
+        filled = np.zeros((6, 6), dtype=bool)
+        for (i, j, k, l) in product([0, 1, 2], repeat=4):
+            vi = voigt_notation(i, j, py_index=True)
+            vj = voigt_notation(k, l, py_index=True)
+            if filled[vi, vj]:
+                continue
+            cijkl = _get_cijkl_op(total_stress, cell, volume, i, j, k, l)
+            components.append(cijkl)
+            v2c_map.append((vi, vj))
+            filled[vi, vj] = True
+        vector = tf.stack(components)
+        elastic = tf.scatter_nd(v2c_map, vector, shape=(6, 6), name=name)
+        if verbose:
+            log_tensor(elastic)
+        return elastic
 
 
 def get_elastic_constant_loss(nn,
@@ -161,9 +232,9 @@ def get_elastic_constant_loss(nn,
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=True)
-
-                stress = tf.get_default_graph().get_tensor_by_name(
-                    f'Elastic/{crystal.name}/Output/Stress/Full/stress:0')
+                total_stress = output.total_stress
+                cell = features.cells
+                volume = features.volume
 
                 with tf.name_scope("Constraints"):
                     constraints.extend([
@@ -172,25 +243,17 @@ def get_elastic_constant_loss(nn,
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
-                        dsdhij = tf.identity(tf.gradients(
-                            stress[i, j],
-                            features.cells)[0], name=f'dsdh{i}{j}')
-                        cij = tf.matmul(
-                            tf.transpose(dsdhij),
-                            tf.identity(features.cells),
-                            name=f'h_dsdh{i}{j}')
-                        cij = tf.math.truediv(cij, features.volume)
-                        cij = tf.math.truediv(cij, GPa, name=f'c{i}{j}')
+                        cijkl = _get_cijkl_op(
+                            total_stress, cell, volume, i, j, k, l)
+                        log_tensor(cijkl)
+
                         vi = voigt_notation(i, j)
                         vj = voigt_notation(k, l)
-                        cijkl = tf.identity(cij[k, l], name=f'C{vi}{vj}')
-
-                        log_tensor(cijkl)
 
                         predictions.append(cijkl)
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
-                                                 dtype=stress.dtype,
+                                                 dtype=total_stress.dtype,
                                                  name=f'refC{vi}{vj}'))
 
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
