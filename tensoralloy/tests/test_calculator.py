@@ -17,6 +17,7 @@ from nose.tools import assert_list_equal, assert_is_not_none, assert_less
 from os.path import join, exists
 from ase.db import connect
 from ase.calculators.lammpsrun import LAMMPS
+from ase.build import bulk
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from pymatgen import Lattice, Structure
@@ -48,7 +49,8 @@ class ModelTimeStampTest(unittest.TestCase):
         Test the method `get_model_timestamp`.
         """
         nn = EamAlloyNN(['Ni'], 'zjw04xc',
-                        export_properties=['energy', 'forces', 'stress', 'hessian'])
+                        export_properties=['energy', 'forces', 'stress',
+                                           'hessian'])
         nn.attach_transformer(EAMTransformer(6.0, ['Ni']))
         nn.export(self.pb_file, keep_tmp_files=False)
 
@@ -92,6 +94,35 @@ def test_calculator_with_qm7():
 
     y_mae = mean_absolute_error(y_true, y_pred)
     assert_almost_equal(y_mae, 0.18296768, delta=1e-7)
+
+
+def test_elastic_constant_tensor():
+    """
+    Test elastic properties calculation of `TensorAlloyCalculator`.
+    """
+    graph_path = join(test_dir(), 'Ni', "Ni.zhou04.pb")
+    calc = TensorAlloyCalculator(graph_path)
+
+    cubic = bulk("Ni", cubic=True)
+    tensor = calc.get_elastic_constant_tensor(cubic)
+
+    assert_almost_equal(tensor.voigt[0, 0], 246.61, delta=0.01)
+    assert_almost_equal(tensor.voigt[1, 1], 246.61, delta=0.01)
+    assert_almost_equal(tensor.voigt[2, 2], 246.61, delta=0.01)
+    assert_almost_equal(tensor.voigt[0, 1], 147.15, delta=0.01)
+    assert_almost_equal(tensor.voigt[0, 2], 147.15, delta=0.01)
+    assert_almost_equal(tensor.voigt[3, 3], 124.72, delta=0.01)
+    assert_almost_equal(tensor.voigt[4, 4], 124.72, delta=0.01)
+    assert_almost_equal(tensor.voigt[5, 5], 124.72, delta=0.01)
+    assert_almost_equal(tensor.homogeneous_poisson, 0.2936, delta=0.0001)
+    assert_almost_equal(tensor.k_vrh, 180.31, delta=0.01)
+    assert_almost_equal(tensor.g_vrh, 86.261, delta=0.01)
+
+    primitive = bulk("Ni", cubic=False)
+    tensor_p = calc.get_elastic_constant_tensor(primitive,
+                                                auto_conventional_standard=True)
+
+    assert_array_almost_equal(tensor, tensor_p, delta=1e-6)
 
 
 class SurfaceSlabTest(unittest.TestCase):

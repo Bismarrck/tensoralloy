@@ -341,6 +341,8 @@ class BasicNN:
         stress_per_volume, total_stress = \
             self._get_reduced_full_stress_tensor(energy, cells, volume,
                                                  positions, forces)
+        if verbose:
+            log_tensor(total_stress)
         ndims = stress_per_volume.shape.ndims
         batch_size = cells.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:

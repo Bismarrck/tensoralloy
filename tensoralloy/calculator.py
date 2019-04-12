@@ -15,6 +15,10 @@ from ase.units import GPa
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
+from collections import namedtuple
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.analysis.elasticity.elastic import ElasticTensor
 
 from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
@@ -31,6 +35,14 @@ from tensoralloy.dtypes import set_float_precision, get_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+# A collection of elastic properties.
+ElasticProperty = namedtuple("ElasticProperty",
+                             ("elastic_tensor", "compliance_tensor",
+                              "bulk_voigt", "bulk_reuss", "bulk_vrh",
+                              "shear_voigt", "shear_reuss", "shear_vrh",
+                              "universal_anisotropy", "poisson_ratio"))
 
 
 class TensorAlloyCalculator(Calculator):
@@ -131,6 +143,7 @@ class TensorAlloyCalculator(Calculator):
             'stress': 'Output/Stress/Voigt/stress:0',
             'total_pressure': 'Output/Pressure/pressure:0',
             'hessian': 'Output/Hessian/hessian:0',
+            'elastic': 'Output/Elastic/Cijkl/elastic:0'
         }
         ops = {}
         for prop, name in props_and_names.items():
@@ -225,6 +238,42 @@ class TensorAlloyCalculator(Calculator):
         """
         stress = self.get_stress(atoms)
         return np.mean(stress[:3]) * (-1.0) / GPa
+
+    def get_elastic_constant_tensor(self,
+                                    atoms=None,
+                                    auto_conventional_standard=False):
+        """
+        Return the elastic constant tensor C.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            The target `Atoms`.
+        auto_conventional_standard : bool
+            If True, `atoms` will be converted to its corresponding conventional
+            standard structure if possible.
+
+        Returns
+        -------
+        elastic_tensor : ElasticTensor
+            The elastic constant tensor.
+
+        References
+        ----------
+        https://wiki.materialsproject.org/Elasticity_calculations
+
+        """
+        atoms = self.atoms or atoms
+        assert atoms.pbc.all()
+
+        if auto_conventional_standard:
+            structure = AseAtomsAdaptor.get_structure(atoms)
+            analyzer = SpacegroupAnalyzer(structure)
+            atoms = AseAtomsAdaptor.get_atoms(
+                analyzer.get_conventional_standard_structure())
+
+        elastic = self.get_property('elastic', atoms, allow_calculation=True)
+        return ElasticTensor.from_voigt(elastic)
 
     def get_frequencies_and_normal_modes(self, atoms=None):
         """
@@ -392,6 +441,7 @@ class TensorAlloyCalculator(Calculator):
                   phonon.get_symmetry().get_international_table())
             print("Reciprocal space paths in reduced coordinates:")
             for band in bands:
+                # noinspection PyStringFormat
                 print("[%5.2f %5.2f %5.2f] --> [%5.2f %5.2f %5.2f]" %
                       (tuple(band[0]) + tuple(band[-1])))
 
