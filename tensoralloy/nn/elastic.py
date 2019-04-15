@@ -113,7 +113,7 @@ def voigt_notation(i, j, py_index=False):
 
 
 def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
-                  i: int, j: int, k: int, l: int):
+                  i: int, j: int, k: int, l: int, name=None):
     """
     Return the Op to compute C_{ijkl}.
     """
@@ -128,7 +128,9 @@ def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
     cij = tf.math.truediv(
         cij, tf.convert_to_tensor(GPa, dtype=cell.dtype, name='GPa'),
         name=f'c{i}{j}')
-    return tf.identity(cij[k, l], name=f'c{i}{j}{k}{l}')
+    if name is None:
+        name = f'c{i}{j}{k}{l}'
+    return tf.identity(cij[k, l], name=name)
 
 
 def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
@@ -243,13 +245,12 @@ def get_elastic_constant_loss(nn,
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
-                        cijkl = _get_cijkl_op(
-                            total_stress, cell, volume, i, j, k, l)
-                        log_tensor(cijkl)
-
                         vi = voigt_notation(i, j)
                         vj = voigt_notation(k, l)
-
+                        cijkl = _get_cijkl_op(
+                            total_stress, cell, volume, i, j, k, l,
+                            name=f"C{vi}{vj}")
+                        log_tensor(cijkl)
                         predictions.append(cijkl)
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
