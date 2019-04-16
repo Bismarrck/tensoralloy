@@ -207,6 +207,10 @@ def get_elastic_constant_loss(nn,
 
     with tf.name_scope("Elastic/"):
 
+        predictions = []
+        labels = []
+        constraints = []
+
         for crystal in list_of_crystal:
             if isinstance(crystal, str):
                 crystal = built_in_crystals[crystal]
@@ -218,10 +222,6 @@ def get_elastic_constant_loss(nn,
             for symbol in symbols:
                 if symbol not in nn.elements:
                     raise ValueError(f"{symbol} is not supported!")
-
-            predictions = []
-            labels = []
-            constraints = []
 
             with tf.name_scope(f"{crystal.name}"):
                 elastic_nn = nn.__class__(**configs)
