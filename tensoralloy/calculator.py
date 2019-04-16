@@ -263,7 +263,7 @@ class TensorAlloyCalculator(Calculator):
         https://wiki.materialsproject.org/Elasticity_calculations
 
         """
-        atoms = self.atoms or atoms
+        atoms = atoms or self.atoms
         assert atoms.pbc.all()
 
         if auto_conventional_standard:
