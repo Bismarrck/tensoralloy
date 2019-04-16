@@ -6,13 +6,14 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
+import toml
 
 from tensorflow_estimator import estimator as tf_estimator
 from ase.units import GPa
 from ase import Atoms
 from ase.build import bulk
 from ase.io import read
-from os.path import join
+from os.path import join, realpath, dirname
 from collections import namedtuple
 from typing import List, Union
 from itertools import product
@@ -52,6 +53,12 @@ class ElasticConstant(namedtuple('ElasticConstant', ('ijkl', 'value'))):
                 value: float):
         return super(ElasticConstant, cls).__new__(cls, ijkl, value)
 
+    def __eq__(self, other):
+        if other.ijkl == self.ijkl and other.value == self.value:
+            return True
+        else:
+            return False
+
 
 # noinspection PyTypeChecker,PyArgumentList
 class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
@@ -85,8 +92,8 @@ built_in_crystals = {
                                         'crystals',
                                         f'Ni3Mo_mp-11506_{_identifier}.cif')),
                      [ElasticConstant([0, 0, 0, 0], 385),
-                      ElasticConstant([0, 0, 0, 1], 166),
-                      ElasticConstant([0, 0, 0, 2], 145),
+                      ElasticConstant([0, 0, 1, 1], 166),
+                      ElasticConstant([0, 0, 2, 2], 145),
                       ElasticConstant([1, 1, 2, 2], 131),
                       ElasticConstant([1, 1, 1, 1], 402),
                       ElasticConstant([2, 2, 2, 2], 402),
@@ -110,6 +117,52 @@ def voigt_notation(i, j, py_index=False):
         return idx - 1
     else:
         return idx
+
+
+def voigt_to_ijkl(vi: int, vj: int, py_index=False):
+    """
+    Return the corresponding (i, j, k, l).
+    """
+    if not py_index:
+        vi -= 1
+        vj -= 1
+    ijkl = []
+    for val in (vi, vj):
+        if val < 3:
+            ijkl.extend((val, val))
+        elif val == 3:
+            ijkl.extend((1, 2))
+        elif val == 4:
+            ijkl.extend((0, 2))
+        else:
+            ijkl.extend((0, 1))
+    return ijkl
+
+
+def read_external_crystal(toml_file: str) -> Crystal:
+    """
+    Read a `Crystal` from the external toml file.
+    """
+    with open(toml_file) as fp:
+        key_value_pairs = dict(toml.load(fp))
+
+        name = key_value_pairs.pop('name')
+        real_path = realpath(join(dirname(toml_file),
+                                  key_value_pairs.pop('file')))
+
+        atoms = read(real_path,
+                     format=key_value_pairs.pop('format'))
+
+        constants = []
+        for key, value in key_value_pairs.items():
+            assert len(key) == 3
+            assert key[0] == 'c'
+            vi = int(key[1])
+            vj = int(key[2])
+            ijkl = voigt_to_ijkl(vi, vj, py_index=False)
+            constants.append(ElasticConstant(ijkl, float(value)))
+
+        return Crystal(name, atoms, constants)
 
 
 def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
@@ -213,7 +266,10 @@ def get_elastic_constant_loss(nn,
 
         for crystal in list_of_crystal:
             if isinstance(crystal, str):
-                crystal = built_in_crystals[crystal]
+                if crystal.endswith('toml'):
+                    crystal = read_external_crystal(crystal)
+                else:
+                    crystal = built_in_crystals[crystal]
             elif not isinstance(crystal, Crystal):
                 raise ValueError(
                     "`crystal` must be a str or a `Crystal` object!")
