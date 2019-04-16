@@ -268,6 +268,7 @@ def get_elastic_constant_loss(nn,
 
                 mse = tf.reduce_mean(tf.squared_difference(predictions, labels),
                                      name='mse')
+                mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
                 dtype = get_float_dtype()
                 eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
                 mse = tf.add(mse, eps, name='mse/safe')
@@ -287,5 +288,6 @@ def get_elastic_constant_loss(nn,
 
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
 
         return total_loss
