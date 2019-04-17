@@ -286,7 +286,8 @@ class TrainingManager:
             tf.logging.info(f'seed={self._hparams.seed}')
             tf.logging.info(f'input= \n{str(self._reader)}')
 
-            gpu_options = tf.GPUOptions(allow_growth=True)
+            gpu_options = tf.GPUOptions(
+                allow_growth=hparams.debug.allow_gpu_growth)
             session_config = tf.ConfigProto(allow_soft_placement=True,
                                             gpu_options=gpu_options)
 

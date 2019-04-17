@@ -179,7 +179,7 @@ class InputReader:
         _safe_update('precision')
         _safe_update('seed')
         
-        for section in ("dataset", "nn", "opt", "train"):
+        for section in ("dataset", "nn", "opt", "train", "debug"):
             for key, val in defaults[section].items():
                 if isinstance(val, dict):
                     continue
