@@ -101,7 +101,7 @@ built_in_crystals = {
 }
 
 
-def voigt_notation(i, j, py_index=False):
+def voigt_notation(i, j, return_py_index=False):
     """
     Return the Voigt notation given two indices (start from zero).
     """
@@ -113,17 +113,17 @@ def voigt_notation(i, j, py_index=False):
         idx = 5
     else:
         idx = 6
-    if py_index:
+    if return_py_index:
         return idx - 1
     else:
         return idx
 
 
-def voigt_to_ijkl(vi: int, vj: int, py_index=False):
+def voigt_to_ijkl(vi: int, vj: int, is_py_index=False):
     """
     Return the corresponding (i, j, k, l).
     """
-    if not py_index:
+    if not is_py_index:
         vi -= 1
         vj -= 1
     ijkl = []
@@ -159,7 +159,7 @@ def read_external_crystal(toml_file: str) -> Crystal:
             assert key[0] == 'c'
             vi = int(key[1])
             vj = int(key[2])
-            ijkl = voigt_to_ijkl(vi, vj, py_index=False)
+            ijkl = voigt_to_ijkl(vi, vj, is_py_index=False)
             constants.append(ElasticConstant(ijkl, float(value)))
 
         return Crystal(name, atoms, constants)
@@ -218,8 +218,8 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         v2c_map = []
         filled = np.zeros((6, 6), dtype=bool)
         for (i, j, k, l) in product([0, 1, 2], repeat=4):
-            vi = voigt_notation(i, j, py_index=True)
-            vj = voigt_notation(k, l, py_index=True)
+            vi = voigt_notation(i, j, return_py_index=True)
+            vj = voigt_notation(k, l, return_py_index=True)
             if filled[vi, vj]:
                 continue
             cijkl = _get_cijkl_op(total_stress, cell, volume, i, j, k, l)
