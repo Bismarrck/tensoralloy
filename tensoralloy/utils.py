@@ -118,7 +118,7 @@ def get_kbody_terms(elements: List[str], k_max=3) -> Tuple[List[str],
     return all_terms, kbody_terms, elements
 
 
-def set_logging_configs(logfile="logfile"):
+def set_logging_configs(logfile="logfile", level=logging.INFO):
     """
     Setup the logging module.
     """
@@ -132,7 +132,7 @@ def set_logging_configs(logfile="logfile"):
         "handlers": {
             'file': {
                 'class': 'logging.FileHandler',
-                'level': logging.INFO,
+                'level': level,
                 'formatter': 'file',
                 'filename': logfile,
                 'mode': 'a',
@@ -140,7 +140,7 @@ def set_logging_configs(logfile="logfile"):
         },
         "root": {
             'handlers': ['file'],
-            'level': logging.INFO,
+            'level': level,
         },
         "disable_existing_loggers": False
     }
