@@ -26,6 +26,7 @@ from phonopy.interface import get_default_physical_units
 from phonopy.structure.cells import guess_primitive_matrix
 from phonopy.units import VaspToCm
 
+from tensoralloy.tests.test_phonon import phonon_spectrum_example
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
@@ -481,48 +482,6 @@ class TensorAlloyCalculator(Calculator):
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
             set_float_precision(original)
-
-
-def phonon_spectrum_example():
-    """
-    A demo of plotting phonon spectrum of Ni/fcc.
-    """
-    from ase.build import bulk
-    from os.path import join
-    from tensoralloy.test_utils import test_dir
-
-    band_paths = [
-        [np.array([0, 0, 0]),
-         np.array([1 / 2, 0, 1 / 2]),
-         np.array([1 / 2, 1 / 4, 3 / 4]),
-         np.array([1 / 2, 1 / 2, 1]),
-         np.array([3 / 8, 3 / 8, 3 / 4]),
-         np.array([0, 0, 0]),
-         np.array([1 / 2, 1 / 2, 1 / 2])]
-    ]
-
-    labels = [
-        r"$\Gamma$",
-        r"$\mathrm{X}$",
-        r"$\mathrm{W}$",
-        r"$\mathrm{X}$",
-        r"$\mathrm{K}$",
-        r"$\Gamma$",
-        r"$\mathrm{L}$",
-    ]
-
-    atoms = bulk('Ni')
-    calc = TensorAlloyCalculator(join(test_dir(), 'Ni', 'Ni.zjw04xc.pb'))
-    atoms.calc = calc
-    calc.get_phonon_spectrum(
-        atoms,
-        primitive_axes='auto',
-        supercell=(4, 4, 4),
-        band_paths=band_paths,
-        band_labels=labels,
-        npoints=101,
-        use_wavenumber=True, plot_vertical_lines=True,
-        verbose=True)
 
 
 if __name__ == "__main__":
