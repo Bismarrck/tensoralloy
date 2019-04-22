@@ -6,44 +6,16 @@ from __future__ import print_function, absolute_import
 
 import nose
 
-from nose.tools import assert_dict_equal, assert_equal, assert_list_equal
+from nose.tools import assert_equal, assert_list_equal
 from nose.tools import assert_not_in
 from os.path import join, realpath
 
-from tensoralloy.io.input.reader import nested_set, nested_get, InputReader
+from tensoralloy.io.input.reader import InputReader
+from tensoralloy.utils import nested_get
 from tensoralloy.test_utils import test_dir, datasets_dir, project_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def test_nested_set():
-    """
-    Test the function `nested_set`.
-    """
-    d = {}
-    nested_set(d, 'a.b.c', 4)
-    assert_dict_equal(d, {'a': {'b': {'c': 4}}})
-
-    nested_set(d, ['a', 'b'], {'x': [2, 3]})
-    assert_dict_equal(d, {'a': {'b': {'x': [2, 3]}}})
-
-
-def test_nested_get():
-    """
-    Test the function `nested_get`.
-    """
-    d = {
-        'a': {
-            'b': 2,
-            'c': {
-                'd': 4
-            }
-        }
-    }
-    assert_dict_equal(nested_get(d, "a.c"), {'d': 4})
-    assert_equal(nested_get(d, 'a.b.c.d'), None)
-    assert_equal(nested_get(d, ['a', 'c', 'd']), 4)
 
 
 def test_read_behler_angular_toml():

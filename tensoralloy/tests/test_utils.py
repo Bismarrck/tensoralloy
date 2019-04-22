@@ -10,10 +10,40 @@ import nose
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
 
 from tensoralloy.utils import cantor_pairing
+from tensoralloy.utils import nested_get, nested_set
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def test_nested_set():
+    """
+    Test the function `nested_set`.
+    """
+    d = {}
+    nested_set(d, 'a.b.c', 4)
+    assert_dict_equal(d, {'a': {'b': {'c': 4}}})
+
+    nested_set(d, ['a', 'b'], {'x': [2, 3]})
+    assert_dict_equal(d, {'a': {'b': {'x': [2, 3]}}})
+
+
+def test_nested_get():
+    """
+    Test the function `nested_get`.
+    """
+    d = {
+        'a': {
+            'b': 2,
+            'c': {
+                'd': 4
+            }
+        }
+    }
+    assert_dict_equal(nested_get(d, "a.c"), {'d': 4})
+    assert_equal(nested_get(d, 'a.b.c.d'), None)
+    assert_equal(nested_get(d, ['a', 'c', 'd']), 4)
 
 
 def test_cantor_pairing():

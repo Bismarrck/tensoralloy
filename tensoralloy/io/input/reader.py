@@ -7,61 +7,13 @@ from __future__ import print_function, absolute_import
 import toml
 
 from os.path import dirname, join
-from typing import List, Union, Any
+from typing import List, Union
 
 from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import nested_get, nested_set
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def nested_get(d: dict, nested_keys: Union[str, List[str]]) -> Any:
-    """
-    Get the value from the dict `d` with a keypath (e.g `a.b.c`) or a list of
-    nested keys (e.g ['a', 'b', 'c']).
-
-    Parameters
-    ----------
-    d : dict
-        A dict.
-    nested_keys : str or List[str]
-        A str as the key path or a list of str.
-
-    Returns
-    -------
-    val : Any
-        The value corresponding to the keypath.
-
-    """
-    if isinstance(nested_keys, str):
-        nested_keys = nested_keys.split('.')
-    obj = d
-    for i, key in enumerate(nested_keys):
-        if not hasattr(obj, "__getitem__"):
-            return None
-        obj = obj.get(key, None)
-        if obj is None:
-            return None
-    return obj
-
-
-def nested_set(d: dict, nested_keys: Union[str, List[str]], new_val):
-    """
-    Set the value of dict `d` with the given keypath or nested keys.
-    """
-    if isinstance(nested_keys, str):
-        nested_keys = nested_keys.split('.')
-    if not isinstance(d, dict):
-        raise ValueError("`d` must be a dict")
-    obj = d
-    n = len(nested_keys)
-    for i, key in enumerate(nested_keys):
-        if i == n - 1:
-            obj[key] = new_val
-        else:
-            if key not in obj:
-                obj[key] = {}
-            obj = obj[key]
 
 
 class InputValueError(ValueError):
