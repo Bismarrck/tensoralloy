@@ -41,7 +41,11 @@ weight = 0.01
 [nn.loss.elastic]
 crystals = []
 weight = 0.1
-constraint_weight = 10.0
+
+[nn.loss.elastic.constraint]
+use_kbar = true
+forces_weight = 1.0
+stress_weight = 0.1
 
 [nn.atomic]
 arch = "AtomicNN"

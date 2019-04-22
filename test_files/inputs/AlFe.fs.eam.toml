@@ -7,11 +7,20 @@ tfrecords_dir = "experiments/AlFe/fs"
 test_size = 1000
 
 [nn]
-minimize = ['energy', 'forces', 'stress']
+minimize = ['energy', 'forces', 'stress', 'elastic']
 export = ['energy', 'forces', 'hessian', 'stress']
 
 [nn.loss.stress]
 use_rmse = true
+
+[nn.loss.elastic]
+crystals = ['Al']
+weight = 0.1
+
+[nn.loss.elastic.constraint]
+use_kbar = false
+forces_weight = 1.0
+stress_weight = 0.01
 
 [nn.eam]
 arch = "EamFsNN"

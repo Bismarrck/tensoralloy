@@ -119,8 +119,14 @@ def test_read_eam_fs_toml():
     assert_list_equal(reader['nn.export'],
                       ['energy', 'forces', 'hessian', 'stress'])
     assert_list_equal(reader['nn.minimize'],
-                      ['energy', 'forces', 'stress'])
+                      ['energy', 'forces', 'stress', 'elastic'])
     assert_equal(reader['nn.loss.stress.use_rmse'], True)
+
+    assert_equal(reader['nn.loss.elastic.crystals'], ['Al'])
+    assert_equal(reader['nn.loss.elastic.weight'], 0.1)
+    assert_equal(reader['nn.loss.elastic.constraint.use_kbar'], False)
+    assert_equal(reader['nn.loss.elastic.constraint.forces_weight'], 1.0)
+    assert_equal(reader['nn.loss.elastic.constraint.stress_weight'], 0.01)
 
     assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Al'), 'fcc')
     assert_equal(nested_get(configs, 'nn.eam.setfl.lattice.type.Fe'), 'bcc')
