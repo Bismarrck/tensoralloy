@@ -26,7 +26,6 @@ from phonopy.interface import get_default_physical_units
 from phonopy.structure.cells import guess_primitive_matrix
 from phonopy.units import VaspToCm
 
-from tensoralloy.tests.test_phonon import phonon_spectrum_example
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
@@ -482,7 +481,3 @@ class TensorAlloyCalculator(Calculator):
             self.results = self._sess.run(
                 ops, feed_dict=self._transformer.get_feed_dict(atoms))
             set_float_precision(original)
-
-
-if __name__ == "__main__":
-    phonon_spectrum_example()
