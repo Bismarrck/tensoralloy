@@ -10,6 +10,7 @@ from typing import List
 
 from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
 from tensoralloy.nn.utils import get_optimizer, get_learning_rate
+from tensoralloy.nn.dataclasses import OptParameters
 from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -110,29 +111,7 @@ def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
         tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
 
 
-def _check_opt_hparams(hparams: AttributeDict):
-    """
-    Check the hyper parameters and add missing but required parameters.
-    """
-    defaults = AttributeDict(
-        method='adam',
-        decay_function=None,
-        learning_rate=0.01)
-    if hparams is None:
-        hparams = AttributeDict(opt=defaults)
-    else:
-        hparams = AttributeDict(hparams)
-        if 'opt' not in hparams:
-            hparams['opt'] = defaults
-        else:
-            hparams['opt'] = AttributeDict(hparams['opt'])
-            for key, value in defaults.items():
-                if key not in hparams['opt']:
-                    hparams['opt'][key] = value
-    return hparams
-
-
-def get_train_op(losses: AttributeDict, hparams: AttributeDict,
+def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
                  minimize_properties: List[str]):
     """
     Return the Op for a training step.
@@ -141,14 +120,8 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
     ----------
     losses : AttributeDict
         A dict of loss tensors.
-    hparams : AttributeDict
-        The hyper parameters. Essential keypaths for this function are:
-            - 'hparams.opt.method'
-            - 'hparams.opt.learning_rate'
-            - 'hparams.opt.decay_function'
-            - 'hparams.opt.decay_rate'
-            - 'hparams.opt.decay_steps'
-            - 'hparams.opt.staircase'
+    opt_parameters : OptParameters
+        The hyper parameters for minimizing the total loss.
     minimize_properties : List[str]
         A list of str as the structural properties to minimize.
 
@@ -162,21 +135,19 @@ def get_train_op(losses: AttributeDict, hparams: AttributeDict,
     """
     with tf.name_scope("Optimize"):
 
-        hparams = _check_opt_hparams(hparams)
-
         global_step = tf.train.get_or_create_global_step()
         learning_rate = get_learning_rate(
             global_step,
-            learning_rate=hparams.opt.learning_rate,
-            decay_function=hparams.opt.decay_function,
-            decay_rate=hparams.opt.decay_rate,
-            decay_steps=hparams.opt.decay_steps,
-            staircase=hparams.opt.staircase
+            learning_rate=opt_parameters.learning_rate,
+            decay_function=opt_parameters.decay_function,
+            decay_rate=opt_parameters.decay_rate,
+            decay_steps=opt_parameters.decay_steps,
+            staircase=opt_parameters.staircase
         )
 
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            optimizer = get_optimizer(learning_rate, hparams.opt.method)
+            optimizer = get_optimizer(learning_rate, opt_parameters.method)
 
         grads_and_vars = {}
         total_norms = {}

@@ -5,7 +5,7 @@ This module defines data classes for `tensoralloy.nn` package.
 from __future__ import print_function, absolute_import
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,7 +76,7 @@ class ElasticLossOptions(_LossOptions):
 @dataclass
 class LossParameters:
     """
-    Hyper parameters for handling total loss.
+    Hyper parameters for constructing the total loss.
     """
 
     equivalently_trusted: bool = True
@@ -86,6 +86,19 @@ class LossParameters:
     total_pressure: PressureLossOptions = PressureLossOptions()
     l2: L2LossOptions = L2LossOptions()
     elastic: ElasticLossOptions = ElasticLossOptions()
+
+
+@dataclass
+class OptParameters:
+    """
+    Hyper parameters for optimizing the total loss.
+    """
+    method: str = 'adam'
+    learning_rate: float = 0.01
+    decay_function: Union[str, None] = None
+    decay_rate: float = 0.99
+    decay_steps: int = 1000
+    staircase: bool = False
 
 
 @dataclass(init=True, frozen=True)
