@@ -22,6 +22,7 @@ from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.utils import GraphKeys
 from tensoralloy.test_utils import test_dir
 from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.dataclasses import ElasticConstraintOptions
 
 
 __author__ = 'Xin Chen'
@@ -240,30 +241,6 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         return elastic
 
 
-# noinspection PyTypeChecker,PyArgumentList
-class ElasticConstraintOptions(
-    namedtuple('ElasticConstraintOptions',
-               ('use_kbar', 'forces_weight', 'stress_weight'))):
-    """
-    Options for computing loss of the elastic contraints.
-    """
-
-    def __new__(cls,
-                use_kbar: bool,
-                forces_weight: float,
-                stress_weight: float):
-        return super(ElasticConstraintOptions, cls).__new__(
-            cls, use_kbar, forces_weight, stress_weight)
-
-    @staticmethod
-    def default():
-        """
-        Return the default options.
-        """
-        return ElasticConstraintOptions(use_kbar=True, forces_weight=1.0,
-                                        stress_weight=0.1)
-
-
 def get_elastic_constant_loss(nn,
                               list_of_crystal: List[Union[Crystal, str]],
                               options: ElasticConstraintOptions = None,
@@ -286,7 +263,7 @@ def get_elastic_constant_loss(nn,
 
     """
     if options is None:
-        options = ElasticConstraintOptions.default()
+        options = ElasticConstraintOptions()
 
     configs = nn.as_dict()
     configs.pop('class')
