@@ -240,10 +240,34 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         return elastic
 
 
+# noinspection PyTypeChecker,PyArgumentList
+class ElasticConstraintOptions(
+    namedtuple('ElasticConstraintOptions',
+               ('use_kbar', 'forces_weight', 'stress_weight'))):
+    """
+    Options for computing loss of the elastic contraints.
+    """
+
+    def __new__(cls,
+                use_kbar: bool,
+                forces_weight: float,
+                stress_weight: float):
+        return super(ElasticConstraintOptions, cls).__new__(
+            cls, use_kbar, forces_weight, stress_weight)
+
+    @staticmethod
+    def default():
+        """
+        Return the default options.
+        """
+        return ElasticConstraintOptions(use_kbar=True, forces_weight=1.0,
+                                        stress_weight=0.1)
+
+
 def get_elastic_constant_loss(nn,
                               list_of_crystal: List[Union[Crystal, str]],
-                              weight=1.0,
-                              constraint_weight=1.0):
+                              options: ElasticConstraintOptions = None,
+                              weight=1.0):
     """
     Return a special loss: RMSE (GPa) of certain elastic constants of
     certain bulk solids.
@@ -255,12 +279,15 @@ def get_elastic_constant_loss(nn,
     list_of_crystal : List[Crystal] or List[str]
         A list of `Crystal` objects. It can also be a list of str as the names
         of the built-in crystals.
+    options : ElasticConstraintOptions
+        The options of the loss contributed by the constraints.
     weight : float
         The weight of the loss contributed by elastic constants.
-    constraint_weight : float
-        The weight of the loss contributed by the constraints.
 
     """
+    if options is None:
+        options = ElasticConstraintOptions.default()
+
     configs = nn.as_dict()
     configs.pop('class')
     configs['export_properties'] = ['energy', 'forces', 'stress']
@@ -305,13 +332,22 @@ def get_elastic_constant_loss(nn,
                     constraints['forces'].append(
                         tf.linalg.norm(output.forces, name='forces'))
 
-                    unit = tf.constant(1e4 / GPa, dtype=total_stress.dtype,
-                                       name='to_bar')
-                    bar = tf.identity(
-                        tf.linalg.norm(
-                            tf.math.multiply(output.stress, unit)), name='bar')
-                    constraints['stress'].append(bar)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, bar)
+                    if options.use_kbar:
+                        unit = tf.constant(10.0 / GPa, dtype=total_stress.dtype,
+                                           name='unit')
+                        value = tf.identity(
+                            tf.linalg.norm(
+                                tf.math.multiply(output.stress, unit)),
+                            name='kbar')
+                    else:
+                        unit = tf.constant(1e4 / GPa, dtype=total_stress.dtype,
+                                           name='unit')
+                        value = tf.identity(
+                            tf.linalg.norm(
+                                tf.math.multiply(output.stress, unit)),
+                            name='bar')
+                    constraints['stress'].append(value)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
@@ -352,12 +388,12 @@ def get_elastic_constant_loss(nn,
             with tf.name_scope("Constraint"):
                 f_loss = tf.add_n(constraints['forces'], name='f_loss')
                 f_weight = tf.convert_to_tensor(
-                    constraint_weight, dtype, name='weight/f')
+                    options.forces_weight, dtype, name='weight/f')
                 f_loss = tf.multiply(f_loss, f_weight, name='weighted/f_loss')
 
                 p_loss = tf.add_n(constraints['stress'], name='p_loss')
                 p_weight = tf.convert_to_tensor(
-                    constraint_weight * 0.01, dtype, name='weight/p')
+                    options.stress_weight, dtype, name='weight/p')
                 p_loss = tf.multiply(p_loss, p_weight, name='weighted/p_loss')
 
                 c_loss = tf.add(p_loss, f_loss, name='c_loss')
