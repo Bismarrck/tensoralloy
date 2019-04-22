@@ -311,7 +311,7 @@ def get_elastic_constant_loss(nn,
                         tf.linalg.norm(
                             tf.math.multiply(output.stress, unit)), name='bar')
                     constraints['stress'].append(bar)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, unit)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, bar)
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
