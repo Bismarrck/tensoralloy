@@ -101,3 +101,4 @@ profile_steps = 2000
 
 [debug]
 allow_gpu_growth = true
+logging_level = 'info'

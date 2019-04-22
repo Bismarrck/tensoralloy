@@ -8,6 +8,7 @@ import tensorflow as tf
 import shutil
 import os
 import platform
+import logging
 
 from os.path import join, exists, dirname, basename, realpath
 from ase.db import connect
@@ -108,7 +109,9 @@ class TrainingManager:
             precision=self._reader['precision'],
             train=AttributeDict(self._reader['train']),
             opt=AttributeDict(self._reader['opt']),
-            loss=AttributeDict(self._reader['nn.loss']))
+            loss=AttributeDict(self._reader['nn.loss']),
+            debug=AttributeDict(self._reader['debug'])
+        )
 
         if not hparams.opt.decay_function:
             hparams.opt.decay_function = None
@@ -263,6 +266,20 @@ class TrainingManager:
                       f"was already deleted")
                 hparams.train.previous_checkpoint = None
 
+    @staticmethod
+    def _get_logging_level(hparams: AttributeDict):
+        """
+        Return the logging level controlled by `hparams.debug.logging_level`.
+        """
+        levels = {
+            'info': logging.INFO,
+            'debug': logging.DEBUG,
+            'critical': logging.CRITICAL,
+            'error': logging.ERROR,
+            'warning': logging.WARNING,
+        }
+        return levels.get(hparams.debug.logging_level.lower(), logging.INFO)
+
     def train_and_evaluate(self, debug=False):
         """
         Initialize a model and train it with `tf_estimator.train_and_evalutate`.
@@ -280,7 +297,8 @@ class TrainingManager:
             self._backup_input_file()
 
             set_logging_configs(
-                logfile=check_path(join(hparams.train.model_dir, 'logfile')))
+                logfile=check_path(join(hparams.train.model_dir, 'logfile')),
+                level=self._get_logging_level(hparams))
 
             tf.logging.info(f'pid={os.getpid()}')
             tf.logging.info(f'seed={self._hparams.seed}')
