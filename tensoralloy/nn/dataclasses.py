@@ -101,6 +101,24 @@ class OptParameters:
     staircase: bool = False
 
 
+@dataclass
+class TrainParameters:
+    """
+    Hyper parameters for handling the training.
+    """
+    model_dir: str
+    restart: bool = True
+    batch_size: int = 50
+    previous_checkpoint: Union[str, None, bool] = None
+    shuffle: bool = True
+    max_checkpoints_to_keep: int = 20
+    train_steps: int = 10000
+    eval_steps: int = 1000
+    summary_steps: int = 100
+    log_steps: int = 100
+    profile_steps: int = 2000
+
+
 @dataclass(init=True, frozen=True)
 class StructuralProperty:
     """

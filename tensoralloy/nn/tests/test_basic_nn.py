@@ -20,6 +20,7 @@ from tensorflow.python.framework import importer
 from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import assert_array_equal, datasets_dir, test_dir
@@ -85,42 +86,6 @@ def test_convert_to_voigt_stress():
 
         assert_array_equal(pred_voigt, batch_voigt[0])
         assert_array_equal(pred_batch_voigt, batch_voigt)
-
-
-def test_check_hparams():
-    """
-    Test the static method `BasicNN._check_hparams`.
-    """
-    nn = BasicNN(elements=['Ni'], activation='leaky_relu',
-                 minimize_properties=['stress'], export_properties=['stress'])
-    
-    defaults = AttributeDict(
-        loss=AttributeDict(
-            equivalently_trusted=True,
-            energy=AttributeDict(weight=1.0, per_atom_loss=False),
-            forces=AttributeDict(weight=1.0),
-            stress=AttributeDict(weight=1.0, use_rmse=True),
-            total_pressure=AttributeDict(weight=1.0),
-            l2=AttributeDict(weight=0.01),
-            elastic=AttributeDict(weight=0.1, crystals=[],
-                                  constraint_weight=10.0)))
-
-    # noinspection PyTypeChecker
-    hparams = nn._check_loss_hparams(None)
-    assert_dict_equal(defaults, hparams)
-    
-    hparams = nn._check_loss_hparams(AttributeDict())
-    assert_dict_equal(defaults, hparams)
-
-    hparams = nn._check_loss_hparams(AttributeDict(loss={}))
-    assert_dict_equal(defaults, hparams)
-
-    hparams = nn._check_loss_hparams(
-        AttributeDict(loss={'energy': {'weight': 3.0},
-                            'equivalently_trusted': False}))
-    assert_equal(hparams.loss.energy.weight, 3.0)
-    assert_equal(hparams.loss.forces.weight, 1.0)
-    assert_equal(hparams.loss.equivalently_trusted, False)
 
 
 def test_graph_model_variables():
@@ -207,17 +172,13 @@ def test_build_nn_with_properties():
             labels['stress_confidence'] = batch.pop('s_conf')
             labels['total_pressure'] = batch.pop('total_pressure')
 
-            hparams = AttributeDict()
-            hparams.loss = AttributeDict(
-                equivalently_trusted=True,
-                energy=AttributeDict(weight=1.0, per_atom_loss=False),
-                forces=AttributeDict(weight=1.0),
-                stress=AttributeDict(weight=1.0, use_rmse=True),
-                total_pressure=AttributeDict(weight=1.0),
-                l2=AttributeDict(weight=0.01),
-                elastic=AttributeDict(weight=0.1, crystals=['Ni'],
-                                      constraint_weight=10.0),
-            )
+            loss_parameters = LossParameters()
+            loss_parameters.elastic.crystals = ['Ni']
+            loss_parameters.elastic.weight = 0.1
+            loss_parameters.elastic.constrain_options.forces_weight = 1.0
+            loss_parameters.elastic.constrain_options.stress_weight = 0.1
+            loss_parameters.elastic.constrain_options.use_kbar = True
+
             mode = tf_estimator.ModeKeys.TRAIN
 
             try:
@@ -228,7 +189,7 @@ def test_build_nn_with_properties():
                 nn.get_total_loss(predictions=predictions,
                                   labels=labels,
                                   n_atoms=batch.n_atoms,
-                                  hparams=hparams,
+                                  loss_parameters=loss_parameters,
                                   mode=mode)
             except Exception as excp:
                 print(excp)

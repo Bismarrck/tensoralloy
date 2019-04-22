@@ -11,13 +11,14 @@ import shutil
 
 from datetime import datetime
 from typing import List, Dict
-from collections import namedtuple
 from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
+from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
+from tensoralloy.nn.dataclasses import TrainParameters
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.opt import get_train_op
 from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
@@ -61,42 +62,13 @@ class ExportablePropertyError(_PropertyError):
     label = "exportable"
 
 
-# noinspection PyTypeChecker,PyArgumentList
-class Property(namedtuple('Property', ('name', 'minimizable', 'exportable'))):
-    """
-    A property of a strucutre.
-    """
-
-    def __new__(cls, name: str, minimizable: bool, exportable: bool):
-        """
-        Initialization method.
-
-        Parameters
-        ----------
-        name : str
-            The name of this property.
-        minimizable : bool
-            A boolean indicating whether this property can be minimized or not.
-        exportable : bool
-            A boolean indicating whether this property can be exported or not.
-
-        """
-        return super(Property, cls).__new__(cls, name, minimizable, exportable)
-
-    def __eq__(self, other):
-        if hasattr(other, "name"):
-            return other.name == self.name
-        else:
-            return str(other) == self.name
-
-
 all_properties = (
-    Property(name='energy', minimizable=True, exportable=True),
-    Property(name='forces', minimizable=True, exportable=True),
-    Property(name='stress', minimizable=True, exportable=True),
-    Property(name='total_pressure', minimizable=True, exportable=True),
-    Property(name='hessian', minimizable=False, exportable=True),
-    Property(name='elastic', minimizable=True, exportable=True)
+    StructuralProperty(name='energy'),
+    StructuralProperty(name='forces'),
+    StructuralProperty(name='stress'),
+    StructuralProperty(name='total_pressure'),
+    StructuralProperty(name='hessian', minimizable=False),
+    StructuralProperty(name='elastic')
 )
 
 exportable_properties = [
@@ -384,62 +356,8 @@ class BasicNN:
             log_tensor(hessian)
         return hessian
 
-    @staticmethod
-    def _check_loss_hparams(hparams: AttributeDict):
-        """
-        Check the hyper parameters and add missing but required parameters.
-        """
-
-        def _convert_to_attr_dict(adict):
-            if not isinstance(adict, AttributeDict):
-                return AttributeDict(adict)
-            else:
-                return adict
-
-        defaults = AttributeDict(
-            equivalently_trusted=True,
-            energy=AttributeDict(weight=1.0, per_atom_loss=False),
-            forces=AttributeDict(weight=1.0),
-            stress=AttributeDict(weight=1.0, use_rmse=True),
-            total_pressure=AttributeDict(weight=1.0),
-            l2=AttributeDict(weight=0.01),
-            elastic=AttributeDict(weight=0.1, crystals=[],
-                                  constraint_weight=10.0),
-        )
-
-        if hparams is None:
-            hparams = AttributeDict(loss=defaults)
-        else:
-            hparams = _convert_to_attr_dict(hparams)
-            if 'loss' not in hparams:
-                hparams.loss = defaults
-            else:
-                hparams.loss = _convert_to_attr_dict(hparams.loss)
-
-                def _check_section(section):
-                    if section not in hparams.loss:
-                        hparams.loss[section] = defaults[section]
-                    else:
-                        hparams.loss[section] = _convert_to_attr_dict(
-                            hparams.loss[section])
-                        for key, value in defaults[section].items():
-                            if key not in hparams.loss[section]:
-                                hparams.loss[section][key] = value
-
-                if 'equivalently_trusted' not in hparams.loss:
-                    hparams.loss.equivalently_trusted = True
-
-                _check_section('energy')
-                _check_section('forces')
-                _check_section('stress')
-                _check_section('total_pressure')
-                _check_section('l2')
-                _check_section('elastic')
-
-        return hparams
-
     def get_total_loss(self, predictions, labels, n_atoms,
-                       hparams: AttributeDict,
+                       loss_parameters: LossParameters,
                        mode=tf_estimator.ModeKeys.TRAIN):
         """
         Get the total loss tensor.
@@ -475,20 +393,8 @@ class BasicNN:
                   'stress' should be minimized.
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
-        hparams : AttributeDict
-            A dict of hyper parameters for defining loss functions. Essential
-            keypaths for this method are:
-                - 'hparams.loss.energy.weight'
-                - 'hparams.loss.energy.per_atom_loss'
-                - 'hparams.loss.forces.weight'
-                - 'hparams.loss.stress.weight'
-                - 'hparams.loss.stress.use_rmse'
-                - 'hparams.loss.total_pressure.weight'
-                - 'hparams.loss.l2.weight'
-                - 'hparams.loss.elastic.weight'
-                - 'hparams.loss.elastic.constraint_weight'
-                - 'hparams.loss.elastic.crystals'
-                - 'hparams.loss.equivalently_trusted'
+        loss_parameters : LossParameters
+            The hyper parameters for computing the total loss.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
 
@@ -504,7 +410,7 @@ class BasicNN:
 
         def _get_confidence(key):
             if mode == tf_estimator.ModeKeys.TRAIN and \
-                    (not hparams.loss.equivalently_trusted):
+                    (not loss_parameters.equivalently_trusted):
                 return labels[f"{key}_confidence"]
             else:
                 return None
@@ -512,7 +418,6 @@ class BasicNN:
         with tf.name_scope("Loss"):
 
             collections = [GraphKeys.TRAIN_METRICS]
-            hparams = self._check_loss_hparams(hparams)
 
             losses = AttributeDict()
             losses.energy = loss_ops.get_energy_loss(
@@ -520,8 +425,8 @@ class BasicNN:
                 predictions=predictions.energy,
                 n_atoms=n_atoms,
                 confidences=_get_confidence('energy'),
-                weight=hparams.loss.energy.weight,
-                per_atom_loss=hparams.loss.energy.per_atom_loss,
+                weight=loss_parameters.energy.weight,
+                per_atom_loss=loss_parameters.energy.per_atom_loss,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
@@ -530,7 +435,7 @@ class BasicNN:
                     predictions=predictions.forces,
                     n_atoms=n_atoms,
                     confidences=_get_confidence('forces'),
-                    weight=hparams.loss.forces.weight,
+                    weight=loss_parameters.forces.weight,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
@@ -538,7 +443,7 @@ class BasicNN:
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
                     confidences=_get_confidence('stress'),
-                    weight=hparams.loss.total_pressure.weight,
+                    weight=loss_parameters.total_pressure.weight,
                     collections=collections)
 
             elif 'stress' in self._minimize_properties:
@@ -546,12 +451,12 @@ class BasicNN:
                     labels=labels.stress,
                     predictions=predictions.stress,
                     confidences=_get_confidence("stress"),
-                    weight=hparams.loss.stress.weight,
-                    use_rmse=hparams.loss.stress.use_rmse,
+                    weight=loss_parameters.stress.weight,
+                    use_rmse=loss_parameters.stress.use_rmse,
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(
-                weight=hparams.loss.l2.weight,
+                weight=loss_parameters.l2.weight,
                 collections=collections)
 
             # Elastic constants will only be computed during training.
@@ -559,9 +464,8 @@ class BasicNN:
                     'elastic' in self._minimize_properties:
                 losses.elastic = elastic_ops.get_elastic_constant_loss(
                     nn=self,
-                    list_of_crystal=hparams.loss.elastic.crystals,
-                    weight=hparams.loss.elastic.weight,
-                    constraint_weight=hparams.loss.elastic.constraint_weight)
+                    list_of_crystal=loss_parameters.elastic.crystals,
+                    weight=loss_parameters.elastic.weight)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -581,7 +485,7 @@ class BasicNN:
     def get_training_hooks(self,
                            losses: AttributeDict,
                            ema: tf.train.ExponentialMovingAverage,
-                           hparams) -> List[tf.train.SessionRunHook]:
+                           train_parameters: TrainParameters):
         """
         Return a list of `tf.train.SessionRunHook` objects for training.
 
@@ -592,7 +496,7 @@ class BasicNN:
             pressure.
         ema : tf.train.ExponentialMovingAverage
             A function to obtain moving averaged variables.
-        hparams : AttributeDict
+        train_parameters : TrainParameters
             Hyper parameters for this function.
 
         """
@@ -600,14 +504,14 @@ class BasicNN:
 
             with tf.name_scope("Summary"):
                 summary_saver_hook = tf.train.SummarySaverHook(
-                    save_steps=hparams.train.summary_steps,
-                    output_dir=hparams.train.model_dir,
+                    save_steps=train_parameters.summary_steps,
+                    output_dir=train_parameters.model_dir,
                     summary_op=tf.summary.merge_all())
 
             with tf.name_scope("Speed"):
                 examples_per_sec_hook = ExamplesPerSecondHook(
-                    batch_size=hparams.train.batch_size,
-                    every_n_steps=hparams.train.log_steps)
+                    batch_size=train_parameters.batch_size,
+                    every_n_steps=train_parameters.log_steps)
 
             with tf.name_scope("Nan"):
                 nan_tensor_hook = NanTensorHook(fail_on_nan_loss=True, **losses)
@@ -617,31 +521,32 @@ class BasicNN:
             if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
                 logging_tensor_hook = LoggingTensorHook(
                     tensors=self.get_logging_tensors(GraphKeys.TRAIN_METRICS),
-                    every_n_iter=hparams.train.log_steps,
+                    every_n_iter=train_parameters.log_steps,
                     at_end=True)
                 hooks.append(logging_tensor_hook)
 
-            if hparams.train.profile_steps:
+            if train_parameters.profile_steps:
                 with tf.name_scope("Profile"):
                     profiler_hook = ProfilerHook(
-                        save_steps=hparams.train.profile_steps,
-                        output_dir=f"{hparams.train.model_dir}-profile",
+                        save_steps=train_parameters.profile_steps,
+                        output_dir=f"{train_parameters.model_dir}-profile",
                         show_memory=True)
                 hooks.append(profiler_hook)
 
-            if hparams.train.previous_checkpoint is not None:
+            if train_parameters.previous_checkpoint:
                 with tf.name_scope("Restore"):
+                    ckpt = train_parameters.previous_checkpoint
                     warm_start_hook = WarmStartFromVariablesHook(
-                        previous_checkpoint=hparams.train.previous_checkpoint,
+                        previous_checkpoint=ckpt,
                         ema=ema,
-                        restart=hparams.train.restart)
+                        restart=train_parameters.restart)
                 hooks.append(warm_start_hook)
 
         return hooks
 
     def get_evaluation_hooks(self,
                              ema: tf.train.ExponentialMovingAverage,
-                             hparams: AttributeDict):
+                             train_parameters: TrainParameters):
         """
         Return a list of `tf.train.SessionRunHook` objects for evaluation.
         """
@@ -654,7 +559,7 @@ class BasicNN:
                     logging_tensor_hook = LoggingTensorHook(
                         tensors=self.get_logging_tensors(
                             GraphKeys.EVAL_METRICS),
-                        every_n_iter=hparams.train.eval_steps,
+                        every_n_iter=train_parameters.eval_steps,
                         at_end=True)
                 hooks.append(logging_tensor_hook)
 
@@ -956,7 +861,7 @@ class BasicNN:
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
         params : AttributeDict
-            Hyperparameters for building and training a NN model.
+            Hyperparameters for building and training a `BasicNN`.
 
         Returns
         -------
@@ -979,18 +884,18 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms,
-                                                 hparams=params,
+                                                 loss_parameters=params.loss,
                                                  mode=mode)
         ema, train_op = get_train_op(
             losses=losses,
-            hparams=params,
+            opt_parameters=params.opt,
             minimize_properties=self._minimize_properties)
 
         if mode == tf_estimator.ModeKeys.TRAIN:
             training_hooks = self.get_training_hooks(
                 losses=losses,
                 ema=ema,
-                hparams=params)
+                train_parameters=params.train)
             return tf_estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)
@@ -999,7 +904,9 @@ class BasicNN:
             predictions=predictions,
             labels=labels,
             n_atoms=features.n_atoms)
-        evaluation_hooks = self.get_evaluation_hooks(ema=ema, hparams=params)
+        evaluation_hooks = self.get_evaluation_hooks(
+            ema=ema,
+            train_parameters=params.train)
         return tf_estimator.EstimatorSpec(mode=mode,
                                           loss=total_loss,
                                           eval_metric_ops=eval_metrics_ops,
