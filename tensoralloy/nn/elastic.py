@@ -269,7 +269,7 @@ def get_elastic_constant_loss(nn,
 
         predictions = []
         labels = []
-        constraints = []
+        constraints = {'forces': [], 'stress': []}
 
         for crystal in list_of_crystal:
             if isinstance(crystal, str):
@@ -302,8 +302,16 @@ def get_elastic_constant_loss(nn,
                 volume = features.volume
 
                 with tf.name_scope("Constraints"):
-                    constraints.extend([
-                        tf.linalg.norm(output.forces, name='forces')])
+                    constraints['forces'].append(
+                        tf.linalg.norm(output.forces, name='forces'))
+
+                    unit = tf.constant(1e4 / GPa, dtype=total_stress.dtype,
+                                       name='to_bar')
+                    bar = tf.identity(
+                        tf.linalg.norm(
+                            tf.math.multiply(output.stress, unit)), name='bar')
+                    constraints['stress'].append(bar)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, unit)
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
@@ -342,10 +350,17 @@ def get_elastic_constant_loss(nn,
             # Loss contribution from constraints because the 2-norm of the total
             # forces and stress of the crystal structure should be zero.
             with tf.name_scope("Constraint"):
-                c_loss = tf.add_n(constraints, name='loss')
-                weight = tf.convert_to_tensor(
-                    constraint_weight, dtype, name='weight')
-                c_loss = tf.multiply(c_loss, weight, name='weighted/loss')
+                f_loss = tf.add_n(constraints['forces'], name='f_loss')
+                f_weight = tf.convert_to_tensor(
+                    constraint_weight, dtype, name='weight/f')
+                f_loss = tf.multiply(f_loss, f_weight, name='weighted/f_loss')
+
+                p_loss = tf.add_n(constraints['stress'], name='p_loss')
+                p_weight = tf.convert_to_tensor(
+                    constraint_weight * 0.01, dtype, name='weight/p')
+                p_loss = tf.multiply(p_loss, p_weight, name='weighted/p_loss')
+
+                c_loss = tf.add(p_loss, f_loss, name='c_loss')
 
         total_loss = tf.add(e_loss, c_loss, name='total_loss')
 
