@@ -30,7 +30,7 @@ def test_read_external_crystal():
     builtin = built_in_crystals['Ni3Mo']
 
     assert_equal(builtin.name, crystal.name)
-    assert_equal(len(builtin.elastic_constants), len(crystal.elastic_constants))
+    assert_equal(7, len(crystal.elastic_constants))
 
     for elastic_constant in crystal.elastic_constants:
         assert_in(elastic_constant, builtin.elastic_constants)

@@ -175,9 +175,9 @@ def test_build_nn_with_properties():
             loss_parameters = LossParameters()
             loss_parameters.elastic.crystals = ['Ni']
             loss_parameters.elastic.weight = 0.1
-            loss_parameters.elastic.constrain_options.forces_weight = 1.0
-            loss_parameters.elastic.constrain_options.stress_weight = 0.1
-            loss_parameters.elastic.constrain_options.use_kbar = True
+            loss_parameters.elastic.constraint.forces_weight = 1.0
+            loss_parameters.elastic.constraint.stress_weight = 0.1
+            loss_parameters.elastic.constraint.use_kbar = True
 
             mode = tf_estimator.ModeKeys.TRAIN
 
