@@ -1,4 +1,4 @@
-\documentclass[prb,preprint]{revtex4-2}
+\documentclass[preprint]{revtex4-2}
 
 \usepackage{amsmath}    % need for subequations
 \usepackage{graphicx}   % need for figures
@@ -18,11 +18,17 @@
 \title{
     TensorAlloy: a highly efficient atomistic neural network program for alloys
 }
-\author{Xin Chen, De-Ye Lin, Hai-Feng Song$^\mathrm{*}$}
+\author{Xin Chen}
+\author{Xing-Yu Gao}
+\author{Ya-Fan Zhao}
+\author{De-Ye Lin}
+\email{lindeye0716@163.com}
+\author{Wei-Dong Chu}
+\author{Hai-Feng Song}
+\email{song\_haifeng@iapcm.ac.cn}
 \affiliation{
     Institute of Applied Physics and Computational Math, 
     Beijing 100088, China}
-
 \affiliation{
     CAEP Software Center for High Performance Numerical Simulation, 
     Beijing 100088, China}
@@ -31,16 +37,17 @@
 \begin{abstract}
 Atomistic modeling is important for studying physical and chemical properties of
 materials. Recently, machine learning interaction potentials have gained much 
-more attentions as they can give density functional theory level predictions 
-within second. Currently, symmetry function based atomistic neural network is 
-the most widely used model for alloys. To precisely describe atomistic 
-interactions, integrating advanced metrics, such as force or virial stress, into 
-training can be of great help. However, the traditional way to construct a 
+more attentions as they can provide density functional theory level predictions 
+within negligible time. Currently, the symmetry function descriptor based 
+atomistic neural network is the most widely used model for modeling alloys. 
+To precisely describe complex potential energy surfaces, integrating advanced 
+metrics, such as force or virial stress, into training can be of great help. 
+However, the traditional way to construct a 
 machine learning model computation graph starts from pre-computed descriptors, 
 but not positions, due to technial challenges. Thus, deriving analytical atomic 
-force or virial stress of a machine learning model becomes quite difficult as 
+force and virial stress of a machine learning model becomes quite difficult as 
 the partial derivations of descriptors with respect to positions need separate 
-implementations, which requires plenty of effort and its efficiency can not be 
+implementations, which requires plenty of efforts and its efficiency can not be 
 guaranteed.
 In this paper, we designed a new method, named the virtual atom approach, for 
 implementing the symmetry function descriptor and the corresponding atomistic 
@@ -50,9 +57,9 @@ computation graph from atomic positions \textemdash but not descriptors
 platforms to compute atomic force and virial stress becoming possible. We also 
 derived a simple and machine learning friendly equation for calculating virial 
 stress. All these new algorithms have been implemented in our Python package, 
-TensorAlloy. TensorAlloy supports both \textit{molecules} and \textit{solids} 
-and one hour is sufficient for TensorAlloy to obtain models with state-of-art 
-level accuracy.
+TensorAlloy. TensorAlloy supports constructing machine learning interaction 
+potentials for both \textit{molecules} and \textit{solids} and one hour is 
+sufficient for TensorAlloy to obtain models with state-of-art level accuracy.
 \end{abstract}
 
 \maketitle
@@ -75,30 +82,33 @@ atomistic interactions must be properly described. The very accurate
 \textit{ab initio} and quantum chemical methods have gain significant 
 improvements over the past decades but their applicabilities are restricted by 
 computation expenses. Physical model based empirical potentials, such as the 
-embedded-atom method\cite{eam-1,eam-2,eam-3,eam-4,eam-5}, are much more popular 
-for long-time simulation because of their reasonable accuraty and acceptable 
-costs. However, designing empirical potentials and optimizing parameters for 
-alloys are still challenging tasks. 
+embedded-atom method\cite{eam-1,eam-2,eam-3,eam-4,eam-5} or its variants (
+modified embedded-atom method\cite{eam-5,meam-1,meam-2,meam-3}, 
+angular-dependent interaction potential\cite{adp-1,adp-2,adp-3}, etc), are much 
+more popular for long-time simulation because of their reasonable accuraty and 
+acceptable costs. 
+However, designing empirical potentials and optimizing parameters for 
+alloys are still challenging tasks\cite{eam-5, adp-2, SNAP_2018}. 
 
 In the past few years, machine learning (ML) has become one of the most 
 influential topic in almost all fields of science. A lot of effort has been made 
 by various physicists to explore the possiblity of using ML models \textemdash 
 instead of traditional empirical potentials \textemdash to describe atomistic 
-interactions during MD simulations. ML potentials are much easier to design and 
+interactions during MD simulations\cite{kCON,SchNet,DTNN,SNAP_2018,SNAP_Mo_2017,
+ANI,TensorMol}. ML potentials are much easier to design and 
 optimize. With sufficient training data, ML models can achieve similar or even 
-better performances compared with density functional theory. Until now, various 
-ML models (kCON\cite{kCON}, SchNet\cite{SchNet}, DTNN\cite{DTNN}, 
-SNAP\cite{SNAP_Mo_2017, SNAP_2018}, etc) have been published by researchers. 
-Among them, the symmetry function based atomistic neural network (ANN) model, 
-first proposed by Parinello and Behler in 
-2007\cite{Behler,Behler2,Behler3,Behler4,Behler1}, is still the most widely used 
-method for \textit{solids} and its effectness and accuracy has been proven by 
-several works\cite{Behler-solids-lzp-1,Behler-alloy-1,Behler-alloy-2,
-Behler-alloy-3}. The Amp\cite{AMP} package, developed by Peterson's group, is 
-the first open-source framework that implements the symmetry function 
-descriptor. Amp supports both \textit{molecules} and \textit{solids} and it has 
-successfully powered quite a few researches since 
-2016\cite{Amp-works-hammer,amp-work-1}. ANI\cite{ANI} and 
+better performances compared with density functional theory.
+The symmetry function based atomistic neural network (ANN) model, first proposed 
+by Parinello and Behler in 2007\cite{Behler,Behler2,Behler3,Behler4,Behler1}, 
+is still the most widely used method for \textit{solids} and its effectness and 
+accuracy has been proven by several 
+works\cite{Behler-solids-lzp-1,Behler-alloy-1,Behler-alloy-2, Behler-alloy-3}.
+Until now, various ML implementations\cite{AMP,ANI,TensorMol} have been 
+published by researchers. The Amp\cite{AMP} package, developed by Peterson's 
+group, is the first open-source framework that implements the symmetry function 
+descriptor. Amp can be used to learn interaction potentials for both 
+\textit{molecules} and \textit{solids} and it has successfully powered quite a 
+few researches since 2016\cite{Amp-works-hammer,amp-work-1}. ANI\cite{ANI} and 
 TensorMol\cite{TensorMol} are also symmetry function based packages but they 
 mainly focus on \textit{molecules}.
 
@@ -113,7 +123,7 @@ This approach can significantly reduce technical difficulty and works very well
 if only total energy is considered in the loss function. But to fit atomic 
 forces, numerous codes must be written manually, such as the derivation of 
 descriptors with respect to positions. Although the derivation is theoretically
-clear, the implementation will be a challenge and the efficiency can not be 
+clear, the implementation is challenging and the efficiency can not be 
 guaranteed.
 
 Recently, machine learning platforms (TensorFlow\cite{tensorflow}, 
@@ -140,9 +150,7 @@ theory of the symmetry function descriptor and the ANN framework. Section
 model used by \tensoralloy{}. Section \ref{section:discussions} displays 
 performances of \tensoralloy{} on two public datasets. The appendix 
 \ref{section:appendix} gives derivation and implementation details of key 
-algorithms. The compiled version of \tensoralloy{} program and all the 
-associated model files are available on 
-\href{https://github.com/Bismarrck/tensoralloy-release}{GitHub}.
+algorithms. The \tensoralloy{} program can be obtained on request.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -166,8 +174,8 @@ network $\mathbf{NN}_{el}$ for element $el$:
 E_i = \mathbf{NN}_{el}\left( \mathbf{G}_i \right)
 \end{equation} 
 Here $\mathbf{G}_i$ is a vector representing atomic descriptors of atom $i$. 
-$\mathbf{G}_i$ typically only depends on local environments \textemdash 
-neighbors \textemdash of atom $i$:
+$\mathbf{G}_i$ typically only depends on local environments, i.e.  
+neighbors of atom $i$:
 \begin{equation}
 \mathbf{G}_i = F_G(\left\{ \rijn, |\rijn| < r_c\right\} )
 \end{equation}
@@ -241,9 +249,9 @@ f_c(r) =
     \text{$r \leq r_c$}
     \end{cases}
 \end{equation}
-and $r_c$ is the cutoff radius. In our implementation, $R_s$ is always fixed to 
-0 so it becomes neglectable\cite{AMP}. Equation \eqref{eq:fc_origin} can be 
-further transformed to a vectorized expression:
+and $r_c$ is the cutoff radius. $R_s$ may be fixed to zero \cite{AMP}. 
+Equation \eqref{eq:fc_origin} can be further transformed to a vectorized 
+expression:
 \begin{equation}
 \label{eq:fc}
 f_c(r) = \frac{1}{2}\left( 
@@ -300,37 +308,38 @@ and
 }
 \end{align}
 
-The derivations are theoretically straightforward but coding these equations 
-manually will be a challenge\cite{AMP}. Thanks to the virtual atom approach, 
-\tensoralloy{} can now calculate $f_a$ using Equation \ref{eq:dEdr} directly.
+The derivations are theoretically straightforward but their implementations are 
+challenging \cite{AMP}. Later we will provide a new approach to address this 
+problem.
 
-The $3 \times 3$ virial stress tensor $\epsilon$ is an important metric for 
-solids. For arbitrary many-body interaction potentials, $\epsilon$ can be 
-calculated with the following equation\cite{lammps_stress}:
+The $3 \times 3$ virial stress tensor $\epsilon$ is an important metric to 
+describe solids under deformation or external pressure. For arbitrary many-body 
+interaction potentials, $\epsilon$ can be calculated with the following equation
+\cite{lammps_stress}:
 \begin{equation}
 \label{eq:stress_lammps}
-\epsilon = \left(-\sum_{i=1}^{N}{\mathbf{r}_i^{(0)} \otimes f_i} - 
+V \cdot \epsilon = \left(-\sum_{i=1}^{N}{\mathbf{r}_i^{(0)} \otimes f_i} - 
 \sum_{\mathbf{n}}{\mathbf{h}^T\mathbf{n}} \otimes 
 \sum_{i=1}^{N}{F^{\prime}_{i\mathbf{n}}}
 \right)^T
 \end{equation}
-where $\otimes$ indicates tensor product, $f_i$ is the total force acting on 
-atom $i$ and $F^{\prime}_{i\mathbf{n}}$ is the partial force. Yntil now, 
-most machine learning force-field models focus on fitting total energy and 
-atomic forces, very few of them\cite{DeePMD,DeePMD_rl,DeePMD_kit} had attempted 
-to include stress in their loss functions. The current expression of Equation 
-\ref{eq:stress_lammps} is not very compatible with NN or other ML potentials 
-since the partial forces are difficult to compute with vectorized operations. 
-To resolve this issue, we derived an equivalent form of Equation 
-\ref{eq:stress_lammps}:
+where $V$ is the volume, $\otimes$ indicates tensor product, $f_i$ is the total 
+force acting on atom $i$ and $F^{\prime}_{i\mathbf{n}}$ is the partial force. 
+Until now, most machine learning force-field models focus on fitting total 
+energy and atomic forces, very few of them\cite{DeePMD,DeePMD_rl,DeePMD_kit} had 
+attempted to include stress in their loss functions. 
+The current expression of Equation \ref{eq:stress_lammps} is not very compatible 
+with NN or other ML potentials since the partial forces are difficult to compute 
+with vectorized operations. To resolve this issue, we derived an equivalent form 
+of Equation \ref{eq:stress_lammps}:
 \begin{equation}
 \label{eq:stress}
-\epsilon = -F^{T} R + 
+V \cdot \epsilon = -F^{T} R + 
 \left(\frac{\partial E^{total}}{\partial \mathbf{h}}\right)^T \mathbf{h}
 \end{equation}
-where $R$ is the $N \times 3$ positions matrix and $F$ is the corresponding 
-total forces matrix. The new equation can be easily implemented with simple 
-matrix operations. The detailed derivation is given in the appendix.
+where $R$ is the $N \times 3$ positions matrix and $F$ is the 
+corresponding total forces matrix. The new equation can be easily implemented 
+with simple matrix operations. The detailed derivation is given in the appendix.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -347,10 +356,10 @@ matrix operations. The detailed derivation is given in the appendix.
 \newcommand{\nijkmax}{N_{ijk}^{\mathrm{max}}}
 
 In this section we will describe details of \tensoralloy{}: the virtual atom 
-approach, the atomic residual potential and the loss function. The Ni-Mo alloy 
-system, with four $\eta$, two $\beta$, two $\gamma$ and one $\zeta$, will be 
-used as the example to show this algorithm. For simplicity, only radial symmetry
-function related algorithms are visualized in the figures. 
+approach, the atomic residual potential and the loss function. 
+The Ni-Mo binary alloy system will be used as the example to show this 
+algorithm. The virtual atom approach is built upon TensorFlow. For simplicity, 
+only radial symmetry function related algorithms are visualized in the figures.
 
 \subsection{The virtual atom approach}
 \label{section:virtual_atom_approach}
@@ -360,9 +369,10 @@ approach. The cutoff radius $r_{cut}$ must be fixed. The first step is to go
 through the entire dataset and determining four prerequisite constants: 
 $N_{ij}^{\mathrm{max}}$, $N_{ijk}^{\mathrm{max}}$, 
 $N_{\mathrm{Ni}}^{\mathrm{max}}$ and $N_{\mathrm{Mo}}^{\mathrm{max}}$. 
-Here $N_{ij}^{\mathrm{max}}$ represents the maximum number of neighbor pairs of 
-arbitrary structure and $N_{ijk}^{\mathrm{max}}$ represents the maximum number 
-of triples. $N_{ij}^{\mathrm{max}}$ and $N_{ijk}^{\mathrm{max}}$ only depends on 
+Here $N_{ij}^{\mathrm{max}}$ represents the maximum number of neighbor pairs 
+and $N_{ijk}^{\mathrm{max}}$ represents the maximum number of triples in 
+arbitrary structure. 
+$N_{ij}^{\mathrm{max}}$ and $N_{ijk}^{\mathrm{max}}$ only depend on 
 $r_{cut}$. The associated codes are given in the appendix.
 $N_{\mathrm{Ni}}^{\mathrm{max}}$ and $N_{\mathrm{Mo}}^{\mathrm{max}}$ indicate 
 the maximum appearances of Ni and Mo in any structure, respectively. 
@@ -376,12 +386,12 @@ The order of the interactions must be maintained as well.
 \begin{figure}[h!]
 \centering
 \includegraphics[scale=0.5]{figures/Fig1-prepare.pdf}
-\caption{\label{fig:algo1} The initialization. 
-\textbf{a)} the detections of $N_{\mathrm{Ni}}^{\mathrm{max}}$, 
+\caption{\label{fig:algo1} The initialization step. 
+\textbf{a)} describes the detections of $N_{\mathrm{Ni}}^{\mathrm{max}}$, 
 $N_{\mathrm{Ni}}^{\mathrm{max}}$, $N_{ij}^{max}$, $N_{ijk}^{max}$ and the global
 symbols list.
-\textbf{b)} and \textbf{c)} the \textit{offsets} and their corresponding 
-symmetry function parameters.
+The \textit{offsets} of radial and angular functions and their corresponding 
+symmetry function parameters are in \textbf{b)} and \textbf{c)}, respectively.
 }
 \end{figure}
 
@@ -502,8 +512,7 @@ describes the implementation of $\mathbf{R'_{b}} \rightarrow \mathbf{G_b}$.
 To implement $\mathbf{G_b} \rightarrow \mathbf{E_b}$, \textbf{TensorAlloy} uses 
 1D-convolutional neural networks with $1 \times 1$ kernels\cite{kCON}. The total 
 forces $\mathbf{F_{b}}$ and the virial stress $\mathbf{\epsilon_{b}}$ are 
-calculated with Equation \ref{eq:dEdr} and Equation \ref{eq:stress} by with just 
-few lines of codes.
+calculated with Equation \ref{eq:dEdr} and Equation \ref{eq:stress} directly.
 
 \subsection{The residual model}
 
@@ -521,7 +530,7 @@ the \textit{static} energy of each type of element\cite{kCON}. The NN in
 Equation \ref{eq:e_total_res} just describes the atomistic interactions 
 (the \textit{residual} energy). The 
 introduction of $E^{static}$ can significantly limit value range of NN outputs, 
-leading to much faster convergence speed and higher training stability 
+leading to faster convergence speed and higher training stability 
 (Fig \ref{fig:benchmark_qm7}c). The initial $\{E_{el}\}$ are calculated by 
 solving the linear system $Ax=b$ where $A$ is a $N_{data} \times N_{el}$ matrix 
 and $b$ is a $N_{data}\times 1$ vector. $A(i,j)$ is the number of $j^{th}$
@@ -554,7 +563,7 @@ stress losses. Typically both $\chi_{\mathrm{f}}$ and $\chi_{\mathrm{s}}$ range
 within $[1,10]$. Stress tensors are converted to Voigt vectors. All energies are 
 in \textbf{eV}, all forces are in \textbf{eV/\AA} and all stress components are 
 in \textbf{eV/\AA}$\mathbf{^3}$. In most cases, we set $N_b$ to 50 or 100 and we
-use the Adam\cite{adam} optimizer with exponentially-decayed learning rate to 
+use the ADAM\cite{adam} optimizer with exponentially-decayed learning rate to 
 minimize the loss function. The activation function is Leaky ReLU
 \cite{maas2013rectifier}:
 \begin{equation}
@@ -590,14 +599,14 @@ were randomly selected as test set before training.
 Figure \ref{fig:benchmark_qm7} demonstrates the performances of 
 \textbf{TensorAlloy} on QM7 dataset. In this figure, 'Radial' means only radial 
 symmetry functions (Equation \ref{eq:G2}) are used and 'Angular' indicates both 
-radial and angular symmetry functions are used. The cutoff radius is 6.5 \AA and
-the corresponding $\nijmax$ and $\nijkmax$ are 506 and 5313, indicating the 
-calculation of angular descriptors is much more expensive.
-The $\eta$ for radial symmetry functions are 0.1, 0.5, 1, 2, 4, 8, 12, 16, 20, 
-40 and $\beta$ (0.1, 0.5), $\gamma$ (1, -1) and $\zeta$ (1, 4) are used for
-angular functions. The initial learning rate is 0.01 and the it is exponentially 
-decayed with rate 0.99 for every 5000 steps. Each atomistic neural network has
-two hidden layers with 128 and 64 neurons.
+radial and angular symmetry functions are used. The cutoff radius is 6.5 \AA.
+The corresponding $\nijmax$ and $\nijkmax$ are 506 and 5313, respectively, 
+indicating the calculation of angular descriptors is much more expensive.
+Values of $\eta$ for radial symmetry functions are 0.1, 0.5, 1, 2, 4, 8, 12, 16, 
+20, 40 and $\beta$ (0.1, 0.5), $\gamma$ (1, -1) and $\zeta$ (1, 4) are used for
+angular functions. $R_s$ is fixed to zero. The initial learning rate is 0.01 and 
+then it is exponentially decayed with rate 0.99 for every 5000 steps. 
+Each atomistic neural network has two hidden layers with 128 and 64 neurons.
 
 Figure \ref{fig:benchmark_qm7}a compares the training speed (number of processed 
 structures per second) with different batch sizes (number of structures per 
@@ -705,8 +714,8 @@ corresponding SNAP models}
     \centering
     \includegraphics[scale=0.8]{figures/Fig5-snap.pdf}
 \caption{\label{fig:snap_gpu_train_speed} The test MAEs of the SFNN/Ni-Mo model 
-vs training time (GPU Hour). The black dotted line marks the performance of the
-SNAP/Ni-Mo model.}
+vs training time (GPU Hour). The black dotted line marks the final performance 
+of the SNAP/Ni-Mo model \cite{SNAP_2018}.}
 \end{figure}
 
 Table \ref{table:MAE} summarizes the energy, force and stress prediction 
@@ -745,10 +754,10 @@ used to generate these surface slabs.
 \begin{figure}[h!]
     \centering
     \includegraphics[scale=0.8]{figures/Fig7-surface-energy.pdf}
-\caption{\label{fig:surface_energy_Ni} Surface energies ($J/m^2$) of different 
-Ni surfaces calculated with DFT, Ni/SFNN and Ni-Mo/SFNN models. The MAEs of the 
-Ni/SFNN and Ni-Mo/SFNN relative to the DFT values are 0.09 and 0.05, 
-respectively.}
+\caption{\label{fig:surface_energy_Ni} Surface formation energies ($J/m^2$) of 
+different Ni surfaces calculated by DFT, Ni/SFNN and Ni-Mo/SFNN models. 
+The MAEs of the Ni/SFNN and Ni-Mo/SFNN relative to the DFT values are 0.09 and 
+0.05, respectively.}
 \end{figure}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
@@ -779,7 +788,10 @@ state-of-art performances within just one GPU Hour.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \section*{Acknowledgments}
 
-This work was supported by. Computing resources were provided by.
+This work was supported by the National Key Research and Development Program of 
+China under Grant No. 2016YFB0201203, the Science Challenge Project under Grant 
+No. TZ2018002 and the National Natural Science Foundation of China under Grant 
+No. U1630250.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -952,13 +964,13 @@ a radial function:
     \sum_{\gamma}{\cdot n_{\gamma}\hgb}
 } \nonumber \\
 & = -\sum_{i}^{N}{\sum_{l}^{N_G}}{\sum_{j \neq i}{\sum_{\mathbf{n}}}{
-    f^{'}_{ij\mathbf{n}}
+    f^{'}_{ij\mathbf{n}\alpha}
     \sum_{\gamma}{\cdot n_{\gamma}\hgb}
 }}
 \end{align}
 where $f^{'}_{ij\mathbf{n}}$ is the partial force:
 \begin{equation}
-f^{'}_{ij\mathbf{n}} = 
+f^{'}_{ij\mathbf{n}\alpha} = 
 -\frac{\partial \mathbf{NN}_{el}(\mathbf{G}_i)}{\partial G_{il}} \cdot 
 \frac{\partial g_2}{\partial \rijn} \cdot 
 \frac{\Delta_{ij\mathbf{n}\alpha}}{\rijn}
