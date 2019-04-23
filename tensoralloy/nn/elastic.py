@@ -75,11 +75,15 @@ class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
 
 
 built_in_crystals = {
-    "Ni": Crystal("Ni", bulk("Ni", cubic=True),
+    "Al": Crystal("Al", bulk('Al', cubic=True, crystalstructure='fcc'),
+                  [ElasticConstant([0, 0, 0, 0], 104),
+                   ElasticConstant([0, 0, 1, 1], 73),
+                   ElasticConstant([1, 2, 1, 2], 32)]),
+    "Ni": Crystal("Ni", bulk("Ni", cubic=True, crystalstructure='fcc'),
                   [ElasticConstant([0, 0, 0, 0], 276),
                    ElasticConstant([0, 0, 1, 1], 159),
                    ElasticConstant([1, 2, 1, 2], 132)]),
-    "Mo": Crystal("Mo", bulk("Mo", cubic=True),
+    "Mo": Crystal("Mo", bulk("Mo", cubic=True, crystalstructure='bcc'),
                   [ElasticConstant([0, 0, 0, 0], 472),
                    ElasticConstant([0, 0, 1, 1], 158),
                    ElasticConstant([1, 2, 1, 2], 106)]),
