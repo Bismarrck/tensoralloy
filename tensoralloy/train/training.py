@@ -18,11 +18,12 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
-from tensoralloy.io.input.reader import nested_set
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.utils import set_logging_configs, AttributeDict
+from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
+from tensoralloy.nn.dataclasses import LossParameters
+from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.dtypes import set_float_precision
 
@@ -107,9 +108,9 @@ class TrainingManager:
         hparams = AttributeDict(
             seed=self._reader['seed'],
             precision=self._reader['precision'],
-            train=AttributeDict(self._reader['train']),
-            opt=AttributeDict(self._reader['opt']),
-            loss=AttributeDict(self._reader['nn.loss']),
+            train=TrainParameters(**self._reader['train']),
+            opt=OptParameters(**self._reader['opt']),
+            loss=LossParameters(**self._reader['nn.loss']),
             debug=AttributeDict(self._reader['debug'])
         )
 
