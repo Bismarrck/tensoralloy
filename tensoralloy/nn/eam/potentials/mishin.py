@@ -14,6 +14,21 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def mishin_cutoff(x):
+    """
+    The cutoff function:
+
+        psi(x) = x**4 / (1 + x**4)  x <  0
+                 0                  x >= 0
+
+    """
+    with tf.name_scope("Psi"):
+        x = tf.nn.relu(-x, name='ix')
+        x4 = tf.pow(x, 4, name='x4')
+        one = tf.constant(1.0, dtype=x.dtype, name='one')
+        return tf.math.truediv(x4, one + x4, name='psi')
+
+
 class MishinH(EamAlloyPotential):
     """
     The ADP potential functions of the Mishin H-style.
@@ -40,21 +55,6 @@ class MishinH(EamAlloyPotential):
         Return the default parameters.
         """
         return {}
-
-    @staticmethod
-    def cutoff(x):
-        """
-        The cutoff function:
-
-            psi(x) = x**4 / (1 + x**4)  x <  0
-                     0                  x >= 0
-
-        """
-        with tf.name_scope("Psi"):
-            x = tf.nn.relu(-x, name='ix')
-            x4 = tf.pow(x, 4, name='x4')
-            one = tf.constant(1.0, dtype=x.dtype, name='one')
-            return tf.math.truediv(x4, one + x4, name='psi')
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
             verbose=False):
@@ -102,7 +102,7 @@ class MishinH(EamAlloyPotential):
 
             drc = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(drc, h, name='drh')
-            psi = self.cutoff(drh)
+            psi = mishin_cutoff(drh)
 
             dr0 = tf.math.subtract(r, R0, name='dr0')
             dr1 = tf.math.subtract(r, R1, name='dr1')
@@ -153,7 +153,7 @@ class MishinH(EamAlloyPotential):
 
             dr = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(dr, h, name='drh')
-            psi = self.cutoff(drh)
+            psi = mishin_cutoff(drh)
 
             rz1 = tf.pow(r, z1, name='rz1')
             e1 = tf.exp(-r * a1, name='e1')
@@ -261,7 +261,7 @@ class MishinH(EamAlloyPotential):
 
             drc = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(drc, h, name='drh')
-            psi = self.cutoff(drh)
+            psi = mishin_cutoff(drh)
 
             left = tf.add(d1 * tf.exp(-d2 * r), d3, name='left')
             dipole = tf.multiply(left, psi, name='dipole')
@@ -294,10 +294,113 @@ class MishinH(EamAlloyPotential):
 
             drc = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(drc, h, name='drh')
-            psi = self.cutoff(drh)
+            psi = mishin_cutoff(drh)
 
             left = tf.add(q1 * tf.exp(-q2 * r), q3, name='left')
             quadrupole = tf.multiply(left, psi, name='quadrupole')
             if verbose:
                 log_tensor(quadrupole)
             return quadrupole
+
+
+class MishinTa(EamAlloyPotential):
+    """
+    The ADP potential functions of the Mishin Ta-style.
+
+    References
+    ----------
+    Y. Mishin and A.Y. Lozovoi, Acta Materialia 54 (2006) 5013–5026
+
+    """
+
+    def __init__(self):
+        """
+        Initialization method.
+        """
+        super(MishinTa, self).__init__()
+
+        self._name = 'MishinTa'
+        self._implemented_potentials = ('rho', 'phi', 'embed', 'dipole',
+                                        'quadrupole')
+
+    @property
+    def defaults(self):
+        """
+        Return the default parameters.
+        """
+        return {}
+
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
+            verbose=False):
+        """
+        The electron density function rho(r).
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
+        element : str
+            The corresponding element.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        with tf.name_scope(f"{self._name}/Rho/{element}"):
+            A0 = self._get_shared_variable('A0', r.dtype, element)
+            B0 = self._get_shared_variable('B0', r.dtype, element)
+            C0 = self._get_shared_variable('B0', r.dtype, element)
+            rc = self._get_shared_variable('rc', r.dtype, element)
+            r0 = self._get_shared_variable('r0', r.dtype, element)
+            y = self._get_shared_variable('y', r.dtype, element)
+            gamma = self._get_shared_variable('gamma', r.dtype, element)
+            h = self._get_shared_variable('h', r.dtype, element)
+            one = tf.constant(1.0, dtype=r.dtype, name='one')
+
+            dr = tf.subtract(r, rc, name='dr')
+            drh = tf.math.truediv(dr, h, name='drh')
+            psi = mishin_cutoff(drh)
+
+            z = tf.math.subtract(r, r0, name='z')
+            egz = tf.exp(-gamma * z)
+            c = tf.add((one + B0 * egz) * A0 * egz * tf.pow(z, y), C0, name='c')
+
+            rho = tf.multiply(c, psi, name='rho')
+            if verbose:
+                log_tensor(rho)
+            return rho
+
+    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
+              verbose=False):
+        """
+        The embedding energy function F(rho).
+
+        Parameters
+        ----------
+        rho : tf.Tensor
+            A 3D tensor of shape `[batch_size, max_n_element, 1]` where
+            `max_n_element` is the maximum occurs of `element`.
+        element : str
+            An element symbol.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        dtype = rho.dtype
+
+        with tf.name_scope(f"{self._name}/Embed/{element}"):
+
+            pass
