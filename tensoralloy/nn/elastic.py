@@ -62,54 +62,75 @@ class ElasticConstant(namedtuple('ElasticConstant', ('ijkl', 'value'))):
 
 
 # noinspection PyTypeChecker,PyArgumentList
-class Crystal(namedtuple('Crystal', ('name', 'atoms', 'elastic_constants'))):
+class Crystal(namedtuple('Crystal',
+                         ('name', 'tag', 'atoms', 'elastic_constants'))):
     """
     A container class for a crystal.
     """
 
     def __new__(cls,
                 name: str,
+                tag: str,
                 atoms: Atoms,
                 elastic_constants: List[ElasticConstant]):
-        return super(Crystal, cls).__new__(cls, name, atoms, elastic_constants)
+        return super(Crystal, cls).__new__(
+            cls, name, tag, atoms, elastic_constants)
 
 
 built_in_crystals = {
-    "Al": Crystal("Al", bulk('Al', cubic=True, crystalstructure='fcc'),
-                  [ElasticConstant([0, 0, 0, 0], 104),
-                   ElasticConstant([0, 0, 1, 1], 73),
-                   ElasticConstant([1, 2, 1, 2], 32)]),
-    "Ni": Crystal("Ni", bulk("Ni", cubic=True, crystalstructure='fcc'),
-                  [ElasticConstant([0, 0, 0, 0], 276),
-                   ElasticConstant([0, 0, 1, 1], 159),
-                   ElasticConstant([1, 2, 1, 2], 132)]),
-    "Mo": Crystal("Mo", bulk("Mo", cubic=True, crystalstructure='bcc'),
-                  [ElasticConstant([0, 0, 0, 0], 472),
-                   ElasticConstant([0, 0, 1, 1], 158),
-                   ElasticConstant([1, 2, 1, 2], 106)]),
-    "Ni4Mo": Crystal("Ni4Mo", read(join(test_dir(),
-                                        'crystals',
-                                        f'Ni4Mo_mp-11507_{_identifier}.cif')),
-                     [ElasticConstant([0, 0, 0, 0], 300),
-                      ElasticConstant([0, 0, 1, 1], 186),
-                      ElasticConstant([1, 1, 2, 2], 166),
-                      ElasticConstant([1, 1, 1, 1], 313),
-                      ElasticConstant([2, 2, 2, 2], 313),
-                      ElasticConstant([1, 2, 1, 2], 106),
-                      ElasticConstant([0, 2, 0, 2], 130),
-                      ElasticConstant([0, 1, 0, 1], 130)]),
-    "Ni3Mo": Crystal("Ni3Mo", read(join(test_dir(),
-                                        'crystals',
-                                        f'Ni3Mo_mp-11506_{_identifier}.cif')),
-                     [ElasticConstant([0, 0, 0, 0], 385),
-                      ElasticConstant([0, 0, 1, 1], 166),
-                      ElasticConstant([0, 0, 2, 2], 145),
-                      ElasticConstant([1, 1, 1, 1], 402),
-                      ElasticConstant([1, 1, 2, 2], 131),
-                      ElasticConstant([2, 2, 2, 2], 402),
-                      ElasticConstant([1, 2, 1, 2], 58),
-                      ElasticConstant([0, 2, 0, 2], 66),
-                      ElasticConstant([0, 1, 0, 1], 94)]),
+    "Al": Crystal(name="Al",
+                  tag="fcc",
+                  atoms=bulk('Al', cubic=True, crystalstructure='fcc'),
+                  elastic_constants=[ElasticConstant([0, 0, 0, 0], 104),
+                                     ElasticConstant([0, 0, 1, 1], 73),
+                                     ElasticConstant([1, 2, 1, 2], 32)]),
+    "Al/bcc": Crystal(name='Al',
+                      tag='bcc',
+                      atoms=read(join(test_dir(),
+                                      'crystals',
+                                      f'Al_bcc_{_identifier}.cif')),
+                      elastic_constants=[ElasticConstant([0, 0, 0, 0], 36),
+                                         ElasticConstant([0, 0, 1, 1], 86),
+                                         ElasticConstant([1, 2, 1, 2], 42),]),
+    "Ni": Crystal(name="Ni",
+                  tag="fcc",
+                  atoms=bulk("Ni", cubic=True, crystalstructure='fcc'),
+                  elastic_constants=[ElasticConstant([0, 0, 0, 0], 276),
+                                     ElasticConstant([0, 0, 1, 1], 159),
+                                     ElasticConstant([1, 2, 1, 2], 132)]),
+    "Mo": Crystal(name="Mo",
+                  tag="fcc",
+                  atoms=bulk("Mo", cubic=True, crystalstructure='bcc'),
+                  elastic_constants=[ElasticConstant([0, 0, 0, 0], 472),
+                                     ElasticConstant([0, 0, 1, 1], 158),
+                                     ElasticConstant([1, 2, 1, 2], 106)]),
+    "Ni4Mo": Crystal(name="Ni4Mo",
+                     tag="cubic",
+                     atoms=read(join(test_dir(),
+                                     'crystals',
+                                     f'Ni4Mo_mp-11507_{_identifier}.cif')),
+                     elastic_constants=[ElasticConstant([0, 0, 0, 0], 300),
+                                        ElasticConstant([0, 0, 1, 1], 186),
+                                        ElasticConstant([1, 1, 2, 2], 166),
+                                        ElasticConstant([1, 1, 1, 1], 313),
+                                        ElasticConstant([2, 2, 2, 2], 313),
+                                        ElasticConstant([1, 2, 1, 2], 106),
+                                        ElasticConstant([0, 2, 0, 2], 130),
+                                        ElasticConstant([0, 1, 0, 1], 130)]),
+    "Ni3Mo": Crystal(name="Ni3Mo",
+                     tag="cubic",
+                     atoms=read(join(test_dir(),
+                                     'crystals',
+                                     f'Ni3Mo_mp-11506_{_identifier}.cif')),
+                     elastic_constants=[ElasticConstant([0, 0, 0, 0], 385),
+                                        ElasticConstant([0, 0, 1, 1], 166),
+                                        ElasticConstant([0, 0, 2, 2], 145),
+                                        ElasticConstant([1, 1, 1, 1], 402),
+                                        ElasticConstant([1, 1, 2, 2], 131),
+                                        ElasticConstant([2, 2, 2, 2], 402),
+                                        ElasticConstant([1, 2, 1, 2], 58),
+                                        ElasticConstant([0, 2, 0, 2], 66),
+                                        ElasticConstant([0, 1, 0, 1], 94)]),
 }
 
 
@@ -159,6 +180,7 @@ def read_external_crystal(toml_file: str) -> Crystal:
         key_value_pairs = dict(toml.load(fp))
 
         name = key_value_pairs.pop('name')
+        tag = key_value_pairs.pop('tag')
         real_path = realpath(join(dirname(toml_file),
                                   key_value_pairs.pop('file')))
 
@@ -174,7 +196,10 @@ def read_external_crystal(toml_file: str) -> Crystal:
             ijkl = voigt_to_ijkl(vi, vj, is_py_index=False)
             constants.append(ElasticConstant(ijkl, float(value)))
 
-        return Crystal(name, atoms, constants)
+        return Crystal(name=name,
+                       tag=tag,
+                       atoms=atoms,
+                       elastic_constants=constants)
 
 
 def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
@@ -279,13 +304,13 @@ def get_elastic_constant_loss(nn,
         labels = []
         constraints = {'forces': [], 'stress': []}
 
-        for crystal in list_of_crystal:
-            if isinstance(crystal, str):
-                if crystal.endswith('toml'):
-                    crystal = read_external_crystal(crystal)
+        for crystal_or_name_or_file in list_of_crystal:
+            if isinstance(crystal_or_name_or_file, str):
+                if crystal_or_name_or_file.endswith('toml'):
+                    crystal = read_external_crystal(crystal_or_name_or_file)
                 else:
-                    crystal = built_in_crystals[crystal]
-            elif not isinstance(crystal, Crystal):
+                    crystal = built_in_crystals[crystal_or_name_or_file]
+            elif not isinstance(crystal_or_name_or_file, Crystal):
                 raise ValueError(
                     "`crystal` must be a str or a `Crystal` object!")
 
@@ -294,7 +319,7 @@ def get_elastic_constant_loss(nn,
                 if symbol not in nn.elements:
                     raise ValueError(f"{symbol} is not supported!")
 
-            with tf.name_scope(f"{crystal.name}"):
+            with tf.name_scope(f"{crystal.name}/{crystal.tag}"):
                 elastic_nn = nn.__class__(**configs)
                 elastic_clf = nn.transformer.as_descriptor_transformer()
                 elastic_nn.attach_transformer(elastic_clf)

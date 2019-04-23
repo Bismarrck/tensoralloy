@@ -1,6 +1,7 @@
 name = "Ni3Mo"
 file = "./Ni3Mo_mp-11506_conventional_standard.cif"
 format = "cif"
+tag = 'cubic'
 
 c11 = 385
 c12 = 166
