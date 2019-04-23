@@ -4,7 +4,7 @@ This module defines data classes for `tensoralloy.nn` package.
 """
 from __future__ import print_function, absolute_import
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
 from typing import List, Union
 
 __author__ = 'Xin Chen'
@@ -43,6 +43,31 @@ def add_slots(cls):
     if qualname is not None:
         cls.__qualname__ = qualname
     return cls
+
+
+def nested_dataclass(*args, **kwargs):
+    """
+    A decorator to create a nested dataclass.
+
+    References
+    ----------
+    https://stackoverflow.com/questions/51564841
+
+    """
+    def wrapper(cls):
+        cls = dataclass(cls, **kwargs)
+        original_init = cls.__init__
+
+        def __init__(self, *args, **kwargs):
+            for name, value in kwargs.items():
+                field_type = cls.__annotations__.get(name, None)
+                if is_dataclass(field_type) and isinstance(value, dict):
+                     new_obj = field_type(**value)
+                     kwargs[name] = new_obj
+            original_init(self, *args, **kwargs)
+        cls.__init__ = __init__
+        return cls
+    return wrapper(args[0]) if args else wrapper
 
 
 @add_slots
@@ -116,6 +141,7 @@ class ElasticConstraintOptions:
 
 
 @add_slots
+@nested_dataclass
 @dataclass
 class ElasticLossOptions(_LossOptions):
     """
@@ -135,6 +161,7 @@ class _HyperParameters:
 
 
 @add_slots
+@nested_dataclass
 @dataclass
 class LossParameters(_HyperParameters):
     """

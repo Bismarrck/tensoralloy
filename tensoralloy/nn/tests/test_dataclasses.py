@@ -20,11 +20,10 @@ def test_dataclasses():
     Test some data classes.
     """
     hparams = AttributeDict(
-        opt=AttributeDict(decay_steps=100, method='rmsprop'),
-        loss=AttributeDict(
-            energy=AttributeDict(per_atom_loss=True),
-            elastic=AttributeDict(crystals=['Ni'],
-                                  constraint=AttributeDict(stress_weight=1.5))
+        opt=dict(decay_steps=100, method='rmsprop'),
+        loss=dict(
+            energy=dict(per_atom_loss=True),
+            elastic=dict(crystals=['Ni'], constraint=dict(stress_weight=1.5))
         )
     )
 
