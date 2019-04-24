@@ -51,6 +51,7 @@ class ElasticConstant:
 
     ijkl: Union[List[int], np.ndarray]
     value: float
+    weight: float = 1.0
 
     def __eq__(self, other):
         if other.ijkl == self.ijkl and other.value == self.value:
@@ -174,7 +175,7 @@ def read_external_crystal(toml_file: str) -> Crystal:
         key_value_pairs = dict(toml.load(fp))
 
         name = key_value_pairs.pop('name')
-        tag = key_value_pairs.pop('tag')
+        phase = key_value_pairs.pop('phase')
         real_path = realpath(join(dirname(toml_file),
                                   key_value_pairs.pop('file')))
 
@@ -188,10 +189,20 @@ def read_external_crystal(toml_file: str) -> Crystal:
             vi = int(key[1])
             vj = int(key[2])
             ijkl = voigt_to_ijkl(vi, vj, is_py_index=False)
-            constants.append(ElasticConstant(ijkl, float(value)))
+
+            if np.isscalar(value):
+                weight = 1.0
+                cijkl = value
+            elif isinstance(value, (tuple, list)):
+                assert len(value) == 2
+                cijkl, weight = value[0], value[1]
+            else:
+                raise ValueError("The value of Cij should be a float or list")
+
+            constants.append(ElasticConstant(ijkl, value=cijkl, weight=weight))
 
         return Crystal(name=name,
-                       phase=tag,
+                       phase=phase,
                        atoms=atoms,
                        elastic_constants=constants)
 
@@ -296,6 +307,7 @@ def get_elastic_constant_loss(nn,
 
         predictions = []
         labels = []
+        cijkl_weights = []
         constraints = {'forces': [], 'stress': []}
 
         for crystal_or_name_or_file in list_of_crystal:
@@ -362,7 +374,11 @@ def get_elastic_constant_loss(nn,
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
                                                  dtype=total_stress.dtype,
-                                                 name=f'refC{vi}{vj}'))
+                                                 name=f'C{vi}{vj}/ref'))
+                        cijkl_weights.append(
+                            tf.convert_to_tensor(elastic_constant.weight,
+                                                 dtype=total_stress.dtype,
+                                                 name=f'C{vi}{vj}/weight'))
 
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
 
@@ -372,9 +388,12 @@ def get_elastic_constant_loss(nn,
             with tf.name_scope("Elastic"):
                 predictions = tf.stack(predictions, name='predictions')
                 labels = tf.stack(labels, name='labels')
+                cijkl_weights = tf.stack(cijkl_weights, name='weights')
 
-                mse = tf.reduce_mean(tf.squared_difference(predictions, labels),
-                                     name='mse')
+                sd = tf.multiply(cijkl_weights,
+                                 tf.squared_difference(predictions, labels),
+                                 name='sd/weighted')
+                mse = tf.reduce_mean(sd, name='mse')
                 mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
                 dtype = get_float_dtype()
                 eps = tf.constant(dtype.eps, dtype=dtype, name='eps')

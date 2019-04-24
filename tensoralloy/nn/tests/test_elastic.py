@@ -36,6 +36,8 @@ def test_read_external_crystal():
     for elastic_constant in crystal.elastic_constants:
         assert_in(elastic_constant, builtin.elastic_constants)
 
+    assert_equal(crystal.elastic_constants[-1].weight, 0.0)
+
 
 def test_elastic_constant_tensor_op():
     """
