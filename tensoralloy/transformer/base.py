@@ -11,6 +11,7 @@ import abc
 from collections import Counter
 from typing import Dict, List
 from ase import Atoms
+from ase.units import GPa
 
 from tensoralloy.utils import AttributeDict
 from tensoralloy.dtypes import get_float_dtype
@@ -377,11 +378,11 @@ class BatchDescriptorTransformer(BaseTransformer):
             # 1 GPa = 10 kbar
             # reduced_stress (eV) = stress * volume
             virial = atoms.get_stress(voigt=True).astype(np_dtype)
-            total_pressure = np.atleast_1d(
-                virial[:3].mean()).astype(np_dtype)
+            internal_pressure = np.atleast_1d(
+                -virial[:3].mean() / GPa).astype(np_dtype)
             feature_list['stress'] = bytes_feature(virial.tostring())
             feature_list['total_pressure'] = bytes_feature(
-                np.atleast_1d(total_pressure).tostring())
+                np.atleast_1d(internal_pressure).tostring())
             feature_list['s_conf'] = bytes_feature(confidences[2].tostring())
         return feature_list
 
