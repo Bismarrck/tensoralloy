@@ -586,9 +586,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             decoded.stress = stress
 
             total_pressure = tf.decode_raw(
-                example['total_pressure'], float_dtype, name='stress')
+                example['total_pressure'], float_dtype)
             total_pressure.set_shape([1])
-            decoded.total_pressure = total_pressure
+            decoded.total_pressure = tf.squeeze(
+                total_pressure, name='total_pressure')
 
             s_conf = tf.decode_raw(example['s_conf'], float_dtype)
             s_conf.set_shape([1])
