@@ -459,9 +459,7 @@ class BasicNN:
                 weight=loss_parameters.l2.weight,
                 collections=collections)
 
-            # Elastic constants will only be computed during training.
-            if mode == tf_estimator.ModeKeys.TRAIN and \
-                    'elastic' in self._minimize_properties:
+            if 'elastic' in self._minimize_properties:
                 losses.elastic = elastic_ops.get_elastic_constant_loss(
                     nn=self,
                     list_of_crystal=loss_parameters.elastic.crystals,
@@ -654,6 +652,11 @@ class BasicNN:
                         ops_dict['Stress/relative'] = \
                             tf.metrics.mean(upper / lower)
                     metrics.update(ops_dict)
+
+            if 'elastic' in self._minimize_properties:
+                for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
+                    if tensor.op.name.startswith("Elastic"):
+                        metrics[tensor.op.name] = (tensor, tf.no_op())
 
             return metrics
 

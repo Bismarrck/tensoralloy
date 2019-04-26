@@ -360,6 +360,7 @@ def get_elastic_constant_loss(nn,
                             name='bar')
                     constraints['stress'].append(value)
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, value)
+                    tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
                     for elastic_constant in crystal.elastic_constants:
@@ -381,6 +382,7 @@ def get_elastic_constant_loss(nn,
                                                  name=f'C{vi}{vj}/weight'))
 
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
+                        tf.add_to_collection(GraphKeys.EVAL_METRICS, cijkl)
 
         with tf.name_scope("Loss"):
 
