@@ -1,0 +1,706 @@
+2019-04-24 16:16:11,215 tensorflow   INFO     pid=5675
+2019-04-24 16:16:11,215 tensorflow   INFO     seed=611
+2019-04-24 16:16:11,215 tensorflow   INFO     input=
+precision = "medium"
+seed = 611
+
+[dataset]
+sqlite3 = "Al.db"
+name = "Al"
+descriptor = "eam"
+rc = 6.5
+tfrecords_dir = "."
+test_size = 1000
+serial = false
+
+[nn]
+activation = "leaky_relu"
+minimize = [ "energy", "forces", "elastic",]
+export = [ "energy", "forces", "stress", "hessian",]
+positive_energy_mode = false
+
+[opt]
+method = "adam"
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.99
+decay_steps = 1000
+staircase = false
+
+[train]
+restart = true
+batch_size = 50
+previous_checkpoint = false
+shuffle = true
+model_dir = "fcc_bcc"
+max_checkpoints_to_keep = 100
+train_steps = 400
+eval_steps = 200
+summary_steps = 200
+log_steps = 10
+profile_steps = 20000
+
+[debug]
+allow_gpu_growth = true
+logging_level = "info"
+
+[nn.eam]
+arch = "EamAlloyNN"
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+
+[nn.loss.forces]
+weight = 10.0
+
+[nn.loss.elastic]
+weight = 0.1
+crystals = [ "Al", "Al/bcc",]
+
+[nn.eam.rho]
+Al = "zjw04xc"
+
+[nn.eam.phi]
+AlAl = "zjw04xc"
+
+[nn.eam.embed]
+Al = "zjw04xc"
+
+[nn.eam.setfl]
+nr = 10000
+dr = 0.00065
+nrho = 10000
+drho = 0.01
+
+[nn.loss.elastic.constraint]
+use_kbar = true
+forces_weight = 1.0
+stress_weight = 0.5
+
+[nn.eam.setfl.lattice.constant]
+
+[nn.eam.setfl.lattice.type]
+
+2019-04-24 16:16:11,215 tensorflow   INFO     Using config: {'_model_dir': 'fcc_bcc', '_tf_random_seed': 611, '_save_summary_steps': 100, '_save_checkpoints_steps': 200, '_save_checkpoints_secs': None, '_session_config': gpu_options {
+  allow_growth: true
+}
+allow_soft_placement: true
+, '_keep_checkpoint_max': 100, '_keep_checkpoint_every_n_hours': 10000, '_log_step_count_steps': 10, '_train_distribute': None, '_device_fn': None, '_protocol': None, '_eval_distribute': None, '_experimental_distribute': None, '_service': None, '_cluster_spec': <tensorflow.python.training.server_lib.ClusterSpec object at 0x1c2f26d240>, '_task_type': 'worker', '_task_id': 0, '_global_id_in_cluster': 0, '_master': '', '_evaluation_master': '', '_is_chief': True, '_num_ps_replicas': 0, '_num_worker_replicas': 1}
+2019-04-24 16:16:11,216 tensorflow   INFO     Not using Distribute Coordinator.
+2019-04-24 16:16:11,216 tensorflow   INFO     Running training and evaluation locally (non-distributed).
+2019-04-24 16:16:11,216 tensorflow   INFO     Start train and evaluate loop. The evaluate will happen after every checkpoint. Checkpoint frequency is determined based on RunConfig arguments: save_checkpoints_steps 200 or save_checkpoints_secs None.
+2019-04-24 16:16:11,219 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/framework/op_def_library.py:263: colocate_with (from tensorflow.python.framework.ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+Colocations handled automatically by placer.
+2019-04-24 16:16:11,281 tensorflow   INFO     Calling model_fn.
+2019-04-24 16:16:11,352 tensorflow   INFO     nnEAM/Rho/AlAl/input                             : [    50,     1,    32,    86,     1]
+2019-04-24 16:16:11,366 tensorflow   INFO     nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho                : [    50,     1,    32,    86,     1]
+2019-04-24 16:16:11,368 tensorflow   INFO     nnEAM/Rho/AlAl/rho                               : [    50,    32]
+2019-04-24 16:16:11,371 tensorflow   INFO     nnEAM/Embed/Al/Al                                : [    50,    32,     1]
+2019-04-24 16:16:11,446 tensorflow   INFO     nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed            : [    50,    32,     1]
+2019-04-24 16:16:11,449 tensorflow   INFO     nnEAM/Embed/Al/atomic                            : [    50,    32]
+2019-04-24 16:16:11,462 tensorflow   INFO     nnEAM/Phi/AlAl/input                             : [    50,     1,    32,    86,     1]
+2019-04-24 16:16:11,497 tensorflow   INFO     nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi                : [    50,     1,    32,    86,     1]
+2019-04-24 16:16:11,501 tensorflow   INFO     nnEAM/Phi/AlAl/atomic                            : [    50,    32]
+2019-04-24 16:16:11,507 tensorflow   INFO     Output/Energy/energy                             : [    50]
+2019-04-24 16:16:11,511 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/ops/math_ops.py:3066: to_int32 (from tensorflow.python.ops.math_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.cast instead.
+2019-04-24 16:16:11,980 tensorflow   INFO     Output/Forces/forces                             : [    50,    32,     3]
+2019-04-24 16:16:12,044 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:16:12,050 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     4,    78,     1]
+2019-04-24 16:16:12,052 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/rho                : [     1,     4]
+2019-04-24 16:16:12,055 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Al                 : [     4,     1]
+2019-04-24 16:16:12,075 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     4,     1]
+2019-04-24 16:16:12,076 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/atomic             : [     4]
+2019-04-24 16:16:12,086 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:16:12,135 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     4,    78,     1]
+2019-04-24 16:16:12,138 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/atomic             : [     1,     4]
+2019-04-24 16:16:12,143 tensorflow   INFO     Elastic/Al/fcc/Output/Energy/energy              : []
+2019-04-24 16:16:12,521 tensorflow   INFO     Elastic/Al/fcc/Output/Forces/forces              : [     4,     3]
+2019-04-24 16:16:12,903 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:16:12,904 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:16:15,084 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C11                         : []
+2019-04-24 16:16:17,177 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C12                         : []
+2019-04-24 16:16:19,304 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C44                         : []
+2019-04-24 16:16:19,365 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:16:19,370 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     2,    64,     1]
+2019-04-24 16:16:19,372 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/rho                : [     1,     2]
+2019-04-24 16:16:19,376 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Al                 : [     2,     1]
+2019-04-24 16:16:19,394 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     2,     1]
+2019-04-24 16:16:19,395 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/atomic             : [     2]
+2019-04-24 16:16:19,403 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:16:19,413 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     2,    64,     1]
+2019-04-24 16:16:19,416 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/atomic             : [     1,     2]
+2019-04-24 16:16:19,421 tensorflow   INFO     Elastic/Al/bcc/Output/Energy/energy              : []
+2019-04-24 16:16:19,933 tensorflow   INFO     Elastic/Al/bcc/Output/Forces/forces              : [     2,     3]
+2019-04-24 16:16:20,258 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:16:20,259 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:16:22,272 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C11                         : []
+2019-04-24 16:16:24,450 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C12                         : []
+2019-04-24 16:16:26,647 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C44                         : []
+2019-04-24 16:17:09,190 tensorflow   INFO     Done calling model_fn.
+2019-04-24 16:17:09,192 tensorflow   INFO     Create CheckpointSaverHook.
+2019-04-24 16:17:18,810 tensorflow   INFO     Graph was finalized.
+2019-04-24 16:17:22,511 tensorflow   INFO     Running local_init_op.
+2019-04-24 16:17:23,551 tensorflow   INFO     Done running local_init_op.
+2019-04-24 16:17:55,501 tensorflow   INFO     Saving checkpoints for 0 into fcc_bcc/model.ckpt.
+2019-04-24 16:18:30,010 tensorflow   INFO     loss = 14.523808, step = 1
+2019-04-24 16:18:30,013 tensorflow   INFO
+Elastic/Al/bcc/Cijkl/C11 = 26.326546, Elastic/Al/bcc/Cijkl/C12 = 57.465317, Elastic/Al/bcc/Cijkl/C44 = 23.319702
+Elastic/Al/bcc/Constraints/kbar = 91.330841, Elastic/Al/fcc/Cijkl/C11 = 107.799828, Elastic/Al/fcc/Cijkl/C12 = 61.366528, Elastic/Al/fcc/Cijkl/C44 = 28.352505
+Elastic/Al/fcc/Constraints/kbar = 0.513692, Elastic/Loss/Constraint/c_loss = 9.184454, Elastic/Loss/Elastic/mae = 12.661538
+Elastic/Loss/Elastic/weighted/loss = 1.538310, GradNorm/elastic/total = 1001.740845, GradNorm/energy/total = 120.060501, GradNorm/forces/total = 23.653687
+Loss/Energy/mae = 1.023489, Loss/Energy/rmse = 1.654174, Loss/Energy/weighted/loss = 1.654174, Loss/Forces/mae = 0.130871, Loss/Forces/rmse = 0.214687
+Loss/Forces/weighted/loss = 2.146869, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:21,375 tensorflow   INFO     global_step/sec: 0.194681
+2019-04-24 16:19:21,375 tensorflow   INFO     loss = 10.849178, step = 11 (51.366 sec)
+2019-04-24 16:19:21,376 tensorflow   INFO     Average examples/sec:    9.7 (   9.7), step =      10, steps/minute:     11.7
+2019-04-24 16:19:21,377 tensorflow   INFO     (51.364 sec)
+Elastic/Al/bcc/Cijkl/C11 = 21.075287, Elastic/Al/bcc/Cijkl/C12 = 79.251152, Elastic/Al/bcc/Cijkl/C44 = 8.565254
+Elastic/Al/bcc/Constraints/kbar = 22.959362, Elastic/Al/fcc/Cijkl/C11 = 151.752960, Elastic/Al/fcc/Cijkl/C12 = 92.352486, Elastic/Al/fcc/Cijkl/C44 = 45.213718
+Elastic/Al/fcc/Constraints/kbar = 14.806133, Elastic/Loss/Constraint/c_loss = 3.776550, Elastic/Loss/Elastic/mae = 22.571245
+Elastic/Loss/Elastic/weighted/loss = 2.650674, GradNorm/elastic/total = 1088.958618, GradNorm/energy/total = 167.860489, GradNorm/forces/total = 29.638710
+Loss/Energy/mae = 0.668197, Loss/Energy/rmse = 1.074068, Loss/Energy/weighted/loss = 1.074068, Loss/Forces/mae = 0.201200, Loss/Forces/rmse = 0.334789
+Loss/Forces/weighted/loss = 3.347888, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:21,973 tensorflow   INFO     global_step/sec: 16.7183
+2019-04-24 16:19:21,974 tensorflow   INFO     loss = 8.346515, step = 21 (0.598 sec)
+2019-04-24 16:19:21,974 tensorflow   INFO     Average examples/sec:   19.2 ( 836.1), step =      20, steps/minute:   1003.3
+2019-04-24 16:19:21,975 tensorflow   INFO     (0.598 sec)
+Elastic/Al/bcc/Cijkl/C11 = 11.779160, Elastic/Al/bcc/Cijkl/C12 = 67.515953, Elastic/Al/bcc/Cijkl/C44 = 9.791898
+Elastic/Al/bcc/Constraints/kbar = 18.709951, Elastic/Al/fcc/Cijkl/C11 = 132.016769, Elastic/Al/fcc/Cijkl/C12 = 84.392120, Elastic/Al/fcc/Cijkl/C44 = 44.612259
+Elastic/Al/fcc/Constraints/kbar = 9.248799, Elastic/Loss/Constraint/c_loss = 2.795876, Elastic/Loss/Elastic/mae = 21.155691
+Elastic/Loss/Elastic/weighted/loss = 2.250726, GradNorm/elastic/total = 1033.439453, GradNorm/energy/total = 42.443520, GradNorm/forces/total = 28.475353
+Loss/Energy/mae = 0.373656, Loss/Energy/rmse = 0.685408, Loss/Energy/weighted/loss = 0.685408, Loss/Forces/mae = 0.156916, Loss/Forces/rmse = 0.261451
+Loss/Forces/weighted/loss = 2.614506, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:22,579 tensorflow   INFO     global_step/sec: 16.5222
+2019-04-24 16:19:22,579 tensorflow   INFO     loss = 6.63138, step = 31 (0.605 sec)
+2019-04-24 16:19:22,579 tensorflow   INFO     Average examples/sec:   28.5 ( 826.1), step =      30, steps/minute:    991.3
+2019-04-24 16:19:22,581 tensorflow   INFO     (0.605 sec)
+Elastic/Al/bcc/Cijkl/C11 = 31.131445, Elastic/Al/bcc/Cijkl/C12 = 80.149292, Elastic/Al/bcc/Cijkl/C44 = 14.400741
+Elastic/Al/bcc/Constraints/kbar = 3.972887, Elastic/Al/fcc/Cijkl/C11 = 125.222473, Elastic/Al/fcc/Cijkl/C12 = 88.431702, Elastic/Al/fcc/Cijkl/C44 = 43.428345
+Elastic/Al/fcc/Constraints/kbar = 17.818550, Elastic/Loss/Constraint/c_loss = 2.179144, Elastic/Loss/Elastic/mae = 14.400173
+Elastic/Loss/Elastic/weighted/loss = 1.652670, GradNorm/elastic/total = 236.303101, GradNorm/energy/total = 71.160820, GradNorm/forces/total = 24.906673
+Loss/Energy/mae = 0.396034, Loss/Energy/rmse = 0.750645, Loss/Energy/weighted/loss = 0.750645, Loss/Forces/mae = 0.115363, Loss/Forces/rmse = 0.204892
+Loss/Forces/weighted/loss = 2.048921, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:23,181 tensorflow   INFO     global_step/sec: 16.5858
+2019-04-24 16:19:23,182 tensorflow   INFO     loss = 5.7047343, step = 41 (0.603 sec)
+2019-04-24 16:19:23,182 tensorflow   INFO     Average examples/sec:   37.6 ( 829.3), step =      40, steps/minute:    995.2
+2019-04-24 16:19:23,184 tensorflow   INFO     (0.603 sec)
+Elastic/Al/bcc/Cijkl/C11 = 27.627321, Elastic/Al/bcc/Cijkl/C12 = 77.288490, Elastic/Al/bcc/Cijkl/C44 = 14.941998
+Elastic/Al/bcc/Constraints/kbar = 7.944976, Elastic/Al/fcc/Cijkl/C11 = 119.779472, Elastic/Al/fcc/Cijkl/C12 = 85.422607, Elastic/Al/fcc/Cijkl/C44 = 44.802254
+Elastic/Al/fcc/Constraints/kbar = 6.413765, Elastic/Loss/Constraint/c_loss = 1.435874, Elastic/Loss/Elastic/mae = 14.191089
+Elastic/Loss/Elastic/weighted/loss = 1.552062, GradNorm/elastic/total = 266.304016, GradNorm/energy/total = 41.688286, GradNorm/forces/total = 28.113949
+Loss/Energy/mae = 0.190065, Loss/Energy/rmse = 0.276939, Loss/Energy/weighted/loss = 0.276939, Loss/Forces/mae = 0.147230, Loss/Forces/rmse = 0.243986
+Loss/Forces/weighted/loss = 2.439858, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:23,785 tensorflow   INFO     global_step/sec: 16.5675
+2019-04-24 16:19:23,785 tensorflow   INFO     loss = 5.9120717, step = 51 (0.604 sec)
+2019-04-24 16:19:23,785 tensorflow   INFO     Average examples/sec:   46.5 ( 828.4), step =      50, steps/minute:    994.1
+2019-04-24 16:19:23,787 tensorflow   INFO     (0.604 sec)
+Elastic/Al/bcc/Cijkl/C11 = 28.032673, Elastic/Al/bcc/Cijkl/C12 = 78.420685, Elastic/Al/bcc/Cijkl/C44 = 14.382032
+Elastic/Al/bcc/Constraints/kbar = 4.919230, Elastic/Al/fcc/Cijkl/C11 = 117.639420, Elastic/Al/fcc/Cijkl/C12 = 84.310646, Elastic/Al/fcc/Cijkl/C44 = 45.019592
+Elastic/Al/fcc/Constraints/kbar = 12.650743, Elastic/Loss/Constraint/c_loss = 1.756997, Elastic/Loss/Elastic/mae = 13.522378
+Elastic/Loss/Elastic/weighted/loss = 1.509498, GradNorm/elastic/total = 1046.477905, GradNorm/energy/total = 80.076027, GradNorm/forces/total = 25.913044
+Loss/Energy/mae = 0.198026, Loss/Energy/rmse = 0.352776, Loss/Energy/weighted/loss = 0.352776, Loss/Forces/mae = 0.143976, Loss/Forces/rmse = 0.229280
+Loss/Forces/weighted/loss = 2.292800, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:24,391 tensorflow   INFO     global_step/sec: 16.5146
+2019-04-24 16:19:24,391 tensorflow   INFO     loss = 6.008544, step = 61 (0.606 sec)
+2019-04-24 16:19:24,391 tensorflow   INFO     Average examples/sec:   55.2 ( 825.7), step =      60, steps/minute:    990.8
+2019-04-24 16:19:24,393 tensorflow   INFO     (0.606 sec)
+Elastic/Al/bcc/Cijkl/C11 = 31.393631, Elastic/Al/bcc/Cijkl/C12 = 81.086449, Elastic/Al/bcc/Cijkl/C44 = 14.410282
+Elastic/Al/bcc/Constraints/kbar = 5.244605, Elastic/Al/fcc/Cijkl/C11 = 117.353363, Elastic/Al/fcc/Cijkl/C12 = 84.421242, Elastic/Al/fcc/Cijkl/C44 = 44.507385
+Elastic/Al/fcc/Constraints/kbar = 4.197220, Elastic/Loss/Constraint/c_loss = 0.944183, Elastic/Loss/Elastic/mae = 12.398605
+Elastic/Loss/Elastic/weighted/loss = 1.455877, GradNorm/elastic/total = 253.179718, GradNorm/energy/total = 98.217186, GradNorm/forces/total = 27.014437
+Loss/Energy/mae = 0.206296, Loss/Energy/rmse = 0.439429, Loss/Energy/weighted/loss = 0.439429, Loss/Forces/mae = 0.167255, Loss/Forces/rmse = 0.316906
+Loss/Forces/weighted/loss = 3.169055, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:24,995 tensorflow   INFO     global_step/sec: 16.5333
+2019-04-24 16:19:24,996 tensorflow   INFO     loss = 5.741324, step = 71 (0.605 sec)
+2019-04-24 16:19:24,996 tensorflow   INFO     Average examples/sec:   63.7 ( 826.7), step =      70, steps/minute:    992.1
+2019-04-24 16:19:24,997 tensorflow   INFO     (0.605 sec)
+Elastic/Al/bcc/Cijkl/C11 = 26.951752, Elastic/Al/bcc/Cijkl/C12 = 75.381630, Elastic/Al/bcc/Cijkl/C44 = 15.468595
+Elastic/Al/bcc/Constraints/kbar = 5.099636, Elastic/Al/fcc/Cijkl/C11 = 114.645020, Elastic/Al/fcc/Cijkl/C12 = 81.507370, Elastic/Al/fcc/Cijkl/C44 = 44.642284
+Elastic/Al/fcc/Constraints/kbar = 7.096987, Elastic/Loss/Constraint/c_loss = 1.219662, Elastic/Loss/Elastic/mae = 12.998783
+Elastic/Loss/Elastic/weighted/loss = 1.439939, GradNorm/elastic/total = 1058.274170, GradNorm/energy/total = 109.700790, GradNorm/forces/total = 28.001081
+Loss/Energy/mae = 0.202291, Loss/Energy/rmse = 0.282256, Loss/Energy/weighted/loss = 0.282256, Loss/Forces/mae = 0.177640, Loss/Forces/rmse = 0.279947
+Loss/Forces/weighted/loss = 2.799467, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:25,608 tensorflow   INFO     global_step/sec: 16.3258
+2019-04-24 16:19:25,608 tensorflow   INFO     loss = 4.7630234, step = 81 (0.612 sec)
+2019-04-24 16:19:25,608 tensorflow   INFO     Average examples/sec:   71.9 ( 816.3), step =      80, steps/minute:    979.6
+2019-04-24 16:19:25,610 tensorflow   INFO     (0.612 sec)
+Elastic/Al/bcc/Cijkl/C11 = 31.310122, Elastic/Al/bcc/Cijkl/C12 = 79.507545, Elastic/Al/bcc/Cijkl/C44 = 15.815621
+Elastic/Al/bcc/Constraints/kbar = 1.024087, Elastic/Al/fcc/Cijkl/C11 = 116.007164, Elastic/Al/fcc/Cijkl/C12 = 82.165077, Elastic/Al/fcc/Cijkl/C44 = 44.756737
+Elastic/Al/fcc/Constraints/kbar = 4.297097, Elastic/Loss/Constraint/c_loss = 0.532119, Elastic/Loss/Elastic/mae = 11.882615
+Elastic/Loss/Elastic/weighted/loss = 1.378812, GradNorm/elastic/total = 260.542969, GradNorm/energy/total = 14.876957, GradNorm/forces/total = 23.018204
+Loss/Energy/mae = 0.250654, Loss/Energy/rmse = 0.394359, Loss/Energy/weighted/loss = 0.394359, Loss/Forces/mae = 0.140802, Loss/Forces/rmse = 0.245773
+Loss/Forces/weighted/loss = 2.457733, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:26,218 tensorflow   INFO     global_step/sec: 16.4031
+2019-04-24 16:19:26,218 tensorflow   INFO     loss = 5.937566, step = 91 (0.610 sec)
+2019-04-24 16:19:26,218 tensorflow   INFO     Average examples/sec:   80.1 ( 820.1), step =      90, steps/minute:    984.1
+2019-04-24 16:19:26,220 tensorflow   INFO     (0.610 sec)
+Elastic/Al/bcc/Cijkl/C11 = 30.978098, Elastic/Al/bcc/Cijkl/C12 = 79.022400, Elastic/Al/bcc/Cijkl/C44 = 15.486398
+Elastic/Al/bcc/Constraints/kbar = 4.574569, Elastic/Al/fcc/Cijkl/C11 = 112.892525, Elastic/Al/fcc/Cijkl/C12 = 79.736427, Elastic/Al/fcc/Cijkl/C44 = 44.407761
+Elastic/Al/fcc/Constraints/kbar = 0.002493, Elastic/Loss/Constraint/c_loss = 0.457706, Elastic/Loss/Elastic/mae = 11.091637
+Elastic/Loss/Elastic/weighted/loss = 1.326202, GradNorm/elastic/total = 229.513153, GradNorm/energy/total = 106.487038, GradNorm/forces/total = 28.027760
+Loss/Energy/mae = 0.438317, Loss/Energy/rmse = 0.682433, Loss/Energy/weighted/loss = 0.682433, Loss/Forces/mae = 0.206765, Loss/Forces/rmse = 0.347122
+Loss/Forces/weighted/loss = 3.471225, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:53,207 tensorflow   INFO     global_step/sec: 0.370515
+2019-04-24 16:19:53,208 tensorflow   INFO     loss = 4.8345404, step = 101 (26.990 sec)
+2019-04-24 16:19:53,208 tensorflow   INFO     Average examples/sec:   60.1 (  18.5), step =     100, steps/minute:     22.2
+2019-04-24 16:19:53,210 tensorflow   INFO     (26.990 sec)
+Elastic/Al/bcc/Cijkl/C11 = 33.225395, Elastic/Al/bcc/Cijkl/C12 = 80.810051, Elastic/Al/bcc/Cijkl/C44 = 15.821117
+Elastic/Al/bcc/Constraints/kbar = 1.732875, Elastic/Al/fcc/Cijkl/C11 = 112.414078, Elastic/Al/fcc/Cijkl/C12 = 79.417435, Elastic/Al/fcc/Cijkl/C44 = 44.418564
+Elastic/Al/fcc/Constraints/kbar = 4.138783, Elastic/Loss/Constraint/c_loss = 0.587166, Elastic/Loss/Elastic/mae = 10.232252
+Elastic/Loss/Elastic/weighted/loss = 1.282035, GradNorm/elastic/total = 236.611664, GradNorm/energy/total = 20.010796, GradNorm/forces/total = 13.546343
+Loss/Energy/mae = 0.286888, Loss/Energy/rmse = 0.507065, Loss/Energy/weighted/loss = 0.507065, Loss/Forces/mae = 0.134849, Loss/Forces/rmse = 0.245827
+Loss/Forces/weighted/loss = 2.458274, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:53,860 tensorflow   INFO     global_step/sec: 15.3116
+2019-04-24 16:19:53,860 tensorflow   INFO     loss = 6.4058723, step = 111 (0.652 sec)
+2019-04-24 16:19:53,861 tensorflow   INFO     Average examples/sec:   65.6 ( 766.6), step =     110, steps/minute:    919.9
+2019-04-24 16:19:53,862 tensorflow   INFO     (0.652 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.864491, Elastic/Al/bcc/Cijkl/C12 = 82.802238, Elastic/Al/bcc/Cijkl/C44 = 15.770844
+Elastic/Al/bcc/Constraints/kbar = 10.943377, Elastic/Al/fcc/Cijkl/C11 = 113.190636, Elastic/Al/fcc/Cijkl/C12 = 79.409111, Elastic/Al/fcc/Cijkl/C44 = 44.479942
+Elastic/Al/fcc/Constraints/kbar = 15.141888, Elastic/Loss/Constraint/c_loss = 2.608527, Elastic/Loss/Elastic/mae = 9.773686
+Elastic/Loss/Elastic/weighted/loss = 1.278526, GradNorm/elastic/total = 1081.712158, GradNorm/energy/total = 66.162216, GradNorm/forces/total = 23.936909
+Loss/Energy/mae = 0.224305, Loss/Energy/rmse = 0.398963, Loss/Energy/weighted/loss = 0.398963, Loss/Forces/mae = 0.120945, Loss/Forces/rmse = 0.211986
+Loss/Forces/weighted/loss = 2.119857, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:54,562 tensorflow   INFO     global_step/sec: 14.2549
+2019-04-24 16:19:54,562 tensorflow   INFO     loss = 4.8373876, step = 121 (0.702 sec)
+2019-04-24 16:19:54,562 tensorflow   INFO     Average examples/sec:   71.0 ( 712.8), step =     120, steps/minute:    855.3
+2019-04-24 16:19:54,564 tensorflow   INFO     (0.701 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.330368, Elastic/Al/bcc/Cijkl/C12 = 83.799927, Elastic/Al/bcc/Cijkl/C44 = 15.974423
+Elastic/Al/bcc/Constraints/kbar = 6.448030, Elastic/Al/fcc/Cijkl/C11 = 111.640350, Elastic/Al/fcc/Cijkl/C12 = 78.661560, Elastic/Al/fcc/Cijkl/C44 = 44.409279
+Elastic/Al/fcc/Constraints/kbar = 0.814684, Elastic/Loss/Constraint/c_loss = 0.726271, Elastic/Loss/Elastic/mae = 9.044535
+Elastic/Loss/Elastic/weighted/loss = 1.242778, GradNorm/elastic/total = 1082.123901, GradNorm/energy/total = 55.750565, GradNorm/forces/total = 28.998936
+Loss/Energy/mae = 0.187543, Loss/Energy/rmse = 0.297101, Loss/Energy/weighted/loss = 0.297101, Loss/Forces/mae = 0.154471, Loss/Forces/rmse = 0.257124
+Loss/Forces/weighted/loss = 2.571237, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:55,216 tensorflow   INFO     global_step/sec: 15.2943
+2019-04-24 16:19:55,216 tensorflow   INFO     loss = 7.2793756, step = 131 (0.654 sec)
+2019-04-24 16:19:55,216 tensorflow   INFO     Average examples/sec:   76.3 ( 764.7), step =     130, steps/minute:    917.6
+2019-04-24 16:19:55,218 tensorflow   INFO     (0.654 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.068642, Elastic/Al/bcc/Cijkl/C12 = 81.703148, Elastic/Al/bcc/Cijkl/C44 = 16.198198
+Elastic/Al/bcc/Constraints/kbar = 9.113154, Elastic/Al/fcc/Cijkl/C11 = 111.569534, Elastic/Al/fcc/Cijkl/C12 = 77.863869, Elastic/Al/fcc/Cijkl/C44 = 44.646301
+Elastic/Al/fcc/Constraints/kbar = 13.106972, Elastic/Loss/Constraint/c_loss = 2.222013, Elastic/Loss/Elastic/mae = 9.518287
+Elastic/Loss/Elastic/weighted/loss = 1.244193, GradNorm/elastic/total = 1068.688965, GradNorm/energy/total = 144.176483, GradNorm/forces/total = 27.139576
+Loss/Energy/mae = 0.276623, Loss/Energy/rmse = 0.642415, Loss/Energy/weighted/loss = 0.642415, Loss/Forces/mae = 0.180480, Loss/Forces/rmse = 0.317075
+Loss/Forces/weighted/loss = 3.170754, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:56,043 tensorflow   INFO     global_step/sec: 12.0922
+2019-04-24 16:19:56,043 tensorflow   INFO     loss = 6.6205206, step = 141 (0.827 sec)
+2019-04-24 16:19:56,043 tensorflow   INFO     Average examples/sec:   81.4 ( 604.4), step =     140, steps/minute:    725.3
+2019-04-24 16:19:56,046 tensorflow   INFO     (0.827 sec)
+Elastic/Al/bcc/Cijkl/C11 = 30.401871, Elastic/Al/bcc/Cijkl/C12 = 77.114662, Elastic/Al/bcc/Cijkl/C44 = 17.165113
+Elastic/Al/bcc/Constraints/kbar = 10.005633, Elastic/Al/fcc/Cijkl/C11 = 107.849380, Elastic/Al/fcc/Cijkl/C12 = 74.647385, Elastic/Al/fcc/Cijkl/C44 = 45.042400
+Elastic/Al/fcc/Constraints/kbar = 10.952083, Elastic/Loss/Constraint/c_loss = 2.095772, Elastic/Loss/Elastic/mae = 9.642920
+Elastic/Loss/Elastic/weighted/loss = 1.234704, GradNorm/elastic/total = 1059.621582, GradNorm/energy/total = 95.068832, GradNorm/forces/total = 28.045187
+Loss/Energy/mae = 0.387510, Loss/Energy/rmse = 0.648316, Loss/Energy/weighted/loss = 0.648316, Loss/Forces/mae = 0.153698, Loss/Forces/rmse = 0.264173
+Loss/Forces/weighted/loss = 2.641729, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:56,890 tensorflow   INFO     global_step/sec: 11.799
+2019-04-24 16:19:56,890 tensorflow   INFO     loss = 5.9184837, step = 151 (0.847 sec)
+2019-04-24 16:19:56,890 tensorflow   INFO     Average examples/sec:   86.3 ( 590.2), step =     150, steps/minute:    708.2
+2019-04-24 16:19:56,892 tensorflow   INFO     (0.847 sec)
+Elastic/Al/bcc/Cijkl/C11 = 38.070679, Elastic/Al/bcc/Cijkl/C12 = 85.534737, Elastic/Al/bcc/Cijkl/C44 = 16.717665
+Elastic/Al/bcc/Constraints/kbar = 7.140832, Elastic/Al/fcc/Cijkl/C11 = 112.767387, Elastic/Al/fcc/Cijkl/C12 = 78.966743, Elastic/Al/fcc/Cijkl/C44 = 44.960266
+Elastic/Al/fcc/Constraints/kbar = 11.465997, Elastic/Loss/Constraint/c_loss = 1.860683, Elastic/Loss/Elastic/mae = 9.252112
+Elastic/Loss/Elastic/weighted/loss = 1.241060, GradNorm/elastic/total = 1099.850952, GradNorm/energy/total = 38.207394, GradNorm/forces/total = 24.875925
+Loss/Energy/mae = 0.221214, Loss/Energy/rmse = 0.384326, Loss/Energy/weighted/loss = 0.384326, Loss/Forces/mae = 0.131384, Loss/Forces/rmse = 0.243241
+Loss/Forces/weighted/loss = 2.432415, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:57,618 tensorflow   INFO     global_step/sec: 13.7277
+2019-04-24 16:19:57,619 tensorflow   INFO     loss = 5.3306923, step = 161 (0.728 sec)
+2019-04-24 16:19:57,619 tensorflow   INFO     Average examples/sec:   91.3 ( 686.4), step =     160, steps/minute:    823.6
+2019-04-24 16:19:57,621 tensorflow   INFO     (0.728 sec)
+Elastic/Al/bcc/Cijkl/C11 = 33.622353, Elastic/Al/bcc/Cijkl/C12 = 80.906204, Elastic/Al/bcc/Cijkl/C44 = 17.158958
+Elastic/Al/bcc/Constraints/kbar = 3.527322, Elastic/Al/fcc/Cijkl/C11 = 110.353371, Elastic/Al/fcc/Cijkl/C12 = 76.229889, Elastic/Al/fcc/Cijkl/C44 = 45.245209
+Elastic/Al/fcc/Constraints/kbar = 12.821712, Elastic/Loss/Constraint/c_loss = 1.634904, Elastic/Loss/Elastic/mae = 9.190159
+Elastic/Loss/Elastic/weighted/loss = 1.207553, GradNorm/elastic/total = 1056.512939, GradNorm/energy/total = 97.744133, GradNorm/forces/total = 17.230005
+Loss/Energy/mae = 0.237530, Loss/Energy/rmse = 0.414711, Loss/Energy/weighted/loss = 0.414711, Loss/Forces/mae = 0.134806, Loss/Forces/rmse = 0.207353
+Loss/Forces/weighted/loss = 2.073525, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:58,342 tensorflow   INFO     global_step/sec: 13.814
+2019-04-24 16:19:58,343 tensorflow   INFO     loss = 5.2206044, step = 171 (0.724 sec)
+2019-04-24 16:19:58,343 tensorflow   INFO     Average examples/sec:   96.2 ( 690.7), step =     170, steps/minute:    828.9
+2019-04-24 16:19:58,344 tensorflow   INFO     (0.724 sec)
+Elastic/Al/bcc/Cijkl/C11 = 32.304424, Elastic/Al/bcc/Cijkl/C12 = 79.035385, Elastic/Al/bcc/Cijkl/C44 = 17.075222
+Elastic/Al/bcc/Constraints/kbar = 0.424933, Elastic/Al/fcc/Cijkl/C11 = 106.608795, Elastic/Al/fcc/Cijkl/C12 = 73.979073, Elastic/Al/fcc/Cijkl/C44 = 44.958870
+Elastic/Al/fcc/Constraints/kbar = 10.529052, Elastic/Loss/Constraint/c_loss = 1.095399, Elastic/Loss/Elastic/mae = 8.688618
+Elastic/Loss/Elastic/weighted/loss = 1.196596, GradNorm/elastic/total = 1052.604492, GradNorm/energy/total = 21.857700, GradNorm/forces/total = 27.908596
+Loss/Energy/mae = 0.181357, Loss/Energy/rmse = 0.282128, Loss/Energy/weighted/loss = 0.282128, Loss/Forces/mae = 0.149046, Loss/Forces/rmse = 0.264648
+Loss/Forces/weighted/loss = 2.646482, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:59,018 tensorflow   INFO     global_step/sec: 14.7964
+2019-04-24 16:19:59,019 tensorflow   INFO     loss = 4.320382, step = 181 (0.676 sec)
+2019-04-24 16:19:59,019 tensorflow   INFO     Average examples/sec:  101.1 ( 739.8), step =     180, steps/minute:    887.8
+2019-04-24 16:19:59,021 tensorflow   INFO     (0.676 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.294025, Elastic/Al/bcc/Cijkl/C12 = 81.086853, Elastic/Al/bcc/Cijkl/C44 = 17.959927
+Elastic/Al/bcc/Constraints/kbar = 6.875945, Elastic/Al/fcc/Cijkl/C11 = 110.425514, Elastic/Al/fcc/Cijkl/C12 = 76.397446, Elastic/Al/fcc/Cijkl/C44 = 45.687195
+Elastic/Al/fcc/Constraints/kbar = 0.258844, Elastic/Loss/Constraint/c_loss = 0.713479, Elastic/Loss/Elastic/mae = 9.028225
+Elastic/Loss/Elastic/weighted/loss = 1.186833, GradNorm/elastic/total = 257.962036, GradNorm/energy/total = 90.956207, GradNorm/forces/total = 27.078495
+Loss/Energy/mae = 0.183441, Loss/Energy/rmse = 0.268162, Loss/Energy/weighted/loss = 0.268162, Loss/Forces/mae = 0.130183, Loss/Forces/rmse = 0.215191
+Loss/Forces/weighted/loss = 2.151907, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:19:59,702 tensorflow   INFO     global_step/sec: 14.6275
+2019-04-24 16:19:59,702 tensorflow   INFO     loss = 6.3143, step = 191 (0.684 sec)
+2019-04-24 16:19:59,702 tensorflow   INFO     Average examples/sec:  105.9 ( 731.4), step =     190, steps/minute:    877.7
+2019-04-24 16:19:59,704 tensorflow   INFO     (0.684 sec)
+Elastic/Al/bcc/Cijkl/C11 = 30.661417, Elastic/Al/bcc/Cijkl/C12 = 77.152023, Elastic/Al/bcc/Cijkl/C44 = 18.208782
+Elastic/Al/bcc/Constraints/kbar = 12.792573, Elastic/Al/fcc/Cijkl/C11 = 107.120926, Elastic/Al/fcc/Cijkl/C12 = 73.555717, Elastic/Al/fcc/Cijkl/C44 = 45.822765
+Elastic/Al/fcc/Constraints/kbar = 13.506262, Elastic/Loss/Constraint/c_loss = 2.629884, Elastic/Loss/Elastic/mae = 9.246198
+Elastic/Loss/Elastic/weighted/loss = 1.206874, GradNorm/elastic/total = 1060.214355, GradNorm/energy/total = 89.750198, GradNorm/forces/total = 15.401777
+Loss/Energy/mae = 0.231365, Loss/Energy/rmse = 0.327266, Loss/Energy/weighted/loss = 0.327266, Loss/Forces/mae = 0.128762, Loss/Forces/rmse = 0.215028
+Loss/Forces/weighted/loss = 2.150276, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:20:00,320 tensorflow   INFO     Saving checkpoints for 200 into fcc_bcc/model.ckpt.
+2019-04-24 16:20:06,232 tensorflow   INFO     Calling model_fn.
+2019-04-24 16:20:07,405 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:20:07,409 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     4,    78,     1]
+2019-04-24 16:20:07,411 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/rho                : [     1,     4]
+2019-04-24 16:20:07,415 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Al                 : [     4,     1]
+2019-04-24 16:20:07,433 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     4,     1]
+2019-04-24 16:20:07,434 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/atomic             : [     4]
+2019-04-24 16:20:07,442 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:20:07,451 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     4,    78,     1]
+2019-04-24 16:20:07,454 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/atomic             : [     1,     4]
+2019-04-24 16:20:07,458 tensorflow   INFO     Elastic/Al/fcc/Output/Energy/energy              : []
+2019-04-24 16:20:07,909 tensorflow   INFO     Elastic/Al/fcc/Output/Forces/forces              : [     4,     3]
+2019-04-24 16:20:08,244 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:20:08,245 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:20:10,229 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C11                         : []
+2019-04-24 16:20:12,188 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C12                         : []
+2019-04-24 16:20:14,209 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C44                         : []
+2019-04-24 16:20:14,268 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:20:14,272 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     2,    64,     1]
+2019-04-24 16:20:14,274 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/rho                : [     1,     2]
+2019-04-24 16:20:14,278 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Al                 : [     2,     1]
+2019-04-24 16:20:14,297 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     2,     1]
+2019-04-24 16:20:14,297 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/atomic             : [     2]
+2019-04-24 16:20:14,305 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:20:14,314 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     2,    64,     1]
+2019-04-24 16:20:14,317 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/atomic             : [     1,     2]
+2019-04-24 16:20:14,322 tensorflow   INFO     Elastic/Al/bcc/Output/Energy/energy              : []
+2019-04-24 16:20:14,732 tensorflow   INFO     Elastic/Al/bcc/Output/Forces/forces              : [     2,     3]
+2019-04-24 16:20:15,067 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:20:15,068 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:20:17,802 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C11                         : []
+2019-04-24 16:20:19,938 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C12                         : []
+2019-04-24 16:20:22,071 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C44                         : []
+2019-04-24 16:20:56,516 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/ops/metrics_impl.py:363: to_float (from tensorflow.python.ops.math_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.cast instead.
+2019-04-24 16:20:56,566 tensorflow   INFO     Done calling model_fn.
+2019-04-24 16:20:56,578 tensorflow   INFO     Starting evaluation at 2019-04-24T08:20:56Z
+2019-04-24 16:20:56,760 tensorflow   INFO     Graph was finalized.
+2019-04-24 16:20:56,760 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/training/saver.py:1266: checkpoint_exists (from tensorflow.python.training.checkpoint_management) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use standard file APIs to check for files with this prefix.
+2019-04-24 16:20:56,762 tensorflow   INFO     Restoring parameters from fcc_bcc/model.ckpt-200
+2019-04-24 16:21:00,649 tensorflow   INFO     Running local_init_op.
+2019-04-24 16:21:01,622 tensorflow   INFO     Done running local_init_op.
+2019-04-24 16:21:09,599 tensorflow   INFO
+Elastic/Al/bcc/Cijkl/C11 = 20.943371, Elastic/Al/bcc/Cijkl/C12 = 57.291676, Elastic/Al/bcc/Cijkl/C44 = 20.792837
+Elastic/Al/bcc/Constraints/kbar = 75.477562, Elastic/Al/fcc/Cijkl/C11 = 117.202179, Elastic/Al/fcc/Cijkl/C12 = 67.005112, Elastic/Al/fcc/Cijkl/C44 = 34.542542
+Elastic/Al/fcc/Constraints/kbar = 3.068111
+2019-04-24 16:21:16,143 tensorflow   INFO     Evaluation [20/200]
+2019-04-24 16:21:21,695 tensorflow   INFO     (12.096 sec)
+Elastic/Al/bcc/Cijkl/C11 = 20.943369, Elastic/Al/bcc/Cijkl/C12 = 57.291679, Elastic/Al/bcc/Cijkl/C44 = 20.792837
+Elastic/Al/bcc/Constraints/kbar = 75.477562, Elastic/Al/fcc/Cijkl/C11 = 117.202179, Elastic/Al/fcc/Cijkl/C12 = 67.005112, Elastic/Al/fcc/Cijkl/C44 = 34.542542
+Elastic/Al/fcc/Constraints/kbar = 3.068111
+2019-04-24 16:21:22,660 tensorflow   INFO
+nnEAM/Shared/Al/A = 0.313508, nnEAM/Shared/Al/B = 0.367432, nnEAM/Shared/Al/F0 = -2.835609, nnEAM/Shared/Al/F1 = -0.005602
+nnEAM/Shared/Al/F2 = 0.586357, nnEAM/Shared/Al/F3 = -2.557681, nnEAM/Shared/Al/Fe = -2.832525, nnEAM/Shared/Al/Fn0 = -2.802471
+nnEAM/Shared/Al/Fn1 = -0.234509, nnEAM/Shared/Al/Fn2 = 1.175381, nnEAM/Shared/Al/Fn3 = -1.179887, nnEAM/Shared/Al/alpha = 6.626445
+nnEAM/Shared/Al/beta = 3.560363, nnEAM/Shared/Al/eta = 0.873417, nnEAM/Shared/Al/f_eq = 1.399025, nnEAM/Shared/Al/kappa = 0.405730
+nnEAM/Shared/Al/lamda = 0.769989, nnEAM/Shared/Al/r_eq = 2.863924, nnEAM/Shared/Al/rho_e = 20.424984, nnEAM/Shared/Al/rho_s = 23.066912
+2019-04-24 16:21:30,074 tensorflow   INFO     Finished evaluation at 2019-04-24-08:21:30
+2019-04-24 16:21:30,074 tensorflow   INFO     Saving dict for global step 200: Elastic/Al/bcc/Cijkl/C11 = 20.943369, Elastic/Al/bcc/Cijkl/C12 = 57.29168, Elastic/Al/bcc/Cijkl/C44 = 20.792837, Elastic/Al/bcc/Constraints/kbar = 75.47756, Elastic/Al/fcc/Cijkl/C11 = 117.20218, Elastic/Al/fcc/Cijkl/C12 = 67.00511, Elastic/Al/fcc/Cijkl/C44 = 34.54254, Elastic/Al/fcc/Constraints/kbar = 3.068111, Energy/mae = 0.88202107, Energy/mae/atom = 0.13235892, Energy/mse = 1.739387, Forces/mae = 0.16152886, Forces/mse = 0.33245, global_step = 200, loss = 13.677813
+2019-04-24 16:21:40,456 tensorflow   INFO     Saving 'checkpoint_path' summary for global step 200: fcc_bcc/model.ckpt-200
+2019-04-24 16:21:40,536 tensorflow   INFO     global_step/sec: 0.0991731
+2019-04-24 16:21:40,537 tensorflow   INFO     loss = 5.1187034, step = 201 (100.835 sec)
+2019-04-24 16:21:40,538 tensorflow   INFO     Average examples/sec:   52.5 (   5.0), step =     200, steps/minute:      6.0
+2019-04-24 16:21:40,540 tensorflow   INFO     (100.836 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.697830, Elastic/Al/bcc/Cijkl/C12 = 83.384193, Elastic/Al/bcc/Cijkl/C44 = 17.152390
+Elastic/Al/bcc/Constraints/kbar = 10.852212, Elastic/Al/fcc/Cijkl/C11 = 108.275848, Elastic/Al/fcc/Cijkl/C12 = 75.502815, Elastic/Al/fcc/Cijkl/C44 = 44.933399
+Elastic/Al/fcc/Constraints/kbar = 0.448621, Elastic/Loss/Constraint/c_loss = 1.130083, Elastic/Loss/Elastic/mae = 7.978885
+Elastic/Loss/Elastic/weighted/loss = 1.166585, GradNorm/elastic/total = 240.575836, GradNorm/energy/total = 45.821793, GradNorm/forces/total = 23.195498
+Loss/Energy/mae = 0.297542, Loss/Energy/rmse = 0.550145, Loss/Energy/weighted/loss = 0.550145, Loss/Forces/mae = 0.134472, Loss/Forces/rmse = 0.227189
+Loss/Forces/weighted/loss = 2.271890, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:41,228 tensorflow   INFO     global_step/sec: 14.4438
+2019-04-24 16:21:41,228 tensorflow   INFO     loss = 5.4337206, step = 211 (0.691 sec)
+2019-04-24 16:21:41,229 tensorflow   INFO     Average examples/sec:   54.9 ( 724.5), step =     210, steps/minute:    869.4
+2019-04-24 16:21:41,230 tensorflow   INFO     (0.690 sec)
+Elastic/Al/bcc/Cijkl/C11 = 35.677505, Elastic/Al/bcc/Cijkl/C12 = 81.922203, Elastic/Al/bcc/Cijkl/C44 = 17.935900
+Elastic/Al/bcc/Constraints/kbar = 0.312540, Elastic/Al/fcc/Cijkl/C11 = 108.269180, Elastic/Al/fcc/Cijkl/C12 = 75.194664, Elastic/Al/fcc/Cijkl/C44 = 45.375050
+Elastic/Al/fcc/Constraints/kbar = 7.912571, Elastic/Loss/Constraint/c_loss = 0.822511, Elastic/Loss/Elastic/mae = 8.050548
+Elastic/Loss/Elastic/weighted/loss = 1.153074, GradNorm/elastic/total = 1047.903564, GradNorm/energy/total = 114.497467, GradNorm/forces/total = 26.032337
+Loss/Energy/mae = 0.275862, Loss/Energy/rmse = 0.442740, Loss/Energy/weighted/loss = 0.442740, Loss/Forces/mae = 0.170112, Loss/Forces/rmse = 0.301539
+Loss/Forces/weighted/loss = 3.015395, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:41,945 tensorflow   INFO     global_step/sec: 13.9395
+2019-04-24 16:21:41,946 tensorflow   INFO     loss = 5.879575, step = 221 (0.717 sec)
+2019-04-24 16:21:41,946 tensorflow   INFO     Average examples/sec:   57.3 ( 697.1), step =     220, steps/minute:    836.5
+2019-04-24 16:21:41,947 tensorflow   INFO     (0.717 sec)
+Elastic/Al/bcc/Cijkl/C11 = 33.231766, Elastic/Al/bcc/Cijkl/C12 = 79.319771, Elastic/Al/bcc/Cijkl/C44 = 19.093876
+Elastic/Al/bcc/Constraints/kbar = 11.978022, Elastic/Al/fcc/Cijkl/C11 = 109.965546, Elastic/Al/fcc/Cijkl/C12 = 75.217819, Elastic/Al/fcc/Cijkl/C44 = 46.300026
+Elastic/Al/fcc/Constraints/kbar = 0.944344, Elastic/Loss/Constraint/c_loss = 1.292237, Elastic/Loss/Elastic/mae = 9.139663
+Elastic/Loss/Elastic/weighted/loss = 1.170453, GradNorm/elastic/total = 264.915558, GradNorm/energy/total = 26.866993, GradNorm/forces/total = 28.903473
+Loss/Energy/mae = 0.332023, Loss/Energy/rmse = 0.555246, Loss/Energy/weighted/loss = 0.555246, Loss/Forces/mae = 0.175573, Loss/Forces/rmse = 0.286164
+Loss/Forces/weighted/loss = 2.861638, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:42,735 tensorflow   INFO     global_step/sec: 12.6613
+2019-04-24 16:21:42,735 tensorflow   INFO     loss = 4.691142, step = 231 (0.790 sec)
+2019-04-24 16:21:42,736 tensorflow   INFO     Average examples/sec:   59.7 ( 633.0), step =     230, steps/minute:    759.6
+2019-04-24 16:21:42,737 tensorflow   INFO     (0.790 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.326164, Elastic/Al/bcc/Cijkl/C12 = 80.968132, Elastic/Al/bcc/Cijkl/C44 = 18.077812
+Elastic/Al/bcc/Constraints/kbar = 5.459729, Elastic/Al/fcc/Cijkl/C11 = 108.543022, Elastic/Al/fcc/Cijkl/C12 = 74.776833, Elastic/Al/fcc/Cijkl/C44 = 45.707951
+Elastic/Al/fcc/Constraints/kbar = 3.191448, Elastic/Loss/Constraint/c_loss = 0.865118, Elastic/Loss/Elastic/mae = 8.442616
+Elastic/Loss/Elastic/weighted/loss = 1.163398, GradNorm/elastic/total = 1053.015503, GradNorm/energy/total = 49.674210, GradNorm/forces/total = 24.019072
+Loss/Energy/mae = 0.225377, Loss/Energy/rmse = 0.384269, Loss/Energy/weighted/loss = 0.384269, Loss/Forces/mae = 0.127500, Loss/Forces/rmse = 0.227836
+Loss/Forces/weighted/loss = 2.278358, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:43,529 tensorflow   INFO     global_step/sec: 12.6032
+2019-04-24 16:21:43,530 tensorflow   INFO     loss = 4.6765327, step = 241 (0.794 sec)
+2019-04-24 16:21:43,530 tensorflow   INFO     Average examples/sec:   62.0 ( 629.7), step =     240, steps/minute:    755.6
+2019-04-24 16:21:43,532 tensorflow   INFO     (0.794 sec)
+Elastic/Al/bcc/Cijkl/C11 = 39.318581, Elastic/Al/bcc/Cijkl/C12 = 85.479767, Elastic/Al/bcc/Cijkl/C44 = 18.247969
+Elastic/Al/bcc/Constraints/kbar = 5.870488, Elastic/Al/fcc/Cijkl/C11 = 109.282646, Elastic/Al/fcc/Cijkl/C12 = 76.025734, Elastic/Al/fcc/Cijkl/C44 = 45.571365
+Elastic/Al/fcc/Constraints/kbar = 2.910271, Elastic/Loss/Constraint/c_loss = 0.878076, Elastic/Loss/Elastic/mae = 8.245098
+Elastic/Loss/Elastic/weighted/loss = 1.152306, GradNorm/elastic/total = 259.063965, GradNorm/energy/total = 19.118702, GradNorm/forces/total = 26.103016
+Loss/Energy/mae = 0.185392, Loss/Energy/rmse = 0.356595, Loss/Energy/weighted/loss = 0.356595, Loss/Forces/mae = 0.140427, Loss/Forces/rmse = 0.228956
+Loss/Forces/weighted/loss = 2.289556, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:44,238 tensorflow   INFO     global_step/sec: 14.1026
+2019-04-24 16:21:44,239 tensorflow   INFO     loss = 4.6648874, step = 251 (0.709 sec)
+2019-04-24 16:21:44,239 tensorflow   INFO     Average examples/sec:   64.4 ( 704.7), step =     250, steps/minute:    845.6
+2019-04-24 16:21:44,241 tensorflow   INFO     (0.709 sec)
+Elastic/Al/bcc/Cijkl/C11 = 35.742496, Elastic/Al/bcc/Cijkl/C12 = 81.980255, Elastic/Al/bcc/Cijkl/C44 = 18.738581
+Elastic/Al/bcc/Constraints/kbar = 0.812297, Elastic/Al/fcc/Cijkl/C11 = 109.038437, Elastic/Al/fcc/Cijkl/C12 = 75.063698, Elastic/Al/fcc/Cijkl/C44 = 46.015167
+Elastic/Al/fcc/Constraints/kbar = 1.303808, Elastic/Loss/Constraint/c_loss = 0.211611, Elastic/Loss/Elastic/mae = 8.109328
+Elastic/Loss/Elastic/weighted/loss = 1.142649, GradNorm/elastic/total = 1062.704102, GradNorm/energy/total = 46.061939, GradNorm/forces/total = 22.504936
+Loss/Energy/mae = 0.266488, Loss/Energy/rmse = 0.513509, Loss/Energy/weighted/loss = 0.513509, Loss/Forces/mae = 0.141757, Loss/Forces/rmse = 0.279712
+Loss/Forces/weighted/loss = 2.797119, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:45,068 tensorflow   INFO     global_step/sec: 12.0487
+2019-04-24 16:21:45,068 tensorflow   INFO     loss = 3.9569197, step = 261 (0.829 sec)
+2019-04-24 16:21:45,068 tensorflow   INFO     Average examples/sec:   66.6 ( 603.2), step =     260, steps/minute:    723.9
+2019-04-24 16:21:45,070 tensorflow   INFO     (0.829 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.159382, Elastic/Al/bcc/Cijkl/C12 = 80.219032, Elastic/Al/bcc/Cijkl/C44 = 18.913578
+Elastic/Al/bcc/Constraints/kbar = 0.401993, Elastic/Al/fcc/Cijkl/C11 = 108.088242, Elastic/Al/fcc/Cijkl/C12 = 74.221664, Elastic/Al/fcc/Cijkl/C44 = 46.052715
+Elastic/Al/fcc/Constraints/kbar = 0.062031, Elastic/Loss/Constraint/c_loss = 0.046403, Elastic/Loss/Elastic/mae = 8.345105
+Elastic/Loss/Elastic/weighted/loss = 1.144170, GradNorm/elastic/total = 222.135269, GradNorm/energy/total = 36.070145, GradNorm/forces/total = 22.616051
+Loss/Energy/mae = 0.290230, Loss/Energy/rmse = 0.511863, Loss/Energy/weighted/loss = 0.511863, Loss/Forces/mae = 0.139085, Loss/Forces/rmse = 0.225448
+Loss/Forces/weighted/loss = 2.254484, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:45,899 tensorflow   INFO     global_step/sec: 12.0286
+2019-04-24 16:21:45,899 tensorflow   INFO     loss = 4.910433, step = 271 (0.831 sec)
+2019-04-24 16:21:45,899 tensorflow   INFO     Average examples/sec:   68.9 ( 601.5), step =     270, steps/minute:    721.7
+2019-04-24 16:21:45,901 tensorflow   INFO     (0.831 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.473370, Elastic/Al/bcc/Cijkl/C12 = 80.300079, Elastic/Al/bcc/Cijkl/C44 = 19.603889
+Elastic/Al/bcc/Constraints/kbar = 6.738276, Elastic/Al/fcc/Cijkl/C11 = 109.051216, Elastic/Al/fcc/Cijkl/C12 = 74.614365, Elastic/Al/fcc/Cijkl/C44 = 46.508938
+Elastic/Al/fcc/Constraints/kbar = 0.171956, Elastic/Loss/Constraint/c_loss = 0.691023, Elastic/Loss/Elastic/mae = 8.466197
+Elastic/Loss/Elastic/weighted/loss = 1.136541, GradNorm/elastic/total = 259.455109, GradNorm/energy/total = 59.724903, GradNorm/forces/total = 24.833563
+Loss/Energy/mae = 0.228987, Loss/Energy/rmse = 0.388455, Loss/Energy/weighted/loss = 0.388455, Loss/Forces/mae = 0.156447, Loss/Forces/rmse = 0.269441
+Loss/Forces/weighted/loss = 2.694414, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:46,566 tensorflow   INFO     global_step/sec: 14.9945
+2019-04-24 16:21:46,566 tensorflow   INFO     loss = 4.955838, step = 281 (0.667 sec)
+2019-04-24 16:21:46,566 tensorflow   INFO     Average examples/sec:   71.2 ( 749.7), step =     280, steps/minute:    899.6
+2019-04-24 16:21:46,568 tensorflow   INFO     (0.667 sec)
+Elastic/Al/bcc/Cijkl/C11 = 38.584904, Elastic/Al/bcc/Cijkl/C12 = 84.417534, Elastic/Al/bcc/Cijkl/C44 = 18.595509
+Elastic/Al/bcc/Constraints/kbar = 12.996809, Elastic/Al/fcc/Cijkl/C11 = 109.085014, Elastic/Al/fcc/Cijkl/C12 = 76.056740, Elastic/Al/fcc/Cijkl/C44 = 45.561127
+Elastic/Al/fcc/Constraints/kbar = 2.808710, Elastic/Loss/Constraint/c_loss = 1.580552, Elastic/Loss/Elastic/mae = 8.212457
+Elastic/Loss/Elastic/weighted/loss = 1.137293, GradNorm/elastic/total = 1086.336792, GradNorm/energy/total = 102.421104, GradNorm/forces/total = 18.127594
+Loss/Energy/mae = 0.187517, Loss/Energy/rmse = 0.377708, Loss/Energy/weighted/loss = 0.377708, Loss/Forces/mae = 0.104930, Loss/Forces/rmse = 0.186028
+Loss/Forces/weighted/loss = 1.860285, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:47,257 tensorflow   INFO     global_step/sec: 14.4701
+2019-04-24 16:21:47,258 tensorflow   INFO     loss = 4.7789764, step = 291 (0.692 sec)
+2019-04-24 16:21:47,258 tensorflow   INFO     Average examples/sec:   73.5 ( 722.7), step =     290, steps/minute:    867.3
+2019-04-24 16:21:47,260 tensorflow   INFO     (0.692 sec)
+Elastic/Al/bcc/Cijkl/C11 = 33.178806, Elastic/Al/bcc/Cijkl/C12 = 78.724594, Elastic/Al/bcc/Cijkl/C44 = 20.019089
+Elastic/Al/bcc/Constraints/kbar = 9.641840, Elastic/Al/fcc/Cijkl/C11 = 108.535118, Elastic/Al/fcc/Cijkl/C12 = 74.395279, Elastic/Al/fcc/Cijkl/C44 = 46.701283
+Elastic/Al/fcc/Constraints/kbar = 7.085468, Elastic/Loss/Constraint/c_loss = 1.672731, Elastic/Loss/Elastic/mae = 8.784865
+Elastic/Loss/Elastic/weighted/loss = 1.142142, GradNorm/elastic/total = 1059.789673, GradNorm/energy/total = 28.075790, GradNorm/forces/total = 9.615901
+Loss/Energy/mae = 0.223914, Loss/Energy/rmse = 0.325361, Loss/Energy/weighted/loss = 0.325361, Loss/Forces/mae = 0.084213, Loss/Forces/rmse = 0.163874
+Loss/Forces/weighted/loss = 1.638743, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:48,121 tensorflow   INFO     global_step/sec: 11.5756
+2019-04-24 16:21:48,123 tensorflow   INFO     loss = 4.683103, step = 301 (0.865 sec)
+2019-04-24 16:21:48,124 tensorflow   INFO     Average examples/sec:   75.7 ( 577.4), step =     300, steps/minute:    692.9
+2019-04-24 16:21:48,126 tensorflow   INFO     (0.866 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.353081, Elastic/Al/bcc/Cijkl/C12 = 79.787163, Elastic/Al/bcc/Cijkl/C44 = 19.636925
+Elastic/Al/bcc/Constraints/kbar = 0.820986, Elastic/Al/fcc/Cijkl/C11 = 107.813828, Elastic/Al/fcc/Cijkl/C12 = 74.369514, Elastic/Al/fcc/Cijkl/C44 = 46.251892
+Elastic/Al/fcc/Constraints/kbar = 5.864555, Elastic/Loss/Constraint/c_loss = 0.668554, Elastic/Loss/Elastic/mae = 8.276344
+Elastic/Loss/Elastic/weighted/loss = 1.126171, GradNorm/elastic/total = 1055.170776, GradNorm/energy/total = 20.353401, GradNorm/forces/total = 24.186916
+Loss/Energy/mae = 0.258499, Loss/Energy/rmse = 0.420604, Loss/Energy/weighted/loss = 0.420604, Loss/Forces/mae = 0.147076, Loss/Forces/rmse = 0.246777
+Loss/Forces/weighted/loss = 2.467774, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:48,998 tensorflow   INFO     global_step/sec: 11.4056
+2019-04-24 16:21:48,998 tensorflow   INFO     loss = 5.114027, step = 311 (0.875 sec)
+2019-04-24 16:21:48,998 tensorflow   INFO     Average examples/sec:   77.9 ( 572.0), step =     310, steps/minute:    686.4
+2019-04-24 16:21:49,000 tensorflow   INFO     (0.874 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.723663, Elastic/Al/bcc/Cijkl/C12 = 82.385384, Elastic/Al/bcc/Cijkl/C44 = 19.822145
+Elastic/Al/bcc/Constraints/kbar = 0.839517, Elastic/Al/fcc/Cijkl/C11 = 109.615517, Elastic/Al/fcc/Cijkl/C12 = 75.654655, Elastic/Al/fcc/Cijkl/C44 = 46.487022
+Elastic/Al/fcc/Constraints/kbar = 1.570443, Elastic/Loss/Constraint/c_loss = 0.240996, Elastic/Loss/Elastic/mae = 8.212222
+Elastic/Loss/Elastic/weighted/loss = 1.120938, GradNorm/elastic/total = 1068.856323, GradNorm/energy/total = 106.013023, GradNorm/forces/total = 28.181095
+Loss/Energy/mae = 0.372350, Loss/Energy/rmse = 0.722683, Loss/Energy/weighted/loss = 0.722683, Loss/Forces/mae = 0.176811, Loss/Forces/rmse = 0.302941
+Loss/Forces/weighted/loss = 3.029410, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:49,823 tensorflow   INFO     global_step/sec: 12.1104
+2019-04-24 16:21:49,824 tensorflow   INFO     loss = 4.5972753, step = 321 (0.826 sec)
+2019-04-24 16:21:49,824 tensorflow   INFO     Average examples/sec:   80.1 ( 605.6), step =     320, steps/minute:    726.7
+2019-04-24 16:21:49,826 tensorflow   INFO     (0.826 sec)
+Elastic/Al/bcc/Cijkl/C11 = 34.084938, Elastic/Al/bcc/Cijkl/C12 = 79.668114, Elastic/Al/bcc/Cijkl/C44 = 20.169876
+Elastic/Al/bcc/Constraints/kbar = 1.859086, Elastic/Al/fcc/Cijkl/C11 = 107.903976, Elastic/Al/fcc/Cijkl/C12 = 73.692017, Elastic/Al/fcc/Cijkl/C44 = 46.753380
+Elastic/Al/fcc/Constraints/kbar = 1.614443, Elastic/Loss/Constraint/c_loss = 0.347353, Elastic/Loss/Elastic/mae = 8.237741
+Elastic/Loss/Elastic/weighted/loss = 1.120786, GradNorm/elastic/total = 264.060852, GradNorm/energy/total = 110.792191, GradNorm/forces/total = 30.414249
+Loss/Energy/mae = 0.269232, Loss/Energy/rmse = 0.468329, Loss/Energy/weighted/loss = 0.468329, Loss/Forces/mae = 0.158345, Loss/Forces/rmse = 0.266081
+Loss/Forces/weighted/loss = 2.660807, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:50,671 tensorflow   INFO     global_step/sec: 11.7949
+2019-04-24 16:21:50,673 tensorflow   INFO     loss = 4.294146, step = 331 (0.849 sec)
+2019-04-24 16:21:50,673 tensorflow   INFO     Average examples/sec:   82.2 ( 588.8), step =     330, steps/minute:    706.6
+2019-04-24 16:21:50,676 tensorflow   INFO     (0.849 sec)
+Elastic/Al/bcc/Cijkl/C11 = 35.833126, Elastic/Al/bcc/Cijkl/C12 = 81.510872, Elastic/Al/bcc/Cijkl/C44 = 20.104239
+Elastic/Al/bcc/Constraints/kbar = 2.496772, Elastic/Al/fcc/Cijkl/C11 = 108.627426, Elastic/Al/fcc/Cijkl/C12 = 74.511246, Elastic/Al/fcc/Cijkl/C44 = 46.736656
+Elastic/Al/fcc/Constraints/kbar = 3.151643, Elastic/Loss/Constraint/c_loss = 0.564842, Elastic/Loss/Elastic/mae = 7.904516
+Elastic/Loss/Elastic/weighted/loss = 1.110908, GradNorm/elastic/total = 1059.588623, GradNorm/energy/total = 42.827847, GradNorm/forces/total = 20.043051
+Loss/Energy/mae = 0.202320, Loss/Energy/rmse = 0.454201, Loss/Energy/weighted/loss = 0.454201, Loss/Forces/mae = 0.118640, Loss/Forces/rmse = 0.216420
+Loss/Forces/weighted/loss = 2.164195, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:51,461 tensorflow   INFO     global_step/sec: 12.6575
+2019-04-24 16:21:51,462 tensorflow   INFO     loss = 4.4381747, step = 341 (0.789 sec)
+2019-04-24 16:21:51,462 tensorflow   INFO     Average examples/sec:   84.4 ( 633.9), step =     340, steps/minute:    760.7
+2019-04-24 16:21:51,464 tensorflow   INFO     (0.789 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.301987, Elastic/Al/bcc/Cijkl/C12 = 81.675194, Elastic/Al/bcc/Cijkl/C44 = 20.761618
+Elastic/Al/bcc/Constraints/kbar = 5.151777, Elastic/Al/fcc/Cijkl/C11 = 110.012520, Elastic/Al/fcc/Cijkl/C12 = 75.584801, Elastic/Al/fcc/Cijkl/C44 = 47.130741
+Elastic/Al/fcc/Constraints/kbar = 0.645525, Elastic/Loss/Constraint/c_loss = 0.579730, Elastic/Loss/Elastic/mae = 8.265540
+Elastic/Loss/Elastic/weighted/loss = 1.111782, GradNorm/elastic/total = 1051.138062, GradNorm/energy/total = 51.260010, GradNorm/forces/total = 29.218147
+Loss/Energy/mae = 0.248354, Loss/Energy/rmse = 0.442171, Loss/Energy/weighted/loss = 0.442171, Loss/Forces/mae = 0.119000, Loss/Forces/rmse = 0.230449
+Loss/Forces/weighted/loss = 2.304492, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:52,249 tensorflow   INFO     global_step/sec: 12.6895
+2019-04-24 16:21:52,250 tensorflow   INFO     loss = 4.6179247, step = 351 (0.788 sec)
+2019-04-24 16:21:52,250 tensorflow   INFO     Average examples/sec:   86.5 ( 634.4), step =     350, steps/minute:    761.2
+2019-04-24 16:21:52,252 tensorflow   INFO     (0.788 sec)
+Elastic/Al/bcc/Cijkl/C11 = 35.068447, Elastic/Al/bcc/Cijkl/C12 = 80.639511, Elastic/Al/bcc/Cijkl/C44 = 20.335152
+Elastic/Al/bcc/Constraints/kbar = 4.112692, Elastic/Al/fcc/Cijkl/C11 = 108.939079, Elastic/Al/fcc/Cijkl/C12 = 74.898407, Elastic/Al/fcc/Cijkl/C44 = 46.824200
+Elastic/Al/fcc/Constraints/kbar = 4.257767, Elastic/Loss/Constraint/c_loss = 0.837046, Elastic/Loss/Elastic/mae = 8.269763
+Elastic/Loss/Elastic/weighted/loss = 1.115589, GradNorm/elastic/total = 1054.560059, GradNorm/energy/total = 39.855057, GradNorm/forces/total = 24.195259
+Loss/Energy/mae = 0.198253, Loss/Energy/rmse = 0.437313, Loss/Energy/weighted/loss = 0.437313, Loss/Forces/mae = 0.129540, Loss/Forces/rmse = 0.222798
+Loss/Forces/weighted/loss = 2.227976, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:53,011 tensorflow   INFO     global_step/sec: 13.1367
+2019-04-24 16:21:53,011 tensorflow   INFO     loss = 3.9458144, step = 361 (0.761 sec)
+2019-04-24 16:21:53,011 tensorflow   INFO     Average examples/sec:   88.7 ( 657.0), step =     360, steps/minute:    788.4
+2019-04-24 16:21:53,013 tensorflow   INFO     (0.761 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.002502, Elastic/Al/bcc/Cijkl/C12 = 81.153152, Elastic/Al/bcc/Cijkl/C44 = 20.314522
+Elastic/Al/bcc/Constraints/kbar = 6.196498, Elastic/Al/fcc/Cijkl/C11 = 107.655350, Elastic/Al/fcc/Cijkl/C12 = 74.340500, Elastic/Al/fcc/Cijkl/C44 = 46.590092
+Elastic/Al/fcc/Constraints/kbar = 2.765456, Elastic/Loss/Constraint/c_loss = 0.896196, Elastic/Loss/Elastic/mae = 7.686795
+Elastic/Loss/Elastic/weighted/loss = 1.096799, GradNorm/elastic/total = 220.072311, GradNorm/energy/total = 109.005318, GradNorm/forces/total = 17.278082
+Loss/Energy/mae = 0.208804, Loss/Energy/rmse = 0.465426, Loss/Energy/weighted/loss = 0.465426, Loss/Forces/mae = 0.094123, Loss/Forces/rmse = 0.148739
+Loss/Forces/weighted/loss = 1.487394, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:53,896 tensorflow   INFO     global_step/sec: 11.2966
+2019-04-24 16:21:53,896 tensorflow   INFO     loss = 3.8022702, step = 371 (0.885 sec)
+2019-04-24 16:21:53,896 tensorflow   INFO     Average examples/sec:   90.7 ( 564.8), step =     370, steps/minute:    677.7
+2019-04-24 16:21:53,898 tensorflow   INFO     (0.885 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.800446, Elastic/Al/bcc/Cijkl/C12 = 82.286102, Elastic/Al/bcc/Cijkl/C44 = 20.631802
+Elastic/Al/bcc/Constraints/kbar = 4.893515, Elastic/Al/fcc/Cijkl/C11 = 108.508286, Elastic/Al/fcc/Cijkl/C12 = 74.525581, Elastic/Al/fcc/Cijkl/C44 = 47.043404
+Elastic/Al/fcc/Constraints/kbar = 1.685177, Elastic/Loss/Constraint/c_loss = 0.657869, Elastic/Loss/Elastic/mae = 7.826635
+Elastic/Loss/Elastic/weighted/loss = 1.095437, GradNorm/elastic/total = 1062.817261, GradNorm/energy/total = 46.860210, GradNorm/forces/total = 24.330900
+Loss/Energy/mae = 0.213132, Loss/Energy/rmse = 0.404020, Loss/Energy/weighted/loss = 0.404020, Loss/Forces/mae = 0.095547, Loss/Forces/rmse = 0.164494
+Loss/Forces/weighted/loss = 1.644944, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:54,635 tensorflow   INFO     global_step/sec: 13.5341
+2019-04-24 16:21:54,635 tensorflow   INFO     loss = 3.9786072, step = 381 (0.739 sec)
+2019-04-24 16:21:54,635 tensorflow   INFO     Average examples/sec:   92.9 ( 676.4), step =     380, steps/minute:    811.7
+2019-04-24 16:21:54,637 tensorflow   INFO     (0.739 sec)
+Elastic/Al/bcc/Cijkl/C11 = 36.364807, Elastic/Al/bcc/Cijkl/C12 = 81.762627, Elastic/Al/bcc/Cijkl/C44 = 21.092043
+Elastic/Al/bcc/Constraints/kbar = 0.383205, Elastic/Al/fcc/Cijkl/C11 = 108.574814, Elastic/Al/fcc/Cijkl/C12 = 74.272552, Elastic/Al/fcc/Cijkl/C44 = 47.410294
+Elastic/Al/fcc/Constraints/kbar = 0.351660, Elastic/Loss/Constraint/c_loss = 0.073487, Elastic/Loss/Elastic/mae = 7.794633
+Elastic/Loss/Elastic/weighted/loss = 1.091831, GradNorm/elastic/total = 232.214539, GradNorm/energy/total = 76.834106, GradNorm/forces/total = 24.756502
+Loss/Energy/mae = 0.225614, Loss/Energy/rmse = 0.452011, Loss/Energy/weighted/loss = 0.452011, Loss/Forces/mae = 0.133748, Loss/Forces/rmse = 0.236128
+Loss/Forces/weighted/loss = 2.361279, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:55,394 tensorflow   INFO     global_step/sec: 13.1772
+2019-04-24 16:21:55,394 tensorflow   INFO     loss = 4.898922, step = 391 (0.758 sec)
+2019-04-24 16:21:55,394 tensorflow   INFO     Average examples/sec:   94.9 ( 659.2), step =     390, steps/minute:    791.0
+2019-04-24 16:21:55,396 tensorflow   INFO     (0.759 sec)
+Elastic/Al/bcc/Cijkl/C11 = 37.763664, Elastic/Al/bcc/Cijkl/C12 = 83.209091, Elastic/Al/bcc/Cijkl/C44 = 21.218605
+Elastic/Al/bcc/Constraints/kbar = 2.430193, Elastic/Al/fcc/Cijkl/C11 = 109.819946, Elastic/Al/fcc/Cijkl/C12 = 75.326660, Elastic/Al/fcc/Cijkl/C44 = 47.508614
+Elastic/Al/fcc/Constraints/kbar = 3.630644, Elastic/Loss/Constraint/c_loss = 0.606084, Elastic/Loss/Elastic/mae = 8.165198
+Elastic/Loss/Elastic/weighted/loss = 1.097397, GradNorm/elastic/total = 1074.434326, GradNorm/energy/total = 90.179268, GradNorm/forces/total = 28.084406
+Loss/Energy/mae = 0.256614, Loss/Energy/rmse = 0.511320, Loss/Energy/weighted/loss = 0.511320, Loss/Forces/mae = 0.139806, Loss/Forces/rmse = 0.268412
+Loss/Forces/weighted/loss = 2.684121, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:21:56,019 tensorflow   INFO     Saving checkpoints for 400 into fcc_bcc/model.ckpt.
+2019-04-24 16:22:04,418 tensorflow   INFO     Calling model_fn.
+2019-04-24 16:22:05,026 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:22:05,034 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     4,    78,     1]
+2019-04-24 16:22:05,036 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Rho/AlAl/rho                : [     1,     4]
+2019-04-24 16:22:05,044 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Al                 : [     4,     1]
+2019-04-24 16:22:05,088 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     4,     1]
+2019-04-24 16:22:05,089 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Embed/Al/atomic             : [     4]
+2019-04-24 16:22:05,108 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/input              : [     1,     1,     4,    78,     1]
+2019-04-24 16:22:05,128 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     4,    78,     1]
+2019-04-24 16:22:05,132 tensorflow   INFO     Elastic/Al/fcc/nnEAM/Phi/AlAl/atomic             : [     1,     4]
+2019-04-24 16:22:05,142 tensorflow   INFO     Elastic/Al/fcc/Output/Energy/energy              : []
+2019-04-24 16:22:05,599 tensorflow   INFO     Elastic/Al/fcc/Output/Forces/forces              : [     4,     3]
+2019-04-24 16:22:05,921 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:22:05,923 tensorflow   INFO     Elastic/Al/fcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:22:07,941 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C11                         : []
+2019-04-24 16:22:14,547 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C12                         : []
+2019-04-24 16:22:16,996 tensorflow   INFO     Elastic/Al/fcc/Cijkl/C44                         : []
+2019-04-24 16:22:17,058 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:22:17,063 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho : [     1,     1,     2,    64,     1]
+2019-04-24 16:22:17,065 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Rho/AlAl/rho                : [     1,     2]
+2019-04-24 16:22:17,068 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Al                 : [     2,     1]
+2019-04-24 16:22:17,087 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed : [     2,     1]
+2019-04-24 16:22:17,088 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Embed/Al/atomic             : [     2]
+2019-04-24 16:22:17,096 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/input              : [     1,     1,     2,    64,     1]
+2019-04-24 16:22:17,105 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi : [     1,     1,     2,    64,     1]
+2019-04-24 16:22:17,108 tensorflow   INFO     Elastic/Al/bcc/nnEAM/Phi/AlAl/atomic             : [     1,     2]
+2019-04-24 16:22:17,113 tensorflow   INFO     Elastic/Al/bcc/Output/Energy/energy              : []
+2019-04-24 16:22:17,529 tensorflow   INFO     Elastic/Al/bcc/Output/Forces/forces              : [     2,     3]
+2019-04-24 16:22:17,958 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Full/stress         : [     3,     3]
+2019-04-24 16:22:17,959 tensorflow   INFO     Elastic/Al/bcc/Output/Stress/Voigt/stress        : [     6]
+2019-04-24 16:22:20,461 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C11                         : []
+2019-04-24 16:22:23,209 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C12                         : []
+2019-04-24 16:22:25,491 tensorflow   INFO     Elastic/Al/bcc/Cijkl/C44                         : []
+2019-04-24 16:23:04,290 tensorflow   INFO     Done calling model_fn.
+2019-04-24 16:23:04,327 tensorflow   INFO     Starting evaluation at 2019-04-24T08:23:04Z
+2019-04-24 16:23:04,562 tensorflow   INFO     Graph was finalized.
+2019-04-24 16:23:04,563 tensorflow   INFO     Restoring parameters from fcc_bcc/model.ckpt-400
+2019-04-24 16:23:08,934 tensorflow   INFO     Running local_init_op.
+2019-04-24 16:23:10,030 tensorflow   INFO     Done running local_init_op.
+2019-04-24 16:23:19,456 tensorflow   INFO
+Elastic/Al/bcc/Cijkl/C11 = 17.669937, Elastic/Al/bcc/Cijkl/C12 = 58.059090, Elastic/Al/bcc/Cijkl/C44 = 19.549858
+Elastic/Al/bcc/Constraints/kbar = 61.620941, Elastic/Al/fcc/Cijkl/C11 = 116.028534, Elastic/Al/fcc/Cijkl/C12 = 69.352310, Elastic/Al/fcc/Cijkl/C44 = 39.337307
+Elastic/Al/fcc/Constraints/kbar = 5.913546
+2019-04-24 16:23:26,702 tensorflow   INFO     Evaluation [20/200]
+2019-04-24 16:23:32,525 tensorflow   INFO     (13.069 sec)
+Elastic/Al/bcc/Cijkl/C11 = 17.669937, Elastic/Al/bcc/Cijkl/C12 = 58.059090, Elastic/Al/bcc/Cijkl/C44 = 19.549858
+Elastic/Al/bcc/Constraints/kbar = 61.620941, Elastic/Al/fcc/Cijkl/C11 = 116.028534, Elastic/Al/fcc/Cijkl/C12 = 69.352310, Elastic/Al/fcc/Cijkl/C44 = 39.337307
+Elastic/Al/fcc/Constraints/kbar = 5.913546
+2019-04-24 16:23:33,605 tensorflow   INFO
+nnEAM/Shared/Al/A = 0.314420, nnEAM/Shared/Al/B = 0.372002, nnEAM/Shared/Al/F0 = -2.837225, nnEAM/Shared/Al/F1 = -0.017067
+nnEAM/Shared/Al/F2 = 0.518714, nnEAM/Shared/Al/F3 = -2.660981, nnEAM/Shared/Al/Fe = -2.845220, nnEAM/Shared/Al/Fn0 = -2.795422
+nnEAM/Shared/Al/Fn1 = -0.151861, nnEAM/Shared/Al/Fn2 = 1.115895, nnEAM/Shared/Al/Fn3 = -1.148968, nnEAM/Shared/Al/alpha = 6.669928
+nnEAM/Shared/Al/beta = 3.612989, nnEAM/Shared/Al/eta = 0.979082, nnEAM/Shared/Al/f_eq = 1.398013, nnEAM/Shared/Al/kappa = 0.431300
+nnEAM/Shared/Al/lamda = 0.779404, nnEAM/Shared/Al/r_eq = 2.863924, nnEAM/Shared/Al/rho_e = 20.429663, nnEAM/Shared/Al/rho_s = 22.883257
+2019-04-24 16:23:39,373 tensorflow   INFO     Finished evaluation at 2019-04-24-08:23:39
+2019-04-24 16:23:39,373 tensorflow   INFO     Saving dict for global step 400: Elastic/Al/bcc/Cijkl/C11 = 17.669937, Elastic/Al/bcc/Cijkl/C12 = 58.05909, Elastic/Al/bcc/Cijkl/C44 = 19.549858, Elastic/Al/bcc/Constraints/kbar = 61.62094, Elastic/Al/fcc/Cijkl/C11 = 116.028534, Elastic/Al/fcc/Cijkl/C12 = 69.35231, Elastic/Al/fcc/Cijkl/C44 = 39.337307, Elastic/Al/fcc/Constraints/kbar = 5.913546, Energy/mae = 0.72158366, Energy/mae/atom = 0.109596066, Energy/mse = 1.1880957, Forces/mae = 0.15678833, Forces/mse = 0.31517112, global_step = 400, loss = 12.331369
+2019-04-24 16:23:39,374 tensorflow   INFO     Saving 'checkpoint_path' summary for global step 400: fcc_bcc/model.ckpt-400
+2019-04-24 16:24:03,821 tensorflow   INFO     (128.425 sec)
+Elastic/Al/bcc/Cijkl/C11 = 35.417828, Elastic/Al/bcc/Cijkl/C12 = 80.375786, Elastic/Al/bcc/Cijkl/C44 = 21.865580
+Elastic/Al/bcc/Constraints/kbar = 6.413847, Elastic/Al/fcc/Cijkl/C11 = 108.703568, Elastic/Al/fcc/Cijkl/C12 = 74.109047, Elastic/Al/fcc/Cijkl/C44 = 47.795013
+Elastic/Al/fcc/Constraints/kbar = 2.729234, Elastic/Loss/Constraint/c_loss = 0.914308, Elastic/Loss/Elastic/mae = 7.991405
+Elastic/Loss/Elastic/weighted/loss = 1.087966, GradNorm/elastic/total = 1055.047974, GradNorm/energy/total = 90.858879, GradNorm/forces/total = 20.590055
+Loss/Energy/mae = 0.186852, Loss/Energy/rmse = 0.278323, Loss/Energy/weighted/loss = 0.278323, Loss/Forces/mae = 0.122155, Loss/Forces/rmse = 0.202207
+Loss/Forces/weighted/loss = 2.022068, Loss/L2/total_regularization_loss = 0.000000, Loss/L2/weighted/loss = 0.000000
+2019-04-24 16:24:05,031 tensorflow   INFO     Loss for final step: 4.889069.
+2019-04-24 16:24:05,069 tensorflow   INFO     nnEAM/Rho/AlAl/input                             : [     1,     1,    -1,    -1,     1]
+2019-04-24 16:24:05,082 tensorflow   INFO     nnEAM/Rho/AlAl/Zjw04xc/Rho/Al/rho                : [     1,     1,    -1,    -1,     1]
+2019-04-24 16:24:05,084 tensorflow   INFO     nnEAM/Rho/AlAl/rho                               : [     1,    -1]
+2019-04-24 16:24:05,087 tensorflow   INFO     nnEAM/Embed/Al/Al                                : [    -1,     1]
+2019-04-24 16:24:05,128 tensorflow   INFO     nnEAM/Embed/Al/Zjw04xc/Embed/Al/embed            : [    -1,     1]
+2019-04-24 16:24:05,128 tensorflow   INFO     nnEAM/Embed/Al/atomic                            : [    -1]
+2019-04-24 16:24:05,137 tensorflow   INFO     nnEAM/Phi/AlAl/input                             : [     1,     1,    -1,    -1,     1]
+2019-04-24 16:24:05,153 tensorflow   INFO     nnEAM/Phi/AlAl/Zjw04xc/Phi/Al/phi                : [     1,     1,    -1,    -1,     1]
+2019-04-24 16:24:05,156 tensorflow   INFO     nnEAM/Phi/AlAl/atomic                            : [     1,    -1]
+2019-04-24 16:24:05,160 tensorflow   INFO     Output/Energy/energy                             : []
+2019-04-24 16:24:05,503 tensorflow   INFO     Output/Forces/forces                             : [    -1,    -1]
+2019-04-24 16:24:05,830 tensorflow   INFO     Output/Stress/Full/stress                        : [     3,     3]
+2019-04-24 16:24:05,831 tensorflow   INFO     Output/Stress/Voigt/stress                       : [     6]
+2019-04-24 16:24:07,691 tensorflow   INFO     Output/Hessian/hessian                           : [    -1,     3,    -1,     3]
+2019-04-24 16:24:07,834 tensorflow   INFO     Restoring parameters from fcc_bcc/model.ckpt-400
+2019-04-24 16:24:09,310 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/tools/freeze_graph.py:249: FastGFile.__init__ (from tensorflow.python.platform.gfile) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.gfile.GFile.
+2019-04-24 16:24:11,964 tensorflow   INFO     Restoring parameters from fcc_bcc/export/saved_model-0
+2019-04-24 16:24:12,227 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/tools/freeze_graph.py:232: convert_variables_to_constants (from tensorflow.python.framework.graph_util_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.compat.v1.graph_util.convert_variables_to_constants
+2019-04-24 16:24:12,227 tensorflow   WARNING  From /Users/bismarrck/anaconda3/envs/iapcm/lib/python3.7/site-packages/tensorflow/python/framework/graph_util_impl.py:245: extract_sub_graph (from tensorflow.python.framework.graph_util_impl) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.compat.v1.graph_util.extract_sub_graph
+2019-04-24 16:24:12,437 tensorflow   INFO     Froze 20 variables.
+2019-04-24 16:24:12,497 tensorflow   INFO     Converted 20 variables to const ops.
+2019-04-24 16:24:12,608 tensorflow   INFO     Model exported to fcc_bcc/Al.pb
+2019-04-24 16:24:12,715 tensorflow   INFO     Restoring parameters from fcc_bcc/model.ckpt-400
+2019-04-24 16:24:13,819 tensorflow   INFO     Model exported to fcc_bcc/Al.alloy.eam

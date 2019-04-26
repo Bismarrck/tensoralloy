@@ -5,6 +5,7 @@ This module defines the command-line main function of `tensoralloy`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import pandas as pd
 import numpy as np
 import argparse
 import glob
@@ -331,111 +332,70 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         super(PrintEvaluationSummaryProgram, self).config_subparser(subparser)
 
     @staticmethod
-    def print_evaluation_summary(logfile, eval_forces=False, eval_stress=False):
+    def print_evaluation_summary(logfile) -> pd.DataFrame:
         """
         Summarize the evalutaion results of the logfile.
         """
-        e_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
-                            r"Energy/mae/atom\s=\s([0-9.]+),.*")
 
-        ef_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
-                             r"Energy/mae/atom\s=\s([0-9.]+),.*"
-                             r"Forces/mae\s=\s([0-9.]+),.*")
-
-        efs_patt = re.compile(r".*tensorflow\s+INFO\s+.*global\sstep\s(\d+):.*"
-                              r"Energy/mae/atom\s=\s([0-9.]+),.*"
-                              r"Forces/mae\s=\s([0-9.]+),.*"
-                              r"Stress/mae\s=\s([0-9.]+),.*"
-                              r"Stress/relative\s=\s([0-9.]+),.*")
-
-        if not eval_forces:
-            patt = e_patt
-        elif not eval_stress:
-            patt = ef_patt
-        else:
-            patt = efs_patt
-
-        energy = []
-        forces = []
-        stress = []
-        stress_rel = []
-        steps = []
+        global_step_patt = re.compile(r".*tensorflow\s+INFO\s+Saving\sdict"
+                                      r"\sfor\sglobal\sstep\s(\d+):(.*)")
+        key_value_pair_patt = re.compile(r"\s+(.*)\s=\s([0-9.-]+)")
+        pid_patt = re.compile(r".*tensorflow\s+INFO\s+pid=(\d+)")
+        results = {}
 
         with open(logfile) as fp:
             for line in fp:
                 line = line.strip()
-                m = patt.search(line)
-                if m:
-                    steps.append(int(m.group(1)))
-                    energy.append(float(m.group(2)))
-                    if eval_forces:
-                        forces.append(float(m.group(3)))
-                    if eval_stress:
-                        stress.append(float(m.group(4)))
-                        stress_rel.append(float(m.group(5)))
+                if pid_patt.search(line):
+                    results.clear()
+                    continue
 
-        if len(energy) == 0:
-            return
+                m = global_step_patt.search(line)
+                if not m:
+                    continue
 
-        idx_y_min = np.argmin(energy)
+                for s in m.group(2).split(','):
+                    key_value_pair = key_value_pair_patt.search(s)
+                    key = key_value_pair.group(1)
+                    val = key_value_pair.group(2)
 
-        if eval_forces:
-            idx_f_min = np.argmin(forces)
-        else:
-            idx_f_min = -1
+                    if key == 'global_step':
+                        convert_fn = int
 
-        if eval_stress:
-            idx_s_min = np.argmin(stress)
-        else:
-            idx_s_min = -1
+                    elif key.startswith('Elastic'):
+                        def convert_fn(_x):
+                            """ Convert the string to int. """
+                            return "%.1f" % np.round(float(_x), 1)
 
-        np.set_printoptions(precision=6, suppress=True)
+                        if 'Constraints' in key:
+                            key = key[8:].replace('/Constraints', '')
+                        else:
+                            key = key[8:].replace('/Cijkl', '')
+                    else:
+                        convert_fn = float
 
-        for i in range(len(steps)):
-            if forces:
-                if eval_stress:
-                    vals = (steps[i], energy[i], forces[i], stress[i],
-                            stress_rel[i] * 100.0)
-                    fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f} " \
-                          "s_mae = {:6.4f} s_rel = {:6.2f} %"
-                else:
-                    vals = (steps[i], energy[i], forces[i])
-                    fmt = "Step = {:7d} y_mae/atom = {:8.5f} f_mae = {:6.4f}"
-            else:
-                vals = (steps[i], energy[i])
-                fmt = "Step = {:7d} y_mae/atom = {:8.5f}"
-            if i == idx_y_min:
-                fmt += " Y_MIN"
-            if i == idx_f_min:
-                fmt += " F_MIN"
-            if i == idx_s_min:
-                fmt += " S_MIN"
-            print(fmt.format(*vals))
+                    results[key] = results.get(key, []) + [convert_fn(val)]
+
+        df = pd.DataFrame(results)
+        df.set_index('global_step', inplace=True)
+
+        print(df.to_string())
+
+        with open(join(dirname(logfile), 'summary.csv'), 'w') as fp:
+            fp.write(df.to_csv())
+
+        return df
 
     @property
     def main_func(self):
+        """
+        The main function of this program.
+        """
         def func(args: argparse.Namespace):
             logfile = args.logfile
             if not exists(logfile):
                 raise IOError(f"The logfile {logfile} cannot be accessed!")
-            model_dir = dirname(logfile)
-            if model_dir == "":
-                model_dir = "."
-            toml_files = list(glob.glob(f"{model_dir}/*.toml"))
-            if len(toml_files) == 0:
-                print(f"Warning: no TOML file found in {model_dir}. "
-                      f"Only energy evalutation results will be summarized.")
-                eval_forces = False
-                eval_stress = False
-            else:
-                if len(toml_files) > 1:
-                    print(f"Warning: more than one TOML file found in "
-                          f"{model_dir}. Only {toml_files[0]} will be used.")
-                config = InputReader(toml_files[0])
-                minimize_properties = config['nn.minimize']
-                eval_forces = "forces" in minimize_properties
-                eval_stress = "stress" in minimize_properties
-            self.print_evaluation_summary(logfile, eval_forces, eval_stress)
+            self.print_evaluation_summary(logfile)
         return func
 
 
