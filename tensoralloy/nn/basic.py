@@ -14,7 +14,9 @@ from typing import List, Dict
 from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
+from tensorflow.python.framework.tensor_util import is_tensor
 from tensorflow_estimator import estimator as tf_estimator
+from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
@@ -306,25 +308,37 @@ class BasicNN:
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
-                       forces, name='stress', verbose=True):
+                       forces, name='stress', return_pressure=False,
+                       verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
+
+        # Get the 3x3 full stress tensor
         stress_per_volume, total_stress = \
             self._get_reduced_full_stress_tensor(energy, cells, volume,
                                                  positions, forces)
         if verbose:
             log_tensor(total_stress)
+
+        # Get the Voigt stress tensor
         ndims = stress_per_volume.shape.ndims
         batch_size = cells.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
         voigt = self._convert_to_voigt_stress(
             stress_per_volume, batch_size, name=name, verbose=verbose)
-        return voigt, total_stress
 
-    def _get_total_pressure_op(self, energy: tf.Tensor, cells, volume,
-                               positions, forces, name='pressure',
+        if return_pressure:
+            total_pressure = self._get_total_pressure_op(stress_per_volume,
+                                                         verbose=verbose)
+        else:
+            total_pressure = tf.no_op()
+
+        return voigt, total_stress, total_pressure
+
+    @staticmethod
+    def _get_total_pressure_op(stress_per_volume: tf.Tensor, name='pressure',
                                verbose=True):
         """
         Return the Op to compute the reduced total pressure (eV).
@@ -332,15 +346,13 @@ class BasicNN:
             reduced_total_pressure = -trace(full_stress) / 3.0
 
         """
-        stress_per_volume, total_stress = \
-            self._get_reduced_full_stress_tensor(energy, cells, volume,
-                                                 positions, forces)
-        three = tf.constant(-3.0, dtype=energy.dtype, name='three')
+        dtype = stress_per_volume.dtype
         total_pressure = tf.math.truediv(tf.trace(stress_per_volume),
-                                         three, name=name)
+                                         tf.constant(-3.0 * GPa, dtype=dtype),
+                                         name=f"{name}/GPa")
         if verbose:
             log_tensor(total_pressure)
-        return total_pressure, total_stress
+        return total_pressure
 
     @staticmethod
     def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
@@ -446,7 +458,7 @@ class BasicNN:
                     weight=loss_parameters.total_pressure.weight,
                     collections=collections)
 
-            elif 'stress' in self._minimize_properties:
+            if 'stress' in self._minimize_properties:
                 losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
@@ -788,23 +800,21 @@ class BasicNN:
                         predictions.energy, features.positions, name='forces',
                         verbose=verbose)
 
-            if 'total_pressure' in properties:
-                with tf.name_scope("Pressure"):
-                    total_pressure, total_stress = \
-                        self._get_total_pressure_op(
-                            predictions.energy, features.cells, features.volume,
-                            features.positions, predictions.forces,
-                            name='pressure', verbose=verbose)
-                    predictions.total_pressure = total_pressure
-                    predictions.total_stress = total_stress
-            elif 'stress' in properties:
+            if 'stress' in properties or 'total_pressure' in properties:
                 with tf.name_scope("Stress"):
-                    voigt_stress, total_stress = self._get_stress_op(
-                        predictions.energy, features.cells, features.volume,
-                        features.positions, predictions.forces, name='stress',
-                        verbose=verbose)
+                    voigt_stress, total_stress, total_pressure = \
+                        self._get_stress_op(
+                            energy=predictions.energy,
+                            cells=features.cells,
+                            volume=features.volume,
+                            positions=features.positions,
+                            forces=predictions.forces,
+                            return_pressure=True,
+                            name='stress',
+                            verbose=verbose)
                     predictions.stress = voigt_stress
                     predictions.total_stress = total_stress
+                    predictions.total_pressure = total_pressure
 
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
@@ -1004,6 +1014,8 @@ class BasicNN:
             ]
 
             for tensor in predictions.values():
+                if not is_tensor(tensor):
+                    continue
                 output_node_names.append(tensor.op.name)
 
             for node in graph.as_graph_def().node:

@@ -702,9 +702,13 @@ def test_batch_stress():
             verbose=False)
         energy = nn._get_energy_op(outputs, features, verbose=False)
         forces = nn._get_forces_op(energy, batch.positions, verbose=False)
-        stress, total_stress = nn._get_stress_op(energy, batch.cells,
-                                                 batch.volume, batch.positions,
-                                                 forces, verbose=False)
+        stress, total_stress, _ = nn._get_stress_op(
+            energy=energy,
+            cells=batch.cells,
+            volume=batch.volume,
+            positions=batch.positions,
+            forces=forces,
+            verbose=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()

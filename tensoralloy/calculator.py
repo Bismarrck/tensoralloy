@@ -141,7 +141,6 @@ class TensorAlloyCalculator(Calculator):
             'energy': 'Output/Energy/energy:0',
             'forces': 'Output/Forces/forces:0',
             'stress': 'Output/Stress/Voigt/stress:0',
-            'total_pressure': 'Output/Pressure/pressure:0',
             'hessian': 'Output/Hessian/hessian:0',
             'elastic': 'Output/Elastic/Cijkl/elastic:0'
         }
