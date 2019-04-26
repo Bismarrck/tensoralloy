@@ -242,7 +242,7 @@ class FingerprintsComparator:
         pos = atoms.get_positions()
         scalpos = atoms.get_scaled_positions()
         num = atoms.get_atomic_numbers()
-        cell = self.cell
+        cell = atoms.cell
 
         unique_types = sorted(list(set(num)))  # the unique atomic numbers
         posdic = {}
@@ -252,8 +252,6 @@ class FingerprintsComparator:
 
         # Setting up the required extra parameters if we don't want to apply
         # PBC in 1 or 2 directions:
-
-        pbc_dirs = [i for i in range(3) if self.pbc[i]]
         non_pbc_dirs = [i for i in range(3) if not self.pbc[i]]
 
         if self.dimensions == 2:
@@ -304,24 +302,39 @@ class FingerprintsComparator:
             qmax *= np.linalg.norm(cell[non_pbc_dirs[1], :])
 
         def arccos(x):
-            # the domain of the numpy version is only [-1,1]
+            """
+            A specific arccos function. The domain of the numpy version is
+            only [-1, 1].
+            """
             return (1. / 1j) * np.log(x + sqrt(x ** 2 - 1))
 
         def surface_area_0d(r):
+            """
+            Return the surface area of the 0D lattice.
+            """
             return 4 * np.pi * (r ** 2)
 
-        def surface_area_1d(r, pos):
-            q0 = pos[non_pbc_dirs[1]]
+        def surface_area_1d(r, _pos):
+            """
+            Return the surface area of the 1D lattice.
+            """
+            q0 = _pos[non_pbc_dirs[1]]
             phi1 = arccos((qmax - q0) / r).real
             phi2 = np.pi - arccos((qmin - q0) / r).real
             factor = 1 - (phi1 + phi2) / np.pi
-            return surface_area_2d(r, pos) * factor
+            return surface_area_2d(r, _pos) * factor
 
-        def surface_area_2d(r, pos):
-            p0 = pos[non_pbc_dirs[0]]
+        def surface_area_2d(r, _pos):
+            """
+            Return the surface area of the 2D lattice.
+            """
+            p0 = _pos[non_pbc_dirs[0]]
             return 2 * np.pi * r * (min(pmax - p0, r) + min(p0 - pmin, r))
 
         def surface_area_3d(r):
+            """
+            Return the surface area of the 3D lattice.
+            """
             return 4 * np.pi * (r ** 2)
 
         # determining which neighbouring cells to 'visit' for a given rcut:
@@ -463,6 +476,9 @@ class FingerprintsComparator:
         return distance
 
     def get_motifs(self, atoms):
+        """
+        Find and return the motifs.
+        """
         pos = atoms.get_positions()
         motifs = []
         for i in range(len(atoms)):
