@@ -26,30 +26,35 @@ class CubicInterpolator(object):
     Cubic spline interpolation for a scalar function in one dimension
     """
 
-    def __init__(self, x, y, fpa=None, fpb=None, name=None):
+    def __init__(self, x, y, bc_start=None, bc_end=None, name=None,
+                 natural_boundary=False):
         """
         Initialization method.
 
         Parameters
         ----------
         x : tf.Tensor
-            The independent coordinates of the training points.
+            The independent coordinates of the training points. The shape should
+            be `[..., N]`.
         y : tf.Tensor
             The dependent coordinates of the training points. This must be the
             same shape as ``x`` and the interpolation is always performed along
-            the last axis.
-        fpa : float or tf.Tensor or None
+            the last axis. The shape should be `[..., N]`.
+        bc_start : float or tf.Tensor or None
             The value of the derivative of the function at the first data point.
             By default this is zero.
-        fpb : float or tf.Tensor or None
+        bc_end : float or tf.Tensor or None
             The value of the derivative of the function at the last data point.
             By default this is zero.
         name : str
             The name of this interpolator.
         """
-
         self.name = name
+
         with tf.name_scope(name, "CubicInterpolator"):
+
+            x = tf.convert_to_tensor(x, name='x')
+
             # Compute the deltas
             size = tf.shape(x)[-1]
             axis = tf.rank(x) - 1
@@ -72,22 +77,53 @@ class CubicInterpolator(object):
                                         axis=axis)
             last = lambda a: tf.gather(a, [size-2], axis=axis)  # NOQA
 
-            fpa_ = fpa if fpa is not None else tf.constant(0, x.dtype)
-            fpb_ = fpb if fpb is not None else tf.constant(0, x.dtype)
+            if bc_start is None:
+                bc_start = 0.0
+            bc_start = tf.convert_to_tensor(
+                bc_start, dtype=x.dtype, name='bc_start')
 
-            diag = 2 * tf.concat((first(dx), dx_up+dx_lo, last(dx)), axis)
-            upper = dx
-            lower = dx
-            Y = 3*tf.concat((first(dy)/first(dx) - fpa_,
-                             dy_up/dx_up - dy_lo/dx_lo,
-                             fpb_ - last(dy)/last(dx)), axis)
+            if bc_end is None:
+                bc_end = 0.0
+            bc_end = tf.convert_to_tensor(bc_end, dtype=x.dtype, name='bc_end')
 
-            # Solve the tri-diagonal system
+            two = tf.constant(2.0, dtype=x.dtype, name='two')
+            three = tf.constant(3.0, dtype=x.dtype, name='three')
+
+            if not natural_boundary:
+                upper = dx
+                lower = dx
+                diag = two * tf.concat((first(dx), dx_up + dx_lo, last(dx)),
+                                       axis=axis)
+                Y = three * tf.concat((first(dy)/first(dx) - bc_start,
+                                       dy_up/dx_up - dy_lo/dx_lo,
+                                       bc_end - last(dy) / last(dx)),
+                                      axis=axis, name='y')
+
+            else:
+                diag = two * tf.concat(
+                    (first(dx) / two,
+                     dx_up + dx_lo,
+                     last(dx) / two),
+                    axis=axis, name='diag')
+
+                shape = dx.shape.as_list()[:-1] + [1]
+                zeros = tf.zeros(shape, dtype=x.dtype)
+
+                upper = tf.concat((zeros, dx[..., 1:]),
+                                  axis=axis, name='upper')
+                lower = tf.concat((dx[..., :-1], zeros),
+                                  axis=axis, name='lower')
+                Y = three * tf.concat((tf.fill(shape, bc_start),
+                                       dy_up / dx_up - dy_lo / dx_lo,
+                                       tf.fill(shape, bc_end)),
+                                      axis=axis, name=name)
+
+            # Solve the tri-diagonal system Ax = b
             c = tri_diag_solve(diag, upper, lower, Y)
             c_up = tf.gather(c, tf.range(1, size), axis=axis)
-            c_lo = tf.gather(c, tf.range(size-1), axis=axis)
-            b = dy / dx - dx * (c_up + 2*c_lo) / 3
-            d = (c_up - c_lo) / (3*dx)
+            c_lo = tf.gather(c, tf.range(size - 1), axis=axis)
+            b = dy / dx - dx * (c_up + two * c_lo) / three
+            d = (c_up - c_lo) / (three * dx)
 
             self.x = x
             self.y = y
@@ -103,9 +139,10 @@ class CubicInterpolator(object):
         ----------
         t : tf.Tensor
             The independent coordinates where the model should be evaluated.
-            The dimensions of all but the last axis must match the
-            dimensions of ``x``. The interpolation is performed in the last
+            The dimensions of all but the first axis must match the last
+            dimension of `x`. The interpolation is performed in the last
             dimension independently for each of the earlier dimensions.
+            The shape should be `[N, ...]`.
         name : str
             The name.
 
