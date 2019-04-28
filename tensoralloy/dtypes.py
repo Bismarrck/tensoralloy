@@ -30,7 +30,39 @@ class Precision(enum.Enum):
     medium = 1
 
 
-_floating_point_precision = None
+_floating_point_precision = Precision.high
+
+
+class set_precision:
+    """
+    A wrapper for setting precision using the with statement.
+    """
+
+    def __init__(self, precision=Precision.high):
+        """
+        Set the default precision of all floating-point numbers.
+
+        Parameters
+        ----------
+        precision : Precision or str
+            The precision of the floating-point numbers.
+
+        """
+        self._precision = precision
+        self._original = get_float_precision()
+
+    def __enter__(self):
+        """
+        Start the precision block.
+        """
+        set_float_precision(self._precision)
+        return self._precision
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Leave the precision block.
+        """
+        set_float_precision(self._original)
 
 
 def set_float_precision(precision=Precision.high):
