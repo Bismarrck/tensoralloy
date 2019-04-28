@@ -7,10 +7,15 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import List
+from tensorflow.python.training.basic_session_run_hooks import NanTensorHook
+from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
 
 from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
 from tensoralloy.nn.utils import get_optimizer, get_learning_rate
-from tensoralloy.nn.dataclasses import OptParameters
+from tensoralloy.nn.utils import get_tensors_dict_for_hook
+from tensoralloy.nn.dataclasses import OptParameters, TrainParameters
+from tensoralloy.nn.hooks import LoggingTensorHook, ExamplesPerSecondHook
+from tensoralloy.nn.hooks import WarmStartFromVariablesHook
 from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -190,3 +195,65 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
                     add_gradients_cos_dist_summary(grads_and_vars['energy'], g)
 
     return ema, variable_averages_op
+
+
+def get_training_hooks(losses: AttributeDict,
+                       ema: tf.train.ExponentialMovingAverage,
+                       train_parameters: TrainParameters):
+    """
+    Return a list of `tf.train.SessionRunHook` objects for training.
+
+    Parameters
+    ----------
+    losses : AttributeDict
+        A dict. The loss tensor for energy, forces and stress or total
+        pressure.
+    ema : tf.train.ExponentialMovingAverage
+        A function to obtain moving averaged variables.
+    train_parameters : TrainParameters
+        Hyper parameters for this function.
+
+    """
+    with tf.name_scope("Hooks"):
+
+        with tf.name_scope("Summary"):
+            summary_saver_hook = tf.train.SummarySaverHook(
+                save_steps=train_parameters.summary_steps,
+                output_dir=train_parameters.model_dir,
+                summary_op=tf.summary.merge_all())
+
+        with tf.name_scope("Speed"):
+            examples_per_sec_hook = ExamplesPerSecondHook(
+                batch_size=train_parameters.batch_size,
+                every_n_steps=train_parameters.log_steps)
+
+        with tf.name_scope("Nan"):
+            nan_tensor_hook = NanTensorHook(fail_on_nan_loss=True, **losses)
+
+        hooks = [summary_saver_hook, examples_per_sec_hook, nan_tensor_hook]
+
+        if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
+            logging_tensor_hook = LoggingTensorHook(
+                tensors=get_tensors_dict_for_hook(GraphKeys.TRAIN_METRICS),
+                every_n_iter=train_parameters.log_steps,
+                at_end=True)
+            hooks.append(logging_tensor_hook)
+
+        if train_parameters.profile_steps:
+            with tf.name_scope("Profile"):
+                profiler_hook = ProfilerHook(
+                    save_steps=train_parameters.profile_steps,
+                    output_dir=f"{train_parameters.model_dir}-profile",
+                    show_memory=True)
+            hooks.append(profiler_hook)
+
+        if train_parameters.previous_checkpoint:
+            with tf.name_scope("Restore"):
+                ckpt = train_parameters.previous_checkpoint
+                warm_start_hook = WarmStartFromVariablesHook(
+                    previous_checkpoint=ckpt,
+                    ema=ema,
+                    restart=train_parameters.restart)
+            hooks.append(warm_start_hook)
+
+    return hooks

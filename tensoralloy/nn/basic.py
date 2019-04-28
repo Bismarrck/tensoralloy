@@ -20,12 +20,9 @@ from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
-from tensoralloy.nn.dataclasses import TrainParameters
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.nn.opt import get_train_op
-from tensoralloy.nn.hooks import RestoreEmaVariablesHook, ProfilerHook
-from tensoralloy.nn.hooks import ExamplesPerSecondHook, LoggingTensorHook
-from tensoralloy.nn.hooks import WarmStartFromVariablesHook, NanTensorHook
+from tensoralloy.nn.opt import get_train_op, get_training_hooks
+from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn import elastic as elastic_ops
 from tensoralloy.transformer.base import BaseTransformer
@@ -474,203 +471,6 @@ class BasicNN:
 
         return tf.add_n(list(losses.values()), name='loss'), losses
 
-    @staticmethod
-    def get_logging_tensors(key) -> Dict[str, tf.Tensor]:
-        """
-        Return a dict of logging tensors.
-        """
-        tensors = {}
-        for tensor in tf.get_collection(key):
-            tensors[tensor.op.name] = tensor
-        return tensors
-
-    def get_training_hooks(self,
-                           losses: AttributeDict,
-                           ema: tf.train.ExponentialMovingAverage,
-                           train_parameters: TrainParameters):
-        """
-        Return a list of `tf.train.SessionRunHook` objects for training.
-
-        Parameters
-        ----------
-        losses : AttributeDict
-            A dict. The loss tensor for energy, forces and stress or total
-            pressure.
-        ema : tf.train.ExponentialMovingAverage
-            A function to obtain moving averaged variables.
-        train_parameters : TrainParameters
-            Hyper parameters for this function.
-
-        """
-        with tf.name_scope("Hooks"):
-
-            with tf.name_scope("Summary"):
-                summary_saver_hook = tf.train.SummarySaverHook(
-                    save_steps=train_parameters.summary_steps,
-                    output_dir=train_parameters.model_dir,
-                    summary_op=tf.summary.merge_all())
-
-            with tf.name_scope("Speed"):
-                examples_per_sec_hook = ExamplesPerSecondHook(
-                    batch_size=train_parameters.batch_size,
-                    every_n_steps=train_parameters.log_steps)
-
-            with tf.name_scope("Nan"):
-                nan_tensor_hook = NanTensorHook(fail_on_nan_loss=True, **losses)
-
-            hooks = [summary_saver_hook, examples_per_sec_hook, nan_tensor_hook]
-
-            if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
-                logging_tensor_hook = LoggingTensorHook(
-                    tensors=self.get_logging_tensors(GraphKeys.TRAIN_METRICS),
-                    every_n_iter=train_parameters.log_steps,
-                    at_end=True)
-                hooks.append(logging_tensor_hook)
-
-            if train_parameters.profile_steps:
-                with tf.name_scope("Profile"):
-                    profiler_hook = ProfilerHook(
-                        save_steps=train_parameters.profile_steps,
-                        output_dir=f"{train_parameters.model_dir}-profile",
-                        show_memory=True)
-                hooks.append(profiler_hook)
-
-            if train_parameters.previous_checkpoint:
-                with tf.name_scope("Restore"):
-                    ckpt = train_parameters.previous_checkpoint
-                    warm_start_hook = WarmStartFromVariablesHook(
-                        previous_checkpoint=ckpt,
-                        ema=ema,
-                        restart=train_parameters.restart)
-                hooks.append(warm_start_hook)
-
-        return hooks
-
-    def get_evaluation_hooks(self,
-                             ema: tf.train.ExponentialMovingAverage,
-                             train_parameters: TrainParameters):
-        """
-        Return a list of `tf.train.SessionRunHook` objects for evaluation.
-        """
-        hooks = []
-
-        with tf.name_scope("Hooks"):
-
-            if len(tf.get_collection(GraphKeys.EVAL_METRICS)) > 0:
-                with tf.name_scope("Accuracy"):
-                    logging_tensor_hook = LoggingTensorHook(
-                        tensors=self.get_logging_tensors(
-                            GraphKeys.EVAL_METRICS),
-                        every_n_iter=train_parameters.eval_steps,
-                        at_end=True)
-                hooks.append(logging_tensor_hook)
-
-            if len(tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)) > 0:
-                with tf.name_scope("EmpiricalPotential"):
-                    potential_values_hook = LoggingTensorHook(
-                        tensors=self.get_logging_tensors(
-                            GraphKeys.EAM_POTENTIAL_VARIABLES),
-                        every_n_iter=None,
-                        at_end=True)
-                hooks.append(potential_values_hook)
-
-            with tf.name_scope("EMA"):
-                restore_ema_hook = RestoreEmaVariablesHook(ema=ema)
-                hooks.append(restore_ema_hook)
-
-        return hooks
-
-    def get_eval_metrics_ops(self, predictions, labels, n_atoms):
-        """
-        Return a dict of Ops as the evaluation metrics.
-
-        Always required:
-            * 'energy' of shape `[batch_size, ]`.
-            * 'energy_confidence' of shape `[batch_size, ]`
-
-        Required if 'forces' should be minimized:
-            * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
-              required if 'forces' should be minimized.
-            * 'forces_confidence' of shape `[batch_size, ]` is required if
-              'forces' should be minimized.
-
-        Required if 'stress' or 'total_pressure' should be minimized:
-            * 'stress' of shape `[batch_size, 6]` is required if
-              'stress' should be minimized.
-            * 'pulay_stress' of shape `[batch_size, ]`
-            * 'total_pressure' of shape `[batch_size, ]`
-            * 'stress_confidence' of shape `[batch_size, ]`
-
-        `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
-        the number of atoms in each structure.
-
-        """
-        with tf.name_scope("Metrics"):
-
-            metrics = {}
-            n_atoms = tf.cast(n_atoms, labels.energy.dtype, name='n_atoms')
-
-            with tf.name_scope("Energy"):
-                x = labels.energy
-                y = predictions.energy
-                xn = x / n_atoms
-                yn = y / n_atoms
-                ops_dict = {
-                    'Energy/mae': tf.metrics.mean_absolute_error(x, y),
-                    'Energy/mse': tf.metrics.mean_squared_error(x, y),
-                    'Energy/mae/atom': tf.metrics.mean_absolute_error(xn, yn),
-                }
-                metrics.update(ops_dict)
-
-            if 'forces' in self._minimize_properties:
-                with tf.name_scope("Forces"):
-                    with tf.name_scope("Split"):
-                        x = tf.split(labels.forces, [1, -1], axis=1)[1]
-                    y = predictions.forces
-                    with tf.name_scope("Scale"):
-                        n_max = tf.convert_to_tensor(
-                            x.shape[1].value, dtype=x.dtype, name='n_max')
-                        one = tf.constant(1.0, dtype=x.dtype, name='one')
-                        weight = tf.math.truediv(
-                            one, tf.reduce_mean(n_atoms / n_max), name='weight')
-                        x = tf.multiply(weight, x)
-                        y = tf.multiply(weight, y)
-                    ops_dict = {
-                        'Forces/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Forces/mse': tf.metrics.mean_squared_error(x, y),
-                    }
-                    metrics.update(ops_dict)
-
-            if 'total_pressure' in self._minimize_properties:
-                with tf.name_scope("Pressure"):
-                    x = labels.total_pressure
-                    y = predictions.total_pressure
-                    ops_dict = {
-                        'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Pressure/mse': tf.metrics.mean_squared_error(x, y)}
-                    metrics.update(ops_dict)
-
-            elif 'stress' in self._minimize_properties:
-                with tf.name_scope("Stress"):
-                    x = labels.stress
-                    y = predictions.stress
-                    ops_dict = {
-                        'Stress/mae': tf.metrics.mean_absolute_error(x, y),
-                        'Stress/mse': tf.metrics.mean_squared_error(x, y)}
-                    with tf.name_scope("rRMSE"):
-                        upper = tf.linalg.norm(x - y, axis=-1)
-                        lower = tf.linalg.norm(x, axis=-1)
-                        ops_dict['Stress/relative'] = \
-                            tf.metrics.mean(upper / lower)
-                    metrics.update(ops_dict)
-
-            if 'elastic' in self._minimize_properties:
-                for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
-                    if tensor.op.name.startswith("Elastic"):
-                        metrics[tensor.op.name] = (tensor, tf.no_op())
-
-            return metrics
-
     def _get_model_outputs(self,
                            features: AttributeDict,
                            descriptors: AttributeDict,
@@ -904,7 +704,7 @@ class BasicNN:
             minimize_properties=self._minimize_properties)
 
         if mode == tf_estimator.ModeKeys.TRAIN:
-            training_hooks = self.get_training_hooks(
+            training_hooks = get_training_hooks(
                 losses=losses,
                 ema=ema,
                 train_parameters=params.train)
@@ -912,11 +712,12 @@ class BasicNN:
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
-        eval_metrics_ops = self.get_eval_metrics_ops(
+        eval_metrics_ops = get_eval_metrics_ops(
+            eval_properties=self._minimize_properties,
             predictions=predictions,
             labels=labels,
             n_atoms=features.n_atoms)
-        evaluation_hooks = self.get_evaluation_hooks(
+        evaluation_hooks = get_evaluation_hooks(
             ema=ema,
             train_parameters=params.train)
         return tf_estimator.EstimatorSpec(mode=mode,
