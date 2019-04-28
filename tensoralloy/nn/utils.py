@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
+from typing import Dict
 
 from tensoralloy.utils import Defaults
 
@@ -106,6 +107,16 @@ def get_optimizer(learning_rate, method='adam', **kwargs):
         else:
             raise ValueError(
                 "Supported SGD optimizers: adam, nadam, adadelta, rmsprop.")
+
+
+def get_tensors_dict_for_hook(key) -> Dict[str, tf.Tensor]:
+    """
+    Return a dict of logging tensors for a `LoggingTensorHook`.
+    """
+    tensors = {}
+    for tensor in tf.get_collection(key):
+        tensors[tensor.op.name] = tensor
+    return tensors
 
 
 def log_tensor(tensor: tf.Tensor):
