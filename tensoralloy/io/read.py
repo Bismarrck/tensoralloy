@@ -48,7 +48,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
     to_eV, to_eV_Angstrom, to_eV_Ang3 = get_conversion_units(units)
     count = 0
     max_occurs = Counter()
-    stress = None
+    use_stress = None
     periodic = False
     database = connect(name='{}.db'.format(splitext(filename)[0]),
                        append=False)
@@ -92,9 +92,9 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
                 atoms.calc.results['forces'] = np.zeros_like(atoms.positions)
 
             # Check if the stress tensor is included in the results.
-            if stress is None:
-                stress = bool('stress' in atoms.calc.results)
-            if stress:
+            if use_stress is None:
+                use_stress = bool('stress' in atoms.calc.results)
+            if use_stress:
                 # Convert the unit of stress tensors to 'eV / Angstrom**3':
                 # 1 eV/Angstrom**3 = 160.21766208 GPa
                 # 1 GPa = 10 kbar
@@ -107,8 +107,14 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
             weights = atoms.info.get('weights', np.ones(3))
             assert len(weights) == 3
             source = atoms.info.get('source', '')
-            database.write(atoms, data={'weights': weights},
-                           key_value_pairs={'source': source})
+            key_value_pairs = {'source': source}
+            if use_stress:
+                pulay_stress = atoms.info.get('pulay_stress', 0.0) * to_eV_Ang3
+                key_value_pairs['pulay_stress'] = pulay_stress
+
+            database.write(atoms,
+                           data={'weights': weights},
+                           key_value_pairs=key_value_pairs)
             count += 1
 
             # Update the dict of `max_occurs` and print the parsing progress.
@@ -129,7 +135,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
         'max_occurs': max_occurs,
         'extxyz': ext,
         'forces': True,
-        'stress': stress,
+        'stress': use_stress,
         'periodic': periodic,
         'unit_conversion': {'energy': to_eV,
                             'forces': to_eV_Angstrom,

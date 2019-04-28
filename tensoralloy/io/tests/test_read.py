@@ -5,6 +5,7 @@ This module defines tests for file-io functions.
 import nose
 
 from ase import Atoms
+from ase.units import GPa
 from nose.tools import assert_equal, assert_almost_equal, assert_true
 from nose.tools import assert_dict_equal
 from os.path import join
@@ -67,6 +68,19 @@ def test_read_snap_stress():
     assert_equal(weights[1], 1.0)
     assert_equal(weights[2], 0.0)
     assert_equal(source, "Ni.AIMD.0")
+
+
+def test_read_pulay_stress():
+    """
+    Test reading `Pu4_60GPa.extxyz`.
+    """
+    xyzfile = join(test_dir(), 'Pu4_60GPa.extxyz')
+    database = read_file(xyzfile, verbose=False)
+    atoms = database.get_atoms(id=1, add_additional_information=True)
+    kbar = atoms.get_stress() / GPa * 10.0
+    pulay = atoms.info['key_value_pairs']['pulay_stress'] / GPa * 10.0
+    net = kbar[:3].mean() - pulay
+    assert_almost_equal(net, -0.78, delta=0.01)
 
 
 if __name__ == '__main__':
