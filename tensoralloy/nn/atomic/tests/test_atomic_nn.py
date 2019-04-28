@@ -20,7 +20,7 @@ from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys, AttributeDict
-from tensoralloy.dtypes import set_float_precision
+from tensoralloy.dtypes import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -33,7 +33,6 @@ def test_as_dict():
     elements = ['Al', 'Cu']
     hidden_sizes = 32
     old_nn = AtomicNN(elements, hidden_sizes,
-                      normalizer='linear',
                       activation='tanh',
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
@@ -104,7 +103,6 @@ def test_inference():
         g_cu = np.random.randn(batch_size, max_n_cu, ndim)
 
         nn = AtomicNN(elements, hidden_sizes,
-                      normalizer='linear',
                       activation='tanh',
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
@@ -150,8 +148,7 @@ def test_inference_from_transformer():
         elements = ['Al', 'Cu']
         clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
                                           angular=False)
-        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'],
-                         normalizer=None)
+        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'])
         nn.transformer = clf
         prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
@@ -187,28 +184,25 @@ def test_export_to_pb():
     max_occurs = db.metadata['max_occurs']
     elements = list(sorted(max_occurs.keys()))
 
-    set_float_precision('medium')
+    with set_precision('medium'):
+        clf = SymmetryFunctionTransformer(
+            rc=6.5, elements=elements, angular=False, trainable=True,
+            eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
+            omega=[0.0, 3.2])
+        atomic_static_energy = db.metadata['atomic_static_energy']
 
-    clf = SymmetryFunctionTransformer(
-        rc=6.5, elements=elements, angular=False, trainable=True,
-        eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
-        omega=[0.0, 3.2])
+        nn = AtomicResNN(elements=elements,
+                         hidden_sizes=[64, 32],
+                         activation='leaky_relu',
+                         export_properties=['energy', 'forces', 'stress'],
+                         atomic_static_energy=atomic_static_energy)
+        nn.attach_transformer(clf)
+        nn.export(output_graph_path=output_graph_path,
+                  checkpoint=checkpoint_path,
+                  keep_tmp_files=False)
 
-    nn = AtomicResNN(elements=elements,
-                     hidden_sizes=[64, 32],
-                     activation='leaky_relu',
-                     export_properties=['energy', 'forces', 'stress'],
-                     normalizer=None,
-                     atomic_static_energy=db.metadata['atomic_static_energy'])
-    nn.attach_transformer(clf)
-    nn.export(output_graph_path=output_graph_path,
-              checkpoint=checkpoint_path,
-              keep_tmp_files=False)
-
-    assert_true(exists(output_graph_path))
-    assert_false(exists(join(dirname(output_graph_path), 'export')))
-
-    set_float_precision('high')
+        assert_true(exists(output_graph_path))
+        assert_false(exists(join(dirname(output_graph_path), 'export')))
 
 
 if __name__ == "__main__":

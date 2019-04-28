@@ -16,7 +16,6 @@ export = ['energy']
 
 [nn.atomic]
 arch = "AtomicResNN"
-input_normalizer = false
 
 [nn.atomic.resnet]
 fixed_static_energy = true

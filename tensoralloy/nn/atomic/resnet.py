@@ -43,8 +43,6 @@ class AtomicResNN(AtomicNN):
                  activation=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian'),
-                 normalizer=None,
-                 normalization_weights=None,
                  atomic_static_energy=None,
                  fixed_static_energy=False):
         """
@@ -55,9 +53,7 @@ class AtomicResNN(AtomicNN):
             hidden_sizes=hidden_sizes,
             activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties,
-            normalizer=normalizer,
-            normalization_weights=normalization_weights)
+            export_properties=export_properties)
 
         self._atomic_static_energy: Dict[str, float] = atomic_static_energy
         self._fixed_static_energy = fixed_static_energy

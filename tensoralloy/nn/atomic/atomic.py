@@ -9,9 +9,8 @@ import tensorflow as tf
 from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.nn.atomic.normalizer import InputNormalizer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.utils import GraphKeys, AttributeDict, safe_select
+from tensoralloy.utils import GraphKeys, AttributeDict
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
 
@@ -31,19 +30,9 @@ class AtomicNN(BasicNN):
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'hessian'),
-                 normalizer=None,
-                 normalization_weights=None):
+                 export_properties=('energy', 'forces', 'hessian')):
         """
         Initialization method.
-
-        normalizer : str
-            The normalization method. Defaults to 'linear'. Set this to None to
-            disable normalization.
-        normalization_weights : Dict[str, array_like]
-            The initial weights for column-wise normalizing the input atomic
-            descriptors.
-
         """
         super(AtomicNN, self).__init__(
             elements=elements,
@@ -51,10 +40,6 @@ class AtomicNN(BasicNN):
             activation=activation,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
-
-        self._initial_normalizer_weights = \
-            safe_select(normalization_weights, {})
-        self._normalizer = InputNormalizer(method=normalizer)
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -67,20 +52,12 @@ class AtomicNN(BasicNN):
         """
         Return a JSON serializable dict representation of this `BasicNN`.
         """
-        if len(self._initial_normalizer_weights) == 0:
-            normalization_weights = None
-        else:
-            normalization_weights = {}
-            for key, value in self._initial_normalizer_weights.items():
-                normalization_weights = list(value)
         return {"class": self.__class__.__name__,
                 "elements": self._elements,
                 "hidden_sizes": self._hidden_sizes,
                 "activation": self._activation,
                 "minimize_properties": self._minimize_properties,
-                "export_properties": self._export_properties,
-                "normalizer": self._normalizer.method,
-                "normalization_weights": normalization_weights}
+                "export_properties": self._export_properties}
 
     def _get_model_outputs(self,
                            features: AttributeDict,
@@ -120,11 +97,7 @@ class AtomicNN(BasicNN):
                     x = tf.identity(value, name='input')
                     if mode == tf_estimator.ModeKeys.PREDICT:
                         assert x.shape.ndims == 2
-                        x = tf.expand_dims(x, axis=0, name='2to3')
-                    if self._normalizer.enabled:
-                        x = self._normalizer(
-                            x, self._initial_normalizer_weights.get(element),
-                            collections=collections)
+                        x = tf.expand_dims(x, axis=0, name='3d')
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)

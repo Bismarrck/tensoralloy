@@ -48,7 +48,6 @@ stress_weight = 0.1
 
 [nn.atomic]
 arch = "AtomicNN"
-input_normalizer = false
 
 [nn.atomic.resnet]
 fixed_static_energy = false
