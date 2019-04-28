@@ -18,13 +18,11 @@ def test_set_precision():
     """
     Test the with statement of `set_precision`.
     """
-    assert_equal(get_float_precision(), Precision.high)
+    with set_precision(Precision.medium):
+        assert_equal(get_float_precision(), Precision.medium)
 
-    with set_precision(precision=Precision.medium):
-        precision = get_float_precision()
-        assert_equal(precision, Precision.medium)
-
-    assert_equal(get_float_precision(), Precision.high)
+    with set_precision(Precision.high):
+        assert_equal(get_float_precision(), Precision.high)
 
 
 if __name__ == "__main__":

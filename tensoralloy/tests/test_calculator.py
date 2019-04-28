@@ -93,7 +93,7 @@ def test_calculator_with_qm7():
         y_pred.append(calc.get_potential_energy(atoms))
 
     y_mae = mean_absolute_error(y_true, y_pred)
-    assert_almost_equal(y_mae, 0.18296768, delta=1e-7)
+    assert_almost_equal(y_mae, 0.18296768, delta=1e-6)
 
 
 def test_elastic_constant_tensor():
@@ -191,10 +191,11 @@ class SurfaceSlabTest(unittest.TestCase):
 
         # Create several slabs
         lattice = Lattice.cubic(3.524)
+        coords = np.asarray([[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
+                             [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
         base_structure = Structure(
             lattice, ['Ni', 'Ni', 'Ni', 'Ni'],
-            coords=[[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
-                    [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
+            coords=coords)
 
         miller_indices = [
             [1, 0, 0], [1, 1, 0], [1, 1, 1], [2, 1, 0],

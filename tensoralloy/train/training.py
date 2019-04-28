@@ -25,7 +25,7 @@ from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
-from tensoralloy.dtypes import set_float_precision
+from tensoralloy.dtypes import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -59,12 +59,13 @@ class TrainingManager:
         else:
             raise ValueError("`input_file` should be a str or InputReader!")
 
-        set_float_precision(self._reader['precision'])
+        self._float_precision = self._reader['precision']
 
-        self._dataset = self._get_dataset(validate_tfrecords)
-        self._hparams = self._get_hparams()
-        self._nn = self._get_nn()
-        self._input_file = input_file
+        with set_precision(self._float_precision):
+            self._dataset = self._get_dataset(validate_tfrecords)
+            self._hparams = self._get_hparams()
+            self._nn = self._get_nn()
+            self._input_file = input_file
 
     @property
     def nn(self) -> BasicNN:
@@ -202,12 +203,10 @@ class TrainingManager:
         minimize_properties = self._reader['nn.minimize']
         export_properties = self._reader['nn.export']
         activation = self._reader['nn.activation']
-        positive_energy_mode = self._reader['nn.positive_energy_mode']
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties,
-                  'activation': activation,
-                  'positive_energy_mode': positive_energy_mode}
+                  'activation': activation}
         if self._reader['dataset.descriptor'] == 'behler':
             nn = self._get_atomic_nn(kwargs)
         else:
@@ -287,108 +286,117 @@ class TrainingManager:
         """
 
         graph = tf.Graph()
+        precision = self._float_precision
 
-        with graph.as_default():
+        with set_precision(precision):
+            with graph.as_default():
 
-            dataset = self._dataset
-            nn = self._nn
-            hparams = self._hparams
+                dataset = self._dataset
+                nn = self._nn
+                hparams = self._hparams
 
-            self._check_before_training(hparams)
-            self._backup_input_file()
+                self._check_before_training(hparams)
+                self._backup_input_file()
 
-            set_logging_configs(
-                logfile=check_path(join(hparams.train.model_dir, 'logfile')),
-                level=self._get_logging_level(hparams))
+                set_logging_configs(
+                    logfile=check_path(join(
+                        hparams.train.model_dir, 'logfile')),
+                    level=self._get_logging_level(hparams))
 
-            tf.logging.info(f'pid={os.getpid()}')
-            tf.logging.info(f'seed={self._hparams.seed}')
-            tf.logging.info(f'input= \n{str(self._reader)}')
+                tf.logging.info(f'pid={os.getpid()}')
+                tf.logging.info(f'seed={self._hparams.seed}')
+                tf.logging.info(f'input= \n{str(self._reader)}')
 
-            gpu_options = tf.GPUOptions(
-                allow_growth=hparams.debug.allow_gpu_growth)
-            session_config = tf.ConfigProto(allow_soft_placement=True,
-                                            gpu_options=gpu_options)
+                gpu_options = tf.GPUOptions(
+                    allow_growth=hparams.debug.allow_gpu_growth)
+                session_config = tf.ConfigProto(allow_soft_placement=True,
+                                                gpu_options=gpu_options)
+                max_ckpts_to_keep = hparams.train.max_checkpoints_to_keep
 
-            estimator = tf_estimator.Estimator(
-                model_fn=nn.model_fn,
-                warm_start_from=None,
-                model_dir=hparams.train.model_dir,
-                config=tf_estimator.RunConfig(
-                    save_checkpoints_steps=hparams.train.eval_steps,
-                    tf_random_seed=hparams.seed,
-                    log_step_count_steps=hparams.train.log_steps,
-                    keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
-                    session_config=session_config),
-                params=hparams)
+                estimator = tf_estimator.Estimator(
+                    model_fn=nn.model_fn,
+                    warm_start_from=None,
+                    model_dir=hparams.train.model_dir,
+                    config=tf_estimator.RunConfig(
+                        save_checkpoints_steps=hparams.train.eval_steps,
+                        tf_random_seed=hparams.seed,
+                        log_step_count_steps=hparams.train.log_steps,
+                        keep_checkpoint_max=max_ckpts_to_keep,
+                        session_config=session_config),
+                    params=hparams)
 
-            if debug:
-                system = platform.system().lower()
-                if system == 'darwin' or system == 'linux':
-                    ui_type = 'curses'
+                if debug:
+                    system = platform.system().lower()
+                    if system == 'darwin' or system == 'linux':
+                        ui_type = 'curses'
+                    else:
+                        ui_type = 'readline'
+                    hooks = [tf_debug.LocalCLIDebugHook(ui_type=ui_type), ]
                 else:
-                    ui_type = 'readline'
-                hooks = [tf_debug.LocalCLIDebugHook(ui_type=ui_type), ]
-            else:
-                hooks = None
+                    hooks = None
 
-            train_spec = tf_estimator.TrainSpec(
-                input_fn=dataset.input_fn(
-                    mode=tf_estimator.ModeKeys.TRAIN,
-                    batch_size=hparams.train.batch_size,
-                    shuffle=hparams.train.shuffle),
-                max_steps=hparams.train.train_steps,
-                hooks=hooks)
+                train_spec = tf_estimator.TrainSpec(
+                    input_fn=dataset.input_fn(
+                        mode=tf_estimator.ModeKeys.TRAIN,
+                        batch_size=hparams.train.batch_size,
+                        shuffle=hparams.train.shuffle),
+                    max_steps=hparams.train.train_steps,
+                    hooks=hooks)
 
-            eval_spec = tf_estimator.EvalSpec(
-                input_fn=dataset.input_fn(
-                    mode=tf_estimator.ModeKeys.EVAL,
-                    batch_size=hparams.train.eval_batch_size,
-                    num_epochs=1,
-                    shuffle=False),
-                steps=hparams.train.eval_steps,
-                start_delay_secs=300,
-                # Explicitly set these thresholds to lower values so that every
-                # checkpoint can be evaluated.
-                throttle_secs=60,
-            )
-            tf_estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+                eval_spec = tf_estimator.EvalSpec(
+                    input_fn=dataset.input_fn(
+                        mode=tf_estimator.ModeKeys.EVAL,
+                        batch_size=hparams.train.eval_batch_size,
+                        num_epochs=1,
+                        shuffle=False),
+                    steps=hparams.train.eval_steps,
+                    start_delay_secs=300,
+                    # Explicitly set these thresholds to lower values so that
+                    # every checkpoint can be evaluated.
+                    throttle_secs=60,
+                )
+                tf_estimator.train_and_evaluate(
+                    estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None):
         """
         Export the trained model.
         """
-        if checkpoint is None:
-            checkpoint = tf.train.latest_checkpoint(
-                self._hparams.train.model_dir)
-
-        if tag is not None:
-            graph_name = f'{self._dataset.name}.{tag}.pb'
-        else:
-            graph_name = f'{self._dataset.name}.pb'
-
-        self._nn.export(output_graph_path=join(self._hparams.train.model_dir,
-                                               graph_name),
-                        checkpoint=checkpoint,
-                        keep_tmp_files=False)
-
-        if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
-            kwargs = self._reader['nn.eam.setfl']
-
-            if 'lattice' in kwargs:
-                lattice = kwargs.pop('lattice')
-                lattice_constants = lattice.get('constant', {})
-                lattice_types = lattice.get('type', {})
-            else:
-                lattice_constants = None
-                lattice_types = None
+        precision = self._float_precision
+        with set_precision(precision):
+            if checkpoint is None:
+                checkpoint = tf.train.latest_checkpoint(
+                    self._hparams.train.model_dir)
 
             if tag is not None:
-                setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+                graph_name = f'{self._dataset.name}.{tag}.pb'
             else:
-                setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
+                graph_name = f'{self._dataset.name}.pb'
 
-            self._nn.export_to_setfl(join(self._hparams.train.model_dir, setfl),
-                                     checkpoint=checkpoint,
-                                     lattice_constants=lattice_constants,
-                                     lattice_types=lattice_types, **kwargs)
+            self._nn.export(
+                output_graph_path=join(self._hparams.train.model_dir,
+                                       graph_name),
+                checkpoint=checkpoint,
+                keep_tmp_files=False)
+
+            if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
+                kwargs = self._reader['nn.eam.setfl']
+
+                if 'lattice' in kwargs:
+                    lattice = kwargs.pop('lattice')
+                    lattice_constants = lattice.get('constant', {})
+                    lattice_types = lattice.get('type', {})
+                else:
+                    lattice_constants = None
+                    lattice_types = None
+
+                if tag is not None:
+                    setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+                else:
+                    setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
+
+                self._nn.export_to_setfl(
+                    join(self._hparams.train.model_dir, setfl),
+                    checkpoint=checkpoint,
+                    lattice_constants=lattice_constants,
+                    lattice_types=lattice_types, **kwargs)

@@ -14,7 +14,7 @@ from typing import Union
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["Precision", "set_float_precision", "get_float_dtype",
+__all__ = ["Precision", "set_precision", "get_float_dtype",
            "get_float_precision"]
 
 

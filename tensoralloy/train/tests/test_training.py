@@ -5,7 +5,6 @@ This module defines tests of `TrainingManager`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-import numpy as np
 import nose
 import shutil
 import glob
@@ -15,7 +14,7 @@ import unittest
 from tensorflow_estimator import estimator as tf_estimator
 from unittest import skipUnless
 from os.path import join, exists
-from nose.tools import assert_equal, assert_less, assert_is_none, assert_in
+from nose.tools import assert_equal, assert_is_none, assert_in
 from nose.tools import with_setup, assert_dict_equal, assert_true
 
 from tensoralloy.utils import Defaults
@@ -23,8 +22,7 @@ from tensoralloy.train.training import TrainingManager
 from tensoralloy.nn import EamAlloyNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.descriptor.tests.test_cutoff import polynomial_cutoff_simple
-from tensoralloy.dtypes import get_float_dtype, set_float_precision
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -59,19 +57,6 @@ class InitializationTest(unittest.TestCase):
         assert isinstance(transformer, BatchSymmetryFunctionTransformer)
         assert_equal(transformer.trainable, True)
 
-        with tf.Session() as sess:
-            rc = transformer.rc
-            gamma = 5.0
-            r = np.linspace(1.0, 10.0, num=91, endpoint=True)
-            x = np.asarray(
-                [polynomial_cutoff_simple(ri, rc, gamma) for ri in r])
-            y = sess.run(
-                transformer._cutoff_fn(
-                    tf.convert_to_tensor(r, dtype=tf.float64),
-                    name='cutoff'))
-
-            assert_less(np.abs(x - y).max(), 1e-8)
-
         assert_equal(hparams.opt.method, 'adam')
         assert_equal(hparams.opt.learning_rate, 0.01)
         assert_is_none(hparams.opt.decay_function)
@@ -80,10 +65,7 @@ class InitializationTest(unittest.TestCase):
 
         nn = manager.nn
         assert_true(isinstance(nn, AtomicResNN))
-        assert_true(nn.positive_energy_mode)
         assert_true(nn.fixed_static_energy)
-
-        set_float_precision()
 
 
 def teardown_initialize_eam_training():
@@ -116,7 +98,6 @@ def test_initialize_eam_training():
 
     assert_dict_equal(nn.potentials, {"Ni": {"rho": "zjw04", "embed": "zjw04"},
                                       "NiNi": {"phi": "zjw04"}})
-    assert_equal(nn.positive_energy_mode, False)
 
     manager.train_and_evaluate()
 

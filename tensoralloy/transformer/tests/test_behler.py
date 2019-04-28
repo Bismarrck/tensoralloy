@@ -21,7 +21,7 @@ from collections import Counter
 from dataclasses import dataclass
 from os.path import join
 
-from tensoralloy.dtypes import set_float_precision, Precision, get_float_dtype
+from tensoralloy.dtypes import set_precision, Precision, get_float_dtype
 from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
@@ -579,16 +579,18 @@ def test_monoatomic_molecule_with_omega():
     rc = 6.0
     z = get_radial_fingerprints_v2(coords, rr, rc, Defaults.eta, omegas)
 
-    with tf.Graph().as_default():
-        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'], eta=Defaults.eta,
-                                         omega=omegas, angular=False)
-        g = sf.get_descriptors(sf.get_placeholder_features())
+    with set_precision(Precision.high):
+        with tf.Graph().as_default():
+            sf = SymmetryFunctionTransformer(rc=rc, elements=['B'],
+                                             eta=Defaults.eta,
+                                             omega=omegas, angular=False)
+            g = sf.get_descriptors(sf.get_placeholder_features())
 
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            values = sess.run(g, feed_dict=sf.get_feed_dict(atoms))
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                values = sess.run(g, feed_dict=sf.get_feed_dict(atoms))
 
-        assert_array_equal(values['B'][0], z)
+            assert_array_equal(values['B'][0], z)
 
 
 def test_single_structure():
@@ -627,16 +629,18 @@ def test_legacy_and_new_flexible():
         atoms.set_pbc([False, False, False])
         targets[i] = legacy_symmetry_function(atoms, rc)[0]
 
-    with tf.Graph().as_default():
-        sf = SymmetryFunctionTransformer(rc=rc, elements=['B'], angular=True)
-        g = sf.get_descriptors(sf.get_placeholder_features())
+    with set_precision(Precision.high):
+        with tf.Graph().as_default():
+            sf = SymmetryFunctionTransformer(
+                rc=rc, elements=['B'], angular=True)
+            g = sf.get_descriptors(sf.get_placeholder_features())
 
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            for i, atoms in enumerate(trajectory):
-                feed_dict = sf.get_feed_dict(atoms)
-                values = sess.run(g, feed_dict=feed_dict)
-                assert_array_equal(values['B'][0], targets[i])
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                for i, atoms in enumerate(trajectory):
+                    feed_dict = sf.get_feed_dict(atoms)
+                    values = sess.run(g, feed_dict=feed_dict)
+                    assert_array_equal(values['B'][0], targets[i])
 
 
 def test_manybody_k():
@@ -651,23 +655,26 @@ def test_manybody_k():
     ref = ref[[3, 4, 0, 1, 2]]
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
-    for k_max in (2, 3):
-        with tf.Graph().as_default():
-            sf = SymmetryFunctionTransformer(rc, elements, angular=(k_max == 3))
-            g = sf.get_descriptors(sf.get_placeholder_features())
-            with tf.Session() as sess:
-                tf.global_variables_initializer().run()
-                values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
+    with set_precision(Precision.high):
+        for k_max in (2, 3):
+            with tf.Graph().as_default():
+                sf = SymmetryFunctionTransformer(
+                    rc, elements, angular=(k_max == 3))
+                g = sf.get_descriptors(sf.get_placeholder_features())
+                with tf.Session() as sess:
+                    tf.global_variables_initializer().run()
+                    values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
 
-            x = np.zeros((5, len(sf.all_kbody_terms) * len(Defaults.eta)))
-            x[:2, :values['O'][0].shape[1]] = values['O'][0]
-            x[2:, values['O'][0].shape[1]:] = values['Pd'][0]
+                x = np.zeros((5, len(sf.all_kbody_terms) * len(Defaults.eta)))
+                x[:2, :values['O'][0].shape[1]] = values['O'][0]
+                x[2:, values['O'][0].shape[1]:] = values['Pd'][0]
 
-            columns = []
-            for i, ref_term in enumerate(ref_all_kbody_terms):
-                if ref_term in sf.all_kbody_terms:
-                    columns.extend(range(ref_offsets[i], ref_offsets[i + 1]))
-            assert_array_equal(x, ref[:, columns])
+                columns = []
+                for i, ref_term in enumerate(ref_all_kbody_terms):
+                    if ref_term in sf.all_kbody_terms:
+                        columns.extend(
+                            range(ref_offsets[i], ref_offsets[i + 1]))
+                assert_array_equal(x, ref[:, columns])
 
 
 def _merge_indexed_slices(
@@ -755,52 +762,49 @@ def test_batch_multi_elements():
     targets = _compute_qm7m_descriptors_legacy(rc)
 
     with tf.Graph().as_default():
+        with set_precision(Precision.medium):
+            float_dtype = get_float_dtype()
+            np_dtype = float_dtype.as_numpy_dtype
 
-        set_float_precision(Precision.medium)
-        float_dtype = get_float_dtype()
-        numpy_float_dtype = float_dtype.as_numpy_dtype
+            nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
+            sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
+                                                  nijk_max, batch_size,
+                                                  angular=True)
+            indexed_slices = []
+            positions = []
+            cells = []
+            volumes = []
+            for i, atoms in enumerate(qm7m.trajectory):
+                clf = sf.get_index_transformer(atoms)
+                indexed_slices.append(sf.get_indexed_slices(atoms))
+                positions.append(
+                    clf.map_positions(atoms.positions).astype(np_dtype))
+                cells.append(
+                    atoms.get_cell(complete=True).array.astype(np_dtype))
+                volumes.append(np_dtype(atoms.get_volume()))
 
-        nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
-        sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
-                                              nijk_max, batch_size,
-                                              angular=True)
-        indexed_slices = []
-        positions = []
-        cells = []
-        volumes = []
-        for i, atoms in enumerate(qm7m.trajectory):
-            clf = sf.get_index_transformer(atoms)
-            indexed_slices.append(sf.get_indexed_slices(atoms))
-            positions.append(
-                clf.map_positions(atoms.positions).astype(numpy_float_dtype))
-            cells.append(
-                atoms.get_cell(complete=True).array.astype(numpy_float_dtype))
-            volumes.append(numpy_float_dtype(atoms.get_volume()))
+            batch = _merge_indexed_slices(indexed_slices)
+            batch.positions = np.asarray(positions)
+            batch.cells = np.asarray(cells)
+            batch.volume = volumes
 
-        batch = _merge_indexed_slices(indexed_slices)
-        batch.positions = np.asarray(positions)
-        batch.cells = np.asarray(cells)
-        batch.volume = volumes
+            # Use a large delta because we use float32 in this test.
+            delta = 1e-5
 
-        # Use a large delta because we use float32 in this test.
-        delta = 1e-5
+            g = sf.get_descriptors(batch)
+            with tf.Session(graph=tf.get_default_graph()) as sess:
+                tf.global_variables_initializer().run()
+                results = sess.run(g)
 
-        g = sf.get_descriptors(batch)
-        with tf.Session(graph=tf.get_default_graph()) as sess:
-            tf.global_variables_initializer().run()
-            results = sess.run(g)
-
-            assert_array_almost_equal(results['C'][0],
-                                      targets['C'].astype(numpy_float_dtype),
-                                      delta=delta)
-            assert_array_almost_equal(results['H'][0],
-                                      targets['H'].astype(numpy_float_dtype),
-                                      delta=delta)
-            assert_array_almost_equal(results['O'][0],
-                                      targets['O'].astype(numpy_float_dtype),
-                                      delta=delta)
-
-        set_float_precision(Precision.high)
+                assert_array_almost_equal(results['C'][0],
+                                          targets['C'].astype(np_dtype),
+                                          delta=delta)
+                assert_array_almost_equal(results['H'][0],
+                                          targets['H'].astype(np_dtype),
+                                          delta=delta)
+                assert_array_almost_equal(results['O'][0],
+                                          targets['O'].astype(np_dtype),
+                                          delta=delta)
 
 
 def test_splits():
@@ -813,16 +817,17 @@ def test_splits():
     elements = sorted(max_occurs.keys())
     ref, _, _ = legacy_symmetry_function(Pd3O2, rc)
 
-    with tf.Graph().as_default():
+    with set_precision(Precision.high):
+        with tf.Graph().as_default():
 
-        sf = SymmetryFunctionTransformer(rc, elements, angular=True)
-        g = sf.get_descriptors(sf.get_constant_features(Pd3O2))
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            values = sess.run(g)
+            sf = SymmetryFunctionTransformer(rc, elements, angular=True)
+            g = sf.get_descriptors(sf.get_constant_features(Pd3O2))
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                values = sess.run(g)
 
-        assert_array_equal(values['O'][0], ref[3:, :20])
-        assert_array_equal(values['Pd'][0], ref[:3, 20:])
+            assert_array_equal(values['O'][0], ref[3:, :20])
+            assert_array_equal(values['Pd'][0], ref[:3, 20:])
 
 
 def test_as_dict():

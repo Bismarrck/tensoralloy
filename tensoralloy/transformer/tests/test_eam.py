@@ -20,6 +20,7 @@ from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
+from tensoralloy.dtypes import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -71,21 +72,22 @@ def test_eam_transformer():
     nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
     ref = eam(atoms, max_occurs, nnl=nnl, rc=rc)
 
-    with tf.Graph().as_default():
+    with set_precision('high'):
+        with tf.Graph().as_default():
 
-        clf = EAMTransformer(rc=6.5, elements=elements)
+            clf = EAMTransformer(rc=6.5, elements=elements)
 
-        with tf.Session() as sess:
-            results = sess.run(
-                clf.get_descriptors(clf.get_constant_features(atoms)))
+            with tf.Session() as sess:
+                results = sess.run(
+                    clf.get_descriptors(clf.get_constant_features(atoms)))
 
-        g_h, mask_h = results['H']
-        g_c, mask_c = results['C']
+            g_h, mask_h = results['H']
+            g_c, mask_c = results['C']
 
-        assert_array_equal(ref['g'][0, :, 3: 9, :], g_h[0])
-        assert_array_equal(ref['g'][0, :, 1: 3, :], g_c[0])
-        assert_array_equal(ref['mask'][0, :, 3: 9, :], mask_h)
-        assert_array_equal(ref['mask'][0, :, 1: 3, :], mask_c)
+            assert_array_equal(ref['g'][0, :, 3: 9, :], g_h[0])
+            assert_array_equal(ref['g'][0, :, 1: 3, :], g_c[0])
+            assert_array_equal(ref['mask'][0, :, 3: 9, :], mask_h)
+            assert_array_equal(ref['mask'][0, :, 1: 3, :], mask_c)
 
 
 def test_batch_eam_transformer():
@@ -101,30 +103,32 @@ def test_batch_eam_transformer():
     nnl_max = nnl + 2
     ref = eam(atoms, max_occurs, nnl=nnl_max, rc=rc)
 
-    with tf.Graph().as_default():
+    with set_precision('high'):
+        with tf.Graph().as_default():
 
-        clf = BatchEAMTransformer(
-            rc=6.5, max_occurs=max_occurs, nij_max=nij_max, nnl_max=nnl_max)
-        protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
-        example = clf.decode_protobuf(protobuf)
+            clf = BatchEAMTransformer(
+                rc=6.5, max_occurs=max_occurs, nij_max=nij_max, nnl_max=nnl_max)
+            protobuf = tf.convert_to_tensor(
+                clf.encode(atoms).SerializeToString())
+            example = clf.decode_protobuf(protobuf)
 
-        batch = AttributeDict()
-        for key, tensor in example.items():
-            batch[key] = tf.expand_dims(
-                tensor, axis=0, name=tensor.op.name + '/batch')
+            batch = AttributeDict()
+            for key, tensor in example.items():
+                batch[key] = tf.expand_dims(
+                    tensor, axis=0, name=tensor.op.name + '/batch')
 
-        ops = clf.get_descriptors(batch)
+            ops = clf.get_descriptors(batch)
 
-        with tf.Session() as sess:
-            results = sess.run(ops)
+            with tf.Session() as sess:
+                results = sess.run(ops)
 
-        g_h, mask_h = results['H']
-        g_c, mask_c = results['C']
+            g_h, mask_h = results['H']
+            g_c, mask_c = results['C']
 
-        assert_array_equal(ref['g'][:, :, 3: 7, :], g_h[0])
-        assert_array_equal(ref['g'][:, :, 1: 3, :], g_c[0])
-        assert_array_equal(ref['mask'][:, :, 3: 7, :], mask_h)
-        assert_array_equal(ref['mask'][:, :, 1: 3, :], mask_c)
+            assert_array_equal(ref['g'][:, :, 3: 7, :], g_h[0])
+            assert_array_equal(ref['g'][:, :, 1: 3, :], g_c[0])
+            assert_array_equal(ref['mask'][:, :, 3: 7, :], mask_h)
+            assert_array_equal(ref['mask'][:, :, 1: 3, :], mask_c)
 
 
 def test_encode_atoms():
@@ -143,18 +147,20 @@ def test_encode_atoms():
         nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
     nnl_max = db.metadata['neighbors']['2']['6.00']['nnl_max']
 
-    with tf.Graph().as_default():
-        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
-                                  nnl_max=nnl_max, use_stress=True)
-        protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
-        example = clf.decode_protobuf(protobuf)
+    with set_precision('high'):
+        with tf.Graph().as_default():
+            clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs,
+                                      nij_max=nij_max, nnl_max=nnl_max,
+                                      use_stress=True)
+            protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
+            example = clf.decode_protobuf(protobuf)
 
-        with tf.Session() as sess:
-            results = sess.run(example)
+            with tf.Session() as sess:
+                results = sess.run(example)
 
-        assert_array_equal(
-            atoms.get_stress(voigt=True),
-            results['stress'])
+            assert_array_equal(
+                atoms.get_stress(voigt=True),
+                results['stress'])
 
 
 if __name__ == "__main__":
