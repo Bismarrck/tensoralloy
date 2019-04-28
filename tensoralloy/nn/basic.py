@@ -391,18 +391,24 @@ class BasicNN:
                 * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
         labels : AttributeDict
             A dict of reference tensors.
-                * 'energy' of shape `[batch_size, ]` is required.
+
+            Always required:
+                * 'energy' of shape `[batch_size, ]`.
+                * 'energy_confidence' of shape `[batch_size, ]`
+
+            Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'stress' of shape `[batch_size, 6]` is required if
-                  'stress' should be minimized.
-                * 'total_pressure' of shape `[batch_size, ]` is required if
-                  'total_pressure' should be minimized.
-                * 'energy_confidence' of shape `[batch_size, ]` is required
                 * 'forces_confidence' of shape `[batch_size, ]` is required if
                   'forces' should be minimized.
-                * 'stress_confidence' of shape `[batch_size, ]` is required if
+
+            Required if 'stress' or 'total_pressure' should be minimized:
+                * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
+                * 'pulay_stress' of shape `[batch_size, ]`
+                * 'total_pressure' of shape `[batch_size, ]`
+                * 'stress_confidence' of shape `[batch_size, ]`
+
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
         loss_parameters : LossParameters
@@ -592,15 +598,22 @@ class BasicNN:
         """
         Return a dict of Ops as the evaluation metrics.
 
-        `predictions` and `labels` are `AttributeDict` with the following keys
-        required:
-            * 'energy' of shape `[batch_size, ]` is required.
-            * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is required
-              if 'forces' should be minimized.
+        Always required:
+            * 'energy' of shape `[batch_size, ]`.
+            * 'energy_confidence' of shape `[batch_size, ]`
+
+        Required if 'forces' should be minimized:
+            * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+              required if 'forces' should be minimized.
+            * 'forces_confidence' of shape `[batch_size, ]` is required if
+              'forces' should be minimized.
+
+        Required if 'stress' or 'total_pressure' should be minimized:
             * 'stress' of shape `[batch_size, 6]` is required if
               'stress' should be minimized.
-            * 'total_pressure' of shape `[batch_size, ]` is required if
-              'total_pressure' should be minimized.
+            * 'pulay_stress' of shape `[batch_size, ]`
+            * 'total_pressure' of shape `[batch_size, ]`
+            * 'stress_confidence' of shape `[batch_size, ]`
 
         `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
         the number of atoms in each structure.
@@ -858,18 +871,24 @@ class BasicNN:
                 * 'n_atoms' of dtype `int64`.'
         labels : AttributeDict
             A dict of reference tensors.
-                * 'energy' of shape `[batch_size, ]` is required.
+
+            Always required:
+                * 'energy' of shape `[batch_size, ]`.
+                * 'energy_confidence' of shape `[batch_size, ]`
+
+            Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'stress' of shape `[batch_size, 6]` is required if
-                  'stress' should be minimized. Its unit should be `eV/Ang**3`.
-                * 'total_pressure' of shape `[batch_size, ]` is required if
-                  'total_pressure' should be minimized.
-                * 'energy_confidence' of shape `[batch_size, ]` is required
                 * 'forces_confidence' of shape `[batch_size, ]` is required if
                   'forces' should be minimized.
-                * 'stress_confidence' of shape `[batch_size, ]` is required if
+
+            Required if 'stress' or 'total_pressure' should be minimized:
+                * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
+                * 'pulay_stress' of shape `[batch_size, ]`
+                * 'total_pressure' of shape `[batch_size, ]`
+                * 'stress_confidence' of shape `[batch_size, ]`
+
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
