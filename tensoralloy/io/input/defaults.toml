@@ -16,7 +16,6 @@ serial = false
 activation = "leaky_relu"
 minimize = ['energy', 'forces']
 export = ['energy', 'forces', 'hessian']
-positive_energy_mode = false
 
 [nn.loss]
 equivalently_trusted = true

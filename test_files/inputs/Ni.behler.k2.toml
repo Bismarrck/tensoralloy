@@ -13,7 +13,6 @@ test_size = 1
 activation = "leaky_relu"
 minimize = ['energy']
 export = ['energy']
-positive_energy_mode = true
 
 [nn.atomic]
 arch = "AtomicResNN"

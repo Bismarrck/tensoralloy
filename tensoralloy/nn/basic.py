@@ -95,8 +95,7 @@ class BasicNN:
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
-                 positive_energy_mode=False):
+                 export_properties=('energy', 'forces', 'hessian')):
         """
         Initialization method.
 
@@ -116,11 +115,6 @@ class BasicNN:
         export_properties : List[str]
             A list of str as the properties to infer when exporting the model.
             'energy' will always be exported.
-        positive_energy_mode : bool
-            A boolean flag. Defaults to False. If True, the true energies will
-            be converted to positive values by multiplying with `-1` before
-            computing the energy loss. Thus, the predicted energies of the NN
-            will also be positive.
 
         Notes
         -----
@@ -146,7 +140,6 @@ class BasicNN:
 
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
-        self._positive_energy_mode = positive_energy_mode
         self._transformer = None
 
     @property
@@ -176,13 +169,6 @@ class BasicNN:
         Return a list of str as the properties to predict.
         """
         return self._export_properties
-
-    @property
-    def positive_energy_mode(self):
-        """
-        Return True if positive energy mode is enabled.
-        """
-        return self._positive_energy_mode
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -796,14 +782,8 @@ class BasicNN:
             predictions = AttributeDict()
 
             with tf.name_scope("Energy"):
-                if self._positive_energy_mode:
-                    energy = self._get_energy_op(
-                        outputs, features, name='energy/positive',
-                        verbose=verbose)
-                    predictions.energy = tf.negative(energy, name='energy')
-                else:
-                    predictions.energy = self._get_energy_op(
-                        outputs, features, name='energy', verbose=verbose)
+                predictions.energy = self._get_energy_op(
+                    outputs, features, name='energy', verbose=verbose)
 
             if 'forces' in properties or \
                     'stress' in properties or \

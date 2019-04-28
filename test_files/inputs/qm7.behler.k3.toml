@@ -12,7 +12,6 @@ test_size = 1000
 activation = "leaky_relu"
 minimize = ['energy']
 export = ['energy', 'forces', 'hessian']
-positive_energy_mode = true
 
 [nn.loss.energy]
 per_atom_loss = false

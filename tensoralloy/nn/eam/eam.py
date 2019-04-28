@@ -77,8 +77,7 @@ class EamNN(BasicNN):
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
-                 positive_energy_mode=False):
+                 export_properties=('energy', 'forces', 'hessian')):
         """
         Initialization method.
         """
@@ -90,8 +89,7 @@ class EamNN(BasicNN):
             hidden_sizes=hidden_sizes,
             activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties,
-            positive_energy_mode=positive_energy_mode)
+            export_properties=export_properties)
 
         # Setup the potentials
         self._potentials = self._setup_potentials(custom_potentials)
@@ -132,8 +130,7 @@ class EamNN(BasicNN):
                 "hidden_sizes": self._hidden_sizes,
                 "activation": self._activation,
                 "minimize_properties": self._minimize_properties,
-                "export_properties": self._export_properties,
-                "positive_energy_mode": self._positive_energy_mode}
+                "export_properties": self._export_properties}
 
     @property
     def potentials(self):
@@ -264,8 +261,6 @@ class EamNN(BasicNN):
             y_mask = tf.multiply(y_atomic, mask, name='mask')
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)
-        if self._positive_energy_mode:
-            energy = tf.negative(energy, name='positive')
         if verbose:
             log_tensor(energy)
         return energy

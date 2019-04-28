@@ -42,10 +42,9 @@ class AtomicResNN(AtomicNN):
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
+                 export_properties=('energy', 'forces', 'hessian'),
                  normalizer=None,
                  normalization_weights=None,
-                 positive_energy_mode=False,
                  atomic_static_energy=None,
                  fixed_static_energy=False):
         """
@@ -58,8 +57,7 @@ class AtomicResNN(AtomicNN):
             minimize_properties=minimize_properties,
             export_properties=export_properties,
             normalizer=normalizer,
-            normalization_weights=normalization_weights,
-            positive_energy_mode=positive_energy_mode)
+            normalization_weights=normalization_weights)
 
         self._atomic_static_energy: Dict[str, float] = atomic_static_energy
         self._fixed_static_energy = fixed_static_energy
@@ -123,9 +121,6 @@ class AtomicResNN(AtomicNN):
                                 collections=collections,
                                 initializer=initializer)
             xz = tf.multiply(x, z, name='xz')
-            if self._positive_energy_mode:
-                xz = tf.negative(xz, name='xz/positive')
-
             if ndims == 1:
                 y_static = tf.reduce_sum(xz, keepdims=False, name='static')
             else:

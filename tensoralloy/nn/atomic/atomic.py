@@ -31,8 +31,7 @@ class AtomicNN(BasicNN):
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
-                 positive_energy_mode=False,
+                 export_properties=('energy', 'forces', 'hessian'),
                  normalizer=None,
                  normalization_weights=None):
         """
@@ -51,8 +50,7 @@ class AtomicNN(BasicNN):
             hidden_sizes=hidden_sizes,
             activation=activation,
             minimize_properties=minimize_properties,
-            export_properties=export_properties,
-            positive_energy_mode=positive_energy_mode)
+            export_properties=export_properties)
 
         self._initial_normalizer_weights = \
             safe_select(normalization_weights, {})
@@ -81,7 +79,6 @@ class AtomicNN(BasicNN):
                 "activation": self._activation,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties,
-                "positive_energy_mode": self._positive_energy_mode,
                 "normalizer": self._normalizer.method,
                 "normalization_weights": normalization_weights}
 

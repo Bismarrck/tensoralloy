@@ -8,7 +8,6 @@ tfrecords_file = '.'
 
 [nn]
 minimize = ['energy']
-positive_energy_mode = true
 
 [nn.loss.l2]
 weight = 0.01

@@ -309,7 +309,6 @@ def test_as_dict():
     assert_dict_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
     assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
     assert_list_equal(new_nn.predict_properties, old_nn.predict_properties)
-    assert_equal(new_nn.positive_energy_mode, old_nn.positive_energy_mode)
     assert_list_equal(new_nn.elements, old_nn.elements)
     assert_equal(new_nn._activation, old_nn._activation)
 
@@ -610,7 +609,7 @@ class BulkStressOpTest(unittest.TestCase):
 
         with tf.Graph().as_default():
             clf = EAMTransformer(rc=rc, elements=elements)
-            nn = EamAlloyNN(elements=elements, positive_energy_mode=True,
+            nn = EamAlloyNN(elements=elements,
                             custom_potentials="zjw04",
                             export_properties=['energy', 'forces', 'stress'])
             nn.attach_transformer(clf)
@@ -734,9 +733,10 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
             os.makedirs(self.work_dir)
 
         lattice = Lattice.cubic(3.52)
+        coords = np.asarray([[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
+                             [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
         structure = Structure(lattice, ['Ni', 'Ni', 'Ni', 'Ni'],
-                              coords=[[0.0, 0.0, 0.0], [0.0, 0.5, 0.5],
-                                      [0.5, 0.0, 0.5], [0.5, 0.5, 0.0]])
+                              coords=coords)
 
         slabs = {}
         for miller_index in ((1, 0, 0), (2, 1, 1)):
