@@ -19,7 +19,7 @@ from tensoralloy.transformer import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import qm7m, test_dir
-from tensoralloy.dtypes import set_float_precision, get_float_dtype
+from tensoralloy.dtypes import set_precision, get_float_dtype
 from tensoralloy.io.read import read_file
 
 __author__ = 'Xin Chen'
@@ -75,7 +75,7 @@ def test_qm7m():
             res = sess.run(next_batch)
             eps = 1e-8
 
-            assert_equal(len(res.keys()), 14)
+            assert_equal(len(res.keys()), 15)
             assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
             assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
             assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
@@ -87,48 +87,45 @@ def test_ethanol():
     """
     Test the ethanol MD dataset for energy and forces and k_max = 3.
     """
-    with tf.Graph().as_default():
+    with set_precision('medium'):
+        with tf.Graph().as_default():
 
-        set_float_precision('medium')
+            savedir = join(test_dir(), 'ethanol')
+            database = connect(join(savedir, 'ethanol.db'))
+            dataset = Dataset(database, 'ethanol', descriptor='behler',
+                              serial=False, angular=True)
 
-        savedir = join(test_dir(), 'ethanol')
-        database = connect(join(savedir, 'ethanol.db'))
-        dataset = Dataset(database, 'ethanol', descriptor='behler',
-                          serial=False, angular=True)
+            assert_equal(len(dataset), 10)
+            assert_true(dataset.use_forces)
 
-        assert_equal(len(dataset), 10)
-        assert_true(dataset.use_forces)
+            dataset.to_records(savedir, test_size=0.5)
+            assert_true(dataset.load_tfrecords(savedir))
 
-        dataset.to_records(savedir, test_size=0.5)
-        assert_true(dataset.load_tfrecords(savedir))
+            # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
+            next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
+                                            batch_size=5,
+                                            num_epochs=1,
+                                            shuffle=False)
 
-        # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
-        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
-                                        batch_size=5,
-                                        num_epochs=1,
-                                        shuffle=False)
+            atoms = database.get_atoms(id=2)
 
-        atoms = database.get_atoms(id=2)
+            dtype = get_float_dtype()
+            np_dtype = dtype.as_numpy_dtype
 
-        dtype = get_float_dtype()
-        np_dtype = dtype.as_numpy_dtype
+            clf = IndexTransformer(dataset.transformer.max_occurs,
+                                   atoms.get_chemical_symbols())
+            positions = clf.map_positions(atoms.positions).astype(np_dtype)
+            energy = np_dtype(atoms.get_total_energy())
+            forces = clf.map_forces(atoms.get_forces()).astype(np_dtype)
 
-        clf = IndexTransformer(dataset.transformer.max_occurs,
-                               atoms.get_chemical_symbols())
-        positions = clf.map_positions(atoms.positions).astype(np_dtype)
-        energy = np_dtype(atoms.get_total_energy())
-        forces = clf.map_forces(atoms.get_forces()).astype(np_dtype)
+            with tf.Session() as sess:
 
-        with tf.Session() as sess:
+                result = sess.run(next_batch)
+                eps = 1e-8
 
-            result = sess.run(next_batch)
-            eps = 1e-8
-
-            assert_less(np.abs(result.positions[1] - positions).max(), eps)
-            assert_less(np.abs(result.f_true[1] - forces).max(), eps)
-            assert_less(float(result.y_true[1] - energy), eps)
-
-        set_float_precision('high')
+                assert_less(np.abs(result.positions[1] - positions).max(), eps)
+                assert_less(np.abs(result.f_true[1] - forces).max(), eps)
+                assert_less(float(result.y_true[1] - energy), eps)
 
 
 def test_nickel():

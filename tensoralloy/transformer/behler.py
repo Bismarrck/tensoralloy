@@ -21,8 +21,7 @@ from tensoralloy.transformer.base import bytes_feature
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
-from tensoralloy.utils import Defaults
+from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -106,6 +105,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             self._placeholders.n_atoms_plus_virt = _int('n_atoms_plus_virt')
             self._placeholders.volume = _float('volume')
             self._placeholders.mask = _float_1d('mask')
+            self._placeholders.pulay_stress = _float('pulay_stress')
             self._placeholders.composition = _float_1d('composition')
             self._placeholders.row_splits = _int_1d(
                 'row_splits', d0=self._n_elements + 1)
@@ -238,6 +238,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         mask = index_transformer.mask
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
+        pulay_stress = get_pulay_stress(atoms)
 
         feed_dict.positions = positions.astype(np_dtype)
         feed_dict.n_atoms_plus_virt = np.int32(n_atoms + 1)
@@ -245,6 +246,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict.cells = cells.array.astype(np_dtype)
         feed_dict.volume = np_dtype(volume)
         feed_dict.composition = composition
+        feed_dict.pulay_stress = np_dtype(pulay_stress)
         feed_dict.row_splits = np.int32(splits)
         feed_dict.g2 = AttributeDict(
             v2g_map=g2.v2g_map, ilist=g2.ilist, jlist=g2.jlist, shift=g2.shift,
@@ -527,76 +529,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))
 
-    def _decode_atoms(self, example: Dict[str, tf.Tensor]) -> AttributeDict:
-        """
-        Decode `Atoms` related properties.
-        """
-        decoded = AttributeDict()
-
-        length = 3 * (self._max_n_atoms + 1)
-        float_dtype = get_float_dtype()
-
-        positions = tf.decode_raw(example['positions'], float_dtype)
-        positions.set_shape([length])
-        decoded.positions = tf.reshape(
-            positions, (self._max_n_atoms + 1, 3), name='R')
-
-        n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
-        decoded.n_atoms = n_atoms
-
-        y_true = tf.decode_raw(example['y_true'], float_dtype)
-        y_true.set_shape([1])
-        decoded.y_true = tf.squeeze(y_true, name='y_true')
-
-        y_conf = tf.decode_raw(example['y_conf'], float_dtype)
-        y_conf.set_shape([1])
-        decoded.y_conf = tf.squeeze(y_conf, name='y_conf')
-
-        cells = tf.decode_raw(example['cells'], float_dtype)
-        cells.set_shape([9])
-        decoded.cells = tf.reshape(cells, (3, 3), name='cells')
-
-        volume = tf.decode_raw(example['volume'], float_dtype)
-        volume.set_shape([1])
-        decoded.volume = tf.squeeze(volume, name='volume')
-
-        mask = tf.decode_raw(example['mask'], float_dtype)
-        mask.set_shape([self._max_n_atoms + 1, ])
-        decoded.mask = mask
-
-        composition = tf.decode_raw(example['composition'], float_dtype)
-        composition.set_shape([self._n_elements, ])
-        decoded.composition = composition
-
-        if self._use_forces:
-            f_true = tf.decode_raw(example['f_true'], float_dtype)
-            # Ignore the forces of the virtual atom
-            f_true.set_shape([length, ])
-            decoded.f_true = tf.reshape(
-                f_true, (self._max_n_atoms + 1, 3), name='f_true')
-
-            f_conf = tf.decode_raw(example['f_conf'], float_dtype)
-            f_conf.set_shape([1])
-            decoded.f_conf = tf.squeeze(f_conf, name='f_conf')
-
-        if self._use_stress:
-            stress = tf.decode_raw(
-                example['stress'], float_dtype, name='stress')
-            stress.set_shape([6])
-            decoded.stress = stress
-
-            total_pressure = tf.decode_raw(
-                example['total_pressure'], float_dtype)
-            total_pressure.set_shape([1])
-            decoded.total_pressure = tf.squeeze(
-                total_pressure, name='total_pressure')
-
-            s_conf = tf.decode_raw(example['s_conf'], float_dtype)
-            s_conf.set_shape([1])
-            decoded.s_conf = tf.squeeze(s_conf, name='s_conf')
-
-        return decoded
-
     def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
         Decode v2g_map, ilist, jlist and Slist for radial functions.
@@ -649,7 +581,12 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Decode the parsed single example.
         """
-        decoded = self._decode_atoms(example)
+        decoded = self._decode_atoms(
+            example,
+            max_n_atoms=self._max_n_atoms,
+            n_elements=self._n_elements,
+            use_forces=self._use_forces,
+            use_stress=self._use_stress)
         g2 = self._decode_g2_indexed_slices(example)
         g4 = self._decode_g4_indexed_slices(example)
 
@@ -687,6 +624,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
                 'composition': tf.FixedLenFeature([], tf.string),
+                'pulay': tf.FixedLenFeature([], tf.string),
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
@@ -794,23 +732,3 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             )
 
         return self.build_graph(inputs)
-
-    def get_descriptor_normalization_weights(self, method):
-        """
-        Return the initial weights for the column-wise normalising the output
-        descriptors.
-        """
-        weights = {}
-        for element in self._elements:
-            kbody_terms = self._kbody_terms[element]
-            values = []
-            for kbody_term in kbody_terms:
-                if len(get_elements_from_kbody_term(kbody_term)) == 2:
-                    for p in self._radial_indices_grid:
-                        values.append(p['eta'])
-                else:
-                    for p in self._angular_indices_grid:
-                        values.append(p['beta'])
-            values = np.asarray(values, dtype=get_float_dtype().as_numpy_dtype)
-            weights[element] = 0.25 / np.exp(-values * 0.25**2)
-        return weights

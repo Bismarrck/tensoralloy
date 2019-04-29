@@ -13,7 +13,7 @@ from typing import Dict, List
 from ase import Atoms
 from ase.units import GPa
 
-from tensoralloy.utils import AttributeDict
+from tensoralloy.utils import AttributeDict, get_pulay_stress
 from tensoralloy.dtypes import get_float_dtype
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
@@ -210,9 +210,10 @@ def int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def _get_confidence(atoms: Atoms) -> np.ndarray:
+def _get_confidence_vector(atoms: Atoms) -> np.ndarray:
     """
-    Return the confidence array.
+    Return a vector as the confidences of energy, forces and stress of this
+    `Atoms`.
     """
     if 'data' in atoms.info:
         return atoms.info['data'].get("weights", np.ones(3))
@@ -355,7 +356,8 @@ class BatchDescriptorTransformer(BaseTransformer):
         composition = self._get_composition(atoms)
         mask = clf.mask.astype(np_dtype)
         confidences = np.reshape(
-            _get_confidence(atoms).astype(np_dtype), (3, 1))
+            _get_confidence_vector(atoms).astype(np_dtype), (3, 1))
+        pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
 
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
@@ -366,6 +368,7 @@ class BatchDescriptorTransformer(BaseTransformer):
             'y_conf': bytes_feature(confidences[0].tostring()),
             'mask': bytes_feature(mask.tostring()),
             'composition': bytes_feature(composition.tostring()),
+            'pulay': bytes_feature(pulay.tostring()),
         }
         if self.use_forces:
             f_true = clf.map_forces(atoms.get_forces()).astype(np_dtype)
@@ -397,6 +400,85 @@ class BatchDescriptorTransformer(BaseTransformer):
             The target `Atoms` object to encode.
         """
         pass
+
+    @staticmethod
+    def _decode_atoms(example: Dict[str, tf.Tensor],
+                      max_n_atoms: int,
+                      n_elements: int,
+                      use_forces=True,
+                      use_stress=False) -> AttributeDict:
+        """
+        Decode `Atoms` related properties.
+        """
+        decoded = AttributeDict()
+
+        length = 3 * (max_n_atoms + 1)
+        float_dtype = get_float_dtype()
+
+        positions = tf.decode_raw(example['positions'], float_dtype)
+        positions.set_shape([length])
+        decoded.positions = tf.reshape(
+            positions, (max_n_atoms + 1, 3), name='R')
+
+        n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
+        decoded.n_atoms = n_atoms
+
+        y_true = tf.decode_raw(example['y_true'], float_dtype)
+        y_true.set_shape([1])
+        decoded.y_true = tf.squeeze(y_true, name='y_true')
+
+        y_conf = tf.decode_raw(example['y_conf'], float_dtype)
+        y_conf.set_shape([1])
+        decoded.y_conf = tf.squeeze(y_conf, name='y_conf')
+
+        cells = tf.decode_raw(example['cells'], float_dtype)
+        cells.set_shape([9])
+        decoded.cells = tf.reshape(cells, (3, 3), name='cells')
+
+        volume = tf.decode_raw(example['volume'], float_dtype)
+        volume.set_shape([1])
+        decoded.volume = tf.squeeze(volume, name='volume')
+
+        mask = tf.decode_raw(example['mask'], float_dtype)
+        mask.set_shape([max_n_atoms + 1, ])
+        decoded.mask = mask
+
+        composition = tf.decode_raw(example['composition'], float_dtype)
+        composition.set_shape([n_elements, ])
+        decoded.composition = composition
+
+        pulay = tf.decode_raw(example['pulay'], float_dtype)
+        pulay.set_shape([1])
+        decoded.pulay_stress = tf.squeeze(pulay, name='pulay_stress')
+
+        if use_forces:
+            f_true = tf.decode_raw(example['f_true'], float_dtype)
+            # Ignore the forces of the virtual atom
+            f_true.set_shape([length, ])
+            decoded.f_true = tf.reshape(
+                f_true, (max_n_atoms + 1, 3), name='f_true')
+
+            f_conf = tf.decode_raw(example['f_conf'], float_dtype)
+            f_conf.set_shape([1])
+            decoded.f_conf = tf.squeeze(f_conf, name='f_conf')
+
+        if use_stress:
+            stress = tf.decode_raw(
+                example['stress'], float_dtype, name='stress')
+            stress.set_shape([6])
+            decoded.stress = stress
+
+            total_pressure = tf.decode_raw(
+                example['total_pressure'], float_dtype)
+            total_pressure.set_shape([1])
+            decoded.total_pressure = tf.squeeze(
+                total_pressure, name='total_pressure')
+
+            s_conf = tf.decode_raw(example['s_conf'], float_dtype)
+            s_conf.set_shape([1])
+            decoded.s_conf = tf.squeeze(s_conf, name='s_conf')
+
+        return decoded
 
     @abc.abstractmethod
     def decode_protobuf(self, example_proto: tf.Tensor) -> AttributeDict:
@@ -443,13 +525,5 @@ class BatchDescriptorTransformer(BaseTransformer):
         descriptors : AttributeDict
             A dict of Ops to get atomic descriptors.
 
-        """
-        pass
-
-    @abc.abstractmethod
-    def get_descriptor_normalization_weights(self, method):
-        """
-        Return the initial weights for column-wise normalising the output atomic
-        descriptors.
         """
         pass

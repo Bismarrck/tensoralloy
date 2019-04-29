@@ -229,10 +229,10 @@ class EamNN(BasicNN):
                            variable_scope=variable_scope,
                            verbose=verbose)
 
-    def _get_energy_op(self, outputs: tf.Tensor, features: AttributeDict,
-                       name='energy', verbose=True):
+    def _get_enthalpy_op(self, outputs: tf.Tensor, features: AttributeDict,
+                         name='energy', verbose=True):
         """
-        Return the Op to compute total energy of nn-EAM.
+        Return the Op to compute enthalpy.
 
         Parameters
         ----------

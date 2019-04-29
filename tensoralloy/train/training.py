@@ -143,14 +143,7 @@ class TrainingManager:
             if value is not None:
                 hidden_sizes[element] = value
 
-        normalizer = self._reader['nn.atomic.input_normalizer']
-        normalization_weights = \
-            self._dataset.transformer.get_descriptor_normalization_weights(
-                method=normalizer)
-
         kwargs['hidden_sizes'] = hidden_sizes
-        kwargs['normalizer'] = normalizer
-        kwargs['normalization_weights'] = normalization_weights
 
         if self._reader['nn.atomic.arch'] == 'AtomicNN':
             return AtomicNN(**kwargs)

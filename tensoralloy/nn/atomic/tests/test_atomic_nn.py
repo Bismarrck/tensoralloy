@@ -118,25 +118,29 @@ def test_inference():
                 np.random.rand(1, max_n_atoms, 3),
                 dtype=tf.float64,
                 name='positions')
+            cells = tf.convert_to_tensor(
+                np.random.rand(batch_size, 3, 3).astype(np.float64))
             mask = tf.convert_to_tensor(
                 np.ones((batch_size, max_n_atoms), np.float64))
-            features = AttributeDict(positions=positions, mask=mask)
+            pulay_stress = tf.zeros(batch_size, dtype=tf.float64, name='pulay')
+            features = AttributeDict(positions=positions, mask=mask,
+                                     cells=cells, pulay_stress=pulay_stress)
 
         outputs = nn._get_model_outputs(
             features=features,
             descriptors=descriptors,
             mode=tf_estimator.ModeKeys.TRAIN,
             verbose=True)
-        predictions = AttributeDict(energy=nn._get_energy_op(
+        predictions = AttributeDict(energy=nn._get_total_energy_op(
             outputs, features, verbose=False))
 
         assert_equal(predictions.energy.shape.as_list(), [batch_size, ])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        assert_equal(len(collection), 8)
+        assert_equal(len(collection), 6)
 
         collection = tf.get_collection(GraphKeys.ATOMIC_NN_VARIABLES)
-        assert_equal(len(collection), 8)
+        assert_equal(len(collection), 6)
 
 
 def test_inference_from_transformer():

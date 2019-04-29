@@ -115,9 +115,9 @@ class AtomicNN(BasicNN):
                     outputs.append(yi)
             return outputs
 
-    def _get_energy_op(self, outputs, features, name='energy', verbose=True):
+    def _get_enthalpy_op(self, outputs, features, name='energy', verbose=True):
         """
-        Return the Op to compute total energy.
+        Return the Op to compute enthalpy.
 
         Parameters
         ----------

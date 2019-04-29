@@ -203,11 +203,69 @@ class BasicNN:
         """
         raise NotImplementedError("This method must be overridden!")
 
-    def _get_energy_op(self, outputs, features, name='energy', verbose=True):
+    def _get_enthalpy_op(self,
+                         outputs,
+                         features: AttributeDict,
+                         name='enthalpy',
+                         verbose=True) -> tf.Tensor:
+        """
+        Return the Op to compute enthalpy.
+
+        Parameters
+        ----------
+        outputs : Any
+            The model outputs from the method `_get_model_outputs`.
+        features : AttributeDict
+            A dict of input raw property tensors:
+                * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
+                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+                * 'pulay_stress' of dtype `float32` or `float64`.
+        name : str
+            The name of the output potential energy tensor.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        """
+        raise NotImplementedError("This method must be overridden!")
+
+    @staticmethod
+    def _get_pv_energy_op(features: AttributeDict,
+                          name='pv',
+                          verbose=True) -> tf.Tensor:
+        """
+        Return the Op to compute pulay stress energy:
+
+            E(pv) = pulay_stress * volume
+
+        """
+        v = tf.linalg.det(features.cells, name='V')
+        p = tf.convert_to_tensor(features.pulay_stress, name='P')
+        pv = tf.multiply(v, p, name=name)
+        if verbose:
+            log_tensor(pv)
+        return pv
+
+    def _get_total_energy_op(self,
+                             outputs,
+                             features: AttributeDict,
+                             name='energy',
+                             verbose=True) -> tf.Tensor:
         """
         Return the Op to compute total energy.
         """
-        raise NotImplementedError("This method must be overridden!")
+        with tf.name_scope("Enthalpy"):
+            enthalpy = self._get_enthalpy_op(
+                outputs=outputs,
+                features=features,
+                verbose=verbose)
+        with tf.name_scope("External"):
+            pv = self._get_pv_energy_op(features, verbose=verbose)
+
+        return tf.add_n([enthalpy, pv], name=name)
 
     @staticmethod
     def _get_forces_op(energy, positions, name='forces', verbose=True):
@@ -489,6 +547,7 @@ class BasicNN:
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+                * 'pulay_stress' of dtype `float32` or `float64`.
         descriptors : AttributeDict
             A dict of Ops to get atomic descriptors. This should be produced by
             an overrided `BaseTransformer.get_descriptors()`.
@@ -533,6 +592,7 @@ class BasicNN:
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+                * 'pulay_stress' of dtype `float32` or `float64`.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
@@ -582,7 +642,7 @@ class BasicNN:
             predictions = AttributeDict()
 
             with tf.name_scope("Energy"):
-                predictions.energy = self._get_energy_op(
+                predictions.energy = self._get_total_energy_op(
                     outputs, features, name='energy', verbose=verbose)
 
             if 'forces' in properties or \
@@ -649,6 +709,7 @@ class BasicNN:
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
+                * 'pulay_stress' of dtype `float32` or `float64`.
         labels : AttributeDict
             A dict of reference tensors.
 

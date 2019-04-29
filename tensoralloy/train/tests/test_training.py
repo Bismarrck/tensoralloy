@@ -22,7 +22,6 @@ from tensoralloy.train.training import TrainingManager
 from tensoralloy.nn import EamAlloyNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -47,8 +46,6 @@ class InitializationTest(unittest.TestCase):
         manager = TrainingManager(input_file)
         transformer = manager.dataset.transformer
         hparams = manager.hparams
-
-        assert_equal(get_float_dtype(), tf.float32)
 
         assert_equal(manager.dataset.descriptor, 'behler')
         assert_equal(manager.dataset.test_size, 1)
