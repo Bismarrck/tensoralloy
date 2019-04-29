@@ -13,8 +13,6 @@ from collections import Counter
 from typing import List
 from ase.db.sqlite import SQLite3Database
 
-from tensoralloy.utils import get_pulay_stress
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
