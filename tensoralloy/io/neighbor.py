@@ -79,6 +79,25 @@ def find_neighbor_size_of_atoms(atoms, rc, k_max):
     return nij, nijk, nnl
 
 
+def _get_updated_metadata(database: SQLite3Database, k_max: int, rc: float,
+                          nij_max: int, nijk_max: int, nnl_max: int):
+    """
+    Return the updated metadata dict.
+    """
+    k_max = convert_k_max_to_key(k_max)
+    rc = convert_rc_to_key(rc)
+    details = {k_max: {rc: {
+        'nij_max': nij_max, 'nijk_max': nijk_max, 'nnl_max': nnl_max}}}
+    metadata = dict(database.metadata)
+    if 'neighbors' not in metadata:
+        metadata['neighbors'] = details
+    elif k_max not in metadata['neighbors']:
+        metadata['neighbors'][k_max] = details[k_max]
+    else:
+        metadata['neighbors'][k_max][rc] = details[k_max][rc]
+    return metadata
+
+
 def find_neighbor_size_maximums(database: SQLite3Database, rc: float,
                                 k_max=3, n_jobs=-1, verbose=True):
     """
@@ -117,18 +136,23 @@ def find_neighbor_size_maximums(database: SQLite3Database, rc: float,
 
     nij_max, nijk_max, nnl_max = np.asarray(
         results, dtype=int).max(axis=0).tolist()
-    rc = convert_rc_to_key(rc)
-    k_max = convert_k_max_to_key(k_max)
-    details = {k_max: {rc: {
-        'nij_max': nij_max, 'nijk_max': nijk_max, 'nnl_max': nnl_max}}}
-    metadata = dict(database.metadata)
-    if 'neighbors' not in metadata:
-        metadata['neighbors'] = details
-    elif k_max not in metadata['neighbors']:
-        metadata['neighbors'][k_max] = details[k_max]
-    else:
-        metadata['neighbors'][k_max][rc] = details[k_max][rc]
-    database.metadata = metadata
+
+    database.metadata = _get_updated_metadata(
+        database,
+        k_max=k_max,
+        rc=rc,
+        nij_max=nij_max,
+        nijk_max=nijk_max,
+        nnl_max=nnl_max)
+
+    if k_max == 3:
+        database.metadata = _get_updated_metadata(
+            database,
+            k_max=2,
+            rc=rc,
+            nij_max=nij_max,
+            nijk_max=0,
+            nnl_max=nnl_max)
 
     if verbose:
         print(f'All {len(database)} jobs are done. nij_max = {nij_max}, '
