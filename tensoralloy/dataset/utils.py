@@ -13,6 +13,8 @@ from collections import Counter
 from typing import List
 from ase.db.sqlite import SQLite3Database
 
+from tensoralloy.utils import get_pulay_stress
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -103,10 +105,13 @@ def compute_atomic_static_energy(database: SQLite3Database,
 
     for aid in range(id_first, id_first + n):
         atoms = database.get_atoms(id=aid)
+        v = atoms.get_volume()
+        p = get_pulay_stress(atoms)
+        e_pv = v * p
         row = aid - 1
         for element, count in Counter(atoms.get_chemical_symbols()).items():
             A[row, col_map[element]] = float(count)
-        b[row] = atoms.get_total_energy()
+        b[row] = atoms.get_total_energy() - e_pv
 
     rank = np.linalg.matrix_rank(A)
     if rank == n_elements:
