@@ -325,7 +325,7 @@ class BasicNN:
                         positions, [1, -1], axis=0, name='split')[1]
                     left = tf.matmul(tf.transpose(forces), positions)
                     left = tf.negative(left, name='left')
-                internal = tf.add(left, right, name='stress')
+                internal = tf.add(left, right, name='internal')
                 with tf.name_scope("PV"):
                     pv = tf.multiply(tf.eye(3, dtype=dtype),
                                      pulay_stress * volume,
@@ -341,7 +341,7 @@ class BasicNN:
                     left = tf.einsum('ijk,ijl->ijlk', positions, forces)
                     left = tf.reduce_sum(left, axis=1, keepdims=False)
                     left = tf.negative(left, name='left')
-                internal = tf.add(left, right, name='stress')
+                internal = tf.add(left, right, name='internal')
 
                 with tf.name_scope("PV"):
                     batch_shape = [energy.shape.as_list()[0]]
