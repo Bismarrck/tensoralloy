@@ -139,6 +139,8 @@ class TensorAlloyCalculator(Calculator):
         graph = self._graph
         props_and_names = {
             'energy': 'Output/Energy/energy:0',
+            'pv': 'Output/Energy/PV/pv:0',
+            'enthalpy': 'Output/Energy/Enthalpy/enthalpy:0',
             'forces': 'Output/Forces/forces:0',
             'stress': 'Output/Stress/Voigt/stress:0',
             'hessian': 'Output/Hessian/hessian:0',
@@ -168,6 +170,18 @@ class TensorAlloyCalculator(Calculator):
         This calculator cannot predict magnetic moments.
         """
         return None
+
+    def get_enthalpy(self, atoms=None):
+        """
+        Return the enthalpy energy (eV).
+        """
+        return self.get_property('enthalpy', atoms=atoms)
+
+    def get_pv_energy(self, atoms=None):
+        """
+        Return the PV energy (eV).
+        """
+        return self.get_property('pv', atoms=atoms)
 
     def get_hessian(self, atoms=None):
         """

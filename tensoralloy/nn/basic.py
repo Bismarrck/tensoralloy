@@ -255,17 +255,20 @@ class BasicNN:
                              name='energy',
                              verbose=True) -> tf.Tensor:
         """
-        Return the Op to compute total energy.
+        Return the Op to compute total energy:
+
+            Internal Energy (E) = Ethalpy (H) - pressure * Volume
+
         """
         with tf.name_scope("Enthalpy"):
             enthalpy = self._get_enthalpy_op(
                 outputs=outputs,
                 features=features,
                 verbose=verbose)
-        with tf.name_scope("External"):
+        with tf.name_scope("PV"):
             pv = self._get_pv_energy_op(features, verbose=verbose)
 
-        return tf.add_n([enthalpy, pv], name=name)
+        return tf.subtract(enthalpy, pv, name=name)
 
     @staticmethod
     def _get_forces_op(energy, positions, name='forces', verbose=True):

@@ -11,6 +11,7 @@ from nose.tools import assert_dict_equal
 from os.path import join
 
 from tensoralloy.io.read import read_file
+from tensoralloy.utils import get_pulay_stress
 from tensoralloy.test_utils import test_dir
 
 
@@ -78,7 +79,7 @@ def test_read_pulay_stress():
     database = read_file(xyzfile, verbose=False)
     atoms = database.get_atoms(id=1, add_additional_information=True)
     kbar = atoms.get_stress() / GPa * 10.0
-    pulay = atoms.info['key_value_pairs']['pulay_stress'] / GPa * 10.0
+    pulay = get_pulay_stress(atoms) / GPa * 10.0 * (-1)
     net = kbar[:3].mean() - pulay
     assert_almost_equal(net, -0.78, delta=0.01)
 

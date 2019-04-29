@@ -60,12 +60,12 @@ def test_energy_pv():
                     clf.get_constant_features(atoms), mode=mode, verbose=False)
 
             with tf.name_scope("10GPa"):
-                set_pulay_stress(atoms, -10.0 * GPa)
+                set_pulay_stress(atoms, 10.0 * GPa)
                 ten_ops = nn.build(
                     clf.get_constant_features(atoms), mode=mode, verbose=False)
 
             with tf.name_scope("100GPa"):
-                set_pulay_stress(atoms, -100.0 * GPa)
+                set_pulay_stress(atoms, 100.0 * GPa)
                 hundred_ops = nn.build(
                     clf.get_constant_features(atoms), mode=mode, verbose=False)
 
