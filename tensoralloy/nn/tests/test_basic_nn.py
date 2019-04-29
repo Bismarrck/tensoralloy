@@ -73,13 +73,19 @@ def test_energy_pv():
                 tf.global_variables_initializer().run()
                 zero, ten, hundred = sess.run([zero_ops, ten_ops, hundred_ops])
 
-            assert_almost_equal(zero.energy - hundred.energy,
-                                -(-100.0 * GPa) * volume,
-                                delta=1e-8)
+            assert_almost_equal(zero.energy, hundred.energy, delta=1e-8)
+            assert_almost_equal(zero.enthalpy - hundred.enthalpy,
+                                -100 * GPa * volume, delta=1e-8)
 
+            # Only diag elements are affected by pulay stress.
             assert_array_almost_equal(
                 ten.stress[:3] / GPa - hundred.stress[:3] / GPa,
                 np.ones(3) * 90.0,
+                delta=1e-8)
+
+            assert_array_almost_equal(
+                ten.stress[3:] / GPa - hundred.stress[3:] / GPa,
+                np.zeros(3),
                 delta=1e-8)
 
 

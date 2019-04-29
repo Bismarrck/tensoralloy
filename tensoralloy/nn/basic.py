@@ -203,13 +203,13 @@ class BasicNN:
         """
         raise NotImplementedError("This method must be overridden!")
 
-    def _get_enthalpy_op(self,
-                         outputs,
-                         features: AttributeDict,
-                         name='enthalpy',
-                         verbose=True) -> tf.Tensor:
+    def _get_internal_energy_op(self,
+                                outputs,
+                                features: AttributeDict,
+                                name='energy',
+                                verbose=True) -> tf.Tensor:
         """
-        Return the Op to compute enthalpy.
+        Return the Op to compute internal energy E.
 
         Parameters
         ----------
@@ -237,7 +237,7 @@ class BasicNN:
                           name='pv',
                           verbose=True) -> tf.Tensor:
         """
-        Return the Op to compute pulay stress energy:
+        Return the Op to compute `E_pv`:
 
             E(pv) = pulay_stress * volume
 
@@ -253,22 +253,33 @@ class BasicNN:
                              outputs,
                              features: AttributeDict,
                              name='energy',
-                             verbose=True) -> tf.Tensor:
+                             verbose=True):
         """
-        Return the Op to compute total energy:
+        Return the Ops to compute total energy E and enthalpy H:
 
-            Internal Energy (E) = Ethalpy (H) - pressure * Volume
+            H = E + PV
+
+        Returns
+        -------
+        energy : tf.Tensor
+            The Op to compute internal energy E.
+        enthalpy : tf.Tensor
+            The Op to compute enthalpy H.
 
         """
-        with tf.name_scope("Enthalpy"):
-            enthalpy = self._get_enthalpy_op(
+        with tf.name_scope("PV"):
+            E_pv = self._get_pv_energy_op(features, verbose=verbose)
+
+        with tf.name_scope("Internal"):
+            E_internal = self._get_internal_energy_op(
                 outputs=outputs,
                 features=features,
                 verbose=verbose)
-        with tf.name_scope("PV"):
-            pv = self._get_pv_energy_op(features, verbose=verbose)
 
-        return tf.subtract(enthalpy, pv, name=name)
+        E_total = tf.identity(E_internal, name=name)
+        H = tf.add(E_internal, E_pv, name='enthalpy')
+
+        return E_total, H
 
     @staticmethod
     def _get_forces_op(energy, positions, name='forces', verbose=True):
@@ -288,11 +299,11 @@ class BasicNN:
 
     @staticmethod
     def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells, volume,
-                                        positions, forces):
+                                        positions, forces, pulay_stress):
         """
         Return the Op to compute the virial stress tensor.
 
-            stress * volume = -F^T @ R + (dE/dh)^T @ h
+            (stress - pulay_stress) * volume = -F^T @ R + (dE/dh)^T @ h
 
         where `E` denotes the total energy, `h` is the 3x3 row-major lattice
         matrix, `R` and `F` are positions and total forces of the atoms.
@@ -301,6 +312,7 @@ class BasicNN:
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
             dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
+            dtype = dEdh.dtype
             if cells.shape.ndims == 2:
                 with tf.name_scope("Right"):
                     right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
@@ -310,7 +322,12 @@ class BasicNN:
                         positions, [1, -1], axis=0, name='split')[1]
                     left = tf.matmul(tf.transpose(forces), positions)
                     left = tf.negative(left, name='left')
-                total_stress = tf.add(left, right, name='stress')
+                internal = tf.add(left, right, name='stress')
+                with tf.name_scope("PV"):
+                    pv = tf.multiply(tf.eye(3, dtype=dtype),
+                                     pulay_stress * volume,
+                                     name='pv')
+                total_stress = tf.subtract(internal, pv, name='stress')
                 stress = tf.math.truediv(total_stress, volume, name='ase')
             else:
                 with tf.name_scope("Right"):
@@ -321,7 +338,16 @@ class BasicNN:
                     left = tf.einsum('ijk,ijl->ijlk', positions, forces)
                     left = tf.reduce_sum(left, axis=1, keepdims=False)
                     left = tf.negative(left, name='left')
-                total_stress = tf.add(left, right, name='stress')
+                internal = tf.add(left, right, name='stress')
+
+                with tf.name_scope("PV"):
+                    batch_shape = [energy.shape.as_list()[0]]
+                    pv = tf.multiply(volume, pulay_stress, name='pv')
+                    pv = tf.multiply(
+                        tf.eye(3, batch_shape=batch_shape, dtype=dtype),
+                        tf.reshape(pv, [-1, 1, 1]),
+                        name='pv')
+                total_stress = tf.subtract(internal, pv, name='stress')
                 stress = tf.math.truediv(tf.reshape(total_stress, (-1, 9)),
                                          tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
@@ -352,7 +378,7 @@ class BasicNN:
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
-                       forces, name='stress', return_pressure=False,
+                       forces, pulay_stress, name='stress', return_pressure=False,
                        verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
@@ -360,8 +386,8 @@ class BasicNN:
 
         # Get the 3x3 full stress tensor
         stress_per_volume, total_stress = \
-            self._get_reduced_full_stress_tensor(energy, cells, volume,
-                                                 positions, forces)
+            self._get_reduced_full_stress_tensor(
+                energy, cells, volume, positions, forces, pulay_stress)
         if verbose:
             log_tensor(total_stress)
 
@@ -645,8 +671,10 @@ class BasicNN:
             predictions = AttributeDict()
 
             with tf.name_scope("Energy"):
-                predictions.energy = self._get_total_energy_op(
+                energy, enthalpy = self._get_total_energy_op(
                     outputs, features, name='energy', verbose=verbose)
+                predictions.energy = energy
+                predictions.enthalpy = enthalpy
 
             if 'forces' in properties or \
                     'stress' in properties or \
@@ -665,6 +693,7 @@ class BasicNN:
                             volume=features.volume,
                             positions=features.positions,
                             forces=predictions.forces,
+                            pulay_stress=features.pulay_stress,
                             return_pressure=True,
                             name='stress',
                             verbose=verbose)

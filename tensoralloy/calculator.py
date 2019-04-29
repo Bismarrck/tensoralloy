@@ -139,8 +139,8 @@ class TensorAlloyCalculator(Calculator):
         graph = self._graph
         props_and_names = {
             'energy': 'Output/Energy/energy:0',
+            'enthalpy': 'Output/Energy/enthalpy:0',
             'pv': 'Output/Energy/PV/pv:0',
-            'enthalpy': 'Output/Energy/Enthalpy/enthalpy:0',
             'forces': 'Output/Forces/forces:0',
             'stress': 'Output/Stress/Voigt/stress:0',
             'hessian': 'Output/Hessian/hessian:0',

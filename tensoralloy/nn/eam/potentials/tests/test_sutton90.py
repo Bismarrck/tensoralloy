@@ -103,7 +103,7 @@ def test_eam_sutton90_batch_transformer():
             descriptors=AttributeDict(descriptors),
             mode=tf_estimator.ModeKeys.EVAL,
             verbose=False)
-        prediction = AttributeDict(energy=nn._get_enthalpy_op(outputs, features))
+        prediction = AttributeDict(energy=nn._get_internal_energy_op(outputs, features))
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()

@@ -700,15 +700,20 @@ def test_batch_stress():
             descriptors=AttributeDict(descriptors),
             mode=tf_estimator.ModeKeys.EVAL,
             verbose=False)
-        energy = nn._get_total_energy_op(outputs, features, verbose=False)
+        energy, enthalpy = \
+            nn._get_total_energy_op(outputs, features, verbose=False)
         forces = nn._get_forces_op(energy, batch.positions, verbose=False)
         stress, total_stress, _ = nn._get_stress_op(
             energy=energy,
             cells=batch.cells,
             volume=batch.volume,
             positions=batch.positions,
+            pulay_stress=batch.pulay_stress,
             forces=forces,
             verbose=False)
+
+        print(stress.shape)
+        print(total_stress.shape)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()

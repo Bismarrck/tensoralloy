@@ -81,9 +81,9 @@ class AtomicResNN(AtomicNN):
         d['fixed_static_energy'] = self._fixed_static_energy
         return d
 
-    def _get_enthalpy_op(self, outputs, features, name='energy', verbose=True):
+    def _get_internal_energy_op(self, outputs, features, name='energy', verbose=True):
         """
-        Return the Op to compute enthalpy (eV).
+        Return the Op to compute internal energy E.
         """
 
         ndims = features.composition.shape.ndims
