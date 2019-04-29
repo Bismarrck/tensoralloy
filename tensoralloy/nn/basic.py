@@ -279,6 +279,9 @@ class BasicNN:
         E_total = tf.identity(E_internal, name=name)
         H = tf.add(E_internal, E_pv, name='enthalpy')
 
+        if verbose:
+            log_tensor(H)
+
         return E_total, H
 
     @staticmethod

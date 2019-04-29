@@ -119,7 +119,7 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms):
                     'Pressure/mse': tf.metrics.mean_squared_error(x, y)}
                 metrics.update(ops_dict)
 
-        elif 'stress' in eval_properties:
+        if 'stress' in eval_properties:
             with tf.name_scope("Stress"):
                 x = labels.stress
                 y = predictions.stress

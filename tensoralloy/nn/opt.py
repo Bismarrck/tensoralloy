@@ -7,7 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import List
-from tensorflow.python.training.basic_session_run_hooks import NanTensorHook
 from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
 
 from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
@@ -227,10 +226,7 @@ def get_training_hooks(losses: AttributeDict,
                 batch_size=train_parameters.batch_size,
                 every_n_steps=train_parameters.log_steps)
 
-        with tf.name_scope("Nan"):
-            nan_tensor_hook = NanTensorHook(fail_on_nan_loss=True, **losses)
-
-        hooks = [summary_saver_hook, examples_per_sec_hook, nan_tensor_hook]
+        hooks = [summary_saver_hook, examples_per_sec_hook]
 
         if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
             logging_tensor_hook = LoggingTensorHook(
