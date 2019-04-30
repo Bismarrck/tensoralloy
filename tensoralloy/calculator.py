@@ -54,12 +54,22 @@ class TensorAlloyCalculator(Calculator):
     default_parameters = {}
     nolabel = True
 
-    def __init__(self, graph_model_path: str, label=None, atoms=None):
+    def __init__(self, graph_model_path: str, atoms=None, serial_mode=False):
         """
         Initialization method.
+
+        Parameters
+        ----------
+        graph_model_path : str
+            The exported model to load.
+        atoms : Atoms
+            The target `Atoms` object.
+        serial_mode : bool
+            If True, the program will only use 1 core and 1 thread.
+
         """
         super(TensorAlloyCalculator, self).__init__(
-            restart=None, ignore_bad_restart_file=False, label=label,
+            restart=None, ignore_bad_restart_file=False, label=None,
             atoms=atoms)
 
         graph = tf.Graph()
@@ -72,9 +82,17 @@ class TensorAlloyCalculator(Calculator):
                 importer.import_graph_def(output_graph_def, name="")
 
             self._graph_model_path = graph_model_path
-            self._sess = tf.Session(
-                config=tf.ConfigProto(allow_soft_placement=True),
-                graph=graph)
+
+            if serial_mode:
+                config = tf.ConfigProto(device_count={'CPU': 1})
+                config.inter_op_parallelism_threads = 1
+                config.intra_op_parallelism_threads = 1
+            else:
+                config = tf.ConfigProto()
+
+            config.allow_soft_placement = True
+
+            self._sess = tf.Session(config=config, graph=graph)
             self._graph = graph
             self._transformer = self._get_transformer()
             self._ops, self._fp_precision = self._get_ops()
