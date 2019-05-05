@@ -551,6 +551,8 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                 dataframe = pd.DataFrame(data)
                 dataframe.set_index('percentile', inplace=True)
+                dataframe.rename(
+                    columns={'energy': 'energy/atom'}, inplace=True)
                 pd.options.display.float_format = "{:.6f}".format
                 print(dataframe)
 
