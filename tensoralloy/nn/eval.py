@@ -49,7 +49,7 @@ def get_evaluation_hooks(ema: tf.train.ExponentialMovingAverage,
     return hooks
 
 
-def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms):
+def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
     """
     Return a dict of Ops as the evaluation metrics.
 
@@ -62,6 +62,7 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms):
           required if 'forces' should be minimized.
         * 'forces_confidence' of shape `[batch_size, ]` is required if
           'forces' should be minimized.
+        * 'mask' of shape `[batch_size, n_atoms_max + 1]`
 
     Required if 'stress' or 'total_pressure' should be minimized:
         * 'stress' of shape `[batch_size, 6]` is required if
@@ -95,15 +96,12 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms):
             with tf.name_scope("Forces"):
                 with tf.name_scope("Split"):
                     x = tf.split(labels.forces, [1, -1], axis=1)[1]
-                y = predictions.forces
-                with tf.name_scope("Scale"):
-                    n_max = tf.convert_to_tensor(
-                        x.shape[1].value, dtype=x.dtype, name='n_max')
-                    one = tf.constant(1.0, dtype=x.dtype, name='one')
-                    weight = tf.math.truediv(
-                        one, tf.reduce_mean(n_atoms / n_max), name='weight')
-                    x = tf.multiply(weight, x)
-                    y = tf.multiply(weight, y)
+                    mask = tf.cast(tf.split(mask, [1, -1], axis=1)[1], tf.bool)
+                x = tf.boolean_mask(x, mask, axis=0, name='x')
+                y = tf.boolean_mask(predictions.forces, mask, axis=0, name='y')
+                with tf.name_scope("Flatten"):
+                    x = tf.reshape(x, (-1, ), name='x')
+                    y = tf.reshape(y, (-1, ), name='y')
                 ops_dict = {
                     'Forces/mae': tf.metrics.mean_absolute_error(x, y),
                     'Forces/mse': tf.metrics.mean_squared_error(x, y),

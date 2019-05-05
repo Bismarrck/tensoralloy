@@ -812,7 +812,9 @@ class BasicNN:
             eval_properties=self._minimize_properties,
             predictions=predictions,
             labels=labels,
-            n_atoms=features.n_atoms)
+            n_atoms=features.n_atoms,
+            mask=features.mask,
+        )
         evaluation_hooks = get_evaluation_hooks(
             ema=ema,
             train_parameters=params.train)
