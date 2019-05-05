@@ -529,10 +529,13 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                             f_true[j, mask_[j], :].flatten())
                                         pred_vals[prop].extend(
                                             f_pred[j, mask_[j], :].flatten())
-                                else:
+                                elif prop == 'stress':
                                     true_vals[prop].extend(labels_[prop] / GPa)
                                     pred_vals[prop].extend(
                                         predictions_[prop] / GPa)
+                                else:
+                                    true_vals[prop].extend(labels_[prop])
+                                    pred_vals[prop].extend(predictions_[prop])
 
                 data = {x: [] for x in properties}
                 data['percentile'] = []
@@ -540,7 +543,6 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 for prop in properties:
                     abs_diff[prop] = np.abs(
                         np.array(true_vals[prop]) - np.array(pred_vals[prop]))
-                    print(prop, np.mean(abs_diff[prop]))
 
                 for q in range(0, 101, args.q):
                     data['percentile'].append(q)
@@ -549,6 +551,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                 dataframe = pd.DataFrame(data)
                 dataframe.set_index('percentile', inplace=True)
+                pd.options.display.float_format = "{:.6f}".format
                 print(dataframe)
 
         return func
