@@ -13,12 +13,16 @@ import warnings
 import re
 import os
 
+from ase.units import GPa
 from os.path import exists, dirname, join, basename, splitext
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.io.read import read_file
 from tensoralloy.io.input import InputReader
 from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
+from tensoralloy.utils import Defaults
+from tensoralloy.dtypes import set_precision
 
 
 __author__ = 'Xin Chen'
@@ -399,6 +403,157 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         return func
 
 
+class ComputeEvaluationPercentileProgram(CLIProgram):
+    """
+    Compute the q-th percentile of per-atom MAEs of the selected checkpoint.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "compute"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Compute q-th percentile of per-atom MAEs of the selected " \
+               "checkpoint."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'ckpt',
+            type=str,
+            help="The checkpoint file to use."
+        )
+        subparser.add_argument(
+            '--tf-records-dir',
+            type=str,
+            default='..',
+            help="The directory where tfrecord files should be found."
+        )
+        subparser.add_argument(
+            '-q',
+            type=int,
+            default=5,
+            help="Percentile or sequence of percentiles to compute, "
+                 "which must be between 0 and 100 exclusive."
+        )
+
+        super(ComputeEvaluationPercentileProgram, self).config_subparser(
+            subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function.
+        """
+        def func(args: argparse.Namespace):
+            """
+            Compute the
+            """
+            if args.q <= 0 or args.q >= 100:
+                raise ValueError("`q` must be an integer and 0 < q < 100.")
+
+            model_dir = dirname(args.ckpt)
+            candidates = list(glob.glob(join(model_dir, "*.toml")))
+            if len(candidates) > 1:
+                warnings.warn(f"More than one TOML file in {model_dir}. "
+                              f"Only {candidates[0]} will be used.")
+            filename = candidates[0]
+
+            config = InputReader(filename)
+            config['dataset.tfrecords_dir'] = args.tf_records_dir
+
+            avail_properties = ('energy', 'forces', 'stress', 'total_pressure')
+            properties = [x for x in config['nn.minimize']
+                          if x in avail_properties]
+            config['nn.minimize'] = properties
+            precision = config['precision']
+
+            with set_precision(precision):
+                with tf.Graph().as_default():
+
+                    mode = tf_estimator.ModeKeys.EVAL
+                    manager = TrainingManager(config, validate_tfrecords=True)
+                    batch_size = manager.hparams.train.batch_size
+                    test_size = manager.dataset.test_size
+
+                    input_fn = manager.dataset.input_fn(
+                        mode=mode,
+                        batch_size=batch_size,
+                        num_epochs=1,
+                        shuffle=False
+                    )
+                    features, labels = input_fn()
+                    predictions = manager.nn.build(features=features,
+                                                   mode=mode,
+                                                   verbose=True)
+
+                    ema = tf.train.ExponentialMovingAverage(
+                        Defaults.variable_moving_average_decay)
+                    saver = tf.train.Saver(var_list=ema.variables_to_restore())
+
+                    with tf.Session() as sess:
+                        tf.global_variables_initializer().run()
+                        saver.restore(sess, args.ckpt)
+
+                        true_vals = {x: [] for x in properties}
+                        pred_vals = {x: [] for x in properties}
+
+                        for i in range(test_size // batch_size):
+                            predictions_, labels_, n_atoms_, mask_ = sess.run([
+                                predictions,
+                                labels,
+                                features.n_atoms,
+                                features.mask])
+                            mask_ = mask_[:, 1:].astype(bool)
+
+                            for prop in properties:
+                                if prop == 'energy':
+                                    true_vals[prop].extend(
+                                        labels_[prop] / n_atoms_)
+                                    pred_vals[prop].extend(
+                                        predictions_[prop] / n_atoms_)
+                                elif prop == 'forces':
+                                    f_true = labels_[prop][:, 1:, :]
+                                    f_pred = predictions_[prop]
+                                    for j in range(batch_size):
+                                        true_vals[prop].extend(
+                                            f_true[j, mask_[j], :].flatten())
+                                        pred_vals[prop].extend(
+                                            f_pred[j, mask_[j], :].flatten())
+                                else:
+                                    true_vals[prop].extend(labels_[prop] / GPa)
+                                    pred_vals[prop].extend(
+                                        predictions_[prop] / GPa)
+
+                data = {x: [] for x in properties}
+                data['percentile'] = []
+                abs_diff = {}
+                for prop in properties:
+                    abs_diff[prop] = np.abs(
+                        np.array(true_vals[prop]) - np.array(pred_vals[prop]))
+                    print(prop, np.mean(abs_diff[prop]))
+
+                for q in range(0, 101, args.q):
+                    data['percentile'].append(q)
+                    for prop in properties:
+                        data[prop].append(np.percentile(abs_diff[prop], q))
+
+                dataframe = pd.DataFrame(data)
+                dataframe.set_index('percentile', inplace=True)
+                print(dataframe)
+
+        return func
+
+
 def main():
     """
     The main function.
@@ -414,7 +569,8 @@ def main():
                  RunExperimentProgram(),
                  ExportModelProgram(),
                  StopExperimentProgram(),
-                 PrintEvaluationSummaryProgram()):
+                 PrintEvaluationSummaryProgram(),
+                 ComputeEvaluationPercentileProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
