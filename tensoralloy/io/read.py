@@ -10,10 +10,9 @@ import time
 
 from collections import Counter
 from os.path import splitext
-from ase.db import connect
-from ase.db.sqlite import SQLite3Database
 from ase.io.extxyz import read_xyz
 
+from tensoralloy.io.sqlite import connect, CoreDatabase
 from tensoralloy.io.units import get_conversion_units
 
 __author__ = 'Xin Chen'
@@ -41,7 +40,7 @@ def _read_extxyz(filename, units, ext=True, num_examples=None,
 
     Returns
     -------
-    database : SQLite3Database
+    database : CoreDatabase
         The database for the given xyz file.
 
     """
@@ -161,7 +160,7 @@ def read_file(filename, units=None, num_examples=None, verbose=True):
 
     Returns
     -------
-    database : SQLite3Database
+    database : CoreDatabase
         The database for the given xyz file.
 
     """
