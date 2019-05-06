@@ -4,13 +4,9 @@ This script is used to rebuild neighbor metadata of built-in datasets.
 """
 from __future__ import print_function, absolute_import
 
-from ase.db import connect
 from os.path import join
 
-from tensoralloy.io.neighbor import find_neighbor_size_maximums
-from tensoralloy.io.neighbor import convert_k_max_to_key
-from tensoralloy.io.neighbor import convert_rc_to_key
-from tensoralloy.dataset.utils import compute_atomic_static_energy
+from tensoralloy.io.sqlite import connect
 from tensoralloy.test_utils import datasets_dir
 
 __author__ = 'Xin Chen'
@@ -53,24 +49,16 @@ def rebuild():
         for index in range(len(config['rc'])):
             rc = config['rc'][index]
             k_max = config['k_max'][index]
-            rc_key = convert_rc_to_key(rc)
-            k_max_key = convert_k_max_to_key(k_max)
 
-            try:
-                _ = db.metadata['neighbors'][k_max_key][rc_key]['nnl_max']
-            except KeyError:
-                find_neighbor_size_maximums(db, rc, k_max, verbose=True)
+            if db.get_nij_max(k_max, rc, allow_calculation=False) is None:
+                db.update_neighbor_meta(k_max, rc, verbose=True)
             else:
-                print(f"Skip {name}/neighbor with rc={rc_key}, "
-                      f"k_max={k_max_key}")
+                print(f"Skip {name}/neighbor with rc={rc}, k_max={k_max}")
 
-            if 'atomic_static_energy' not in db.metadata:
-                elements = sorted(list(db.metadata['max_occurs'].keys()))
-                compute_atomic_static_energy(db, elements, verbose=True)
-            else:
-                print(f"Skip {name}/static_energy")
-
-        print('Done.\n')
+        if not db.get_atomic_static_energy(allow_calculation=False):
+            db.get_atomic_static_energy(allow_calculation=True)
+        else:
+            print(f"Skip {name}/static_energy")
 
 
 if __name__ == "__main__":
