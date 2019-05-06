@@ -9,14 +9,14 @@ import json
 
 from ase.db.sqlite import SQLite3Database
 from ase.db import connect as ase_connect
-from ase.neighborlist import neighbor_list
 from ase.utils import PurePath
 from joblib import Parallel, delayed
 from collections import Counter
 from typing import Dict
 from os.path import splitext
 
-from tensoralloy.utils import cantor_pairing, nested_get, nested_set
+from tensoralloy.utils import nested_get, nested_set
+from tensoralloy.utils import find_neighbor_size_of_atoms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -239,44 +239,3 @@ class CoreDatabase(SQLite3Database):
         return {'nij_max': values[0],
                 'nijk_max': values[1],
                 'nnl_max': values[2]}
-
-
-def find_neighbor_size_of_atoms(atoms, rc, k_max):
-    """
-    A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
-    """
-    ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
-    if k_max >= 2:
-        nij = len(ilist)
-    else:
-        numbers = atoms.numbers
-        uniques = list(set(numbers))
-        inlist = numbers[ilist]
-        jnlist = numbers[jlist]
-        counter = Counter(cantor_pairing(inlist, jnlist))
-        nij = sum([counter[x] for x in cantor_pairing(uniques, uniques)])
-    numbers = atoms.numbers
-    nnl = 0
-    for i in range(len(atoms)):
-        indices = np.where(ilist == i)[0]
-        ii = numbers[ilist[indices]]
-        ij = numbers[jlist[indices]]
-        if k_max == 1:
-            indices = np.where(ii == ij)[0]
-            ii = ii[indices]
-            ij = ij[indices]
-        if len(ii) > 0:
-            nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
-    if k_max == 3:
-        nl = {}
-        for i, atomi in enumerate(ilist):
-            if atomi not in nl:
-                nl[atomi] = []
-            nl[atomi].append(jlist[i])
-        nijk = 0
-        for atomi, nlist in nl.items():
-            n = len(nlist)
-            nijk += (n - 1 + 1) * (n - 1) // 2
-    else:
-        nijk = 0
-    return nij, nijk, nnl
