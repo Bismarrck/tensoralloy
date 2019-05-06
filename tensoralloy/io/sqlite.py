@@ -6,10 +6,12 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import json
+import os
 
 from ase.db.sqlite import SQLite3Database
 from ase.db import connect as ase_connect
 from ase.utils import PurePath
+from ase.parallel import world
 from joblib import Parallel, delayed
 from collections import Counter
 from typing import Dict
@@ -28,7 +30,8 @@ def _get_keypath(k_max: int, rc: float, prop: str):
     """
     A helper function to get the corresponding keypath.
     """
-    return f"{k_max}.{'{:.2f}'.format(np.round(rc, decimals=2))}.{prop}"
+    pm = '{:.0f}'.format(rc * 100.0)
+    return f"neighbors.{k_max}.{pm}.{prop}"
 
 
 def connect(name, use_lock_file=True, append=True, serial=False):
@@ -51,6 +54,10 @@ def connect(name, use_lock_file=True, append=True, serial=False):
     """
     if isinstance(name, PurePath):
         name = str(name)
+
+    if not append and world.rank == 0:
+        if isinstance(name, str) and os.path.isfile(name):
+            os.remove(name)
 
     if name is None:
         db_type = None
@@ -213,12 +220,17 @@ class CoreDatabase(SQLite3Database):
         if verbose:
             print('Start finding neighbors for rc = {} and k_max = {}. This '
                   'may take a very long time.'.format(rc, k_max))
+            verb = 5
+        else:
+            verb = 0
+        size = len(self)
 
-        verb_level = 5 if verbose else 0
-        results = Parallel(n_jobs=n_jobs, verbose=verb_level)(
-            delayed(_find)(jid) for jid in range(1, len(self) + 1)
+        results = Parallel(n_jobs=n_jobs,
+                           verbose=verb)(
+            delayed(_find)(job_id)
+            for job_id in range(1, 1 + size)
         )
-        values = np.asarray(results, dtype=int).max(axis=0)
+        values = np.asarray(results, dtype=int).max(axis=0).tolist()
 
         for i, prop in enumerate(['nij_max', 'nijk_max', 'nnl_max']):
             nested_set(self._metadata, _get_keypath(k_max, rc, prop), values[i])
