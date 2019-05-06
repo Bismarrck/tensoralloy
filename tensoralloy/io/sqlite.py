@@ -14,7 +14,7 @@ from ase.utils import PurePath
 from ase.parallel import world
 from joblib import Parallel, delayed
 from collections import Counter
-from typing import Dict
+from typing import Dict, List
 from os.path import splitext
 
 from tensoralloy.utils import nested_get, nested_set
@@ -105,6 +105,9 @@ class CoreDatabase(SQLite3Database):
         # Automatically initialize the metadata.
         self._initialize(self._connect())
 
+    def __str__(self):
+        return f"CoreDataBase@{self.filename}"
+
     @property
     def metadata(self) -> dict:
         """
@@ -140,11 +143,13 @@ class CoreDatabase(SQLite3Database):
         con.commit()
 
     @property
-    def max_occurs(self):
+    def max_occurs(self) -> Counter:
         """
         Return the maximum appearance of each type of element.
         """
-        return self._metadata.get('max_occurs', Counter())
+        if 'max_occurs' not in self._metadata:
+            self._find_max_occurs()
+        return Counter(self._metadata.get('max_occurs'))
 
     @property
     def has_forces(self):
@@ -161,11 +166,38 @@ class CoreDatabase(SQLite3Database):
         return self._metadata.get('stress', True)
 
     @property
-    def atomic_static_energy(self) -> Dict[str, float]:
+    def has_periodic_structures(self):
+        """
+        Return True if this database has at least one periodic structure.
+        """
+        return self._metadata.get('periodic', True)
+
+    def _find_max_occurs(self):
+        """
+        Update `max_occurs` of this database.
+        """
+        size = len(self)
+        max_occurs = Counter()
+        for atoms_id in range(1, 1 + size):
+            c = Counter(self.get_atoms(id=atoms_id).get_chemical_symbols())
+            for element, n in c.items():
+                max_occurs[element] = max(max_occurs[element], n)
+        self._metadata['max_occurs'] = max_occurs
+        self._write_metadata()
+
+    def get_atomic_static_energy(self,
+                                 allow_calculation=False) -> Dict[str, float]:
         """
         Return the calculated atomic static energy dict.
         """
-        return self._metadata.get('atomic_static_energy', {})
+        key = 'atomic_static_energy'
+        dct = self._metadata.get(key, {})
+        if not dct and allow_calculation:
+            elements = sorted(self.max_occurs.keys())
+            dct = _compute_atomic_static_energy(self, elements, verbose=True)
+            self._metadata[key] = dct
+            self._write_metadata()
+        return dct
 
     def _get_neighbor_property(self, k_max: int, rc: float, prop: str,
                                allow_calculation=False):
@@ -251,3 +283,55 @@ class CoreDatabase(SQLite3Database):
         return {'nij_max': values[0],
                 'nijk_max': values[1],
                 'nnl_max': values[2]}
+
+
+def _compute_atomic_static_energy(database: SQLite3Database,
+                                  elements: List[str],
+                                  verbose=True):
+    """
+    Compute the static energy for each type of element and add the results to
+    the metadata.
+
+    Parameters
+    ----------
+    database : SQLite3Database
+        The database to update. This db must be created by the function `read`.
+    elements : List[str]
+        A list of str as the ordered elements.
+    verbose : bool
+        If True, the progress shall be logged.
+
+    """
+    n = len(database)
+    n_elements = len(elements)
+    id_first = 1
+    col_map = {element: elements.index(element) for element in elements}
+    A = np.zeros((n, n_elements), dtype=np.float64)
+    b = np.zeros(n, dtype=np.float64)
+
+    if verbose:
+        print("Start computing atomic static energies ...")
+
+    for aid in range(id_first, id_first + n):
+        atoms = database.get_atoms(id=aid)
+        row = aid - 1
+        for element, count in Counter(atoms.get_chemical_symbols()).items():
+            A[row, col_map[element]] = float(count)
+        b[row] = atoms.get_total_energy()
+
+    rank = np.linalg.matrix_rank(A)
+    if rank == n_elements:
+        x = np.dot(np.linalg.pinv(A), b)
+    elif rank == 1:
+        x = np.tile(np.mean(b / A.sum(axis=1)), n_elements)
+    else:
+        raise ValueError(f"The matrix has an invalid rank of {rank}")
+
+    if verbose:
+        print("Done.")
+        for i in range(len(elements)):
+            print("  * Atomic Static Energy of {:2s} = {: 12.6f}".format(
+                elements[i], x[i]))
+        print("")
+
+    return {elements[i]: x[i] for i in range(len(elements))}
