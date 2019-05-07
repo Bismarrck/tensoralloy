@@ -13,7 +13,8 @@ from collections import Counter
 from typing import Dict, List
 
 from tensoralloy.utils import nested_get, nested_set
-from tensoralloy.utils import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import NeighborSize, NeighborProperty
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -21,12 +22,12 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["CoreDatabase"]
 
 
-def _get_keypath(k_max: int, rc: float, prop: str):
+def _get_keypath(k_max: int, rc: float, prop: NeighborProperty):
     """
     A helper function to get the corresponding keypath.
     """
     pm = '{:.0f}'.format(rc * 100.0)
-    return f"neighbors.{k_max}.{pm}.{prop}"
+    return f"neighbors.{k_max}.{pm}.{prop.name}_max"
 
 
 class CoreDatabase(SQLite3Database):
@@ -145,7 +146,7 @@ class CoreDatabase(SQLite3Database):
 
     def _get_neighbor_property(self,
                                rc: float,
-                               prop: str,
+                               prop: NeighborProperty,
                                allow_calculation=False):
         """
         A helper function to get the value of a neighbor property.
@@ -162,38 +163,46 @@ class CoreDatabase(SQLite3Database):
             if val is not None:
                 return val
         if allow_calculation:
-            val = self.update_neighbor_meta(rc=rc, angular=True, verbose=True)
+            dct = self.update_neighbor_meta(rc=rc, angular=True, verbose=True)
+            val = dct[prop]
         return val
 
     def get_nij_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_ij_max`.
         """
-        return self._get_neighbor_property(rc, 'nij_max', allow_calculation)
+        return self._get_neighbor_property(rc=rc,
+                                           prop=NeighborProperty.nij,
+                                           allow_calculation=allow_calculation)
 
     def get_nijk_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_ijk_max`.
         """
-        return self._get_neighbor_property(rc, 'nijk_max', allow_calculation)
+        return self._get_neighbor_property(rc=rc,
+                                           prop=NeighborProperty.nijk,
+                                           allow_calculation=allow_calculation)
 
     def get_nnl_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_nl_max`.
         """
-        return self._get_neighbor_property(rc, 'nnl_max', allow_calculation)
+        return self._get_neighbor_property(rc=rc,
+                                           prop=NeighborProperty.nnl,
+                                           allow_calculation=allow_calculation)
 
     def update_neighbor_meta(self,
                              rc: float,
                              angular=False,
                              n_jobs=-1,
-                             verbose=False) -> Dict[str, int]:
+                             verbose=False) -> NeighborSize:
         """
         Update the metadata of neighbor properties.
         """
         def _find(aid):
-            return find_neighbor_size_of_atoms(
+            nl = find_neighbor_size_of_atoms(
                 self.get_atoms(f'id={aid}'), rc, angular=angular)
+            return nl.nnl, nl.nij, nl.nijk
 
         if angular:
             cond = 'enabled'
@@ -217,10 +226,11 @@ class CoreDatabase(SQLite3Database):
         )
         values = np.asarray(results, dtype=int).max(axis=0).tolist()
 
-        for i, prop in enumerate(['nij_max', 'nijk_max', 'nnl_max']):
+        # noinspection PyTypeChecker
+        for i, prop in enumerate(NeighborProperty):
             nested_set(self._metadata, _get_keypath(k_max, rc, prop), values[i])
             if angular:
-                if prop == 'nijk_max':
+                if prop == NeighborProperty.nijk:
                     val = 0
                 else:
                     val = values[i]
@@ -233,9 +243,7 @@ class CoreDatabase(SQLite3Database):
             print(f'All {self} jobs are done. nij_max = {values[0]}, '
                   f'nijk_max = {values[1]}, nnl_max = {values[2]}')
 
-        return {'nij_max': values[0],
-                'nijk_max': values[1],
-                'nnl_max': values[2]}
+        return NeighborSize(nij=values[0], nijk=values[1], nnl=values[2])
 
 
 def _compute_atomic_static_energy(database: SQLite3Database,

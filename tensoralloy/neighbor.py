@@ -11,6 +11,7 @@ from collections import Counter
 from enum import Enum
 from ase import Atoms
 from ase.neighborlist import neighbor_list
+from typing import Union
 
 from tensoralloy.utils import cantor_pairing
 
@@ -37,6 +38,11 @@ class NeighborSize:
     nnl: int
     nij: int
     nijk: int
+
+    def __getitem__(self, item: Union[str, NeighborProperty]):
+        if isinstance(item, NeighborProperty):
+            item = item.name
+        return self.__dict__[item]
 
 
 def find_neighbor_size_of_atoms(atoms: Atoms,
