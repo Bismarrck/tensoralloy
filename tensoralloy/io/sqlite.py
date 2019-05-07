@@ -143,7 +143,9 @@ class CoreDatabase(SQLite3Database):
             self._write_metadata()
         return dct
 
-    def _get_neighbor_property(self, k_max: int, rc: float, prop: str,
+    def _get_neighbor_property(self,
+                               rc: float,
+                               prop: str,
                                allow_calculation=False):
         """
         A helper function to get the value of a neighbor property.
@@ -154,32 +156,32 @@ class CoreDatabase(SQLite3Database):
             * nijk_max
 
         """
-        keypath = _get_keypath(k_max, rc, prop)
-        val = nested_get(self._metadata, keypath)
-        if val is None and allow_calculation:
-            val = self.update_neighbor_meta(k_max, rc)[prop]
+        for k_max in (2, 3):
+            keypath = _get_keypath(k_max, rc, prop)
+            val = nested_get(self._metadata, keypath)
+            if val is not None:
+                return val
+        if allow_calculation:
+            val = self.update_neighbor_meta(k_max=3, rc=rc, verbose=True)
         return val
 
-    def get_nij_max(self, k_max: int, rc: float, allow_calculation=False):
+    def get_nij_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_ij_max`.
         """
-        return self._get_neighbor_property(
-            k_max, rc, 'nij_max', allow_calculation)
+        return self._get_neighbor_property(rc, 'nij_max', allow_calculation)
 
-    def get_nijk_max(self, k_max: int, rc: float, allow_calculation=False):
+    def get_nijk_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_ijk_max`.
         """
-        return self._get_neighbor_property(
-            k_max, rc, 'nijk_max', allow_calculation)
+        return self._get_neighbor_property(rc, 'nijk_max', allow_calculation)
 
-    def get_nnl_max(self, k_max: int, rc: float, allow_calculation=False):
+    def get_nnl_max(self, rc: float, allow_calculation=False):
         """
         Return the corresponding `N_nl_max`.
         """
-        return self._get_neighbor_property(
-            k_max, rc, 'nnl_max', allow_calculation)
+        return self._get_neighbor_property(rc, 'nnl_max', allow_calculation)
 
     def update_neighbor_meta(self,
                              k_max: int,

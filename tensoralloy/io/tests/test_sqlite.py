@@ -27,7 +27,7 @@ def test_find_neighbor_size_limits():
     db.update_neighbor_meta(k_max=3, rc=6.0, n_jobs=1, verbose=False)
     db.update_neighbor_meta(k_max=2, rc=6.5, n_jobs=1, verbose=False)
 
-    assert_equal(db.get_nij_max(k_max=3, rc=6.0), 358)
+    assert_equal(db.get_nij_max(rc=6.0), 358)
 
 
 def test_read():
@@ -35,8 +35,8 @@ def test_read():
     Test the function `read_neighbor_sizes`.
     """
     db = connect(join(datasets_dir(), 'snap-Ni.db'))
-    assert_equal(db.get_nij_max(k_max=2, rc=6.5), 14494)
-    assert_equal(db.get_nnl_max(k_max=2, rc=6.5), 136)
+    assert_equal(db.get_nij_max(rc=6.5), 14494)
+    assert_equal(db.get_nnl_max(rc=6.5), 136)
 
 
 if __name__ == "__main__":
