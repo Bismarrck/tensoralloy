@@ -29,8 +29,8 @@ from phonopy.units import VaspToCm
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
-from tensoralloy.analysis.phonopy import Phonopy
-from tensoralloy.analysis.phonopy import print_phonopy_version, print_phonopy
+from tensoralloy.analysis.phonon import Phonopy
+from tensoralloy.analysis.phonon import print_phonopy_version, print_phonopy
 from tensoralloy.dtypes import set_precision
 
 __author__ = 'Xin Chen'
