@@ -152,7 +152,7 @@ class InputReader:
 
         if descriptor == 'behler':
             _safe_update("nn.atomic.behler.angular")
-            _safe_update("nn.atomic.behler.cutoff")
+            _safe_update("nn.atomic.behler.cutoff_function")
             _safe_update("nn.atomic.behler.eta")
             _safe_update("nn.atomic.behler.omega")
             _safe_update("nn.atomic.behler.gamma")
@@ -172,11 +172,7 @@ class InputReader:
 
         else:
             _safe_update("nn.eam.arch")
-            _safe_update("nn.eam.setfl.nr")
-            _safe_update("nn.eam.setfl.dr")
-            _safe_update("nn.eam.setfl.nrho")
-            _safe_update("nn.eam.setfl.drho")
-            _safe_update("nn.eam.setfl.checkpoint")
+            _safe_update("nn.eam.setfl")
 
             for attr in ('constant', 'type'):
                 values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")

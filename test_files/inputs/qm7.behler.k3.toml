@@ -21,7 +21,7 @@ weight = 0.01
 
 [nn.atomic.behler]
 angular = true
-cutoff = 'polynomial'
+cutoff_function = 'polynomial'
 trainable = true
 eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]
 omega = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
