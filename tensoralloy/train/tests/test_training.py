@@ -47,9 +47,9 @@ class InitializationTest(unittest.TestCase):
         transformer = manager.dataset.transformer
         hparams = manager.hparams
 
-        assert_equal(manager.dataset.descriptor, 'behler')
+        assert_equal(manager.dataset.transformer.descriptor, 'behler')
         assert_equal(manager.dataset.test_size, 1)
-        assert_equal(manager.dataset.cutoff_radius, 6.0)
+        assert_equal(manager.dataset.transformer.rc, 6.0)
 
         assert isinstance(transformer, BatchSymmetryFunctionTransformer)
         assert_equal(transformer.trainable, True)
@@ -88,7 +88,7 @@ def test_initialize_eam_training():
     input_file = join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml')
     manager = TrainingManager(input_file)
 
-    assert_equal(manager.dataset.cutoff_radius, 6.0)
+    assert_equal(manager.dataset.transformer.rc, 6.0)
 
     nn = manager.nn
     assert isinstance(nn, EamAlloyNN)

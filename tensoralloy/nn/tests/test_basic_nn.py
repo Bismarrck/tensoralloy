@@ -20,7 +20,7 @@ from typing import List
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.eam.alloy import EamAlloyNN
@@ -197,7 +197,7 @@ def test_build_nn_with_properties():
     batch_size = 1
     db = connect(join(datasets_dir(), 'snap.db'))
     atoms = db.get_atoms(id=1)
-    nij_max, _, _ = find_neighbor_size_of_atoms(atoms, rc, k_max=2)
+    nij_max = find_neighbor_size_of_atoms(atoms, rc).nij
     max_occurs = Counter(atoms.get_chemical_symbols())
 
     def _get_transformer():

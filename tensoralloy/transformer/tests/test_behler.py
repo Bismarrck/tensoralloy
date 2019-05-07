@@ -26,7 +26,7 @@ from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.utils import get_kbody_terms, AttributeDict, Defaults
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer import SymmetryFunctionTransformer
@@ -610,9 +610,9 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     nij_max = 0
     nijk_max = 0
     for atoms in trajectory:
-        nij, nijk, _ = find_neighbor_size_of_atoms(atoms, rc, k_max)
-        nij_max = max(nij_max, nij)
-        nijk_max = max(nijk, nijk_max)
+        size = find_neighbor_size_of_atoms(atoms, rc, angular=(k_max == 3))
+        nij_max = max(nij_max, size.nij)
+        nijk_max = max(size.nijk, nijk_max)
     return nij_max, nijk_max
 
 

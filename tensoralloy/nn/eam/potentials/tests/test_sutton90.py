@@ -20,7 +20,7 @@ from nose import with_setup
 
 from tensoralloy.transformer import BatchEAMTransformer, EAMTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.utils import AttributeDict
 from tensoralloy.test_utils import test_dir
 
@@ -67,7 +67,7 @@ def test_eam_sutton90_batch_transformer():
     """
     ref = bulk('Ag') * [2, 2, 2]
     rc = 11.999
-    nij_max, _, nnl_max = find_neighbor_size_of_atoms(ref, rc=rc, k_max=2)
+    size = find_neighbor_size_of_atoms(ref, rc=rc)
     max_occurs = Counter(ref.get_chemical_symbols())
 
     lammps = get_lammps_calculator()
@@ -76,8 +76,10 @@ def test_eam_sutton90_batch_transformer():
 
     with tf.Graph().as_default():
 
-        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
-                                  nnl_max=nnl_max)
+        clf = BatchEAMTransformer(rc=rc,
+                                  max_occurs=max_occurs,
+                                  nij_max=size.nij,
+                                  nnl_max=size.nnl)
 
         protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
         example = clf.decode_protobuf(protobuf)

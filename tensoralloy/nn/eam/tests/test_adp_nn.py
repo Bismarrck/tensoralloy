@@ -15,7 +15,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from nose.tools import assert_equal
 from collections import Counter
 
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.transformer.adp import AdpTransformer, BatchAdpTransformer
 from tensoralloy.test_utils import test_dir
@@ -64,11 +64,14 @@ def test_dynamic_partition():
     with tf.Graph().as_default():
         nn = AdpNN(elements=elements)
 
-        nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc, k_max=2)
+        size = find_neighbor_size_of_atoms(atoms, rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
 
-        adp = BatchAdpTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij,
-                                  nnl_max=nnl, batch_size=1)
+        adp = BatchAdpTransformer(rc=rc,
+                                  max_occurs=max_occurs,
+                                  nij_max=size.nij,
+                                  nnl_max=size.nnl,
+                                  batch_size=1)
 
         protobuf = tf.convert_to_tensor(adp.encode(atoms).SerializeToString())
         example = adp.decode_protobuf(protobuf)

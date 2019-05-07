@@ -29,7 +29,7 @@ from ase.units import GPa
 from ase.io import read
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer import EAMTransformer, BatchEAMTransformer
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
@@ -673,10 +673,12 @@ def test_batch_stress():
 
 
     with tf.Graph().as_default():
-        nij_max, _, nnl_max = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
+        size = find_neighbor_size_of_atoms(atoms, rc=rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
-        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
-                                  nnl_max=nnl_max, batch_size=1,
+        clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs,
+                                  nij_max=size.nij,
+                                  nnl_max=size.nnl,
+                                  batch_size=1,
                                   use_forces=True, use_stress=True)
         protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
         example = clf.decode_protobuf(protobuf)

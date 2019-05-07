@@ -8,14 +8,13 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from ase.db import connect
 from ase.atoms import Atoms
 from ase.neighborlist import neighbor_list
 from collections import Counter
 from os.path import join
 
-from tensoralloy.io.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.io.neighbor import find_neighbor_size_maximums
+from tensoralloy.io.db import connect
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
@@ -69,8 +68,8 @@ def test_eam_transformer():
     rc = 6.5
     elements = ['C', 'H']
     max_occurs = Counter({'C': 2, 'H': 6})
-    nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
-    ref = eam(atoms, max_occurs, nnl=nnl, rc=rc)
+    size = find_neighbor_size_of_atoms(atoms, rc=rc)
+    ref = eam(atoms, max_occurs, nnl=size.nnl, rc=rc)
 
     with set_precision('high'):
         with tf.Graph().as_default():
@@ -98,9 +97,9 @@ def test_batch_eam_transformer():
     atoms = db.get_atoms('id=1')
     rc = 6.5
     max_occurs = Counter({'C': 2, 'H': 4})
-    nij, _, nnl = find_neighbor_size_of_atoms(atoms, rc=rc, k_max=2)
-    nij_max = nij + 10
-    nnl_max = nnl + 2
+    size = find_neighbor_size_of_atoms(atoms, rc=rc)
+    nij_max = size.nij + 10
+    nnl_max = size.nnl + 2
     ref = eam(atoms, max_occurs, nnl=nnl_max, rc=rc)
 
     with set_precision('high'):
@@ -140,12 +139,8 @@ def test_encode_atoms():
     max_occurs = Counter({'Ni': len(atoms) + 1})
     rc = 6.0
 
-    try:
-        nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
-    except KeyError:
-        find_neighbor_size_maximums(db, rc, k_max=2, verbose=False)
-        nij_max = db.metadata['neighbors']['2']['6.00']['nij_max']
-    nnl_max = db.metadata['neighbors']['2']['6.00']['nnl_max']
+    nij_max = db.get_nij_max(rc, allow_calculation=True)
+    nnl_max = db.get_nnl_max(rc)
 
     with set_precision('high'):
         with tf.Graph().as_default():

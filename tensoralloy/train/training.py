@@ -11,18 +11,20 @@ import platform
 import logging
 
 from os.path import join, exists, dirname, basename, realpath
-from ase.db import connect
 from typing import Union
 from tensorflow.python import debug as tf_debug
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
+from tensoralloy.io.db import connect
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters
+from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.dtypes import set_precision
@@ -213,18 +215,41 @@ class TrainingManager:
         """
         Initialize a `Dataset` using the configs of the input file.
         """
-        descriptor = self._reader['dataset.descriptor']
         database = connect(self._reader['dataset.sqlite3'])
-        name = self._reader['dataset.name']
+
+        descriptor = self._reader['dataset.descriptor']
+
         rc = self._reader['dataset.rc']
-        serial = self._reader['dataset.serial']
+        max_occurs = database.max_occurs
+        nij_max = database.get_nij_max(rc, allow_calculation=True)
 
         if descriptor == 'behler':
-            kwargs = self._reader['nn.atomic.behler']
+            if self._reader['nn.atomic.behler.angular']:
+                nijk_max = database.get_nijk_max(rc, allow_calculation=True)
+            else:
+                nijk_max = 0
+            clf = BatchSymmetryFunctionTransformer(
+                rc=rc,
+                max_occurs=max_occurs,
+                nij_max=nij_max,
+                nijk_max=nijk_max,
+                use_stress=database.has_stress,
+                use_forces=database.has_forces,
+                **self._reader['nn.atomic.behler'])
         else:
-            kwargs = {}
-        dataset = Dataset(database=database, descriptor=descriptor,
-                          name=name, rc=rc, serial=serial, **kwargs)
+            nnl_max = database.get_nnl_max(rc, allow_calculation=True)
+            clf = BatchEAMTransformer(
+                rc=rc,
+                max_occurs=max_occurs,
+                nij_max=nij_max,
+                nnl_max=nnl_max,
+                use_forces=database.has_forces,
+                use_stress=database.has_stress)
+
+        name = self._reader['dataset.name']
+        serial = self._reader['dataset.serial']
+        dataset = Dataset(database=database, transformer=clf,
+                          name=name, serial=serial)
 
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
