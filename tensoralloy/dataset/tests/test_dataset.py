@@ -9,7 +9,6 @@ import numpy as np
 import nose
 
 from tensorflow_estimator import estimator as tf_estimator
-from ase.db import connect
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
 from os.path import join
@@ -21,6 +20,7 @@ from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import qm7m, test_dir
 from tensoralloy.dtypes import set_precision, get_float_dtype
 from tensoralloy.io.read import read_file
+from tensoralloy.io.db import connect
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -50,37 +50,54 @@ def test_qm7m():
     """
     Test the qm7m dataset for energy only and k_max = 2.
     """
-    ref = qm7m_compute()
 
-    with tf.Graph().as_default():
+    with set_precision("high"):
 
-        savedir = join(test_dir(), 'qm7m')
-        database = connect(join(savedir, 'qm7m.db'))
-        dataset = Dataset(database, 'qm7m', angular=False, serial=True)
+        ref = qm7m_compute()
 
-        assert_equal(len(dataset), 3)
-        assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
+        with tf.Graph().as_default():
 
-        dataset.to_records(savedir, test_size=0.33)
-        assert_true(dataset.load_tfrecords(savedir))
+            savedir = join(test_dir(), 'qm7m')
 
-        # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
-        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.EVAL,
-                                        batch_size=1,
-                                        num_epochs=1,
-                                        shuffle=False)
 
-        with tf.Session() as sess:
+            database = connect(join(savedir, 'qm7m.db'))
 
-            res = sess.run(next_batch)
-            eps = 1e-8
+            rc = Defaults.rc
+            nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-            assert_equal(len(res.keys()), 15)
-            assert_less(np.abs(res.positions[0] - ref.positions[0]).max(), eps)
-            assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
-            assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
-            assert_less(np.abs(res.rv2g[0] - ref.g2[0].v2g_map).max(), eps)
-            assert_equal(res.y_conf[0], 1.0)
+            clf = BatchSymmetryFunctionTransformer(
+                rc=rc,
+                max_occurs=database.max_occurs,
+                nij_max=nij_max,
+                nijk_max=0,
+                angular=False)
+
+            dataset = Dataset(
+                database, name='qm7m', transformer=clf, serial=True)
+
+            assert_equal(len(dataset), 3)
+            assert_dict_equal(dataset.max_occurs, {'C': 5, 'H': 8, 'O': 2})
+
+            dataset.to_records(savedir, test_size=0.33)
+            assert_true(dataset.load_tfrecords(savedir))
+
+            # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
+            next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.EVAL,
+                                            batch_size=1,
+                                            num_epochs=1,
+                                            shuffle=False)
+
+            with tf.Session() as sess:
+                res = sess.run(next_batch)
+                eps = 1e-8
+
+                assert_equal(len(res.keys()), 15)
+                assert_less(
+                    np.abs(res.positions[0] - ref.positions[0]).max(), eps)
+                assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
+                assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
+                assert_less(np.abs(res.rv2g[0] - ref.g2[0].v2g_map).max(), eps)
+                assert_equal(res.y_conf[0], 1.0)
 
 
 def test_ethanol():
@@ -92,11 +109,20 @@ def test_ethanol():
 
             savedir = join(test_dir(), 'ethanol')
             database = connect(join(savedir, 'ethanol.db'))
-            dataset = Dataset(database, 'ethanol', descriptor='behler',
-                              serial=False, angular=True)
+
+            rc = Defaults.rc
+            nijk_max = database.get_nijk_max(rc, allow_calculation=True)
+            nij_max = database.get_nij_max(rc)
+            clf = BatchSymmetryFunctionTransformer(
+                rc=rc, max_occurs=database.max_occurs, nij_max=nij_max,
+                nijk_max=nijk_max, angular=True
+            )
+
+            dataset = Dataset(
+                database, name='ethanol', transformer=clf, serial=False)
 
             assert_equal(len(dataset), 10)
-            assert_true(dataset.use_forces)
+            assert_true(dataset.has_forces)
 
             dataset.to_records(savedir, test_size=0.5)
             assert_true(dataset.load_tfrecords(savedir))
@@ -132,41 +158,51 @@ def test_nickel():
     """
     Test the nickel dataset for stress.
     """
-    with tf.Graph().as_default():
+    with set_precision("high"):
+        with tf.Graph().as_default():
 
-        savedir = join(test_dir(), 'Ni')
-        database = read_file(join(savedir, "Ni.extxyz"), verbose=False)
-        dataset = Dataset(database, 'Ni', angular=False, serial=True)
+            savedir = join(test_dir(), 'Ni')
+            database = read_file(join(savedir, "Ni.extxyz"), verbose=False)
 
-        assert_equal(len(dataset), 2)
-        assert_true(dataset.use_stress)
+            rc = Defaults.rc
+            nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-        dataset.to_records(savedir, test_size=1)
-        assert_true(dataset.load_tfrecords(savedir))
+            clf = BatchSymmetryFunctionTransformer(
+                rc=rc, max_occurs=database.max_occurs, nij_max=nij_max,
+                nijk_max=0, angular=False
+            )
 
-        next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
-                                        batch_size=1,
-                                        num_epochs=1,
-                                        shuffle=False)
+            dataset = Dataset(database, 'Ni', transformer=clf, serial=True)
 
-        with tf.Session() as sess:
+            assert_equal(len(dataset), 2)
+            assert_true(dataset.has_stress)
 
-            result = sess.run(next_batch)
-            eps = 1e-5
+            dataset.to_records(savedir, test_size=1)
+            assert_true(dataset.load_tfrecords(savedir))
 
-            # These are raw VASP output. The unit is '-eV', `-stress * volume`.
-            xx, yy, zz, xy, yz, xz = \
-                -0.35196, -0.24978, -0.24978, 0.13262, -0.00305, 0.13262,
-            volume = result.volume
-            stress = np.asarray([-xx, -yy, -zz, -yz, -xz, -xy]) / volume
-            total_pressure = -(xx + yy + zz) / 3.0 / volume
+            next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.TRAIN,
+                                            batch_size=1,
+                                            num_epochs=1,
+                                            shuffle=False)
 
-            assert_less(np.abs(result.stress[0] - stress).max(), eps)
-            assert_less(result.total_pressure[0] - total_pressure, eps)
+            with tf.Session() as sess:
 
-            assert_equal(result.y_conf[0], 0.0)
-            assert_equal(result.f_conf[0], 1.0)
-            assert_equal(result.s_conf[0], 0.5)
+                result = sess.run(next_batch)
+                eps = 1e-5
+
+                # These are raw VASP output in '-eV' (-stress * volume).
+                xx, yy, zz, xy, yz, xz = \
+                    -0.35196, -0.24978, -0.24978, 0.13262, -0.00305, 0.13262,
+                volume = result.volume
+                stress = np.asarray([-xx, -yy, -zz, -yz, -xz, -xy]) / volume
+                total_pressure = -(xx + yy + zz) / 3.0 / volume
+
+                assert_less(np.abs(result.stress[0] - stress).max(), eps)
+                assert_less(result.total_pressure[0] - total_pressure, eps)
+
+                assert_equal(result.y_conf[0], 0.0)
+                assert_equal(result.f_conf[0], 1.0)
+                assert_equal(result.s_conf[0], 0.5)
 
 
 if __name__ == "__main__":

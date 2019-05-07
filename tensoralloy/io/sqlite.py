@@ -157,7 +157,7 @@ class CoreDatabase(SQLite3Database):
             * nijk_max
 
         """
-        for k_max in (2, 3):
+        for k_max in (3, 2):
             keypath = _get_keypath(k_max, rc, prop)
             val = nested_get(self._metadata, keypath)
             if val is not None:
@@ -202,7 +202,7 @@ class CoreDatabase(SQLite3Database):
         def _find(aid):
             nl = find_neighbor_size_of_atoms(
                 self.get_atoms(f'id={aid}'), rc, angular=angular)
-            return nl.nnl, nl.nij, nl.nijk
+            return nl
 
         if angular:
             cond = 'enabled'
@@ -224,26 +224,34 @@ class CoreDatabase(SQLite3Database):
             delayed(_find)(job_id)
             for job_id in range(1, 1 + size)
         )
-        values = np.asarray(results, dtype=int).max(axis=0).tolist()
+        maxvals = NeighborSize(**{
+            prop.name: max(map(lambda x: x[prop], results))
+            for prop in NeighborProperty
+        })
 
         # noinspection PyTypeChecker
-        for i, prop in enumerate(NeighborProperty):
-            nested_set(self._metadata, _get_keypath(k_max, rc, prop), values[i])
+        for prop in NeighborProperty:
+            nested_set(self._metadata,
+                       _get_keypath(k_max, rc, prop),
+                       new_val=maxvals[prop])
             if angular:
                 if prop == NeighborProperty.nijk:
                     val = 0
                 else:
-                    val = values[i]
+                    val = maxvals[prop]
                 nested_set(self._metadata,
                            _get_keypath(k_max=2, rc=rc, prop=prop),
-                           val)
+                           new_val=val)
         self._write_metadata()
 
         if verbose:
-            print(f'All {self} jobs are done. nij_max = {values[0]}, '
-                  f'nijk_max = {values[1]}, nnl_max = {values[2]}')
+            print('All {} jobs are done. nij_max = {}, nijk_max = {}, '
+                  'nnl_max = {}'.format(size,
+                                        maxvals.nij,
+                                        maxvals.nijk,
+                                        maxvals.nnl))
 
-        return NeighborSize(nij=values[0], nijk=values[1], nnl=values[2])
+        return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk, nnl=maxvals.nnl)
 
 
 def _compute_atomic_static_energy(database: SQLite3Database,
