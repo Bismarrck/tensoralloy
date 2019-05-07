@@ -245,6 +245,13 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                                             use_stress=use_stress)
 
     @property
+    def descriptor(self):
+        """
+        Return the name of the descriptor.
+        """
+        return "eam"
+
+    @property
     def batch_size(self):
         """
         Return the batch size.

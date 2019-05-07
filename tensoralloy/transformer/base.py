@@ -245,11 +245,42 @@ class BatchDescriptorTransformer(BaseTransformer):
         self._use_stress = use_stress
 
     @property
+    @abc.abstractmethod
+    def descriptor(self):
+        """
+        Return the name of the descriptor.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def k_max(self):
+        """
+        Return the k-max.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def rc(self):
+        """
+        Return the cutoff radius.
+        """
+        pass
+
+    @property
     def use_forces(self):
         """
         Return True if atomic forces should be encoded and trained.
         """
         return self._use_forces
+
+    @use_forces.setter
+    def use_forces(self, flag: bool):
+        """
+        The setter function of the property `use_stress`.
+        """
+        self._use_forces = flag
 
     @property
     def use_stress(self):
@@ -257,6 +288,13 @@ class BatchDescriptorTransformer(BaseTransformer):
         Return True if the stress tensor should be encoded and trained.
         """
         return self._use_stress
+
+    @use_stress.setter
+    def use_stress(self, flag: bool):
+        """
+        The setter function of the property `use_stress`.
+        """
+        self._use_stress = flag
 
     @property
     @abc.abstractmethod

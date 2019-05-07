@@ -382,6 +382,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                                             use_stress=use_stress)
 
     @property
+    def descriptor(self):
+        """
+        Return the name of the descriptor.
+        """
+        return "behler"
+
+    @property
     def batch_size(self):
         """
         Return the batch size.

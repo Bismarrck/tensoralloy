@@ -44,3 +44,10 @@ class BatchAdpTransformer(BatchEAMTransformer):
             batch_size=batch_size, use_forces=use_forces, use_stress=use_stress
         )
         self._graph_scope_name = "ADP"
+
+    @property
+    def descriptor(self):
+        """
+        Return the name of the descriptor.
+        """
+        return "adp"
