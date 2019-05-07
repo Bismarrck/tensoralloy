@@ -8,14 +8,10 @@ import numpy as np
 import nose
 
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
-from ase.db import connect
-from os.path import join
 
-from tensoralloy.test_utils import test_dir
 from tensoralloy.utils import cantor_pairing
 from tensoralloy.utils import nested_get, nested_set
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import find_neighbor_size_of_atoms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -122,25 +118,6 @@ def test_get_kbody_terms():
                                     'C': ['CC', 'CA', 'CB',
                                           'CAA', 'CAB', 'CAC',
                                           'CBB', 'CBC', 'CCC']})
-
-
-def test_find_sizes():
-    """
-    Test the function `_find_sizes`.
-    """
-    db = connect(join(test_dir(), 'qm7m', 'qm7m.db'))
-
-    atoms = db.get_atoms('id=2')
-    nij, nijk, nnl = find_neighbor_size_of_atoms(atoms, 6.5, angular=False)
-    assert_equal(nij, 20)
-    assert_equal(nijk, 0)
-    assert_equal(nnl, 4)
-
-    atoms = db.get_atoms('id=3')
-    nij, nijk, nnl = find_neighbor_size_of_atoms(atoms, 6.5, angular=True)
-    assert_equal(nij, 56)
-    assert_equal(nijk, 168)
-    assert_equal(nnl, 6)
 
 
 if __name__ == "__main__":

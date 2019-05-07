@@ -4,8 +4,6 @@ This module defines utility functions.
 """
 from __future__ import print_function, absolute_import
 
-from collections import Counter
-
 import numpy as np
 import logging
 
@@ -16,8 +14,6 @@ from os.path import dirname
 from itertools import chain
 from logging.config import dictConfig
 from typing import List, Dict, Tuple, Union, Any
-
-from ase.neighborlist import neighbor_list
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -321,52 +317,3 @@ def nested_set(d: dict, nested_keys: Union[str, List[str]], new_val):
             if key not in obj:
                 obj[key] = {}
             obj = obj[key]
-
-
-def find_neighbor_size_of_atoms(atoms: Atoms, rc: float, angular=False):
-    """
-    A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
-
-    Parameters
-    ----------
-    atoms : Atoms
-        The target `Atoms` object.
-    rc : float
-        The cutoff radius.
-    angular : bool
-        If True, `nijk` will also be calculated.
-
-    Returns
-    -------
-    nij : int
-        The total number of atom-atom pairs within `rc`.
-    nijk : int
-        The total number of triples within `rc` or zero if `angular` is False.
-    nnl : int
-        Each atom has `num_a` A-type neighbors, `num_b` B-type neigbors, etc.
-        `nnl` is the maximum of all {num_a}, {num_B}, etc.
-
-    """
-    ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
-    nij = len(ilist)
-    numbers = atoms.numbers
-    nnl = 0
-    for i in range(len(atoms)):
-        indices = np.where(ilist == i)[0]
-        ii = numbers[ilist[indices]]
-        ij = numbers[jlist[indices]]
-        if len(ii) > 0:
-            nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
-    if angular:
-        nl = {}
-        for i, atomi in enumerate(ilist):
-            if atomi not in nl:
-                nl[atomi] = []
-            nl[atomi].append(jlist[i])
-        nijk = 0
-        for atomi, nlist in nl.items():
-            n = len(nlist)
-            nijk += (n - 1 + 1) * (n - 1) // 2
-    else:
-        nijk = 0
-    return nij, nijk, nnl
