@@ -21,7 +21,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def get_lattice_type(cryst):
+def get_lattice_type(cryst, symprec=1e-5):
     """
     Find the symmetry of the crystal using spglib symmetry finder.
 
@@ -36,6 +36,8 @@ def get_lattice_type(cryst):
     ----------
     cryst: Atoms
         The target crystal structure.
+    symprec : float
+        The precision for finding the symmetry.
 
     Returns
     -------
@@ -60,7 +62,7 @@ def get_lattice_type(cryst):
         [231, "Cubic"]
     ]
 
-    sg = spg.get_spacegroup(cryst)
+    sg = spg.get_spacegroup(cryst, symprec=symprec)
     m = re.match(r'([A-Z].*\b)\s*\(([0-9]*)\)', sg)
     sg_name = m.group(1)
     sg_nr = int(m.group(2))
