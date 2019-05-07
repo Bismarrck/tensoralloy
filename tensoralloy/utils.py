@@ -323,33 +323,41 @@ def nested_set(d: dict, nested_keys: Union[str, List[str]], new_val):
             obj = obj[key]
 
 
-def find_neighbor_size_of_atoms(atoms, rc, k_max):
+def find_neighbor_size_of_atoms(atoms: Atoms, rc: float, angular=False):
     """
     A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        The target `Atoms` object.
+    rc : float
+        The cutoff radius.
+    angular : bool
+        If True, `nijk` will also be calculated.
+
+    Returns
+    -------
+    nij : int
+        The total number of atom-atom pairs within `rc`.
+    nijk : int
+        The total number of triples within `rc` or zero if `angular` is False.
+    nnl : int
+        Each atom has `num_a` A-type neighbors, `num_b` B-type neigbors, etc.
+        `nnl` is the maximum of all {num_a}, {num_B}, etc.
+
     """
     ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
-    if k_max >= 2:
-        nij = len(ilist)
-    else:
-        numbers = atoms.numbers
-        uniques = list(set(numbers))
-        inlist = numbers[ilist]
-        jnlist = numbers[jlist]
-        counter = Counter(cantor_pairing(inlist, jnlist))
-        nij = sum([counter[x] for x in cantor_pairing(uniques, uniques)])
+    nij = len(ilist)
     numbers = atoms.numbers
     nnl = 0
     for i in range(len(atoms)):
         indices = np.where(ilist == i)[0]
         ii = numbers[ilist[indices]]
         ij = numbers[jlist[indices]]
-        if k_max == 1:
-            indices = np.where(ii == ij)[0]
-            ii = ii[indices]
-            ij = ij[indices]
         if len(ii) > 0:
             nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
-    if k_max == 3:
+    if angular:
         nl = {}
         for i, atomi in enumerate(ilist):
             if atomi not in nl:
