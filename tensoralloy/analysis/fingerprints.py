@@ -8,10 +8,11 @@ The code is (probably) written by Lasse B. Vilhelmsen.
 from __future__ import print_function
 
 import numpy as np
+
 from itertools import product, combinations_with_replacement
-from math import erf
-from cmath import sqrt
+from math import erf, sqrt
 from copy import copy
+from typing import Union, List
 
 
 class FingerprintsComparator:
@@ -30,50 +31,58 @@ class FingerprintsComparator:
 
     """
 
-    def __init__(self, atoms, n_top=None, cell=None, dE=1.0,
-                 cos_dist_max=5e-3, rcut=20., binwidth=0.05,
+    def __init__(self, atomic_numbers: Union[List[int], np.ndarray], n_top=None,
+                 cell=None, dE=1.0, cos_dist_max=5e-3, rcut=20., binwidth=0.05,
                  pbc=(True, True, True), maxdims=(0, 0, 0), sigma=0.025,
                  nsigma=4):
         """
+        Initialization method.
 
-        Arguments:
-
-        n_top = number of atoms to optimize (everything except the substrate).
-
-        dE: energy difference above which two structures are automatically
+        Parameters
+        ----------
+        atomic_numbers : array_like
+            The ordered atomic numbers of ths system.
+        n_top : int
+            The number of atoms to optimize (everything except the substrate).
+        dE : float
+            Energy difference above which two structures are automatically
             considered to be different.
+        cell : np.ndarray
+            The base cell matrix to use.
+        cos_dist_max : float
+            The maximal cosine distance between two structures in order to
+            be still considered the same structure.
+        rcut : float
+            The cut-off radius for the fingerprints.
+        binwidth : float
+            Width of the bins over which the fingerprints are discretized.
+        pbc: List[bool]
+            Conditions (PBC) along each of the three unit cell vectors
+            when calculating the fingerprint.
 
-        cos_dist_max: maximal cosine distance between two structures in order to
-                      be still considered the same structure.
+            Note: for isolated systems (pbc = [False,False,False]), the pair
+            correlation function itself is always short-ranged (i.e. decays to
+            zero beyond a certain radius), so unity is not substracted for
+            calculating the fingerprint. Also the volume normalization
+            disappears.
+        maxdims : List[int] or array_like
+            If PBC in only 1 or 2 dimensions are specified, the maximal
+            thicknesses along the non-periodic directions must be specified, as
+            a list of length 3 (the values for the periodic directions are not
+            read).
 
-        rcut: cut-off radius for the fingerprints.
+            Note: in this implementation, the cell vectors of the non-
+            periodic directions are assumed to be orthogonal amongst
+            themselves and also orthogonal to the cell vectors of the
+            periodic directions.
+        sigma : float
+            Standard deviation of the gaussian smearing to be applied in the
+            calculation of the fingerprints (in Angstrom).
+        nsigma : int
+            The distance (as the number of standard deviations sigma) at which
+            the gaussian smearing is cut off (i.e. no smearing beyond that
+            distance).
 
-        binwidth: width of the bins over which the fingerprints are discretized.
-
-        pbc: list of booleans specifying whether to apply periodic boundary
-             conditions (PBC) along each of the three unit cell vectors
-             when calculating the fingerprint.
-             Note: for isolated systems (pbc = [False,False,False]), the pair
-             correlation function itself is always short-ranged (i.e. decays to
-             zero beyond a certain radius), so unity is not substracted for
-             calculating the fingerprint. Also the volume normalization
-             disappears.
-
-        maxdims: If PBC in only 1 or 2 dimensions are specified, the maximal
-                 thicknesses along the non-periodic directions must be
-                 specified, as a list of length 3 (the values for the periodic
-                 directions are not read).
-                 Note: in this implementation, the cell vectors of the non-
-                 periodic directions are assumed to be orthogonal amongst
-                 themselves and also orthogonal to the cell vectors of the
-                 periodic directions.
-
-        sigma: standard deviation of the gaussian smearing to be applied in the
-               calculation of the fingerprints (in Angstrom).
-
-        nsigma: the distance (as the number of standard deviations sigma) at
-                which the gaussian smearing is cut off (i.e. no smearing beyond
-                that distance).
         """
 
         if cell is None:
@@ -133,11 +142,11 @@ class FingerprintsComparator:
         elif self.dimensions == 0:
             self.volume = 1.
 
-        num = atoms.get_atomic_numbers()
-        unique_types = sorted(list(set(num)))  # the unique atomic numbers
+        # Find the unique atomic numbers
+        unique_types = sorted(list(set(atomic_numbers)))
         self.typedic = {}
         for t in unique_types:
-            tlist = [i for i, atom in enumerate(atoms) if atom.number == t]
+            tlist = [i for i, ni in enumerate(atomic_numbers) if ni == t]
             self.typedic[t] = tlist
 
     def looks_like(self, a1, a2):
@@ -496,18 +505,25 @@ class FingerprintsComparator:
         return motifs
 
 
-def demo():
+def usage_demo():
     """
     A simple demo of `FingerprintsComparator`.
     """
     from ase.io import read
+    from os.path import join
+    from tensoralloy.test_utils import test_dir
 
-    a, b = read('../test_files/B28.xyz', format='xyz', index='0:2')
+    a, b = read(join(test_dir(), 'B28.xyz'), format='xyz', index='0:2')
     a.cell = np.eye(3) * 20.0
     b.cell = np.eye(3) * 20.0
 
     comparator = FingerprintsComparator(
-        a, n_top=len(a), cell=a.cell, rcut=6.0, binwidth=0.02)
+        a.numbers,
+        n_top=len(a),
+        cell=a.cell,
+        rcut=6.0,
+        binwidth=0.02,
+        pbc=[False] * 3)
 
     fa = comparator.get_features(a)
     fb = comparator.get_features(b)
@@ -515,4 +531,4 @@ def demo():
 
 
 if __name__ == "__main__":
-    demo()
+    usage_demo()
