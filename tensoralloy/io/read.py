@@ -12,7 +12,8 @@ from collections import Counter
 from os.path import splitext
 from ase.io.extxyz import read_xyz
 
-from tensoralloy.io.sqlite import connect, CoreDatabase
+from tensoralloy.io.sqlite import CoreDatabase
+from tensoralloy.io.db import connect
 from tensoralloy.io.units import get_conversion_units
 
 __author__ = 'Xin Chen'

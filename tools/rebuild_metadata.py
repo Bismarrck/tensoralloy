@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 from os.path import join
 
-from tensoralloy.io.sqlite import connect
+from tensoralloy.io.db import connect
 from tensoralloy.test_utils import datasets_dir
 
 __author__ = 'Xin Chen'

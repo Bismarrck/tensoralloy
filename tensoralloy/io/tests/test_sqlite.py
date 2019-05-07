@@ -9,7 +9,7 @@ import nose
 from nose.tools import assert_equal
 from os.path import join
 
-from tensoralloy.io.sqlite import connect
+from tensoralloy.io.db import connect
 from tensoralloy.io.read import read_file
 from tensoralloy.test_utils import test_dir, datasets_dir
 

@@ -6,16 +6,11 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import json
-import os
 
 from ase.db.sqlite import SQLite3Database
-from ase.db import connect as ase_connect
-from ase.utils import PurePath
-from ase.parallel import world
 from joblib import Parallel, delayed
 from collections import Counter
 from typing import Dict, List
-from os.path import splitext
 
 from tensoralloy.utils import nested_get, nested_set
 from tensoralloy.utils import find_neighbor_size_of_atoms
@@ -23,7 +18,7 @@ from tensoralloy.utils import find_neighbor_size_of_atoms
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["connect", "CoreDatabase"]
+__all__ = ["CoreDatabase"]
 
 
 def _get_keypath(k_max: int, rc: float, prop: str):
@@ -32,57 +27,6 @@ def _get_keypath(k_max: int, rc: float, prop: str):
     """
     pm = '{:.0f}'.format(rc * 100.0)
     return f"neighbors.{k_max}.{pm}.{prop}"
-
-
-def connect(name, use_lock_file=True, append=True, serial=False):
-    """
-    Create connection to database.
-
-    Parameters
-    ----------
-    name: str
-        Filename or address of database.
-    use_lock_file: bool
-        You can turn this off if you know what you are doing ...
-    append: bool
-        Use append=False to start a new database.
-    serial : bool
-        Let someone else handle parallelization.  Default behavior is to
-        interact with the database on the master only and then distribute
-        results to all slaves.
-
-    """
-    if isinstance(name, PurePath):
-        name = str(name)
-
-    if not append and world.rank == 0:
-        if isinstance(name, str) and os.path.isfile(name):
-            os.remove(name)
-
-    if name is None:
-        db_type = None
-    elif not isinstance(name, str):
-        db_type = 'json'
-    elif (name.startswith('postgresql://') or
-          name.startswith('postgres://')):
-        db_type = 'postgresql'
-    else:
-        db_type = splitext(name)[1][1:]
-        if db_type == '':
-            raise ValueError('No file extension or database type given')
-
-    if db_type == 'db':
-        return CoreDatabase(name,
-                            create_indices=True,
-                            use_lock_file=use_lock_file,
-                            serial=serial)
-    else:
-        return ase_connect(name,
-                           type=db_type,
-                           create_indices=True,
-                           use_lock_file=use_lock_file,
-                           append=append,
-                           serial=serial)
 
 
 class CoreDatabase(SQLite3Database):
