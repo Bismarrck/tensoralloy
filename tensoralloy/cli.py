@@ -14,6 +14,9 @@ import re
 import os
 
 from ase.units import GPa
+from ase.eos import EquationOfState
+from ase.io import read
+from ase.build import bulk
 from os.path import exists, dirname, join, basename, splitext
 from tensorflow_estimator import estimator as tf_estimator
 
@@ -23,7 +26,7 @@ from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
 from tensoralloy.utils import Defaults
 from tensoralloy.dtypes import set_precision
-
+from tensoralloy.calculator import TensorAlloyCalculator
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -559,6 +562,106 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
         return func
 
 
+class EquationOfStateProgram(CLIProgram):
+    """
+    A program to compute EOS of a crystal.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this program.
+        """
+        return "eos"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Compute the Equation of State of a crystal with a graph model."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'crystal',
+            type=str,
+            help="The name or filename of the target crystal."
+        )
+        subparser.add_argument(
+            'graph_model_path',
+            type=str,
+            help="The graph model file to use."
+        )
+        subparser.add_argument(
+            '--eos',
+            type=str,
+            default="birchmurnaghan",
+            choices=['birchmurnaghan', 'birch', 'murnaghan', 'sj',
+                     'pouriertarantola', 'vinet', 'p3', 'taylor',
+                     'antonschmidt'],
+            help="The equation to use.",
+        )
+        subparser.add_argument(
+            '--fig',
+            type=str,
+            default=None,
+            help="The output volume-energy figure."
+        )
+
+        super(EquationOfStateProgram, self).config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function.
+        """
+        def func(args: argparse.Namespace):
+            calc = TensorAlloyCalculator(args.graph_model_path)
+
+            try:
+                crystal = bulk(args.crystal)
+            except Exception:
+                try:
+                    crystal = read(args.crystal, index=0)
+                except Exception:
+                    raise ValueError("")
+            crystal.calc = calc
+            cell = crystal.cell.copy()
+
+            if args.fig is None:
+                work_dir = "."
+                filename = join(work_dir, "eos.png")
+            else:
+                work_dir = dirname(args.fig)
+                filename = args.fig
+                if not exists(work_dir):
+                    os.makedirs(work_dir)
+
+            volumes = []
+            energies = []
+            for x in np.linspace(0.95, 1.05, num=21, endpoint=True):
+                crystal.set_cell(cell * x, scale_atoms=True)
+                volumes.append(crystal.get_volume())
+                energies.append(crystal.get_potential_energy())
+
+            eos = EquationOfState(volumes, energies, eos=args.eos)
+            v0, e0, bulk_moduli = eos.fit()
+            eos.plot(filename, show=False)
+
+            print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
+                crystal.get_chemical_formula(),
+                args.eos,
+                v0, e0, bulk_moduli / GPa))
+            np.set_printoptions(precision=3, suppress=True)
+            print("New cell: ")
+            print((v0 / np.linalg.det(cell))**(1.0/3.0) * cell)
+
+        return func
+
+
 def main():
     """
     The main function.
@@ -575,7 +678,8 @@ def main():
                  ExportModelProgram(),
                  StopExperimentProgram(),
                  PrintEvaluationSummaryProgram(),
-                 ComputeEvaluationPercentileProgram()):
+                 ComputeEvaluationPercentileProgram(),
+                 EquationOfStateProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
