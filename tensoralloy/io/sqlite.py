@@ -162,7 +162,7 @@ class CoreDatabase(SQLite3Database):
             if val is not None:
                 return val
         if allow_calculation:
-            val = self.update_neighbor_meta(k_max=3, rc=rc, verbose=True)
+            val = self.update_neighbor_meta(rc=rc, angular=True, verbose=True)
         return val
 
     def get_nij_max(self, rc: float, allow_calculation=False):
@@ -184,8 +184,8 @@ class CoreDatabase(SQLite3Database):
         return self._get_neighbor_property(rc, 'nnl_max', allow_calculation)
 
     def update_neighbor_meta(self,
-                             k_max: int,
                              rc: float,
+                             angular=False,
                              n_jobs=-1,
                              verbose=False) -> Dict[str, int]:
         """
@@ -193,11 +193,18 @@ class CoreDatabase(SQLite3Database):
         """
         def _find(aid):
             return find_neighbor_size_of_atoms(
-                self.get_atoms(f'id={aid}'), rc, k_max)
+                self.get_atoms(f'id={aid}'), rc, angular=angular)
+
+        if angular:
+            cond = 'enabled'
+            k_max = 3
+        else:
+            cond = 'disabled'
+            k_max = 2
 
         if verbose:
-            print('Start finding neighbors for rc = {} and k_max = {}. This '
-                  'may take a very long time.'.format(rc, k_max))
+            print('Start finding neighbors for rc = {} and angular {}. This '
+                  'may take a very long time.'.format(rc, cond))
             verb = 5
         else:
             verb = 0
@@ -212,7 +219,7 @@ class CoreDatabase(SQLite3Database):
 
         for i, prop in enumerate(['nij_max', 'nijk_max', 'nnl_max']):
             nested_set(self._metadata, _get_keypath(k_max, rc, prop), values[i])
-            if k_max == 3:
+            if angular:
                 if prop == 'nijk_max':
                     val = 0
                 else:
