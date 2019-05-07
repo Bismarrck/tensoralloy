@@ -22,7 +22,7 @@ def print_phonopy():
     """
     Print the phonopy logo.
     """
-    print("""        _
+    print(r"""        _
   _ __ | |__   ___  _ __   ___   _ __  _   _
  | '_ \| '_ \ / _ \| '_ \ / _ \ | '_ \| | | |
  | |_) | | | | (_) | | | | (_) || |_) | |_| |
@@ -64,7 +64,7 @@ class BandStructure(band_structure.BandStructure):
 
     def plot(self, ax: ImageGrid, labels=None, path_connections=None,
              is_legacy=False, use_wavenumber=False, plot_vertical_lines=False):
-        """
+        r"""
         The plot function.
 
         Parameters

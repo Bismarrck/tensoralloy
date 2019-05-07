@@ -13,6 +13,6 @@ pymatgen>=2018.6
 wheel
 six
 seekpath>=1.8.4
-phonopy>=1.14.2
+phonopy==1.14.2
 spglib
 pandas
