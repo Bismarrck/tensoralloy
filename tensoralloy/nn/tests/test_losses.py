@@ -60,9 +60,12 @@ def test_forces_loss():
         x = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
         y = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
         n_atoms = np.asarray([5, 6, 4, 8, 5, 3])
+        mask = np.zeros((6, 9))
+        for i in range(len(n_atoms)):
+            mask[i, 1: n_atoms[i] + 1] = 1.0
         x[5] = 0.0
         y[5] = 0.0
-        confidences = np.ones(6) * 0.75
+        weights = np.ones(6) * 0.75
 
         mae_values = []
         rmse_values = []
@@ -79,13 +82,14 @@ def test_forces_loss():
 
             x = tf.convert_to_tensor(np.insert(x, 0, 0, axis=1))
             y = tf.convert_to_tensor(y)
-            c = tf.convert_to_tensor(confidences)
-            n_atoms = tf.convert_to_tensor(n_atoms)
+            c = tf.convert_to_tensor(weights)
+            mask = tf.convert_to_tensor(mask)
 
-            rmse = get_forces_loss(x, y, n_atoms, loss_weight=10.0,
+            rmse = get_forces_loss(x, y, mask=mask, loss_weight=10.0,
                                    collections=['UnitTest'],
                                    weights=c)
-            mae = tf.get_default_graph().get_tensor_by_name('Forces/mae:0')
+            mae = tf.get_default_graph().get_tensor_by_name(
+                'Forces/Absolute/mae:0')
 
             with tf.Session() as sess:
                 assert_less(y_mae - sess.run(mae), 1e-8)

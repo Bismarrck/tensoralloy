@@ -20,6 +20,9 @@ arch = ["EamAlloyNN", "EamFsNN", "AdpNN"]
 [nn.loss.energy]
 method = ["rmse", "logcosh"]
 
+[nn.loss.forces]
+method = ["rmse", "logcosh"]
+
 [nn.loss.stress]
 method = ["rmse", "logcosh"]
 

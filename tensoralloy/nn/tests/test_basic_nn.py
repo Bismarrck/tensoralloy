@@ -248,6 +248,7 @@ def test_build_nn_with_properties():
                 nn.get_total_loss(predictions=predictions,
                                   labels=labels,
                                   n_atoms=batch.n_atoms,
+                                  mask=batch.mask,
                                   loss_parameters=loss_parameters,
                                   mode=mode)
             except Exception as excp:

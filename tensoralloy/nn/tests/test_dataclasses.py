@@ -23,6 +23,7 @@ def test_dataclasses():
         opt=dict(decay_steps=100, method='rmsprop'),
         loss=dict(
             energy=dict(per_atom_loss=True),
+            forces=dict(method='logcosh'),
             elastic=dict(crystals=['Ni'], constraint=dict(stress_weight=1.5))
         )
     )
@@ -35,6 +36,7 @@ def test_dataclasses():
     loss_parameters = LossParameters(**hparams.loss)
 
     assert_equal(loss_parameters.energy.per_atom_loss, True)
+    assert_equal(loss_parameters.forces.method, 'logcosh')
     assert_equal(loss_parameters.elastic.crystals, ['Ni'])
     assert_equal(loss_parameters.elastic.constraint.stress_weight, 1.5)
 

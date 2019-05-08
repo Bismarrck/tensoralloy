@@ -93,9 +93,9 @@ class EnergyLossOptions(_LossOptions):
 @dataclass
 class ForcesLossOptions(_LossOptions):
     """
-    No extra option for the loss of forces.
+    Special options for the loss of atomic forces.
     """
-    pass
+    method: str = 'rmse'
 
 
 @add_slots
@@ -123,7 +123,6 @@ class L2LossOptions(_LossOptions):
     Special options for the L2 regularization.
     The default weight is changed to 0.01.
     """
-
     weight: float = 0.01
 
 

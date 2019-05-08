@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from typing import List, Union
 from enum import Enum
+from os.path import basename
 
 from tensoralloy.dtypes import get_float_dtype
 
@@ -110,12 +111,12 @@ def get_energy_loss(labels, predictions, n_atoms, weights=None,
     Parameters
     ----------
     labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, ]` as the reference energy.
+        A float tensor of shape `[batch_size, ]` as the reference energy.
     predictions : tf.Tensor
-        A `float64` tensor of shape `[batch_size, ]` as the predicted energy.
+        A float tensor of shape `[batch_size, ]` as the predicted energy.
     weights : tf.Tensor or None
-        A `float64` tensor of shape `[batch_size, ]` as the energy weights of
-        each structure. If None, all energies are trusted equally.
+        A float tensor of shape `[batch_size, ]` as the energy weights of each
+        structure. If None, all energies are trusted equally.
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
@@ -132,7 +133,7 @@ def get_energy_loss(labels, predictions, n_atoms, weights=None,
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor as the RMSE loss.
+        A float tensor as the total loss.
 
     """
     assert method != LossMethod.rrmse
@@ -161,75 +162,77 @@ def get_energy_loss(labels, predictions, n_atoms, weights=None,
 
 def _absolute_forces_loss(labels: tf.Tensor,
                           predictions: tf.Tensor,
-                          n_atoms: tf.Tensor,
-                          weights: Union[tf.Tensor, None]):
+                          mask: tf.Tensor,
+                          weights: Union[tf.Tensor, None],
+                          method=LossMethod.rmse):
     """
-    Return the absolute RMSE as the loss of atomic forces.
-
-        loss = sqrt(weight * MSE(labels, predictions))
-
-    where `weight` is a scaling factor to eliminate the zero-padding effect.
-
+    Return the absolute loss of atomic forces. The `mask` tensor of shape
+    `[batch_size, n_atoms_max + 1]` is required to eliminate the zero-padding
+    effect.
     """
+    assert method != LossMethod.rrmse
+
     with tf.name_scope("Absolute"):
         dtype = get_float_dtype()
-        if weights is None:
-            mse = tf.reduce_mean(
-                tf.squared_difference(labels, predictions), name='raw_mse')
+        diff = tf.math.subtract(labels, predictions, name='diff')
+        mask = tf.cast(tf.split(mask, [1, -1], axis=1)[1], tf.bool, name='mask')
+        diff = tf.boolean_mask(diff, mask, axis=0, name='diff/mask')
+        eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
+
+        if method == LossMethod.rmse:
+            val = tf.math.square(diff, name='square')
         else:
-            mse = tf.reduce_mean(
-                tf.multiply(tf.reshape(weights, (-1, 1, 1)),
-                            tf.squared_difference(labels, predictions),
-                            name='conf'),
-                name='raw_mse')
-        mae = tf.reduce_mean(tf.abs(labels - predictions), name='raw_mae')
-        with tf.name_scope("Safe"):
-            # Add a very small 'eps' to the mean squared error to make
-            # sure `mse` is always greater than zero. Otherwise NaN may
-            # occur at `Sqrt_Grad`.
-            eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-            mse = tf.add(mse, eps)
-        with tf.name_scope("Scale"):
-            n_reals = tf.cast(n_atoms, dtype=labels.dtype)
-            n_max = tf.convert_to_tensor(
-                labels.shape[1].value, dtype=labels.dtype, name='n_max')
-            one = tf.constant(1.0, dtype=dtype, name='one')
-            weight = tf.math.truediv(one, tf.reduce_mean(n_reals / n_max),
-                                     name='weight')
-        mse = tf.multiply(mse, weight, name='mse')
-    mae = tf.multiply(mae, weight, name='mae')
-    loss = tf.sqrt(mse, name='rmse')
+            val = tf.math.cosh(diff, name='cosh')
+            val = tf.math.add(val, eps, name='cosh/safe')
+            val = tf.math.log(val, name='log')
+
+        if weights is not None:
+            weights = tf.reshape(weights, (-1, 1, 1))
+            val = tf.math.multiply(weights, val,
+                                   name=f'{basename(val.op.name)}/weighted')
+
+        mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
+
+        if method == LossMethod.rmse:
+            val = tf.reduce_mean(val, name='mse')
+            val = tf.math.add(val, eps, name='mse/safe')
+            loss = tf.sqrt(val, name='rmse')
+        else:
+            loss = tf.reduce_mean(val, name='logcosh')
+
     return loss, mae
 
 
-def get_forces_loss(labels, predictions, n_atoms, weights=None, loss_weight=1.0,
-                    collections=None):
+def get_forces_loss(labels, predictions, mask, weights=None, loss_weight=1.0,
+                    collections=None, method=LossMethod.rmse):
     """
     Return the loss tensor of the atomic forces.
 
     Parameters
     ----------
     labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, n_atoms_max + 1, 3]` as the
+        A float tensor of shape `[batch_size, n_atoms_max + 1, 3]` as the
         reference forces.
     predictions : tf.Tensor
-        A `float64` tensor of shape `[batch_size, n_atoms_max, 3]` as the
-        predicted forces.
-    n_atoms : tf.Tensor
-        A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
-        each structure.
+        A float tensor of shape `[batch_size, n_atoms_max, 3]` as the predicted
+        forces.
+    mask : tf.Tensor
+        A float tensor of shape `[batch_size, ]` as the atom masks of each
+        structure.
     weights : tf.Tensor or None
-        A `float64` tensor of shape `[batch_size, ]` as the force weights of
-        each structure. If None, all forces are trusted equally.
+        A float tensor of shape `[batch_size, ]` as the force weights of each
+        structure. If None, all forces are trusted equally.
     loss_weight : float or tf.Tensor
         The weight of the overall loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    method : LossMethod
+        The method to compute the loss.
 
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor as the RMSE loss.
+        A float tensor as the total loss.
 
     """
     with tf.name_scope("Forces"):
@@ -238,8 +241,8 @@ def get_forces_loss(labels, predictions, n_atoms, weights=None, loss_weight=1.0,
         with tf.name_scope("Split"):
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
-        raw_loss, mae = _absolute_forces_loss(labels, predictions, n_atoms,
-                                              weights=weights)
+        raw_loss, mae = _absolute_forces_loss(labels, predictions, mask=mask,
+                                              weights=weights, method=method)
         loss_weight = tf.convert_to_tensor(
             loss_weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, loss_weight, name='weighted/loss')
@@ -258,14 +261,14 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, weights=None,
     Parameters
     ----------
     labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, 6]` as the reference stress.
+        A float tensor of shape `[batch_size, 6]` as the reference stress.
     predictions : tf.Tensor
-        A `float64` tensor of shape `[batch_size, 6]` as the predicted stress.
+        A float tensor of shape `[batch_size, 6]` as the predicted stress.
     loss_weight : float or tf.Tensor
         The weight of the overall loss.
     weights : tf.Tensor or None
-        A `float64` tensor of shape `[batch_size, ]` as the stress weights of
-        each structure. If None, all stress tensors are trusted equally.
+        A float tensor of shape `[batch_size, ]` as the stress weights of each
+        structure. If None, all stress tensors are trusted equally.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
     method : LossMethod
@@ -274,7 +277,7 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, weights=None,
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor as the RMSE loss.
+        A float tensor as the total loss.
 
     """
     with tf.name_scope("Stress"):
@@ -318,15 +321,15 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0, weights=None,
     Parameters
     ----------
     labels : tf.Tensor
-        A `float64` tensor of shape `[batch_size, ]` as the reference pressure.
+        A float tensor of shape `[batch_size, ]` as the reference pressure.
         energies.
     predictions : tf.Tensor
-        A `float64` tensor of shape `[batch_size, ]` as the predicted pressure.
+        A float tensor of shape `[batch_size, ]` as the predicted pressure.
     loss_weight : float or tf.Tensor
         The weight of the overall loss.
     weights : tf.Tensor or None
-        A `float64` tensor of shape `[batch_size, ]` as the stress weights of
-        each structure. If None, all stress tensors are trusted equally.
+        A float tensor of shape `[batch_size, ]` as the stress weights of each
+        structure. If None, all stress tensors are trusted equally.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
     method : LossMethod
@@ -335,7 +338,7 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0, weights=None,
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor as the RMSE loss.
+        A float tensor as the total loss.
 
     """
     assert method != LossMethod.rrmse
@@ -376,7 +379,7 @@ def get_l2_regularization_loss(loss_weight=1.0, collections=None):
     Returns
     -------
     loss : tf.Tensor
-        A `float64` tensor of the per-atom RMSE of `labels` and `predictions`.
+        A float tensor as the total loss.
 
     """
     with tf.name_scope("L2"):

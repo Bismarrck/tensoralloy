@@ -27,6 +27,7 @@ method = "rmse"
 
 [nn.loss.forces]
 weight = 1.0
+method = "rmse"
 
 [nn.loss.stress]
 weight = 1.0

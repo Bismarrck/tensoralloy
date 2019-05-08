@@ -442,7 +442,7 @@ class BasicNN:
             log_tensor(hessian)
         return hessian
 
-    def get_total_loss(self, predictions, labels, n_atoms,
+    def get_total_loss(self, predictions, labels, n_atoms, mask,
                        loss_parameters: LossParameters,
                        mode=tf_estimator.ModeKeys.TRAIN):
         """
@@ -485,6 +485,8 @@ class BasicNN:
 
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
+        mask : tf.Tensor
+            A float tensor of shape `[batch_size, n_atoms_max + 1]`.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
         mode : tf_estimator.ModeKeys
@@ -526,9 +528,10 @@ class BasicNN:
                 losses.forces = loss_ops.get_forces_loss(
                     labels=labels.forces,
                     predictions=predictions.forces,
-                    n_atoms=n_atoms,
+                    mask=mask,
                     weights=_get_per_structure_weights('forces'),
                     loss_weight=loss_parameters.forces.weight,
+                    method=LossMethod[loss_parameters.forces.method],
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
@@ -795,6 +798,7 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(predictions=predictions,
                                                  labels=labels,
                                                  n_atoms=features.n_atoms,
+                                                 mask=features.mask,
                                                  loss_parameters=params.loss,
                                                  mode=mode)
         ema, train_op = get_train_op(
