@@ -472,6 +472,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             filename = candidates[0]
 
             config = InputReader(filename)
+            config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
             config['dataset.tfrecords_dir'] = args.tf_records_dir
 
             avail_properties = ('energy', 'forces', 'stress', 'total_pressure')
@@ -605,6 +606,18 @@ class EquationOfStateProgram(CLIProgram):
             help="The equation to use.",
         )
         subparser.add_argument(
+            '--xlo',
+            type=float,
+            default=0.95,
+            help="The lower bound to scale the cell."
+        )
+        subparser.add_argument(
+            '--xhi',
+            type=float,
+            default=1.05,
+            help="The upper bound to scale the cell."
+        )
+        subparser.add_argument(
             '--fig',
             type=str,
             default=None,
@@ -619,6 +632,9 @@ class EquationOfStateProgram(CLIProgram):
         The main function.
         """
         def func(args: argparse.Namespace):
+            assert 0.80 <= args.xlo <= 0.99
+            assert 1.01 <= args.xhi <= 1.20
+
             calc = TensorAlloyCalculator(args.graph_model_path)
 
             try:
@@ -643,7 +659,8 @@ class EquationOfStateProgram(CLIProgram):
 
             volumes = []
             energies = []
-            for x in np.linspace(0.95, 1.05, num=21, endpoint=True):
+            num = int(np.round(args.xhi - args.xlo, 2) / 0.005) + 1
+            for x in np.linspace(args.xlo, args.xhi, num, True):
                 crystal.set_cell(cell * x, scale_atoms=True)
                 volumes.append(crystal.get_volume())
                 energies.append(crystal.get_potential_energy())
