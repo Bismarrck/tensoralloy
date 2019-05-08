@@ -183,10 +183,16 @@ class ExportModelProgram(CLIProgram):
 
     @property
     def name(self):
+        """
+        The name of this program.
+        """
         return "export"
 
     @property
     def help(self):
+        """
+        The help message of this program.
+        """
         return "Export a tensorflow checkpoint to model file(s)."
 
     def config_subparser(self, subparser: argparse.ArgumentParser):
@@ -209,6 +215,9 @@ class ExportModelProgram(CLIProgram):
 
     @property
     def main_func(self):
+        """
+        The main function.
+        """
         def func(args: argparse.Namespace):
             if args.ckpt.lower() == 'latest':
                 ckpt = tf.train.latest_checkpoint(".")
@@ -285,6 +294,9 @@ class StopExperimentProgram(CLIProgram):
 
     @property
     def main_func(self):
+        """
+        The main function.
+        """
         def func(args: argparse.Namespace):
             logfile = join(args.model_dir, "logfile")
             if not exists(logfile):
@@ -406,6 +418,56 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         return func
 
 
+class ComputeMetricsProgram(CLIProgram):
+    """
+    A collection of programs for computing advanced evaluation metrics. 
+    """
+    
+    def __init__(self):
+        """
+        Initiazliation method.
+        """
+        super(ComputeMetricsProgram, self).__init__()
+        
+        self._programs = [
+            ComputeEvaluationPercentileProgram(),
+            EquationOfStateProgram()
+        ]
+    
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "compute"
+
+    @property
+    def help(self):
+        """
+        The help message
+        """
+        return "Compute advanced evaluation metrics."
+    
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the subparaser.
+        """
+        subsubparsers = subparser.add_subparsers(title=self.name,
+                                                 help=self.help)
+        for prog in self._programs:
+            subsubparser = subsubparsers.add_parser(prog.name, help=prog.help)
+            prog.config_subparser(subsubparser)
+        super(ComputeMetricsProgram, self).config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """ The main function. This is just a program-collection, so this
+        function is empty. """
+        def func(_):
+            pass
+        return func
+
+
 class ComputeEvaluationPercentileProgram(CLIProgram):
     """
     Compute the q-th percentile of per-atom MAEs of the selected checkpoint.
@@ -416,7 +478,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
         """
         The name of this CLI program.
         """
-        return "compute"
+        return "percentile"
 
     @property
     def help(self):
@@ -698,8 +760,7 @@ def main():
                  ExportModelProgram(),
                  StopExperimentProgram(),
                  PrintEvaluationSummaryProgram(),
-                 ComputeEvaluationPercentileProgram(),
-                 EquationOfStateProgram()):
+                 ComputeMetricsProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 
