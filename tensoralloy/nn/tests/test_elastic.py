@@ -6,7 +6,9 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import nose
+import os
 
+from unittest import skipUnless
 from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from nose.tools import assert_in, assert_almost_equal, assert_equal
@@ -39,6 +41,8 @@ def test_read_external_crystal():
     assert_equal(crystal.elastic_constants[-1].weight, 0.0)
 
 
+@skipUnless(os.environ.get('TEST_ELASTIC'),
+            "The flag 'TEST_ELASTIC' is not set")
 def test_elastic_constant_tensor_op():
     """
     Test the method `get_elastic_constant_tensor_op`.

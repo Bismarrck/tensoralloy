@@ -10,6 +10,7 @@ import shutil
 import os
 import unittest
 
+from unittest import skipUnless
 from datetime import datetime
 from nose.tools import assert_almost_equal, assert_equal
 from nose.tools import assert_list_equal, assert_is_not_none, assert_less
@@ -95,6 +96,8 @@ def test_calculator_with_qm7():
     assert_almost_equal(y_mae, 0.18296768, delta=1e-6)
 
 
+@skipUnless(os.environ.get('TEST_ELASTIC'),
+            "The flag 'TEST_ELASTIC' is not set")
 def test_elastic_constant_tensor():
     """
     Test elastic properties calculation of `TensorAlloyCalculator`.
