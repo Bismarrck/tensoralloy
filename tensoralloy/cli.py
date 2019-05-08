@@ -14,12 +14,12 @@ import re
 import os
 
 from ase.units import GPa
-from ase.eos import EquationOfState
 from ase.io import read
 from ase.build import bulk
 from os.path import exists, dirname, join, basename, splitext
 from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.analysis.eos import EquationOfState
 from tensoralloy.io.read import read_file
 from tensoralloy.io.input import InputReader
 from tensoralloy.test_utils import datasets_dir
@@ -630,10 +630,11 @@ class EquationOfStateProgram(CLIProgram):
                     raise ValueError("")
             crystal.calc = calc
             cell = crystal.cell.copy()
+            formula = crystal.get_chemical_formula()
 
             if args.fig is None:
                 work_dir = "."
-                filename = join(work_dir, "eos.png")
+                filename = join(work_dir, f"{formula}_eos.png")
             else:
                 work_dir = dirname(args.fig)
                 filename = args.fig
@@ -648,13 +649,15 @@ class EquationOfStateProgram(CLIProgram):
                 energies.append(crystal.get_potential_energy())
 
             eos = EquationOfState(volumes, energies, eos=args.eos)
-            v0, e0, bulk_moduli = eos.fit()
+            v0, e0, bulk_modulus, residual = eos.fit()
             eos.plot(filename, show=False)
 
             print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
-                crystal.get_chemical_formula(),
+                formula,
                 args.eos,
-                v0, e0, bulk_moduli / GPa))
+                v0, e0, bulk_modulus))
+            print("Residual Norm = {:.3f} eV".format(residual))
+
             np.set_printoptions(precision=3, suppress=True)
             print("New cell: ")
             print((v0 / np.linalg.det(cell))**(1.0/3.0) * cell)
