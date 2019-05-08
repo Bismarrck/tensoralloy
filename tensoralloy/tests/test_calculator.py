@@ -4,7 +4,6 @@ This module defines unit tests of `TensorAlloyCalculator`.
 """
 from __future__ import print_function, absolute_import
 
-import tensorflow as tf
 import numpy as np
 import nose
 import shutil
@@ -168,25 +167,10 @@ class SurfaceSlabTest(unittest.TestCase):
         Test total energy calculation of `TensorAlloyCalculator` with EAM method for
         Ni surface slabs.
         """
-        graph_model_path = join(self.tmp_dir, 'zjw04.pb')
         lammps = self.get_lammps_calculator()
 
-        # Export the zjw04 pb model file
-        with tf.Graph().as_default():
-            rc = 6.0
-            elements = ['Ni']
-            clf = EAMTransformer(rc=rc, elements=elements)
-            nn = EamAlloyNN(elements=elements,
-                            custom_potentials={
-                                "Ni": {"rho": "zjw04", "embed": "zjw04"},
-                                "NiNi": {"phi": "zjw04"}},
-                            export_properties=['energy', 'forces', 'stress'])
-            nn.attach_transformer(clf)
-            nn.export(graph_model_path, keep_tmp_files=True)
-
-        tf.reset_default_graph()
-
         # Initialize a calculator
+        graph_model_path = join(test_dir(), 'Ni', 'Ni.zhou04.pb')
         clf = TensorAlloyCalculator(graph_model_path)
 
         # Create several slabs
@@ -224,7 +208,7 @@ class SurfaceSlabTest(unittest.TestCase):
             y_true.append(lammps.get_potential_energy(atoms))
             y_pred.append(clf.get_potential_energy(atoms))
 
-        assert_array_almost_equal(np.asarray(y_true), np.asarray(y_pred), 1e-5)
+        assert_array_almost_equal(np.asarray(y_true), np.asarray(y_pred), 4e-5)
 
 
 if __name__ == "__main__":
