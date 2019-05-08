@@ -21,7 +21,7 @@ arch = "AtomicResNN"
 fixed_static_energy = true
 
 [nn.atomic.behler]
-cutoff = 'polynomial'
+cutoff_function = 'polynomial'
 trainable = true
 eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]
 
