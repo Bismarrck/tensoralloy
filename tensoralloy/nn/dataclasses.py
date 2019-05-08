@@ -76,7 +76,6 @@ class _LossOptions:
     """
     The basic options for a loss.
     """
-
     weight: float = 1.0
 
 
@@ -87,6 +86,7 @@ class EnergyLossOptions(_LossOptions):
     Special options for the loss of energies.
     """
     per_atom_loss: bool = False
+    method: str = 'rmse'
 
 
 @add_slots
@@ -104,17 +104,16 @@ class StressLossOptions(_LossOptions):
     """
     Special options for the loss of stress tensors.
     """
-
-    use_rmse: bool = True
+    method: str = 'rmse'
 
 
 @add_slots
 @dataclass
 class PressureLossOptions(_LossOptions):
     """
-    No extra option for the loss of total pressure.
+    Special options for the loss of total pressures.
     """
-    pass
+    method: str = 'rmse'
 
 
 @add_slots

@@ -92,7 +92,7 @@ def test_read_eam_fs_toml():
                       ['energy', 'forces', 'hessian', 'stress'])
     assert_list_equal(reader['nn.minimize'],
                       ['energy', 'forces', 'stress', 'elastic'])
-    assert_equal(reader['nn.loss.stress.use_rmse'], True)
+    assert_equal(reader['nn.loss.stress.method'], 'logcosh')
 
     assert_equal(reader['nn.loss.elastic.crystals'], ['Al'])
     assert_equal(reader['nn.loss.elastic.weight'], 0.1)

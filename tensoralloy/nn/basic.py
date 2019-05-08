@@ -24,6 +24,7 @@ from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
+from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn import elastic as elastic_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -518,6 +519,7 @@ class BasicNN:
                 confidences=_get_confidence('energy'),
                 weight=loss_parameters.energy.weight,
                 per_atom_loss=loss_parameters.energy.per_atom_loss,
+                method=LossMethod[loss_parameters.energy.method],
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
@@ -535,6 +537,7 @@ class BasicNN:
                     predictions=predictions.total_pressure,
                     confidences=_get_confidence('stress'),
                     weight=loss_parameters.total_pressure.weight,
+                    method=LossMethod[loss_parameters.total_pressure.method],
                     collections=collections)
 
             if 'stress' in self._minimize_properties:
@@ -543,7 +546,7 @@ class BasicNN:
                     predictions=predictions.stress,
                     confidences=_get_confidence("stress"),
                     weight=loss_parameters.stress.weight,
-                    use_rmse=loss_parameters.stress.use_rmse,
+                    method=LossMethod[loss_parameters.stress.method],
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(

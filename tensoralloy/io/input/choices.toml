@@ -17,6 +17,15 @@ cutoff_function = ["cosine", "polynomial"]
 [nn.eam]
 arch = ["EamAlloyNN", "EamFsNN", "AdpNN"]
 
+[nn.loss.energy]
+method = ["rmse", "logcosh"]
+
+[nn.loss.stress]
+method = ["rmse", "logcosh"]
+
+[nn.loss.total_pressure]
+method = ["rmse", "logcosh"]
+
 [opt]
 method = ["adam", 'rmsprop', 'adadelta']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']

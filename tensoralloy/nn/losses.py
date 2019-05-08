@@ -7,15 +7,48 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import List, Union
+from enum import Enum
 
 from tensoralloy.dtypes import get_float_dtype
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
 __all__ = ["get_energy_loss", "get_forces_loss", "get_stress_loss",
-           "get_total_pressure_loss"]
+           "get_total_pressure_loss", "get_total_pressure_loss",
+           "LossMethod"]
+
+
+class LossMethod(Enum):
+    """
+    The methods for computing losses.
+
+    rmse : the standard RMSE loss
+    rrmse : the relative RMSE loss, rrmse = mean(norm(x - y, -1) / norm(y, -1)).
+    logcosh : the Log-Cosh loss.
+
+    """
+    rmse = 0
+    rrmse = 1
+    logcosh = 2
+
+
+def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
+                            weights: Union[tf.Tensor, None]):
+    """
+    Return the relative RMSE as the loss of atomic forces.
+    """
+    with tf.name_scope("Relative"):
+        diff = tf.subtract(labels, predictions)
+        upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
+        lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
+        ratio = tf.math.truediv(upper, lower, name='ratio')
+        if weights is not None:
+            ratio = tf.math.multiply(ratio, weights, name='ration/conf')
+        loss = tf.reduce_mean(ratio, name='loss')
+    return loss
 
 
 def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
@@ -45,8 +78,32 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
     return loss, mae
 
 
+def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
+                      is_per_atom_loss=False):
+    """
+    Return the Log-Cosh loss tensor and the MAE loss tensor.
+    """
+    if is_per_atom_loss:
+        suffix = "/atom"
+    else:
+        suffix = ""
+    diff = tf.math.subtract(x, y, name='diff')
+    mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
+    if weights is not None:
+        if x.shape.ndims == 2:
+            weights = tf.reshape(weights, (-1, 1))
+        diff = tf.multiply(diff, weights, name='diff/conf')
+    dtype = get_float_dtype()
+    eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
+    cosh = tf.math.cosh(diff, name='cosh')
+    cosh = tf.add(cosh, eps, name='cosh/safe')
+    logcosh = tf.reduce_mean(tf.math.log(cosh), name='logcosh')
+    return logcosh, mae
+
+
 def get_energy_loss(labels, predictions, n_atoms, confidences=None, weight=1.0,
-                    collections=None, per_atom_loss=False):
+                    collections=None, per_atom_loss=False,
+                    method=LossMethod.rmse):
     """
     Return the loss tensor of the energy.
 
@@ -69,6 +126,8 @@ def get_energy_loss(labels, predictions, n_atoms, confidences=None, weight=1.0,
         loss. Defaults to False.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    method : LossMethod
+        The loss method to use.
 
     Returns
     -------
@@ -76,6 +135,8 @@ def get_energy_loss(labels, predictions, n_atoms, confidences=None, weight=1.0,
         A `float64` tensor as the RMSE loss.
 
     """
+    assert method != LossMethod.rrmse
+
     with tf.name_scope("Energy"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
@@ -187,24 +248,8 @@ def get_forces_loss(labels, predictions, n_atoms, confidences=None, weight=1.0,
         return loss
 
 
-def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
-                            weights: Union[tf.Tensor, None]):
-    """
-    Return the relative RMSE as the loss of atomic forces.
-    """
-    with tf.name_scope("Relative"):
-        diff = tf.subtract(labels, predictions)
-        upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
-        lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
-        ratio = tf.math.truediv(upper, lower, name='ratio')
-        if weights is not None:
-            ratio = tf.math.multiply(ratio, weights, name='ration/conf')
-        loss = tf.reduce_mean(ratio, name='loss')
-    return loss
-
-
 def get_stress_loss(labels, predictions, weight=1.0, confidences=None,
-                    use_rmse=True, collections=None):
+                    collections=None, method=LossMethod.rmse):
     """
     Return the (relative) RMSE loss of the stress.
 
@@ -219,11 +264,10 @@ def get_stress_loss(labels, predictions, weight=1.0, confidences=None,
     confidences : tf.Tensor or None
         A `float64` tensor of shape `[batch_size, ]` as the stress confidences
         or None. If None, all stress tensors are trusted equally.
-    use_rmse : bool
-        A boolean. If True, the loss will be RMSE loss; Otherwise it will be the
-        relative RMSE loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    method : LossMethod
+        The loss method to use.
 
     Returns
     -------
@@ -235,18 +279,24 @@ def get_stress_loss(labels, predictions, weight=1.0, confidences=None,
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
 
-        if use_rmse:
+        if method == LossMethod.rmse:
             raw_loss, mae = _get_rmse_loss(
                 labels,
                 predictions,
                 is_per_atom_loss=False,
                 weights=confidences)
-        else:
+        elif method == LossMethod.rrmse:
             raw_loss = _get_relative_rmse_loss(
                 labels,
                 predictions,
                 weights=confidences)
             mae = None
+        else:
+            raw_loss, mae = _get_logcosh_loss(
+                labels,
+                predictions,
+                is_per_atom_loss=False,
+                weights=confidences)
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:
@@ -258,7 +308,7 @@ def get_stress_loss(labels, predictions, weight=1.0, confidences=None,
 
 
 def get_total_pressure_loss(labels, predictions, weight=1.0, confidences=None,
-                            collections=None):
+                            collections=None, method=LossMethod.rmse):
     """
     Return the RMSE loss of the total pressure.
 
@@ -276,6 +326,8 @@ def get_total_pressure_loss(labels, predictions, weight=1.0, confidences=None,
         or None. If None, all stress tensors are trusted equally.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    method : LossMethod
+        The loss method to use.
 
     Returns
     -------
@@ -283,12 +335,20 @@ def get_total_pressure_loss(labels, predictions, weight=1.0, confidences=None,
         A `float64` tensor as the RMSE loss.
 
     """
+    assert method != LossMethod.rrmse
+
     with tf.name_scope("Pressure"):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
-        raw_loss, mae = _get_rmse_loss(labels, predictions,
-                                       is_per_atom_loss=False,
-                                       weights=confidences)
+
+        if method == LossMethod.rmse:
+            raw_loss, mae = _get_rmse_loss(labels, predictions,
+                                           is_per_atom_loss=False,
+                                           weights=confidences)
+        else:
+            raw_loss, mae = _get_logcosh_loss(labels, predictions,
+                                              confidences, False)
+
         weight = tf.convert_to_tensor(weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, weight, name='weighted/loss')
         if collections is not None:

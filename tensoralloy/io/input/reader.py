@@ -102,7 +102,11 @@ class InputReader:
 
         def _safe_set(_keypath, _val):
             _options = nested_get(choices, _keypath)
-            if _options is not None:
+            if isinstance(_options, dict):
+                for _subkey, _subval in _options.items():
+                    if _subkey in _val:
+                        _safe_set(f'{_keypath}.{_subkey}', _val[_subkey])
+            elif _options is not None:
                 if _val not in _options:
                     if not isinstance(_val, bool):
                         raise InputValueError(_keypath, _val, _options)
@@ -151,14 +155,7 @@ class InputReader:
         descriptor = nested_get(configs, 'dataset.descriptor')
 
         if descriptor == 'behler':
-            _safe_update("nn.atomic.behler.angular")
-            _safe_update("nn.atomic.behler.cutoff_function")
-            _safe_update("nn.atomic.behler.eta")
-            _safe_update("nn.atomic.behler.omega")
-            _safe_update("nn.atomic.behler.gamma")
-            _safe_update("nn.atomic.behler.beta")
-            _safe_update("nn.atomic.behler.zeta")
-            _safe_update("nn.atomic.behler.trainable")
+            _safe_update("nn.atomic.behler")
             _safe_update("nn.atomic.arch")
             _safe_update("nn.atomic.resnet")
 

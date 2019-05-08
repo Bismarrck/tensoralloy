@@ -11,7 +11,7 @@ minimize = ['energy', 'forces', 'stress', 'elastic']
 export = ['energy', 'forces', 'hessian', 'stress']
 
 [nn.loss.stress]
-use_rmse = true
+method = 'logcosh'
 
 [nn.loss.elastic]
 crystals = ['Al']
