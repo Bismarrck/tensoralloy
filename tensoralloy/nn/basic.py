@@ -500,7 +500,7 @@ class BasicNN:
 
         """
 
-        def _get_confidence(key):
+        def _get_per_structure_weights(key):
             if mode == tf_estimator.ModeKeys.TRAIN and \
                     (not loss_parameters.equivalently_trusted):
                 return labels[f"{key}_confidence"]
@@ -516,8 +516,8 @@ class BasicNN:
                 labels=labels.energy,
                 predictions=predictions.energy,
                 n_atoms=n_atoms,
-                confidences=_get_confidence('energy'),
-                weight=loss_parameters.energy.weight,
+                weights=_get_per_structure_weights('energy'),
+                loss_weight=loss_parameters.energy.weight,
                 per_atom_loss=loss_parameters.energy.per_atom_loss,
                 method=LossMethod[loss_parameters.energy.method],
                 collections=collections)
@@ -527,16 +527,16 @@ class BasicNN:
                     labels=labels.forces,
                     predictions=predictions.forces,
                     n_atoms=n_atoms,
-                    confidences=_get_confidence('forces'),
-                    weight=loss_parameters.forces.weight,
+                    weights=_get_per_structure_weights('forces'),
+                    loss_weight=loss_parameters.forces.weight,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
                 losses.total_pressure = loss_ops.get_total_pressure_loss(
                     labels=labels.total_pressure,
                     predictions=predictions.total_pressure,
-                    confidences=_get_confidence('stress'),
-                    weight=loss_parameters.total_pressure.weight,
+                    weights=_get_per_structure_weights('stress'),
+                    loss_weight=loss_parameters.total_pressure.weight,
                     method=LossMethod[loss_parameters.total_pressure.method],
                     collections=collections)
 
@@ -544,13 +544,13 @@ class BasicNN:
                 losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
-                    confidences=_get_confidence("stress"),
-                    weight=loss_parameters.stress.weight,
+                    weights=_get_per_structure_weights("stress"),
+                    loss_weight=loss_parameters.stress.weight,
                     method=LossMethod[loss_parameters.stress.method],
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(
-                weight=loss_parameters.l2.weight,
+                loss_weight=loss_parameters.l2.weight,
                 collections=collections)
 
             if 'elastic' in self._minimize_properties:
