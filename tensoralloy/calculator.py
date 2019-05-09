@@ -31,7 +31,7 @@ from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.analysis.phonon import Phonopy
 from tensoralloy.analysis.phonon import print_phonopy_version, print_phonopy
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

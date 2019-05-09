@@ -18,7 +18,7 @@ from os.path import join, realpath, dirname
 from typing import List, Union
 from itertools import product
 
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import GraphKeys
 from tensoralloy.test_utils import test_dir
 from tensoralloy.nn.utils import log_tensor

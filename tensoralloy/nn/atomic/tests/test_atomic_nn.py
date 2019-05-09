@@ -20,7 +20,7 @@ from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys, AttributeDict
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

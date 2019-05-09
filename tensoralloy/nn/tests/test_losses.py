@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
 from tensoralloy.nn.losses import get_stress_loss
-from tensoralloy.dtypes import set_precision, get_float_dtype
+from tensoralloy.precision import set_precision, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

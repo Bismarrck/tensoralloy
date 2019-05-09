@@ -18,7 +18,7 @@ from tensoralloy.transformer import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import qm7m, test_dir
-from tensoralloy.dtypes import set_precision, get_float_dtype
+from tensoralloy.precision import set_precision, get_float_dtype
 from tensoralloy.io.read import read_file
 from tensoralloy.io.db import connect
 

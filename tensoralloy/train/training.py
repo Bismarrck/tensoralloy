@@ -27,7 +27,7 @@ from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

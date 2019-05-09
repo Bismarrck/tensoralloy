@@ -30,7 +30,7 @@ from tensoralloy.transformer import EAMTransformer
 from tensoralloy.utils import AttributeDict, Defaults, set_pulay_stress
 from tensoralloy.test_utils import assert_array_equal, datasets_dir, test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

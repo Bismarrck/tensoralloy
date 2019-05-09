@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import bytes_feature

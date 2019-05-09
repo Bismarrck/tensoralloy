@@ -13,7 +13,7 @@ from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import meam_cutoff
 from tensoralloy.utils import AttributeDict, get_elements_from_kbody_term
 from tensoralloy.utils import GraphKeys
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

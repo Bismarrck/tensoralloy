@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

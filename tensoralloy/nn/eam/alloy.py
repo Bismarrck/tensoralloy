@@ -20,7 +20,7 @@ from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

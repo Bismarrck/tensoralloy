@@ -23,8 +23,8 @@ from tensoralloy.dataset.utils import should_be_serial
 from tensoralloy.dataset.utils import brange
 from tensoralloy.io.sqlite import CoreDatabase
 from tensoralloy.io.db import connect
-from tensoralloy.dtypes import get_float_dtype, set_precision
-from tensoralloy.dtypes import get_float_precision
+from tensoralloy.precision import get_float_dtype, set_precision
+from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -8,7 +8,7 @@ import nose
 
 from nose.tools import assert_equal
 
-from tensoralloy.dtypes import set_precision, get_float_precision, Precision
+from tensoralloy.precision import set_precision, get_float_precision, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -21,7 +21,7 @@ from collections import Counter
 from dataclasses import dataclass
 from os.path import join
 
-from tensoralloy.dtypes import set_precision, Precision, get_float_dtype
+from tensoralloy.precision import set_precision, Precision, get_float_dtype
 from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff

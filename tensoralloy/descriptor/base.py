@@ -11,7 +11,7 @@ from ase.data import chemical_symbols
 from typing import List, Dict, Tuple
 
 from tensoralloy.utils import get_kbody_terms, AttributeDict
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

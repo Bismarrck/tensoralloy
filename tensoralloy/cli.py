@@ -25,7 +25,7 @@ from tensoralloy.io.input import InputReader
 from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
 from tensoralloy.utils import Defaults
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 from tensoralloy.calculator import TensorAlloyCalculator
 
 __author__ = 'Xin Chen'

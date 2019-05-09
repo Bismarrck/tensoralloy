@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.units import GPa
 
 from tensoralloy.utils import AttributeDict, get_pulay_stress
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 

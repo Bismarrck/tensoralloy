@@ -14,7 +14,7 @@ from typing import List
 
 from tensoralloy.utils import Defaults
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

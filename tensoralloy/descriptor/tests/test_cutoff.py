@@ -13,7 +13,7 @@ from nose.tools import assert_less
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.descriptor.cutoff import polynomial_cutoff
 from tensoralloy.descriptor.cutoff import meam_cutoff
-from tensoralloy.dtypes import get_float_dtype, set_float_precision, Precision
+from tensoralloy.precision import get_float_dtype, set_float_precision, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

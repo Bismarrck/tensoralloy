@@ -10,7 +10,7 @@ from typing import List, Union
 from enum import Enum
 from os.path import basename
 
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 
 __author__ = 'Xin Chen'

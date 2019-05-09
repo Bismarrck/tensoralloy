@@ -19,7 +19,7 @@ from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
-from tensoralloy.dtypes import set_precision
+from tensoralloy.precision import set_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

@@ -15,7 +15,7 @@ from tensoralloy.nn.utils import get_tensors_dict_for_hook
 from tensoralloy.nn.dataclasses import OptParameters, TrainParameters
 from tensoralloy.nn.hooks import LoggingTensorHook, ExamplesPerSecondHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -196,17 +196,13 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
     return ema, variable_averages_op
 
 
-def get_training_hooks(losses: AttributeDict,
-                       ema: tf.train.ExponentialMovingAverage,
+def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
                        train_parameters: TrainParameters):
     """
     Return a list of `tf.train.SessionRunHook` objects for training.
 
     Parameters
     ----------
-    losses : AttributeDict
-        A dict. The loss tensor for energy, forces and stress or total
-        pressure.
     ema : tf.train.ExponentialMovingAverage
         A function to obtain moving averaged variables.
     train_parameters : TrainParameters

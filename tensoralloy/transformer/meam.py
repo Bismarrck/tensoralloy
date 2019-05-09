@@ -17,7 +17,7 @@ from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import IndexTransformer
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.dtypes import get_float_dtype
+from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
