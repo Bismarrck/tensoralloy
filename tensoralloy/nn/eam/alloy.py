@@ -350,7 +350,7 @@ class EamAlloyNN(EamNN):
                                xlabel=r"$\rho$",
                                ylabel=r"$\mathbf{F}(\rho)$ (eV)",
                                title=r"$\mathbf{F}(\rho)$ of " + element)
-                plot_potential(nr, dr, density_fn,
+                plot_potential(nr, dr, density_fn, x0=1.0,
                                filename=join(outdir, f"{element}.rho.png"),
                                xlabel=r"$r (\AA)$",
                                ylabel=r"$\mathbf{\rho}(r)$ (eV)",
@@ -363,7 +363,7 @@ class EamAlloyNN(EamNN):
                 potential = Potential(a, b, pairwise_fn)
                 pair_potentials.append(potential)
 
-                plot_potential(nr, dr, pairwise_fn,
+                plot_potential(nr, dr, pairwise_fn, x0=1.0,
                                filename=join(outdir, f"{kbody_term}.phi.png"),
                                xlabel=r"$r (\AA)$",
                                ylabel=r"$\mathbf{\phi}(r)$ (eV)",

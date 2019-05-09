@@ -343,7 +343,7 @@ class EamFsNN(EamNN):
                     density_fn = make_density(kbody_term)
                     density_potentials[specie] = density_fn
 
-                    plot_potential(nr, dr, density_fn,
+                    plot_potential(nr, dr, density_fn, x0=1.0,
                                    filename=join(outdir,
                                                  f"{kbody_term}.rho.png"),
                                    xlabel=r"$r (\AA)$",
@@ -371,7 +371,7 @@ class EamFsNN(EamNN):
                 potential = Potential(a, b, pairwise_fn)
                 pair_potentials.append(potential)
 
-                plot_potential(nr, dr, pairwise_fn,
+                plot_potential(nr, dr, pairwise_fn, x0=1.0,
                                filename=join(outdir, f"{kbody_term}.phi.png"),
                                xlabel=r"$r (\AA)$",
                                ylabel=r"$\mathbf{\phi}(r)$ (eV)",

@@ -25,7 +25,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 def plot_potential(nx: int, dx: float, func: Callable, filename: str,
-                   xlabel=None, ylabel=None, title=None):
+                   x0=0.0, xlabel=None, ylabel=None, title=None):
     """
     Plot an empirical or NN potential.
 
@@ -39,6 +39,8 @@ def plot_potential(nx: int, dx: float, func: Callable, filename: str,
         The function to compute f(x).
     filename : str
         The name of the output image.
+    x0 : float
+        The initial `x`.
     xlabel : str
         The label of X axis.
     ylabel : str
@@ -49,7 +51,8 @@ def plot_potential(nx: int, dx: float, func: Callable, filename: str,
     """
     fig = plt.figure(1, figsize=[6, 6])
 
-    x = np.arange(0.0, nx * dx, dx)
+    x0 = int(x0 / dx) * dx
+    x = np.arange(x0, nx * dx, dx)
     y = [func(xi) for xi in x]
 
     plt.plot(x, y, 'r-', linewidth=0.8)
