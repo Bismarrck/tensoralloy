@@ -24,7 +24,7 @@ method = ["rmse", "logcosh"]
 method = ["rmse", "logcosh"]
 
 [nn.loss.stress]
-method = ["rmse", "logcosh"]
+method = ["rmse", "logcosh", "rrmse"]
 
 [nn.loss.total_pressure]
 method = ["rmse", "logcosh"]
