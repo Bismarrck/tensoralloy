@@ -11,35 +11,13 @@ import os
 from unittest import skipUnless
 from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
-from nose.tools import assert_in, assert_almost_equal, assert_equal
-from os.path import join
+from nose.tools import assert_in, assert_almost_equal
 
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.nn import EamAlloyNN
-from tensoralloy.nn.constraint.elastic import read_external_crystal
-from tensoralloy.nn.constraint.elastic import built_in_crystals
-from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def test_read_external_crystal():
-    """
-    Test the function `read_external_crystal`.
-    """
-    toml_file = join(test_dir(), "crystals", "Ni3Mo_elastic_tensor.toml")
-    crystal = read_external_crystal(toml_file)
-    builtin = built_in_crystals['Ni3Mo']
-
-    assert_equal(builtin.name, crystal.name)
-    assert_equal(builtin.phase, crystal.phase)
-    assert_equal(7, len(crystal.elastic_constants))
-
-    for elastic_constant in crystal.elastic_constants:
-        assert_in(elastic_constant, builtin.elastic_constants)
-
-    assert_equal(crystal.elastic_constants[-1].weight, 0.0)
 
 
 @skipUnless(os.environ.get('TEST_ELASTIC'),
