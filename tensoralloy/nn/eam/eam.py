@@ -25,7 +25,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 def plot_potential(nx: int, dx: float, func: Callable, filename: str,
-                   x0=0.0, xlabel=None, ylabel=None, title=None):
+                   x0=0.0, xt=None, xlabel=None, ylabel=None, title=None):
     """
     Plot an empirical or NN potential.
 
@@ -41,6 +41,8 @@ def plot_potential(nx: int, dx: float, func: Callable, filename: str,
         The name of the output image.
     x0 : float
         The initial `x`.
+    xt : float
+        The final `x`.
     xlabel : str
         The label of X axis.
     ylabel : str
@@ -52,7 +54,12 @@ def plot_potential(nx: int, dx: float, func: Callable, filename: str,
     fig = plt.figure(1, figsize=[6, 6])
 
     x0 = int(x0 / dx) * dx
-    x = np.arange(x0, nx * dx, dx)
+    if xt is None:
+        xt = nx * dx
+    else:
+        xt = min(nx * dx, xt)
+
+    x = np.arange(x0, xt, dx)
     y = [func(xi) for xi in x]
 
     plt.plot(x, y, 'r-', linewidth=0.8)
@@ -628,7 +635,8 @@ class EamNN(BasicNN):
             return y
 
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
-                        drho: float, checkpoint=None, lattice_constants=None,
+                        drho: float, r0=1.0, rt=None, rho0=0.0, rhot=None,
+                        checkpoint=None, lattice_constants=None,
                         lattice_types=None):
         """
         Export this model to an `eam/alloy` or an `eam/fs` LAMMPS setfl
@@ -646,6 +654,14 @@ class EamNN(BasicNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
+        r0 : float
+            The initial `r` for plotting density and pair potentials.
+        rt : float
+            The final `r` for plotting density and pair potentials.
+        rho0 : float
+            The initial `rho` for plotting embedding functions.
+        rhot : float
+            The final `rho` for plotting embedding functions.
         checkpoint : str or None
             The tensorflow checkpoint file to restore. If None, the default
             (or initital) parameters will be used.

@@ -211,6 +211,33 @@ class ExportModelProgram(CLIProgram):
             help="The corresponding input toml file."
         )
 
+        group = subparser.add_argument_group("EAM")
+
+        group.add_argument(
+            '--r0',
+            type=float,
+            default=0.0,
+            help="The initial 'r' for plotting pair and density functions."
+        )
+        group.add_argument(
+            '--rt',
+            type=float,
+            default=None,
+            help="The final 'r' for plotting pair and density functions."
+        )
+        group.add_argument(
+            '--rho0',
+            type=float,
+            default=0.0,
+            help="The initial 'rho' for plotting embedding functions."
+        )
+        group.add_argument(
+            '--rhot',
+            type=float,
+            default=None,
+            help="The final 'rho' for plotting embedding functions."
+        )
+
         super(ExportModelProgram, self).config_subparser(subparser)
 
     @property
@@ -256,8 +283,11 @@ class ExportModelProgram(CLIProgram):
             configs['train.model_dir'] = model_dir
             configs['dataset.sqlite3'] = database_file
 
+            kwargs = {'r0': args.r0, 'rt': args.rt,
+                      'rho0': args.rho0, 'rhot': args.rhot}
+
             manager = TrainingManager(configs, validate_tfrecords=False)
-            manager.export(ckpt, tag=step_tag)
+            manager.export(ckpt, tag=step_tag, **kwargs)
         return func
 
 

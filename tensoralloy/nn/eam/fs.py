@@ -213,7 +213,8 @@ class EamFsNN(EamNN):
             return atomic, values
 
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
-                        drho: float, checkpoint=None, lattice_constants=None,
+                        drho: float, r0=1.0, rt=None, rho0=0.0, rhot=None,
+                        checkpoint=None, lattice_constants=None,
                         lattice_types=None):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
@@ -230,6 +231,14 @@ class EamFsNN(EamNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
+        r0 : float
+            The initial `r` for plotting density and pair potentials.
+        rt : float
+            The final `r` for plotting density and pair potentials.
+        rho0 : float
+            The initial `rho` for plotting embedding functions.
+        rhot : float
+            The final `rho` for plotting embedding functions.
         checkpoint : str
             The tensorflow checkpoint file to restore.
         lattice_constants : Dict[str, float] or None
@@ -343,7 +352,7 @@ class EamFsNN(EamNN):
                     density_fn = make_density(kbody_term)
                     density_potentials[specie] = density_fn
 
-                    plot_potential(nr, dr, density_fn, x0=1.0,
+                    plot_potential(nr, dr, density_fn, x0=r0, xt=rt,
                                    filename=join(outdir,
                                                  f"{kbody_term}.rho.png"),
                                    xlabel=r"$r (\AA)$",
@@ -358,7 +367,7 @@ class EamFsNN(EamNN):
                 )
                 eam_potentials.append(potential)
 
-                plot_potential(nrho, drho, embed_fn,
+                plot_potential(nrho, drho, embed_fn, x0=rho0, xt=rhot,
                                filename=join(outdir, f"{element}.embed.png"),
                                xlabel=r"$\rho$",
                                ylabel=r"$\mathbf{F}(\rho)$ (eV)",
@@ -371,7 +380,7 @@ class EamFsNN(EamNN):
                 potential = Potential(a, b, pairwise_fn)
                 pair_potentials.append(potential)
 
-                plot_potential(nr, dr, pairwise_fn, x0=1.0,
+                plot_potential(nr, dr, pairwise_fn, x0=r0, xt=rt,
                                filename=join(outdir, f"{kbody_term}.phi.png"),
                                xlabel=r"$r (\AA)$",
                                ylabel=r"$\mathbf{\phi}(r)$ (eV)",

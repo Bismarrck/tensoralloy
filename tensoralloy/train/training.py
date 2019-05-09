@@ -376,7 +376,7 @@ class TrainingManager:
                 tf_estimator.train_and_evaluate(
                     estimator, train_spec, eval_spec)
 
-    def export(self, checkpoint=None, tag=None):
+    def export(self, checkpoint=None, tag=None, **kwargs):
         """
         Export the trained model.
         """
@@ -398,10 +398,10 @@ class TrainingManager:
                 keep_tmp_files=False)
 
             if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
-                kwargs = self._reader['nn.eam.setfl']
+                setfl_kwargs = self._reader['nn.eam.setfl']
 
-                if 'lattice' in kwargs:
-                    lattice = kwargs.pop('lattice')
+                if 'lattice' in setfl_kwargs:
+                    lattice = setfl_kwargs.pop('lattice')
                     lattice_constants = lattice.get('constant', {})
                     lattice_types = lattice.get('type', {})
                 else:
@@ -414,7 +414,9 @@ class TrainingManager:
                     setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
 
                 self._nn.export_to_setfl(
-                    join(self._hparams.train.model_dir, setfl),
+                    setfl=join(self._hparams.train.model_dir, setfl),
                     checkpoint=checkpoint,
                     lattice_constants=lattice_constants,
-                    lattice_types=lattice_types, **kwargs)
+                    lattice_types=lattice_types,
+                    **setfl_kwargs,
+                    **kwargs)
