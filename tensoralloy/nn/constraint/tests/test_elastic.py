@@ -16,7 +16,8 @@ from os.path import join
 
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.nn import EamAlloyNN
-from tensoralloy.nn.elastic import read_external_crystal, built_in_crystals
+from tensoralloy.nn.constraint.elastic import read_external_crystal
+from tensoralloy.nn.constraint.elastic import built_in_crystals
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'

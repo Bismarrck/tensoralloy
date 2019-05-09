@@ -25,7 +25,7 @@ from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.losses import LossMethod
-from tensoralloy.nn import elastic as elastic_ops
+from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
