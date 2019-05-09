@@ -9,6 +9,7 @@ import tensorflow as tf
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
+from tensoralloy.dtypes import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -54,7 +55,19 @@ class MishinH(EamAlloyPotential):
         """
         Return the default parameters.
         """
-        return {}
+        params = {
+            "Mo": {
+                "s1": -2.00695289e-01, "s2": -3.12178751e-04,
+                "s3": 7.86343222e-05, "s4": 5.29721645e+00,
+                "s5": 3.79481951e-02, "s6": 1.11800974e+02, "s7": 4.05948858e+00
+            },
+            "H": {
+                "s1": 8.08612, "s2": 1.46294e-2, "s3": -6.86143e-3,
+                "s4": 3.19616, "s5": 1.17247e-1, "s6": 50, "s7": 15e5,
+            }
+        }
+
+        return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
             verbose=False):
@@ -208,7 +221,11 @@ class MishinH(EamAlloyPotential):
             rho2 = tf.square(rho, name='rho2')
             rho3 = tf.multiply(rho, rho2, name='rho3')
             rho4 = tf.square(rho2, name='rho4')
-            rhos5 = tf.pow(rho, s5, name='rhos5')
+
+            with tf.name_scope("Safe"):
+                eps = tf.convert_to_tensor(get_float_dtype().eps, dtype, 'eps')
+                rho_eps = tf.add(rho, eps, 'rho')
+                rhos5 = tf.pow(rho_eps, s5, name='rhos5')
 
             with tf.name_scope("Omega"):
                 """
@@ -219,7 +236,7 @@ class MishinH(EamAlloyPotential):
                 """
                 a = tf.math.subtract(one, s6 * rho2)
                 b = tf.math.add(one, s7 * rho4)
-                right = tf.math.truediv(a, b, name='right')
+                right = tf.div_no_nan(a, b, name='right')
                 omega = tf.subtract(one, right, name='omega')
 
             values = [
