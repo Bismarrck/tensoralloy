@@ -10,7 +10,7 @@ from os.path import join
 from nose.tools import assert_equal, assert_in
 
 from tensoralloy.nn.constraint.data import built_in_crystals
-from tensoralloy.nn.constraint.elastic import read_external_crystal
+from tensoralloy.nn.constraint.data import read_external_crystal
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'

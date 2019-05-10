@@ -6,17 +6,15 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import numpy as np
-import toml
 
 from tensorflow_estimator import estimator as tf_estimator
 from ase.units import GPa
-from ase.io import read
-from os.path import join, realpath, dirname
 from typing import List, Union
 from itertools import product
 
-from tensoralloy.nn.constraint.data import ElasticConstant, Crystal
+from tensoralloy.nn.constraint.data import Crystal, read_external_crystal
 from tensoralloy.nn.constraint.data import built_in_crystals
+from tensoralloy.nn.constraint.voigt import voigt_notation
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor
@@ -25,98 +23,6 @@ from tensoralloy.nn.dataclasses import ElasticConstraintOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-# **Materials Project**
-# https://wiki.materialsproject.org/Elasticity_calculations
-#
-# Note that in this work, conventional unit cells, obtained using
-# `pymatgen.symmetry.SpacegroupAnalyzer.get_conventional_standard_structure`
-# are employed for all elastic constant calculations. In our experience, these
-# cells typically yield more accurate and better converged elastic constants
-# than primitive cells, at the cost of more computational time. We suspect this
-# has to do with the fact that unit cells often exhibit higher symmetries and
-# simpler Brillouin zones than primitive cells (an example is face centered
-# cubic cells).
-_identifier = "conventional_standard"
-
-
-def voigt_notation(i, j, return_py_index=False):
-    """
-    Return the Voigt notation given two indices (start from zero).
-    """
-    if i == j:
-        idx = i + 1
-    elif (i == 1 and j == 2) or (i == 2 and j == 1):
-        idx = 4
-    elif (i == 0 and j == 2) or (i == 2 and j == 0):
-        idx = 5
-    else:
-        idx = 6
-    if return_py_index:
-        return idx - 1
-    else:
-        return idx
-
-
-def voigt_to_ijkl(vi: int, vj: int, is_py_index=False):
-    """
-    Return the corresponding (i, j, k, l).
-    """
-    if not is_py_index:
-        vi -= 1
-        vj -= 1
-    ijkl = []
-    for val in (vi, vj):
-        if val < 3:
-            ijkl.extend((val, val))
-        elif val == 3:
-            ijkl.extend((1, 2))
-        elif val == 4:
-            ijkl.extend((0, 2))
-        else:
-            ijkl.extend((0, 1))
-    return ijkl
-
-
-def read_external_crystal(toml_file: str) -> Crystal:
-    """
-    Read a `Crystal` from the external toml file.
-    """
-    with open(toml_file) as fp:
-        key_value_pairs = dict(toml.load(fp))
-
-        name = key_value_pairs.pop('name')
-        phase = key_value_pairs.pop('phase')
-        real_path = realpath(join(dirname(toml_file),
-                                  key_value_pairs.pop('file')))
-
-        atoms = read(real_path,
-                     format=key_value_pairs.pop('format'))
-
-        constants = []
-        for key, value in key_value_pairs.items():
-            assert len(key) == 3
-            assert key[0] == 'c'
-            vi = int(key[1])
-            vj = int(key[2])
-            ijkl = voigt_to_ijkl(vi, vj, is_py_index=False)
-
-            if np.isscalar(value):
-                weight = 1.0
-                cijkl = value
-            elif isinstance(value, (tuple, list)):
-                assert len(value) == 2
-                cijkl, weight = value[0], value[1]
-            else:
-                raise ValueError("The value of Cij should be a float or list")
-
-            constants.append(ElasticConstant(ijkl, value=cijkl, weight=weight))
-
-        return Crystal(name=name,
-                       phase=phase,
-                       atoms=atoms,
-                       elastic_constants=constants)
 
 
 def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
