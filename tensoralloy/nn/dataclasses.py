@@ -150,6 +150,19 @@ class ElasticLossOptions(_LossOptions):
     constraint: ElasticConstraintOptions = ElasticConstraintOptions()
 
 
+@add_slots
+@dataclass
+class RoseLossOptions(_LossOptions):
+    """
+    Special options for the Rose Equation of State loss.
+    """
+
+    dx: float = 0.10
+    delta: float = 0.01
+    crystals: List[str] = None
+    beta: List[float] = None
+
+
 @dataclass
 class _HyperParameters:
     """
@@ -173,6 +186,7 @@ class LossParameters(_HyperParameters):
     total_pressure: PressureLossOptions = PressureLossOptions()
     l2: L2LossOptions = L2LossOptions()
     elastic: ElasticLossOptions = ElasticLossOptions()
+    rose: RoseLossOptions = RoseLossOptions()
 
 
 @add_slots

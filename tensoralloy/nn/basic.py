@@ -26,6 +26,7 @@ from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn.constraint import elastic as elastic_ops
+from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -68,7 +69,8 @@ all_properties = (
     StructuralProperty(name='stress'),
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
-    StructuralProperty(name='elastic')
+    StructuralProperty(name='elastic'),
+    StructuralProperty(name='rose', exportable=False)
 )
 
 exportable_properties = [
@@ -556,10 +558,21 @@ class BasicNN:
                 collections=collections)
 
             if 'elastic' in self._minimize_properties:
-                losses.elastic = elastic_ops.get_elastic_constant_loss(
-                    nn=self,
-                    list_of_crystal=loss_parameters.elastic.crystals,
-                    weight=loss_parameters.elastic.weight)
+                if loss_parameters.elastic.crystals is not None:
+                    losses.elastic = elastic_ops.get_elastic_constant_loss(
+                        base_nn=self,
+                        list_of_crystal=loss_parameters.elastic.crystals,
+                        weight=loss_parameters.elastic.weight)
+
+            if 'rose' in self._minimize_properties:
+                if loss_parameters.rose.crystals is not None:
+                    losses.rose = rose_ops.get_rose_constraint_loss(
+                        base_nn=self,
+                        list_of_crystal=loss_parameters.rose.crystals,
+                        beta=loss_parameters.rose.beta,
+                        dx=loss_parameters.rose.dx,
+                        delta=loss_parameters.rose.delta,
+                        weight=loss_parameters.rose.weight)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -608,7 +621,7 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop == 'elastic':
+            if prop in ('elastic', 'rose'):
                 continue
             assert prop in labels
 

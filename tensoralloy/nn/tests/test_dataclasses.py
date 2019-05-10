@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import nose
 
-from nose.tools import assert_equal, assert_raises
+from nose.tools import assert_equal, assert_raises, assert_is_none
 
 from tensoralloy.nn.dataclasses import OptParameters, LossParameters
 from tensoralloy.utils import AttributeDict
@@ -39,6 +39,9 @@ def test_dataclasses():
     assert_equal(loss_parameters.forces.method, 'logcosh')
     assert_equal(loss_parameters.elastic.crystals, ['Ni'])
     assert_equal(loss_parameters.elastic.constraint.stress_weight, 1.5)
+
+    assert_is_none(loss_parameters.rose.crystals, None)
+    assert_equal(loss_parameters.rose.dx, 0.10)
 
     with assert_raises(Exception):
         _ = OptParameters(**AttributeDict(decay_method='adam'))

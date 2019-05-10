@@ -14,7 +14,6 @@ from typing import List, Union
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.constraint.data import Crystal, get_crystal
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -82,7 +81,7 @@ def get_batch_transformer(original_clf: BatchDescriptorTransformer,
     return original_clf.__class__(**configs)
 
 
-def get_rose_constraint_loss(base_nn: BasicNN,
+def get_rose_constraint_loss(base_nn,
                              list_of_crystal: List[Union[str, Crystal]],
                              beta: List[float],
                              dx=0.10,
@@ -133,7 +132,7 @@ def get_rose_constraint_loss(base_nn: BasicNN,
 
             nn = base_nn.__class__(**configs)
 
-            with tf.name_scope("Equilibrium"):
+            with tf.name_scope("Eq"):
                 base_clf = base_nn.transformer
                 rc = base_clf.rc
                 angular = base_clf.k_max == 3
@@ -204,7 +203,7 @@ def get_rose_constraint_loss(base_nn: BasicNN,
                 outputs = nn.build(
                     features=fixed_batch,
                     mode=tf_estimator.ModeKeys.TRAIN,
-                    verbose=False)
+                    verbose=True)
 
                 predictions = tf.identity(outputs.energy, name='predictions')
 

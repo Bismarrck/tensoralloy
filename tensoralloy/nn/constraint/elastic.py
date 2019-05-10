@@ -92,7 +92,7 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         return elastic
 
 
-def get_elastic_constant_loss(nn,
+def get_elastic_constant_loss(base_nn,
                               list_of_crystal: List[Union[Crystal, str]],
                               options: ElasticConstraintOptions = None,
                               weight=1.0):
@@ -102,7 +102,7 @@ def get_elastic_constant_loss(nn,
 
     Parameters
     ----------
-    nn : BasicNN
+    base_nn : BasicNN
         A `BasicNN`. Its weights will be reused.
     list_of_crystal : List[Crystal] or List[str]
         A list of `Crystal` objects. It can also be a list of str as the names
@@ -116,7 +116,7 @@ def get_elastic_constant_loss(nn,
     if options is None:
         options = ElasticConstraintOptions()
 
-    configs = nn.as_dict()
+    configs = base_nn.as_dict()
     configs.pop('class')
     configs['export_properties'] = ['energy', 'forces', 'stress']
 
@@ -132,12 +132,12 @@ def get_elastic_constant_loss(nn,
 
             symbols = set(crystal.atoms.get_chemical_symbols())
             for symbol in symbols:
-                if symbol not in nn.elements:
+                if symbol not in base_nn.elements:
                     raise ValueError(f"{symbol} is not supported!")
 
             with tf.name_scope(f"{crystal.name}/{crystal.phase}"):
-                elastic_nn = nn.__class__(**configs)
-                elastic_clf = nn.transformer.as_descriptor_transformer()
+                elastic_nn = base_nn.__class__(**configs)
+                elastic_clf = base_nn.transformer.as_descriptor_transformer()
                 elastic_nn.attach_transformer(elastic_clf)
 
                 features = elastic_clf.get_constant_features(crystal.atoms)
