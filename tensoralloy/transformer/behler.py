@@ -381,6 +381,21 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
                                             use_stress=use_stress)
 
+    def as_dict(self) -> Dict:
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        d = {'class': self.__class__.__name__, 'rc': self._rc,
+             'max_occurs': self._max_occurs, 'nij_max': self._nij_max,
+             'nijk_max': self._nijk_max, 'batch_size': self._batch_size,
+             'angular': self._angular, 'periodic': self._periodic,
+             'eta': self._eta.tolist(), 'omega': self._omega.tolist(),
+             'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
+             'beta': self._beta.tolist(), 'trainable': self._trainable,
+             'cutoff_function': self._cutoff_function,
+             'use_forces': self._use_forces, 'use_stress': self._use_stress}
+        return d
+
     @property
     def descriptor(self):
         """

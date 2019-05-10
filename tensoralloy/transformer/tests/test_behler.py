@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from nose.tools import assert_less, assert_equal
+from nose.tools import assert_less, assert_equal, assert_dict_equal
 from ase import Atoms
 from ase.io import read
 from ase.neighborlist import neighbor_list
@@ -857,6 +857,34 @@ def test_as_dict():
 
         assert_array_equal(old_vals['O'][0], new_vals['O'][0])
         assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])
+
+
+def test_batch_transformer_as_dict():
+    """
+    Test the method `BatchSymmetryFunctionTransformer.as_dict`.
+    """
+    rc = 6.0
+    max_occurs = Counter({'Ni': 108, 'Mo': 32})
+    nij_max = 300
+    nijk_max = 400
+    angular = True
+    trainable = True
+    use_forces =  False
+    old = BatchSymmetryFunctionTransformer(
+        rc, max_occurs, nij_max=nij_max, nijk_max=nijk_max, angular=angular,
+        trainable=trainable, use_forces=use_forces)
+
+    configs = old.as_dict()
+    cls = configs.pop('class')
+    assert_equal(cls, 'BatchSymmetryFunctionTransformer')
+
+    new = BatchSymmetryFunctionTransformer(**configs)
+    assert_dict_equal(old.max_occurs, new.max_occurs)
+    assert_equal(old.nijk_max, new.nijk_max)
+    assert_equal(old.nij_max, new.nij_max)
+    assert_equal(new.trainable, trainable)
+    assert_equal(new.use_forces, use_forces)
+    assert_equal(new.angular, angular)
 
 
 def test_reuse_descriptor_variables():

@@ -244,6 +244,20 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
                                             use_stress=use_stress)
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        d = {'class': self.__class__.__name__,
+             'rc': self._rc,
+             'max_occurs': self._max_occurs,
+             'nij_max': self._nij_max,
+             'nnl_max': self._nnl_max,
+             'batch_size': self._batch_size,
+             'use_forces': self._use_forces,
+             'use_stress': self._use_stress}
+        return d
+
     @property
     def descriptor(self):
         """

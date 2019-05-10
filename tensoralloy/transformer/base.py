@@ -56,6 +56,13 @@ class BaseTransformer:
         return composition
 
     @abc.abstractmethod
+    def as_dict(self) -> Dict:
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        pass
+
+    @abc.abstractmethod
     def get_index_transformer(self, atoms: Atoms):
         """
         Return the corresponding `IndexTransformer`.
@@ -116,13 +123,6 @@ class DescriptorTransformer(BaseTransformer):
     def get_constant_features(self, atoms: Atoms):
         """
         Return a dict of constant feature tensors for the given `Atoms`.
-        """
-        pass
-
-    @abc.abstractmethod
-    def as_dict(self) -> Dict:
-        """
-        Return a JSON serializable dict representation of this transformer.
         """
         pass
 
