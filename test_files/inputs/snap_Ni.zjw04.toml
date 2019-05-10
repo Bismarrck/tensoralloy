@@ -9,7 +9,7 @@ test_size = 61
 tfrecords_dir = 'temp'
 
 [nn]
-minimize = ['energy', 'forces']
+minimize = ['energy', 'forces', 'rose']
 export = ['energy', 'forces', 'stress', 'hessian']
 
 [nn.loss]
@@ -21,6 +21,10 @@ weight = 0.01
 [nn.loss.energy]
 weight = 1.0
 per_atom_loss = false
+
+[nn.loss.rose]
+crystals = ['Ni']
+beta = [0.5e-2]
 
 [nn.loss.forces]
 weight = 3.0

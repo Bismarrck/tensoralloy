@@ -69,12 +69,14 @@ def test_read_eam_alloy_toml():
     assert_not_in('atomic', configs['nn'])
     assert_equal(len(nested_get(configs, 'nn.eam.rho')), 1)
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 1)
-    assert_list_equal(reader['nn.minimize'], ['energy', 'forces'])
+    assert_list_equal(reader['nn.minimize'], ['energy', 'forces', 'rose'])
     assert_list_equal(reader['nn.export'],
                       ['energy', 'forces', 'stress', 'hessian'])
     assert_equal(reader['nn.loss.l2.weight'], 0.01)
     assert_equal(reader['nn.loss.forces.weight'], 3.0)
     assert_equal(reader['nn.loss.energy.weight'], 1.0)
+    assert_list_equal(reader['nn.loss.rose.crystals'], ['Ni'])
+    assert_equal(reader['nn.loss.rose.beta'][0], 0.5e-2)
     assert_equal(reader['nn.loss.equivalently_trusted'], False)
 
 

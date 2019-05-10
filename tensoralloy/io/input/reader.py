@@ -148,6 +148,7 @@ class InputReader:
         _safe_update("nn.loss.total_pressure")
         _safe_update("nn.loss.l2")
         _safe_update("nn.loss.elastic")
+        _safe_update("nn.loss.rose")
 
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")

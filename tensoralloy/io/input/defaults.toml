@@ -25,6 +25,13 @@ weight = 1.0
 per_atom_loss = false
 method = "rmse"
 
+[nn.loss.rose]
+weight = 1.0
+crystals = []
+beta = []
+dx = 0.10
+delta = 0.01
+
 [nn.loss.forces]
 weight = 1.0
 method = "rmse"
