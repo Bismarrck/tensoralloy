@@ -59,7 +59,7 @@ def plot_potential(nx: int, dx: float, func: Callable, filename: str,
     else:
         xt = min(nx * dx, xt)
 
-    x = np.arange(x0, xt, dx)
+    x = np.linspace(x0, xt, num=int((xt - x0) / dx), endpoint=False)
     y = [func(xi) for xi in x]
 
     plt.plot(x, y, 'r-', linewidth=0.8)

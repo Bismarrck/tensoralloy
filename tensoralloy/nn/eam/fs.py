@@ -279,7 +279,7 @@ class EamFsNN(EamNN):
                         symmetric_partitions[kbody_term] = (value, mask)
 
             with tf.variable_scope("nnEAM"):
-                embed = self._build_embed_nn(
+                embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
                     mode=mode,
@@ -307,7 +307,7 @@ class EamFsNN(EamNN):
                     tf.global_variables_initializer().run()
 
                 results = AttributeDict(sess.run(
-                    {'embed': embed, 'rho': rho_vals, 'phi': phi_vals}))
+                    {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals}))
 
                 def make_density(_kbody_term):
                     """
