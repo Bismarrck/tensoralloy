@@ -95,10 +95,10 @@ def test_rose_eos_constraint():
             labels = AttributeDict(energy=batch.pop('y_true'),
                                    energy_confidence=batch.pop('y_conf'))
 
+            train_params = TrainParameters()
+            train_params.profile_steps = 0
             hparams = AttributeDict(
-                train=TrainParameters(),
-                loss=LossParameters(),
-                opt=OptParameters()
+                train=train_params, loss=LossParameters(), opt=OptParameters()
             )
             nn.model_fn(
                 features=batch,
