@@ -68,7 +68,7 @@ class Crystal:
 built_in_crystals = {
     "Al": Crystal(name="Al",
                   phase="fcc",
-                  bulk_modulus=0,
+                  bulk_modulus=76,
                   atoms=bulk('Al', cubic=True, crystalstructure='fcc'),
                   elastic_constants=[ElasticConstant([0, 0, 0, 0], 104),
                                      ElasticConstant([0, 0, 1, 1], 73),
