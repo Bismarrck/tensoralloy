@@ -12,13 +12,12 @@ from ase.units import GPa
 from typing import List, Union
 from itertools import product
 
-from tensoralloy.nn.constraint.data import Crystal, read_external_crystal
-from tensoralloy.nn.constraint.data import built_in_crystals
+from tensoralloy.nn.constraint.data import Crystal, get_crystal
 from tensoralloy.nn.constraint.voigt import voigt_notation
-from tensoralloy.precision import get_float_dtype
-from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.dataclasses import ElasticConstraintOptions
+from tensoralloy.precision import get_float_dtype
+from tensoralloy.utils import GraphKeys
 
 
 __author__ = 'Xin Chen'
@@ -129,14 +128,7 @@ def get_elastic_constant_loss(nn,
         constraints = {'forces': [], 'stress': []}
 
         for crystal_or_name_or_file in list_of_crystal:
-            if isinstance(crystal_or_name_or_file, str):
-                if crystal_or_name_or_file.endswith('toml'):
-                    crystal = read_external_crystal(crystal_or_name_or_file)
-                else:
-                    crystal = built_in_crystals[crystal_or_name_or_file]
-            elif not isinstance(crystal_or_name_or_file, Crystal):
-                raise ValueError(
-                    "`crystal` must be a str or a `Crystal` object!")
+            crystal = get_crystal(crystal_or_name_or_file)
 
             symbols = set(crystal.atoms.get_chemical_symbols())
             for symbol in symbols:

@@ -90,7 +90,7 @@ built_in_crystals = {
                                      ElasticConstant([0, 0, 1, 1], 159),
                                      ElasticConstant([1, 2, 1, 2], 132)]),
     "Mo": Crystal(name="Mo",
-                  phase="fcc",
+                  phase="bcc",
                   bulk_modulus=259,
                   atoms=bulk("Mo", cubic=True, crystalstructure='bcc'),
                   elastic_constants=[ElasticConstant([0, 0, 0, 0], 472),
@@ -168,3 +168,32 @@ def read_external_crystal(toml_file: str) -> Crystal:
                        bulk_modulus=bulk_modulus,
                        atoms=atoms,
                        elastic_constants=constants)
+
+
+def get_crystal(crystal_or_name_or_file: Union[str, Crystal]) -> Crystal:
+    """
+    Return a `Crystal` object.
+
+    Parameters
+    ----------
+    crystal_or_name_or_file : Unit[str, Crystal]
+        Maybe a str or a `Crystal` object. If str, it can be either a filename
+        or one of the names of the built-in crystals.
+
+    Returns
+    -------
+    crystal : Crystal
+        A `Crystal` object.
+
+    """
+    if isinstance(crystal_or_name_or_file, str):
+        if crystal_or_name_or_file.endswith('toml'):
+            crystal = read_external_crystal(crystal_or_name_or_file)
+        else:
+            crystal = built_in_crystals[crystal_or_name_or_file]
+    elif not isinstance(crystal_or_name_or_file, Crystal):
+        raise ValueError(
+            "`crystal` must be a str or a `Crystal` object!")
+    else:
+        crystal = crystal_or_name_or_file
+    return crystal
