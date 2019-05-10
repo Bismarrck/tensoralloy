@@ -96,8 +96,13 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
         diff = tf.multiply(diff, weights, name='diff/conf')
     dtype = get_float_dtype()
     eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-    cosh = tf.math.cosh(diff, name='cosh')
-    cosh = tf.add(cosh, eps, name='cosh/safe')
+    # The clip here is important to avoid cosh overflow.
+    with tf.name_scope("Clip"):
+        lb = tf.convert_to_tensor(-15.0, dtype=x.dtype, name='lb')
+        ub = tf.convert_to_tensor(+15.0, dtype=x.dtype, name='ub')
+        clip = tf.clip_by_value(diff, lb, ub, name='clip')
+        cosh = tf.math.cosh(clip, name='cosh')
+        cosh = tf.add(cosh, eps, name='cosh/safe')
     logcosh = tf.reduce_mean(tf.math.log(cosh), name='logcosh')
     return logcosh, mae
 
