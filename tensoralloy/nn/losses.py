@@ -103,7 +103,7 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
         clip = tf.clip_by_value(diff, lb, ub, name='clip')
         cosh = tf.math.cosh(clip, name='cosh')
         cosh = tf.add(cosh, eps, name='cosh/safe')
-    logcosh = tf.reduce_mean(tf.math.log(cosh), name='logcosh')
+    logcosh = tf.reduce_mean(tf.math.log(cosh), name='logcosh' + suffix)
     return logcosh, mae
 
 
