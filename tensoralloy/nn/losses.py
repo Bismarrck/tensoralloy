@@ -148,8 +148,14 @@ def get_energy_loss(labels, predictions, n_atoms, weights=None,
         else:
             x = tf.identity(labels, name='labels')
             y = tf.identity(predictions, name='predictions')
-        raw_loss, mae = _get_rmse_loss(x, y, weights=weights,
-                                       is_per_atom_loss=per_atom_loss)
+
+        if method == LossMethod.rmse:
+            raw_loss, mae = _get_rmse_loss(x, y, weights=weights,
+                                           is_per_atom_loss=per_atom_loss)
+        else:
+            raw_loss, mae = _get_logcosh_loss(x, y, weights=weights,
+                                              is_per_atom_loss=per_atom_loss)
+
         loss_weight = tf.convert_to_tensor(
             loss_weight, raw_loss.dtype, name='weight')
         loss = tf.multiply(raw_loss, loss_weight, name='weighted/loss')
