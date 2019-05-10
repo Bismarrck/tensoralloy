@@ -56,17 +56,23 @@ class MishinH(EamAlloyPotential):
         Return the default parameters.
         """
         params = {
+            # Self-fitted parameters
             "Mo": {
                 "s1": -2.00695289e-01, "s2": -3.12178751e-04,
                 "s3": 7.86343222e-05, "s4": 5.29721645e+00,
                 "s5": 3.79481951e-02, "s6": 1.11800974e+02, "s7": 4.05948858e+00
             },
+            "Al": {
+                "s1": -3.72848864e-01, "s2": 6.52035828e-03,
+                "s3": 9.71742655e-05, "s4": 7.64264116e+00,
+                "s5": 6.88604789e-02, "s6": 1.55694016e+01, "s7": 5.38646368e+00
+            },
+            # Parameters fitted by Mishin
             "H": {
                 "s1": 8.08612, "s2": 1.46294e-2, "s3": -6.86143e-3,
                 "s4": 3.19616, "s5": 1.17247e-1, "s6": 50, "s7": 15e5,
             }
         }
-
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
