@@ -86,7 +86,8 @@ def get_rose_constraint_loss(base_nn,
                              beta: List[float],
                              dx=0.10,
                              delta=0.01,
-                             weight=1.0) -> tf.Tensor:
+                             weight=1.0,
+                             verbose=True) -> tf.Tensor:
     """
     Create a Rose Equation of State constraint. This constraint is used to fit
     the bulk modulus.
@@ -106,6 +107,8 @@ def get_rose_constraint_loss(base_nn,
         The delta between two adjacents. n_total = int(2 * dx / delta) + 1.
     weight : float
         The loss weight.
+    verbose : bool
+        If True, key tensors will be logged.
 
     Returns
     -------
@@ -148,7 +151,7 @@ def get_rose_constraint_loss(base_nn,
                 output = nn.build(
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
-                    verbose=True)
+                    verbose=verbose)
                 e0 = tf.identity(output.energy, name='E0')
                 v0 = tf.identity(features.volume, name='v0')
 
@@ -203,7 +206,7 @@ def get_rose_constraint_loss(base_nn,
                 outputs = nn.build(
                     features=fixed_batch,
                     mode=tf_estimator.ModeKeys.TRAIN,
-                    verbose=True)
+                    verbose=verbose)
 
                 predictions = tf.identity(outputs.energy, name='predictions')
 
@@ -225,5 +228,7 @@ def get_rose_constraint_loss(base_nn,
 
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+                tf.add_to_collection(GraphKeys.EVAL_METRICS, rmse)
+                tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
 
                 return loss

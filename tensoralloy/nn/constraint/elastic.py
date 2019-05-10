@@ -95,7 +95,8 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
 def get_elastic_constant_loss(base_nn,
                               list_of_crystal: List[Union[Crystal, str]],
                               options: ElasticConstraintOptions = None,
-                              weight=1.0):
+                              weight=1.0,
+                              verbose=True):
     """
     Return a special loss: RMSE (GPa) of certain elastic constants of
     certain bulk solids.
@@ -111,6 +112,8 @@ def get_elastic_constant_loss(base_nn,
         The options of the loss contributed by the constraints.
     weight : float
         The weight of the loss contributed by elastic constants.
+    verbose : bool
+        If True, key tensors will be logged.
 
     """
     if options is None:

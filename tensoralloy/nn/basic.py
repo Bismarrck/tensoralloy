@@ -557,12 +557,15 @@ class BasicNN:
                 loss_weight=loss_parameters.l2.weight,
                 collections=collections)
 
+            verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)
+
             if 'elastic' in self._minimize_properties:
                 if loss_parameters.elastic.crystals is not None:
                     losses.elastic = elastic_ops.get_elastic_constant_loss(
                         base_nn=self,
                         list_of_crystal=loss_parameters.elastic.crystals,
-                        weight=loss_parameters.elastic.weight)
+                        weight=loss_parameters.elastic.weight,
+                        verbose=verbose)
 
             if 'rose' in self._minimize_properties:
                 if loss_parameters.rose.crystals is not None:
@@ -572,7 +575,8 @@ class BasicNN:
                         beta=loss_parameters.rose.beta,
                         dx=loss_parameters.rose.dx,
                         delta=loss_parameters.rose.delta,
-                        weight=loss_parameters.rose.weight)
+                        weight=loss_parameters.rose.weight,
+                        verbose=verbose)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
