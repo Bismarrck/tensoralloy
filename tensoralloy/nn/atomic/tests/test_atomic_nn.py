@@ -153,7 +153,7 @@ def test_inference_from_transformer():
         clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
                                           angular=False)
         nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'])
-        nn.transformer = clf
+        nn.attach_transformer(clf)
         prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction.energy.shape.as_list(), [])
