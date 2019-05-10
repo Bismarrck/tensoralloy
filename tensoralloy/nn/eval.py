@@ -131,9 +131,13 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
                         tf.metrics.mean(upper / lower)
                 metrics.update(ops_dict)
 
-        if 'elastic' in eval_properties:
-            for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
-                if tensor.op.name.startswith("Elastic"):
-                    metrics[tensor.op.name] = (tensor, tf.no_op())
+        for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
+            if tensor.op.name.startswith("Elastic"):
+                metrics[tensor.op.name] = (tensor, tf.no_op())
+            elif tensor.op.name.startswith("Rose"):
+                slist = tensor.op.name.split("/")
+                istop = slist.index('EOS')
+                key = "/".join(slist[:istop])
+                metrics[key] = (tensor, tf.no_op())
 
         return metrics

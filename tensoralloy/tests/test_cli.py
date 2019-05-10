@@ -32,7 +32,7 @@ class PrintSummaryTest(unittest.TestCase):
         """
         program = PrintEvaluationSummaryProgram()
         df = program.print_evaluation_summary(join(test_dir(), "logfile"))
-        assert_equal(df.index.tolist(), [200, 400])
+        assert_equal(df.index.tolist(), [500, 1000])
         assert_equal(exists(self.csv_file), True)
 
     def tearDown(self):
