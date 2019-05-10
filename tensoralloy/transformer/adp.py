@@ -12,10 +12,10 @@ from tensoralloy.transformer.eam import EAMTransformer, BatchEAMTransformer
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["AdpTransformer", "BatchAdpTransformer"]
+__all__ = ["ADPTransformer", "BatchADPTransformer"]
 
 
-class AdpTransformer(EAMTransformer):
+class ADPTransformer(EAMTransformer):
     """
     The feature transformer for the ADP potential.
     """
@@ -24,11 +24,11 @@ class AdpTransformer(EAMTransformer):
         """
         Initialization method.
         """
-        super(AdpTransformer, self).__init__(rc=rc, elements=elements)
+        super(ADPTransformer, self).__init__(rc=rc, elements=elements)
         self._graph_scope_name = "ADP"
 
 
-class BatchAdpTransformer(BatchEAMTransformer):
+class BatchADPTransformer(BatchEAMTransformer):
     """
     A batch implementation of feature transformer for the ADP potential.
     """
@@ -39,7 +39,7 @@ class BatchAdpTransformer(BatchEAMTransformer):
         """
         Initialization method.
         """
-        super(BatchAdpTransformer, self).__init__(
+        super(BatchADPTransformer, self).__init__(
             rc=rc, max_occurs=max_occurs, nij_max=nij_max, nnl_max=nnl_max,
             batch_size=batch_size, use_forces=use_forces, use_stress=use_stress
         )
