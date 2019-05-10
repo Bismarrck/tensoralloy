@@ -173,7 +173,7 @@ class SurfaceSlabTest(unittest.TestCase):
         lammps = self.get_lammps_calculator()
 
         # Initialize a calculator
-        graph_model_path = join(test_dir(), 'Ni', 'Ni.zhou04.pb')
+        graph_model_path = join(test_dir(), 'models', 'Ni.zhou04.pb')
         clf = TensorAlloyCalculator(graph_model_path)
 
         # Create several slabs
