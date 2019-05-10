@@ -17,7 +17,7 @@ from collections import Counter
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.eam.adp import AdpNN
-from tensoralloy.transformer.adp import AdpTransformer, BatchAdpTransformer
+from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
 from tensoralloy.test_utils import test_dir
 from tensoralloy.utils import AttributeDict
 
@@ -40,7 +40,7 @@ def test_dynamic_partition():
     with tf.Graph().as_default():
 
         nn = AdpNN(elements=elements)
-        adp = AdpTransformer(rc, elements)
+        adp = ADPTransformer(rc, elements)
         adp.get_placeholder_features()
 
         with tf.name_scope("Symmetric"):
@@ -67,7 +67,7 @@ def test_dynamic_partition():
         size = find_neighbor_size_of_atoms(atoms, rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
 
-        adp = BatchAdpTransformer(rc=rc,
+        adp = BatchADPTransformer(rc=rc,
                                   max_occurs=max_occurs,
                                   nij_max=size.nij,
                                   nnl_max=size.nnl,

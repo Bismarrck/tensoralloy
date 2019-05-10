@@ -36,6 +36,22 @@ class BaseTransformer:
 
     @property
     @abc.abstractmethod
+    def rc(self):
+        """
+        Return the cutoff radius.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def k_max(self):
+        """
+        Return the k-max.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
     def elements(self) -> List[str]:
         """
         A property that all subclasses should implement.
@@ -249,22 +265,6 @@ class BatchDescriptorTransformer(BaseTransformer):
     def descriptor(self):
         """
         Return the name of the descriptor.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def k_max(self):
-        """
-        Return the k-max.
-        """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def rc(self):
-        """
-        Return the cutoff radius.
         """
         pass
 

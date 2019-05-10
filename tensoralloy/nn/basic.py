@@ -184,19 +184,18 @@ class BasicNN:
             results[element] = sizes.tolist()
         return results
 
-    def attach_transformer(self, clf: BaseTransformer):
-        """
-        Attach a descriptor transformer to this NN.
-        """
-        self._transformer = clf
-
-    def _get_transformer(self):
+    @property
+    def transformer(self) -> BaseTransformer:
         """
         Get the attached transformer.
         """
         return self._transformer
 
-    transformer = property(_get_transformer, attach_transformer)
+    def attach_transformer(self, clf: BaseTransformer):
+        """
+        Attach a descriptor transformer to this NN.
+        """
+        self._transformer = clf
 
     def as_dict(self):
         """
