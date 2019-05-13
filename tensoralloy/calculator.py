@@ -8,10 +8,12 @@ import tensorflow as tf
 import numpy as np
 import json
 import warnings
+import glob
 
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.units import GPa
+from ase.io import read
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
@@ -22,9 +24,15 @@ from pymatgen.analysis.elasticity.elastic import ElasticTensor
 
 from phonopy.phonon.band_structure import get_band_qpoints_by_seekpath
 from phonopy.phonon.band_structure import get_band_qpoints
+from phonopy.structure.atoms import PhonopyAtoms
+from phonopy.interface import parse_disp_yaml
 from phonopy.interface import get_default_physical_units
+from phonopy.interface import get_default_displacement_distance
+from phonopy.interface import write_supercells_with_displacements
+from phonopy.interface import write_FORCE_SETS
 from phonopy.structure.cells import guess_primitive_matrix
 from phonopy.units import VaspToCm
+from phonopy import file_IO
 
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
@@ -340,9 +348,89 @@ class TensorAlloyCalculator(Calculator):
         wave_numbers = eigvals * VaspToCm
         return wave_numbers, eigvecs.transpose()
 
+    def _parse_set_of_forces(self, forces_filenames):
+        """
+        A helper function to compute atomic forces of displaced structures.
+        """
+        force_sets = []
+        for filename in forces_filenames:
+            atoms = read(filename, format='vasp', index=-1)
+            force_sets.append(self.get_forces(atoms))
+        return force_sets
+
+    def get_numeric_force_sets(self, phonon: Phonopy, supercell: Atoms,
+                               displacement_distance=None,
+                               force_sets_zero_mode=False,
+                               verbose=True):
+        """
+        Compute the force constants using the numeric method.
+        """
+
+        if displacement_distance is None:
+            displacement_distance = get_default_displacement_distance('vasp')
+
+        phonon.generate_displacements(
+            distance=displacement_distance,
+            is_plusminus=False,
+            is_diagonal=False,
+            is_trigonal=False)
+        displacements = phonon.get_displacements()
+
+        _supercell = PhonopyAtoms(supercell.symbols,
+                                  positions=supercell.positions,
+                                  pbc=supercell.pbc,
+                                  cell=supercell.cell)
+
+        file_IO.write_disp_yaml(displacements, _supercell)
+
+        # Write supercells with displacements
+        cells_with_disps = phonon.get_supercells_with_displacements()
+        N = abs(np.linalg.det(phonon.supercell_matrix))
+
+        write_supercells_with_displacements('vasp',
+                                            _supercell,
+                                            cells_with_disps,
+                                            N,
+                                            ("POSCAR", ))
+
+        force_sets_filename = "FORCE_SETS"
+        disp_filename = "disp.yaml"
+        disp_dataset = parse_disp_yaml(filename=disp_filename)
+        num_displacements = len(disp_dataset['first_atoms'])
+        n_atoms = disp_dataset['natom']
+        force_filenames = glob.glob("POSCAR-*")
+
+        if force_sets_zero_mode:
+            num_displacements += 1
+        force_sets = self._parse_set_of_forces(force_filenames)
+
+        if force_sets:
+            if force_sets_zero_mode:
+                def _subtract_residual_forces(_force_sets):
+                    for i in range(1, len(_force_sets)):
+                        _force_sets[i] -= _force_sets[0]
+                    return _force_sets[1:]
+                force_sets = _subtract_residual_forces(force_sets)
+            for forces, disp in zip(force_sets, disp_dataset['first_atoms']):
+                disp['forces'] = forces
+            write_FORCE_SETS(disp_dataset, filename=force_sets_filename)
+
+        if verbose:
+            if force_sets:
+                print("%s has been created." % force_sets_filename)
+            else:
+                print("%s could not be created." % force_sets_filename)
+
+        phonon.set_displacement_dataset(
+            file_IO.parse_FORCE_SETS(n_atoms, filename=force_sets_filename))
+
+        # Need to calculate full force constant tensors
+        phonon.produce_force_constants(use_alm=False)
+
     def get_phonon_spectrum(self, atoms=None, supercell=(4, 4, 4),
-                            primitive_axes=None, band_paths=None,
-                            band_labels=None, npoints=51, image_file=None,
+                            numeric_hessian=False, primitive_axes=None,
+                            band_paths=None, band_labels=None, npoints=51,
+                            symprec=1e-5, save_fc=None, image_file=None,
                             use_wavenumber=False, plot_vertical_lines=False,
                             verbose=False):
         """
@@ -354,6 +442,9 @@ class TensorAlloyCalculator(Calculator):
             The target `Atoms` object.
         supercell : tuple or list or array_like
             The supercell expanding factors.
+        numeric_hessian : bool
+            If False, the analytical hessian will be computed. Otherwise the
+            numeric approch shall be used.
         primitive_axes : None or str or array_like
             The primitive axes. If None or 'auto', the primitive axes will be
             guessed.
@@ -373,6 +464,10 @@ class TensorAlloyCalculator(Calculator):
             Labels of the end points of band paths.
         npoints: int
             Number of q-points in each path including end points.
+        symprec : float
+            The precision for determining the spacegroup of the primitive.
+        save_fc : None or str
+            The file to save the calculated force constants or None.
         image_file : str or None
             A filepath for saving the phonon spectrum if provided.
         use_wavenumber : bool
@@ -392,22 +487,12 @@ class TensorAlloyCalculator(Calculator):
             raise ValueError(
                 f"{self._graph_model_path} cannot predict hessians.")
 
-        calc = self.__class__(self._graph_model_path)
-        super_atoms = atoms * supercell
-        super_atoms.calc = calc
-        calc.calculate(super_atoms)
-
-        hessian = calc.get_property('hessian', super_atoms)
-        clf = calc.transformer.get_index_transformer(super_atoms)
-        fc = clf.reverse_map_hessian(hessian, phonopy_format=True)
-
         # Physical units: energy,  distance,  atomic mass, force
         # vasp          : eV,      Angstrom,  AMU,         eV/Angstrom
         # tensoralloy   : eV,      Angstrom,  AMU,         eV/Angstrom
         physical_units = get_default_physical_units('vasp')
 
         # Check the primitive matrix
-        symprec = 1e-5
         if primitive_axes is None or primitive_axes == 'auto':
             primitive_matrix = guess_primitive_matrix(atoms, symprec)
             is_primitive_axes_auto = True
@@ -433,7 +518,25 @@ class TensorAlloyCalculator(Calculator):
             is_symmetry=True,
             use_lapack_solver=False,
             log_level=0)
-        phonon.set_force_constants(fc)
+
+        calc = self.__class__(self._graph_model_path)
+        super_atoms = atoms * supercell
+        super_atoms.calc = calc
+        calc.calculate(super_atoms)
+
+        if not numeric_hessian:
+            hessian = calc.get_property('hessian', super_atoms)
+            clf = calc.transformer.get_index_transformer(super_atoms)
+            fc = clf.reverse_map_hessian(hessian, phonopy_format=True)
+
+            # Convert the matrix to `double` and save it if required.
+            fc = fc.astype(np.float64)
+            if save_fc is not None:
+                np.savez(save_fc, fc=fc)
+            phonon.set_force_constants(fc)
+
+        else:
+            self.get_numeric_force_sets(phonon, super_atoms, None)
 
         is_band_mode_auto = False
 
