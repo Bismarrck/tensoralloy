@@ -128,7 +128,9 @@ def get_elastic_constant_loss(base_nn,
         predictions = []
         labels = []
         cijkl_weights = []
-        constraints = {'forces': [], 'stress': []}
+        dtype = get_float_dtype()
+        eps = tf.convert_to_tensor(dtype.eps, dtype=dtype, name='eps')
+        constraints = {'forces': [eps], 'stress': [eps]}
 
         for crystal_or_name_or_file in list_of_crystal:
             crystal = get_crystal(crystal_or_name_or_file)
@@ -210,8 +212,6 @@ def get_elastic_constant_loss(base_nn,
                                  name='sd/weighted')
                 mse = tf.reduce_mean(sd, name='mse')
                 mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
-                dtype = get_float_dtype()
-                eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
                 mse = tf.add(mse, eps, name='mse/safe')
                 weight = tf.convert_to_tensor(weight, dtype, name='weight')
                 raw_loss = tf.sqrt(mse, name='rmse')
