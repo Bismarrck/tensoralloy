@@ -148,7 +148,7 @@ def get_elastic_constant_loss(base_nn,
                 output = elastic_nn.build(
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
-                    verbose=True)
+                    verbose=verbose)
                 total_stress = output.total_stress
                 cell = features.cells
                 volume = features.volume
