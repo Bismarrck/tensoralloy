@@ -17,6 +17,8 @@ from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.utils import Defaults, GraphKeys
 
+# TODO: use a custom `PowGrad` to fix the NaN bug when `zeta` is 1
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -352,7 +354,12 @@ class SymmetryFunction(AtomicDescriptor):
             delta = self._get_v2g_map_delta(index)
             one = tf.constant(1.0, dtype=r2c.dtype, name='one')
             two = tf.constant(2.0, dtype=r2c.dtype, name='two')
-            c = ((one + gamma * theta)**zeta) * (two**(one - zeta))
+            gt = tf.math.multiply(gamma, theta, name='gt')
+            gt1 = tf.add(gt, one, name='gt1')
+            gt1z = tf.pow(gt1, zeta, name='gt1z')
+            z1 = tf.math.subtract(one, zeta, name='z1')
+            z12 = tf.math.pow(two, z1, name='z12')
+            c = tf.math.multiply(gt1z, z12, name='c')
             v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
             return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
