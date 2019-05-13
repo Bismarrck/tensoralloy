@@ -14,7 +14,7 @@ export = ['energy', 'forces', 'hessian', 'stress']
 method = 'logcosh'
 
 [nn.loss.elastic]
-crystals = ['Al']
+crystals = ['Al.toml']
 weight = 0.1
 
 [nn.loss.elastic.constraint]

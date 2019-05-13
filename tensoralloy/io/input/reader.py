@@ -206,4 +206,17 @@ class InputReader:
                 continue
             nested_set(results, keypath, _convert_filepath(filepath))
 
+        for keypath in ("nn.loss.elastic.crystals",
+                        "nn.loss.rose.crystals"):
+            list_of_values = nested_get(results, keypath)
+            if list_of_values is None:
+                continue
+
+            n = len(list_of_values)
+
+            for i in range(n):
+                assert isinstance(list_of_values[i], str)
+                if list_of_values[i].endswith("toml"):
+                    list_of_values[i] = _convert_filepath(list_of_values[i])
+
         return results

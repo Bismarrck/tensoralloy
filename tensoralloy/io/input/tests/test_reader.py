@@ -96,7 +96,8 @@ def test_read_eam_fs_toml():
                       ['energy', 'forces', 'stress', 'elastic'])
     assert_equal(reader['nn.loss.stress.method'], 'logcosh')
 
-    assert_equal(reader['nn.loss.elastic.crystals'], ['Al'])
+    assert_equal(realpath(reader['nn.loss.elastic.crystals'][0]),
+                 realpath(join(test_dir(True), "inputs", "Al.toml")))
     assert_equal(reader['nn.loss.elastic.weight'], 0.1)
     assert_equal(reader['nn.loss.elastic.constraint.use_kbar'], False)
     assert_equal(reader['nn.loss.elastic.constraint.forces_weight'], 1.0)
