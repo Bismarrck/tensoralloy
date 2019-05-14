@@ -155,8 +155,9 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
 
         grads_and_vars = {}
         total_norms = {}
+        _properties = list(minimize_properties) + ["l2"]
 
-        for prop in minimize_properties:
+        for prop in _properties:
             if prop not in losses:
                 continue
             with tf.name_scope(
