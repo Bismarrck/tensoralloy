@@ -77,6 +77,8 @@ class Dataset:
         else:
             self._serial = serial
 
+        self._check()
+
     @property
     def database(self):
         """
@@ -155,6 +157,12 @@ class Dataset:
         Return the number of examples in this dataset.
         """
         return len(self._database)
+
+    def _check(self):
+        """
+        Necessary internal check calls.
+        """
+        self._database.get_atomic_static_energy(allow_calculation=True)
 
     def _write_subset(self, mode: tf_estimator.ModeKeys, filename: str,
                       indices: List[int], verbose=False):
