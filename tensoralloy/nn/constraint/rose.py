@@ -131,7 +131,7 @@ def get_rose_constraint_loss(base_nn,
         if crystal.bulk_modulus == 0:
             continue
 
-        with tf.name_scope(f"Rose/{crystal.name}/"):
+        with tf.name_scope(f"Rose/{crystal.name}/{crystal.phase}/"):
 
             nn = base_nn.__class__(**configs)
 
