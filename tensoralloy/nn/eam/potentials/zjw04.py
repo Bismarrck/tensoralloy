@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.extension.grad_ops import safe_pow
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -294,7 +295,7 @@ class Zjw04(EamAlloyPotential):
                 with tf.name_scope("e1"):
                     Fn = [Fn0, Fn1, Fn2, Fn3]
                     x = _rho / rho_n - one
-                    return tf.add_n([tf.multiply(Fn[i], tf.pow(x, i))
+                    return tf.add_n([tf.multiply(Fn[i], safe_pow(x, i))
                                      for i in range(len(Fn))], name='e1')
 
             def embed2(_rho):
@@ -318,8 +319,8 @@ class Zjw04(EamAlloyPotential):
                 with tf.name_scope("e2"):
                     x = _rho / rho_e - one
                     e2 = [tf.multiply(F1, x, 'F1e1'),
-                          tf.multiply(F2, tf.pow(x, 2, name='e2_2'), 'F2e2'),
-                          tf.multiply(F3, tf.pow(x, 3, name='e2_3'), 'F3e3')]
+                          tf.multiply(F2, safe_pow(x, 2), 'F2e2'),
+                          tf.multiply(F3, safe_pow(x, 3), 'F3e3')]
                     return tf.add(F0, tf.add_n(e2, name='e2_123'),
                                   name='e2')
 
@@ -331,7 +332,7 @@ class Zjw04(EamAlloyPotential):
                     x = _rho / rho_s
                     lnx = tf.log(x)
                     return tf.multiply(Fe * (one - eta * lnx),
-                                       tf.pow(x, eta), name='e3')
+                                       safe_pow(x, eta), name='e3')
 
             idx1 = tf.where(tf.less(rho, rho_n), name='idx1')
             idx2 = tf.where(tf.logical_and(tf.greater_equal(rho, rho_n),
@@ -446,8 +447,8 @@ class Zjw04xc(Zjw04):
                 with tf.name_scope("e1"):
                     x = tf.subtract(tf.math.truediv(_rho, rho_n), one, name='x')
                     e1 = [tf.multiply(Fn1, x, 'Fn1e1'),
-                          tf.multiply(Fn2, tf.pow(x, 2, 'e1_2'), 'Fn2e2'),
-                          tf.multiply(Fn3, tf.pow(x, 3, 'e1_3'), 'Fn3e3')]
+                          tf.multiply(Fn2, safe_pow(x, 2, 'e1_2'), 'Fn2e2'),
+                          tf.multiply(Fn3, safe_pow(x, 3, 'e1_3'), 'Fn3e3')]
                     return tf.add(Fn0, tf.add_n(e1, name='e1_123'), name='e1')
 
             def embed2(_rho):
@@ -469,8 +470,8 @@ class Zjw04xc(Zjw04):
                 with tf.name_scope("e2"):
                     x = tf.subtract(tf.math.truediv(_rho, rho_e), one, name='x')
                     e2 = [tf.multiply(F1, x, 'F1e1'),
-                          tf.multiply(F2, tf.pow(x, 2, name='e2_2'), 'F2e2'),
-                          tf.multiply(F3, tf.pow(x, 3, name='e2_3'), 'F3e3')]
+                          tf.multiply(F2, safe_pow(x, 2), 'F2e2'),
+                          tf.multiply(F3, safe_pow(x, 3), 'F3e3')]
                     return tf.add(F0, tf.add_n(e2, name='e2_123'),
                                   name='e2')
 
@@ -483,7 +484,7 @@ class Zjw04xc(Zjw04):
                     x = tf.add(tf.math.truediv(_rho, rho_s), eps, name='x')
                     lnx = tf.log(x)
                     return tf.multiply(Fe * (one - eta * lnx),
-                                       tf.pow(x, eta), name='e3')
+                                       safe_pow(x, eta), name='e3')
 
             y1 = embed1(rho)
             y2 = embed2(rho)

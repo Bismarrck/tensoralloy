@@ -9,6 +9,7 @@ import tensorflow as tf
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.nn.utils import log_tensor
+from tensoralloy.extension.grad_ops import safe_pow
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -52,7 +53,7 @@ class AgSutton90(EamAlloyPotential):
             b = self._get_variable('b', r.dtype, kbody_term, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            phi = tf.pow(b * r, 12, name='phi')
+            phi = safe_pow(b * r, 12, name='phi')
             if verbose:
                 log_tensor(phi)
             return phi
@@ -70,7 +71,7 @@ class AgSutton90(EamAlloyPotential):
             a = self._get_variable('a', r.dtype, element, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            rho = tf.pow(a * r, 6, name='rho')
+            rho = safe_pow(a * r, 6, name='rho')
             if verbose:
                 log_tensor(rho)
             return rho

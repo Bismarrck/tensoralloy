@@ -10,6 +10,7 @@ from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.precision import get_float_dtype
+from tensoralloy.extension.grad_ops import safe_pow
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -25,7 +26,7 @@ def mishin_cutoff(x):
     """
     with tf.name_scope("Psi"):
         x = tf.nn.relu(-x, name='ix')
-        x4 = tf.pow(x, 4, name='x4')
+        x4 = safe_pow(x, 4)
         one = tf.constant(1.0, dtype=x.dtype, name='one')
         return tf.math.truediv(x4, one + x4, name='psi')
 
@@ -174,10 +175,10 @@ class MishinH(EamAlloyPotential):
             drh = tf.math.truediv(dr, h, name='drh')
             psi = mishin_cutoff(drh)
 
-            rz1 = tf.pow(r, z1, name='rz1')
-            e1 = tf.exp(-r * a1, name='e1')
-            rz2 = tf.pow(r, z2, name='rz2')
-            e2 = tf.exp(-r * a2, name='e2')
+            rz1 = safe_pow(r, z1)
+            e1 = safe_pow(-r * a1)
+            rz2 = safe_pow(r, z2)
+            e2 = safe_pow(-r * a2)
 
             c = tf.add_n([tf.math.multiply(A0, rz1 * e1, 'A'),
                           tf.math.multiply(B0, rz2 * e2, 'B'),
@@ -231,7 +232,7 @@ class MishinH(EamAlloyPotential):
             with tf.name_scope("Safe"):
                 eps = tf.convert_to_tensor(get_float_dtype().eps, dtype, 'eps')
                 rho_eps = tf.add(rho, eps, 'rho')
-                rhos5 = tf.pow(rho_eps, s5, name='rhos5')
+                rhos5 = safe_pow(rho_eps, s5, name='rhos5')
 
             with tf.name_scope("Omega"):
                 """
@@ -392,7 +393,7 @@ class MishinTa(EamAlloyPotential):
 
             z = tf.math.subtract(r, r0, name='z')
             egz = tf.exp(-gamma * z)
-            c = tf.add((one + B0 * egz) * A0 * egz * tf.pow(z, y), C0, name='c')
+            c = tf.add((one + B0 * egz) * A0 * egz * safe_pow(z, y), C0, name='c')
 
             rho = tf.multiply(c, psi, name='rho')
             if verbose:

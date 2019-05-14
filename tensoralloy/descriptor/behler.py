@@ -16,6 +16,7 @@ from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.utils import Defaults, GraphKeys
+from tensoralloy.extension.grad_ops import safe_pow
 
 # TODO: use a custom `PowGrad` to fix the NaN bug when `zeta` is 1
 
@@ -356,9 +357,9 @@ class SymmetryFunction(AtomicDescriptor):
             two = tf.constant(2.0, dtype=r2c.dtype, name='two')
             gt = tf.math.multiply(gamma, theta, name='gt')
             gt1 = tf.add(gt, one, name='gt1')
-            gt1z = tf.pow(gt1, zeta, name='gt1z')
+            gt1z = safe_pow(gt1, zeta)
             z1 = tf.math.subtract(one, zeta, name='z1')
-            z12 = tf.math.pow(two, z1, name='z12')
+            z12 = safe_pow(two, z1)
             c = tf.math.multiply(gt1z, z12, name='c')
             v_index = tf.multiply(c * tf.exp(-beta * r2c), fc_r, f'v_{index}')
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
