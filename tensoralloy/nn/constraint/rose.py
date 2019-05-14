@@ -54,7 +54,7 @@ def get_batch_transformer(original_clf: BatchDescriptorTransformer,
     if cls == 'BatchSymmetryFunctionTransformer':
         nij_max = max(map(lambda x: x.nij, sizes))
         if configs['angular']:
-            nijk_max = max(map(lambda x: x.nij, sizes))
+            nijk_max = max(map(lambda x: x.nijk, sizes))
         else:
             nijk_max = 0
         configs['nij_max'] = nij_max
