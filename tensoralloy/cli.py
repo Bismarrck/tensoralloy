@@ -22,6 +22,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.analysis.eos import EquationOfState
 from tensoralloy.io.read import read_file
 from tensoralloy.io.input import InputReader
+from tensoralloy.nn.constraint.data import read_external_crystal
 from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
 from tensoralloy.utils import Defaults
@@ -733,9 +734,12 @@ class EquationOfStateProgram(CLIProgram):
                 crystal = bulk(args.crystal)
             except Exception:
                 try:
-                    crystal = read(args.crystal, index=0)
+                    if args.crystal.endswith("toml"):
+                        crystal = read_external_crystal(args.crystal).atoms
+                    else:
+                        crystal = read(args.crystal, index=0)
                 except Exception:
-                    raise ValueError("")
+                    raise ValueError(f"Unrecognized {args.crystal}")
             crystal.calc = calc
             cell = crystal.cell.copy()
             formula = crystal.get_chemical_formula()
