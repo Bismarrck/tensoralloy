@@ -53,7 +53,8 @@ class AgSutton90(EamAlloyPotential):
             b = self._get_variable('b', r.dtype, kbody_term, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            phi = safe_pow(b * r, 12, name='phi')
+            scale = tf.constant(12.0, dtype=r.dtype, name='scale')
+            phi = tf.identity(safe_pow(b * r, scale), 'phi')
             if verbose:
                 log_tensor(phi)
             return phi
@@ -71,7 +72,8 @@ class AgSutton90(EamAlloyPotential):
             a = self._get_variable('a', r.dtype, element, variable_scope)
             with tf.name_scope("ussafe_div"):
                 r = tf.div_no_nan(one, r, name='r_inv')
-            rho = safe_pow(a * r, 6, name='rho')
+            six = tf.constant(6.0, dtype=r.dtype, name='six')
+            rho = tf.identity(safe_pow(a * r, six), name='rho')
             if verbose:
                 log_tensor(rho)
             return rho

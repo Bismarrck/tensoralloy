@@ -89,11 +89,14 @@ def add_grads_and_vars_summary(grads_and_vars, name):
             list_of_ops.append(norm)
             with tf.name_scope("GradNorm/{}/".format(name)):
                 tf.summary.scalar(var.op.name + "/norm", norm)
-    with tf.name_scope("GradNorm/{}/".format(name)):
-        total_norm = tf.add_n(list_of_ops, name='total')
-        tf.summary.scalar('total', total_norm)
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
-    return total_norm
+    if list_of_ops:
+        with tf.name_scope("GradNorm/{}/".format(name)):
+            total_norm = tf.add_n(list_of_ops, name='total')
+            tf.summary.scalar('total', total_norm)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_norm)
+        return total_norm
+    else:
+        return None
 
 
 def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
@@ -154,7 +157,6 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
             optimizer = get_optimizer(learning_rate, opt_parameters.method)
 
         grads_and_vars = {}
-        total_norms = {}
         _properties = list(minimize_properties) + ["l2"]
 
         for prop in _properties:
@@ -163,9 +165,8 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
                 g = optimizer.compute_gradients(losses[prop])
-                total_norm = add_grads_and_vars_summary(g, prop)
+                add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
-                total_norms[prop] = total_norm
 
         with tf.name_scope("Histogram"):
             for var in tf.trainable_variables():

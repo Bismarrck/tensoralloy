@@ -330,13 +330,13 @@ def test_zjw04xc_embed():
                 feed_dict={rho: special_values})
 
             if isinstance(res_grad_old, IndexedSlicesValue):
-                res_grad_old = res_grad_old.values
+                res_grad_old = res_grad_old.values[res_grad_old.indices]
 
             if isinstance(res_grad_new, IndexedSlicesValue):
-                res_grad_new = res_grad_new.values
+                res_grad_new = res_grad_new.values[res_grad_new.indices]
 
             assert_array_almost_equal(res_old, res_new, 1e-4)
-            assert_array_almost_equal(res_grad_old, res_grad_new, 1e-3)
+            assert_array_almost_equal(res_grad_old, res_grad_new, 1e-4)
 
 
 def test_fixed():

@@ -18,6 +18,7 @@ def safe_pow(x, y):
     A safe implementation of the power Op `x**y`.
     """
     z = tf.pow(x, y, name='pow/safe')
+    z = array_ops.where(tf.is_inf(z), tf.zeros_like(z), z)
 
     def _safe_pow_grad(grad):
         """
@@ -30,28 +31,24 @@ def safe_pow(x, y):
             cx = math_ops.conj(x, name='conj/x')
             cy = math_ops.conj(y, name='conj/y')
             cz = math_ops.conj(z, name='conj/z')
-            # Avoid false singularity at x = 0
-            if cx.dtype.is_complex:
-                # real(x) < 0 is fine for the complex case
-                mask = math_ops.not_equal(cx, 0, 'mask')
-            else:
-                # There's no sensible real value to return if x < 0, so return 0
-                mask = cx > 0
             # Another mask to avoid false singularity at x = 0 caused by
             # repeated `tf.gradients` calls.
             with tf.name_scope("dzdx"):
-                if cx.dtype.name == 'float64':
-                    eps_val = 1e-14
-                else:
-                    eps_val = 1e-7
-                eps = tf.convert_to_tensor(eps_val, dtype=cx.dtype, name='eps')
-                safe_cx = array_ops.where(
-                    mask, cx, array_ops.ones_like(x) * eps, 'safe_cx')
-                xy1 = math_ops.pow(safe_cx, cy - 1, 'xy1')
+                xy1 = safe_pow(cx, cy - 1)
                 gx = array_ops.reshape(
                     math_ops.reduce_sum(grad * cy * xy1, rx), sx, 'gx')
+                inf_or_nan = tf.logical_or(math_ops.is_inf(gx),
+                                           math_ops.is_nan(gx))
+                gx = array_ops.where(inf_or_nan, tf.zeros_like(gx), gx)
 
             with tf.name_scope("dzdy"):
+                # Avoid false singularity at x = 0
+                if cx.dtype.is_complex:
+                    # real(x) < 0 is fine for the complex case
+                    mask = math_ops.not_equal(cx, 0, 'mask')
+                else:
+                    # There's no sensible real value to return if x < 0, so return 0
+                    mask = cx > 0
                 safe_log_x = array_ops.where(
                     mask, cx, array_ops.ones_like(cx), 'safe_x')
                 log_x = array_ops.where(
