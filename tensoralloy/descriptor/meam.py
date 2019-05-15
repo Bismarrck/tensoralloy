@@ -1,6 +1,11 @@
 #!coding=utf-8
 """
-The Modified Embedded-Atom Method descriptor.
+The Modified Embedded-Atom Method (Lenosky Style) descriptor.
+
+Notes
+-----
+The Baskes derived 1NN/2NN MEAM is not suitable for this project.
+
 """
 from __future__ import print_function, absolute_import
 
@@ -22,11 +27,17 @@ __email__ = 'Bismarrck@me.com'
 class MEAM(AtomicDescriptor):
     """
     A tensorflow based implementation of Modified Embedded-Atom Method (MEAM).
+
+    References
+    ----------
+    Modelling Simul. Mater. Sci. Eng. 8 (2000) 825–841.
+    Computational Materials Science 124 (2016) 204–210.
+
     """
 
     gather_fn = staticmethod(tf.gather)
 
-    def __init__(self, rc: float, elements: List[str]):
+    def __init__(self, rc: float, elements: List[str], angular_rc_scale=1.0):
         """
         Initialization method.
 
@@ -36,9 +47,14 @@ class MEAM(AtomicDescriptor):
             The cutoff radius.
         elements : List[str]
             A list of str as the ordered elements.
+        angular_rc_scale : float
+            The scaling factor of `rc` for angular interactions.
 
         """
         super(MEAM, self).__init__(rc, elements, k_max=3, periodic=True)
+
+        self._angular_rc_scale = angular_rc_scale
+        self._angular_rc = rc * angular_rc_scale
 
         kbody_index = {}
         for kbody_term in self._all_kbody_terms:
