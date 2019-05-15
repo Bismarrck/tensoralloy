@@ -232,7 +232,7 @@ class MishinH(EamAlloyPotential):
             with tf.name_scope("Safe"):
                 eps = tf.convert_to_tensor(get_float_dtype().eps, dtype, 'eps')
                 rho_eps = tf.add(rho, eps, 'rho')
-                rhos5 = safe_pow(rho_eps, s5, name='rhos5')
+                rhos5 = safe_pow(rho_eps, s5)
 
             with tf.name_scope("Omega"):
                 """
