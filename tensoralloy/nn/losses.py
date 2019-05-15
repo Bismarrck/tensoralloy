@@ -193,9 +193,13 @@ def _absolute_forces_loss(labels: tf.Tensor,
         if method == LossMethod.rmse:
             val = tf.math.square(diff, name='square')
         else:
-            val = tf.math.cosh(diff, name='cosh')
-            val = tf.math.add(val, eps, name='cosh/safe')
-            val = tf.math.log(val, name='log')
+            with tf.name_scope("Clip"):
+                lb = tf.convert_to_tensor(-15.0, dtype=dtype, name='lb')
+                ub = tf.convert_to_tensor(+15.0, dtype=dtype, name='ub')
+                clip = tf.clip_by_value(diff, lb, ub, name='clip')
+                cosh = tf.math.cosh(clip, name='cosh')
+                cosh = tf.add(cosh, eps, name='cosh/safe')
+            val = tf.math.log(cosh, name='log')
 
         if weights is not None:
             weights = tf.reshape(weights, (-1, 1, 1))
