@@ -243,7 +243,8 @@ class Dataset:
                     atoms = self._database.get_atoms(
                         id=atoms_id,
                         add_additional_information=True)
-                    example = self._transformer.encode(atoms)
+                    with set_precision(precision):
+                        example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
                     if (index + 1) % 10 == 0 and verbose:
                         speed = (index + 1) / (time.time() - tic)
