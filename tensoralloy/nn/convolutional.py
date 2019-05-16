@@ -7,26 +7,18 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import six
 
-from tensorflow.contrib.layers import xavier_initializer, l2_regularizer
+from tensorflow.contrib.layers import l2_regularizer
 from tensorflow.python.layers import base
 from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
 from typing import List
 
-from tensoralloy.utils import Defaults
+from tensoralloy.nn.init_ops import get_initializer
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["convolution1x1"]
-
-
-_initializers = {
-    'xavier': xavier_initializer(seed=Defaults.seed, dtype=get_float_dtype()),
-    'msar': xavier_initializer(seed=Defaults.seed, dtype=get_float_dtype()),
-    'zero': tf.zeros_initializer(dtype=get_float_dtype())
-}
 
 
 class Conv(keras_Conv, base.Layer):
@@ -123,8 +115,9 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         of `y` is 1.
 
     """
-    kernel_initializer = _initializers[kernel_initializer]
-    bias_initializer = _initializers['zero']
+    dtype = x.dtype
+    kernel_initializer = get_initializer(kernel_initializer, dtype=x.dtype)
+    bias_initializer = get_initializer('zero', dtype=dtype)
 
     if l2_weight > 0.0:
         regularizer = l2_regularizer(l2_weight)

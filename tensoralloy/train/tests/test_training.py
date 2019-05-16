@@ -63,6 +63,7 @@ class InitializationTest(unittest.TestCase):
         nn = manager.nn
         assert_true(isinstance(nn, AtomicResNN))
         assert_true(nn.fixed_static_energy)
+        assert_equal(getattr(nn, "_kernel_init_method"), "he_uniform")
 
 
 def teardown_initialize_eam_training():

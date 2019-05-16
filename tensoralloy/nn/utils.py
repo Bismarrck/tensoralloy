@@ -6,11 +6,8 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow.contrib.layers import variance_scaling_initializer
 from tensorflow.contrib.opt import NadamOptimizer
 from typing import Dict
-
-from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -126,15 +123,3 @@ def log_tensor(tensor: tf.Tensor):
     dimensions = ",".join(["{:4d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
     tf.logging.info("{:<60s} : [{}]".format(tensor.op.name, dimensions))
-
-
-def msra_initializer(dtype=tf.float64, seed=Defaults.seed):
-    """
-    Return the so-called `MSRA` initializer.
-
-    See Also
-    --------
-    [Delving Deep into Rectifiers](http://arxiv.org/pdf/1502.01852v1.pdf)
-
-    """
-    return variance_scaling_initializer(dtype=dtype, seed=seed)

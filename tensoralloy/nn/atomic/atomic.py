@@ -29,6 +29,7 @@ class AtomicNN(BasicNN):
                  elements: List[str],
                  hidden_sizes=None,
                  activation=None,
+                 kernal_initializer='he_norml',
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -40,6 +41,8 @@ class AtomicNN(BasicNN):
             activation=activation,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
+
+        self._kernel_init_method = kernal_initializer
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -107,6 +110,7 @@ class AtomicNN(BasicNN):
                         hidden_sizes=hidden_sizes,
                         l2_weight=1.0,
                         collections=collections,
+                        kernel_initializer=self._kernel_init_method,
                         variable_scope=None,
                         verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')

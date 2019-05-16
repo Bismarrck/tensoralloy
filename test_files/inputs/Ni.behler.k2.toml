@@ -16,6 +16,7 @@ export = ['energy']
 
 [nn.atomic]
 arch = "AtomicResNN"
+kernel_initializer = 'he_uniform'
 
 [nn.atomic.resnet]
 fixed_static_energy = true

@@ -146,6 +146,8 @@ class TrainingManager:
                 hidden_sizes[element] = value
 
         kwargs['hidden_sizes'] = hidden_sizes
+        kwargs['kernel_initializer'] = \
+            self._reader['nn.atomic.kernel_initializer']
 
         if self._reader['nn.atomic.arch'] == 'AtomicNN':
             return AtomicNN(**kwargs)

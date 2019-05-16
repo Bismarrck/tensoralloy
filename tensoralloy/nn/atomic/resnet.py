@@ -41,6 +41,7 @@ class AtomicResNN(AtomicNN):
                  elements: List[str],
                  hidden_sizes=None,
                  activation=None,
+                 kernel_initializer='he_normal',
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian'),
                  atomic_static_energy=None,
@@ -52,6 +53,7 @@ class AtomicResNN(AtomicNN):
             elements=elements,
             hidden_sizes=hidden_sizes,
             activation=activation,
+            kernal_initializer=kernel_initializer,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
