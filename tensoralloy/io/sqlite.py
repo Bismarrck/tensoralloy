@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import json
 
+from ase import Atoms
 from ase.db.sqlite import SQLite3Database
 from joblib import Parallel, delayed
 from collections import Counter
@@ -52,6 +53,30 @@ class CoreDatabase(SQLite3Database):
 
     def __str__(self):
         return f"CoreDataBase@{self.filename}"
+
+    def get_atoms(self,
+                  selection=None,
+                  attach_calculator=False,
+                  add_additional_information=False,
+                  **kwargs) -> Atoms:
+        """
+        Get Atoms object.
+
+        Parameters
+        ----------
+        selection: int, str or list
+            See the select() method.
+        attach_calculator: bool
+            Attach calculator object to Atoms object (default value is
+            False).
+        add_additional_information: bool
+            Put key-value pairs and data into Atoms.info dictionary.
+        kwargs : dict
+            Specific key-value pairs.
+
+        """
+        return super(CoreDatabase, self).get_atoms(
+            selection, attach_calculator, add_additional_information, **kwargs)
 
     @property
     def metadata(self) -> dict:
