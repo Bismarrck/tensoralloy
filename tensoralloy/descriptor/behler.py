@@ -279,7 +279,7 @@ class SymmetryFunction(AtomicDescriptor):
 
         return eta, omega
 
-    def _get_g2_graph(self, placeholders: AttributeDict):
+    def _get_radial_graph(self, placeholders: AttributeDict):
         """
         The implementation of Behler's G2 symmetry function.
         """
@@ -365,7 +365,7 @@ class SymmetryFunction(AtomicDescriptor):
             v2g_map_index = tf.add(v2g_map, delta, name=f'v2g_map_{index}')
             return tf.scatter_nd(v2g_map_index, v_index, shape, f'g{index}')
 
-    def _get_g4_graph(self, placeholders):
+    def _get_angular_graph(self, placeholders):
         """
         The implementation of Behler's angular symmetry function.
         """
@@ -507,9 +507,9 @@ class SymmetryFunction(AtomicDescriptor):
         self._check_keys(placeholders)
 
         with tf.variable_scope("Behler"):
-            g = self._get_g2_graph(placeholders)
+            g = self._get_radial_graph(placeholders)
             if self._k_max == 3:
-                g += self._get_g4_graph(placeholders)
+                g += self._get_angular_graph(placeholders)
         return self._split_descriptors(g, placeholders)
 
 
