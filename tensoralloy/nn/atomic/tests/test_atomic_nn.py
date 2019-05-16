@@ -166,6 +166,9 @@ def test_inference_from_transformer():
         collection = tf.get_collection(GraphKeys.ATOMIC_RES_NN_VARIABLES)
         assert_equal(len(collection), 11)
 
+        collection = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        assert_equal(len(collection), 10)
+
 
 output_graph_path = join(
     test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
