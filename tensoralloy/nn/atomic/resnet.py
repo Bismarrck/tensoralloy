@@ -53,7 +53,7 @@ class AtomicResNN(AtomicNN):
             elements=elements,
             hidden_sizes=hidden_sizes,
             activation=activation,
-            kernal_initializer=kernel_initializer,
+            kernel_initializer=kernel_initializer,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 

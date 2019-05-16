@@ -29,7 +29,7 @@ class AtomicNN(BasicNN):
                  elements: List[str],
                  hidden_sizes=None,
                  activation=None,
-                 kernal_initializer='he_norml',
+                 kernel_initializer='he_norml',
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -42,7 +42,7 @@ class AtomicNN(BasicNN):
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
-        self._kernel_init_method = kernal_initializer
+        self._kernel_init_method = kernel_initializer
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -59,6 +59,7 @@ class AtomicNN(BasicNN):
                 "elements": self._elements,
                 "hidden_sizes": self._hidden_sizes,
                 "activation": self._activation,
+                'kernel_initializer': self._kernel_init_method,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
