@@ -554,7 +554,7 @@ class BasicNN:
                     collections=collections)
 
             losses.l2 = loss_ops.get_l2_regularization_loss(
-                loss_weight=loss_parameters.l2.weight,
+                options=loss_parameters.l2,
                 collections=collections)
 
             verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)

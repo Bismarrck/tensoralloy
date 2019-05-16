@@ -46,6 +46,9 @@ method = "rmse"
 
 [nn.loss.l2]
 weight = 0.01
+decayed = true
+decay_rate = 0.99
+decay_steps = 10
 
 [nn.loss.elastic]
 crystals = []

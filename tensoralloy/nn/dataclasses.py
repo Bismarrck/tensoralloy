@@ -124,6 +124,9 @@ class L2LossOptions(_LossOptions):
     The default weight is changed to 0.01.
     """
     weight: float = 0.01
+    decayed: bool = True
+    decay_rate: float = 0.99
+    decay_steps: int = 1000
 
 
 @add_slots

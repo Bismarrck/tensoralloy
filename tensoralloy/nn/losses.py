@@ -11,6 +11,7 @@ from enum import Enum
 from os.path import basename
 
 from tensoralloy.precision import get_float_dtype
+from tensoralloy.nn.dataclasses import L2LossOptions
 
 
 __author__ = 'Xin Chen'
@@ -380,14 +381,14 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0, weights=None,
         return loss
 
 
-def get_l2_regularization_loss(loss_weight=1.0, collections=None):
+def get_l2_regularization_loss(options: L2LossOptions, collections=None):
     """
     Return the total L2 regularization loss.
 
     Parameters
     ----------
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
+    options : L2LossOptions
+        The options of L2 loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
 
@@ -404,7 +405,18 @@ def get_l2_regularization_loss(loss_weight=1.0, collections=None):
             l2 = tf.add_n(losses, name=name)
         else:
             l2 = tf.constant(0.0, dtype=get_float_dtype(), name=name)
-        loss_weight = tf.convert_to_tensor(loss_weight, l2.dtype, name='weight')
+        loss_weight = tf.convert_to_tensor(
+            options.weight, l2.dtype, name='weight')
+        if options.decayed:
+            loss_weight = tf.train.exponential_decay(
+                learning_rate=loss_weight,
+                global_step=tf.train.get_global_step(),
+                decay_steps=options.decay_steps,
+                decay_rate=options.decay_rate,
+                name='weight/decayed')
+            if collections is not None:
+                tf.add_to_collections(collections, loss_weight)
+
         loss = tf.multiply(l2, loss_weight, name='weighted/loss')
         if collections is not None:
             tf.add_to_collections(collections, l2)
