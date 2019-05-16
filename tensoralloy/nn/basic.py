@@ -846,7 +846,7 @@ class BasicNN:
                                           evaluation_hooks=evaluation_hooks)
 
     def export(self, output_graph_path: str, checkpoint=None,
-               keep_tmp_files=True):
+               keep_tmp_files=True, use_ema_variables=True):
         """
         Freeze the graph and export the model to a pb file.
 
@@ -858,6 +858,8 @@ class BasicNN:
             The tensorflow checkpoint file to restore or None.
         keep_tmp_files : bool
             If False, the intermediate files will be deleted.
+        use_ema_variables : bool
+            If True, exponentially moving averaged variables will be used.
 
         """
 
@@ -905,10 +907,13 @@ class BasicNN:
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
 
-                # Restore the moving averaged variables
-                ema = tf.train.ExponentialMovingAverage(
-                    Defaults.variable_moving_average_decay)
-                saver = tf.train.Saver(ema.variables_to_restore())
+                if use_ema_variables:
+                    # Restore the moving averaged variables
+                    ema = tf.train.ExponentialMovingAverage(
+                        Defaults.variable_moving_average_decay)
+                    saver = tf.train.Saver(ema.variables_to_restore())
+                else:
+                    saver = tf.train.Saver(var_list=tf.trainable_variables())
                 if checkpoint is not None:
                     saver.restore(sess, checkpoint)
 

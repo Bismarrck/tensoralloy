@@ -637,7 +637,7 @@ class EamNN(BasicNN):
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
                         drho: float, r0=1.0, rt=None, rho0=0.0, rhot=None,
                         checkpoint=None, lattice_constants=None,
-                        lattice_types=None):
+                        lattice_types=None, use_ema_variables=True):
         """
         Export this model to an `eam/alloy` or an `eam/fs` LAMMPS setfl
         potential file.
@@ -669,6 +669,8 @@ class EamNN(BasicNN):
             The lattice constant for each type of element.
         lattice_types : Dict[str, str] or None
             The lattice type, e.g 'fcc', for each type of element.
+        use_ema_variables : bool
+            If True, exponentially moving averaged variables will be used.
 
         """
         raise NotImplementedError(

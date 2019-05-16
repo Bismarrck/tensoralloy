@@ -211,6 +211,12 @@ class ExportModelProgram(CLIProgram):
             default=None,
             help="The corresponding input toml file."
         )
+        subparser.add_argument(
+            '--no-ema',
+            action='store_true',
+            default=False,
+            help="If this flag is given, EMA variables will be disabled."
+        )
 
         group = subparser.add_argument_group("EAM")
 
@@ -288,7 +294,10 @@ class ExportModelProgram(CLIProgram):
                       'rho0': args.rho0, 'rhot': args.rhot}
 
             manager = TrainingManager(configs, validate_tfrecords=False)
-            manager.export(ckpt, tag=step_tag, **kwargs)
+            manager.export(ckpt,
+                           tag=step_tag,
+                           use_ema_variables=(not args.no_ema),
+                           **kwargs)
         return func
 
 

@@ -376,7 +376,8 @@ class TrainingManager:
                 tf_estimator.train_and_evaluate(
                     estimator, train_spec, eval_spec)
 
-    def export(self, checkpoint=None, tag=None, **kwargs):
+    def export(self, checkpoint=None, tag=None, use_ema_variables=True,
+               **kwargs):
         """
         Export the trained model.
         """
@@ -395,6 +396,7 @@ class TrainingManager:
                 output_graph_path=join(self._hparams.train.model_dir,
                                        graph_name),
                 checkpoint=checkpoint,
+                use_ema_variables=use_ema_variables,
                 keep_tmp_files=False)
 
             if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
@@ -418,5 +420,6 @@ class TrainingManager:
                     checkpoint=checkpoint,
                     lattice_constants=lattice_constants,
                     lattice_types=lattice_types,
+                    use_ema_variables=use_ema_variables,
                     **setfl_kwargs,
                     **kwargs)

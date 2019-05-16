@@ -215,7 +215,7 @@ class EamFsNN(EamNN):
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
                         drho: float, r0=1.0, rt=None, rho0=0.0, rhot=None,
                         checkpoint=None, lattice_constants=None,
-                        lattice_types=None):
+                        lattice_types=None, use_ema_variables=True):
         """
         Export this EAM/Alloy model to a setfl potential file for LAMMPS.
 
@@ -245,6 +245,8 @@ class EamFsNN(EamNN):
             The lattice constant for each type of element.
         lattice_types : Dict[str, str] or None
             The lattice type, e.g 'fcc', for each type of element.
+        use_ema_variables : bool
+            If True, exponentially moving averaged variables will be used.
 
         """
         dtype = get_float_dtype().as_numpy_dtype
@@ -298,10 +300,13 @@ class EamFsNN(EamNN):
             sess = tf.Session()
             with sess:
                 if checkpoint is not None:
-                    # Restore the moving averaged variables
-                    ema = tf.train.ExponentialMovingAverage(
-                        Defaults.variable_moving_average_decay)
-                    saver = tf.train.Saver(ema.variables_to_restore())
+                    if use_ema_variables:
+                        # Restore the moving averaged variables
+                        ema = tf.train.ExponentialMovingAverage(
+                            Defaults.variable_moving_average_decay)
+                        saver = tf.train.Saver(ema.variables_to_restore())
+                    else:
+                        saver = tf.train.Saver(tf.trainable_variables())
                     saver.restore(sess, checkpoint)
                 else:
                     tf.global_variables_initializer().run()
