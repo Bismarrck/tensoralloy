@@ -37,6 +37,15 @@ class LossMethod(Enum):
     logcosh = 2
 
 
+def _logcosh(x, dtype=None, name=None):
+    """
+    The keras implemnetation of `logcosh`.
+    """
+    two = tf.convert_to_tensor(2.0, dtype=dtype, name='two')
+    return tf.math.subtract(x + tf.nn.softplus(-two * x), tf.math.log(two),
+                            name=name)
+
+
 def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor,
                             weights: Union[tf.Tensor, None]):
     """
@@ -96,16 +105,8 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, weights=None,
             weights = tf.reshape(weights, (-1, 1))
         diff = tf.multiply(diff, weights, name='diff/conf')
     dtype = get_float_dtype()
-    eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-    # The clip here is important to avoid cosh overflow.
-    with tf.name_scope("Clip"):
-        lb = tf.convert_to_tensor(-15.0, dtype=x.dtype, name='lb')
-        ub = tf.convert_to_tensor(+15.0, dtype=x.dtype, name='ub')
-        clip = tf.clip_by_value(diff, lb, ub, name='clip')
-        cosh = tf.math.cosh(clip, name='cosh')
-        cosh = tf.add(cosh, eps, name='cosh/safe')
-    logcosh = tf.reduce_mean(tf.math.log(cosh), name='logcosh' + suffix)
-    return logcosh, mae
+    z = tf.reduce_mean(_logcosh(diff, dtype), name='logcosh' + suffix)
+    return z, mae
 
 
 def get_energy_loss(labels, predictions, n_atoms, weights=None,
@@ -194,13 +195,7 @@ def _absolute_forces_loss(labels: tf.Tensor,
         if method == LossMethod.rmse:
             val = tf.math.square(diff, name='square')
         else:
-            with tf.name_scope("Clip"):
-                lb = tf.convert_to_tensor(-15.0, dtype=dtype, name='lb')
-                ub = tf.convert_to_tensor(+15.0, dtype=dtype, name='ub')
-                clip = tf.clip_by_value(diff, lb, ub, name='clip')
-                cosh = tf.math.cosh(clip, name='cosh')
-                cosh = tf.add(cosh, eps, name='cosh/safe')
-            val = tf.math.log(cosh, name='log')
+            val = _logcosh(diff, dtype=dtype, name='logcosh')
 
         if weights is not None:
             weights = tf.reshape(weights, (-1, 1, 1))
