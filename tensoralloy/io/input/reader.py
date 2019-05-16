@@ -157,7 +157,7 @@ class InputReader:
 
         if descriptor == 'behler':
             _safe_update("nn.atomic.behler")
-            _safe_update("nn.atomic.arch")
+            _safe_update("nn.atomic")
             _safe_update("nn.atomic.resnet")
 
             layers = nested_get(configs, 'nn.atomic.layers')

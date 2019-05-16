@@ -19,6 +19,10 @@ per_atom_loss = false
 [nn.loss.l2]
 weight = 0.01
 
+[nn.atomic]
+arch = 'AtomicNN'
+kernel_initializer = 'truncated_normal'
+
 [nn.atomic.behler]
 angular = true
 cutoff_function = 'polynomial'

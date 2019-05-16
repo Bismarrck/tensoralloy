@@ -38,6 +38,8 @@ def test_read_behler_angular_toml():
 
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
+    assert_equal(nested_get(configs, 'nn.atomic.kernel_initializer'),
+                 'truncated_normal')
     assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
                       [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0])
     assert_list_equal(reader['nn.atomic.behler.omega'],
