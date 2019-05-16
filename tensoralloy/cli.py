@@ -556,6 +556,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             default=False,
             help="If this flag is given, EMA variables will be disabled."
         )
+        subparser.add_argument(
+            '--use-train-data',
+            default=False,
+            action='store_true',
+            help="Use training data instead of test data."
+        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -592,10 +598,16 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             with set_precision(precision):
                 with tf.Graph().as_default():
 
-                    mode = tf_estimator.ModeKeys.EVAL
                     manager = TrainingManager(config, validate_tfrecords=True)
+                    if args.use_train_data:
+                        mode = tf_estimator.ModeKeys.TRAIN
+                        size = manager.dataset.train_size
+                    else:
+                        mode = tf_estimator.ModeKeys.EVAL
+                        size = manager.dataset.test_size
+
                     batch_size = manager.hparams.train.batch_size
-                    test_size = manager.dataset.test_size
+                    n_used = size - divmod(size, batch_size)[1]
 
                     input_fn = manager.dataset.input_fn(
                         mode=mode,
@@ -622,7 +634,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         true_vals = {x: [] for x in properties}
                         pred_vals = {x: [] for x in properties}
 
-                        for i in range(test_size // batch_size):
+                        for i in range(size // batch_size):
                             predictions_, labels_, n_atoms_, mask_ = sess.run([
                                 predictions,
                                 labels,
@@ -673,6 +685,8 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 dataframe.rename(
                     columns={'energy': 'energy/atom'}, inplace=True)
                 pd.options.display.float_format = "{:.6f}".format
+
+                print(f"Mode: {mode} ({n_used}/{size})")
                 print(dataframe)
 
         return func
