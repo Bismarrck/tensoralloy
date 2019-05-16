@@ -550,6 +550,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             help="Percentile or sequence of percentiles to compute, "
                  "which must be between 0 and 100 exclusive."
         )
+        subparser.add_argument(
+            '--no-ema',
+            action='store_true',
+            default=False,
+            help="If this flag is given, EMA variables will be disabled."
+        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -602,9 +608,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                                    mode=mode,
                                                    verbose=True)
 
-                    ema = tf.train.ExponentialMovingAverage(
-                        Defaults.variable_moving_average_decay)
-                    saver = tf.train.Saver(var_list=ema.variables_to_restore())
+                    if args.no_ema:
+                        saver = tf.train.Saver(tf.trainable_variables())
+                    else:
+                        ema = tf.train.ExponentialMovingAverage(
+                            Defaults.variable_moving_average_decay)
+                        saver = tf.train.Saver(ema.variables_to_restore())
 
                     with tf.Session() as sess:
                         tf.global_variables_initializer().run()
@@ -652,8 +661,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                 for q in range(0, 101, args.q):
                     data['percentile'].append(q)
+                    if q == 100:
+                        data['percentile'].append('MAE')
                     for prop in properties:
                         data[prop].append(np.percentile(abs_diff[prop], q))
+                        if q == 100:
+                            data[prop].append(np.mean(abs_diff[prop]))
 
                 dataframe = pd.DataFrame(data)
                 dataframe.set_index('percentile', inplace=True)
