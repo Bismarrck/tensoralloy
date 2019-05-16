@@ -101,6 +101,11 @@ def get_optimizer(learning_rate, method='adam', **kwargs):
             return tf.train.RMSPropOptimizer(
                 learning_rate=learning_rate, decay=kwargs.get('decay', 0.9),
                 momentum=kwargs.get('momentum', 0.0))
+        elif method.lower() == 'sgd':
+            return tf.train.MomentumOptimizer(
+                learning_rate=learning_rate,
+                momentum=kwargs.get('momentum', 0.9),
+                use_nesterov=kwargs.get('use_nesterov', True))
         else:
             raise ValueError(
                 "Supported SGD optimizers: adam, nadam, adadelta, rmsprop.")
