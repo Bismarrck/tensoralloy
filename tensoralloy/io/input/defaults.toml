@@ -106,6 +106,7 @@ staircase = false
 restart = true
 batch_size = 50
 previous_checkpoint = false
+use_previous_ema_variables = true
 shuffle = true
 model_dir = "required"
 max_checkpoints_to_keep = 20

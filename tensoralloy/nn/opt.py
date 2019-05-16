@@ -244,9 +244,13 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
         if train_parameters.previous_checkpoint:
             with tf.name_scope("Restore"):
                 ckpt = train_parameters.previous_checkpoint
+                if train_parameters.use_previous_ema_variables:
+                    _ema = ema
+                else:
+                    _ema = None
                 warm_start_hook = WarmStartFromVariablesHook(
                     previous_checkpoint=ckpt,
-                    ema=ema,
+                    ema=_ema,
                     restart=train_parameters.restart)
             hooks.append(warm_start_hook)
 

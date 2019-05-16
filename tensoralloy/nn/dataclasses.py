@@ -218,6 +218,7 @@ class TrainParameters(_HyperParameters):
     restart: bool = True
     batch_size: int = 50
     previous_checkpoint: Union[str, None, bool] = None
+    use_previous_ema_variables: bool = True
     shuffle: bool = True
     max_checkpoints_to_keep: int = 20
     train_steps: int = 10000
