@@ -152,6 +152,7 @@ class TrainingManager:
                 hidden_sizes[element] = value
 
         kwargs['hidden_sizes'] = hidden_sizes
+        kwargs['minmax_scale'] = self._reader['nn.atomic.minmax_scale']
         kwargs['kernel_initializer'] = \
             self._reader['nn.atomic.kernel_initializer']
 

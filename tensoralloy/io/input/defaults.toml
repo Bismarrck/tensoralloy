@@ -62,6 +62,7 @@ stress_weight = 0.1
 [nn.atomic]
 arch = "AtomicNN"
 kernel_initializer = 'he_normal'
+minmax_scale = true
 
 [nn.atomic.resnet]
 fixed_static_energy = false
