@@ -109,7 +109,6 @@ class AtomicNN(BasicNN):
                     if self._minmax_scale:
                         with tf.name_scope("MinMax"):
                             _collections = [
-                                GraphKeys.TRAIN_METRICS,
                                 tf.GraphKeys.GLOBAL_VARIABLES,
                                 tf.GraphKeys.MODEL_VARIABLES,
                             ] + collections
