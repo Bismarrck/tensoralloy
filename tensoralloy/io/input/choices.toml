@@ -6,7 +6,7 @@ precision = ['high', 'medium']
 descriptor = ['eam', 'behler']
 
 [nn]
-activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'sigmoid', 'linear', 'elu']
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'sigmoid', 'linear', 'elu', 'neg_lrelu']
 
 [nn.atomic]
 arch = ["AtomicResNN", 'AtomicNN']
