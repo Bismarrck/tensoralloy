@@ -29,7 +29,8 @@ class AtomicNN(BasicNN):
                  elements: List[str],
                  hidden_sizes=None,
                  activation=None,
-                 kernel_initializer='he_norml',
+                 kernel_initializer='he_normal',
+                 minmax_scale=True,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -43,6 +44,7 @@ class AtomicNN(BasicNN):
             export_properties=export_properties)
 
         self._kernel_init_method = kernel_initializer
+        self._minmax_scale = minmax_scale
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -60,6 +62,7 @@ class AtomicNN(BasicNN):
                 "hidden_sizes": self._hidden_sizes,
                 "activation": self._activation,
                 'kernel_initializer': self._kernel_init_method,
+                'minmax_scale': self._minmax_scale,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -102,6 +105,39 @@ class AtomicNN(BasicNN):
                     if mode == tf_estimator.ModeKeys.PREDICT:
                         assert x.shape.ndims == 2
                         x = tf.expand_dims(x, axis=0, name='3d')
+
+                    if self._minmax_scale:
+                        with tf.name_scope("MinMax"):
+                            _collections = [
+                                GraphKeys.TRAIN_METRICS,
+                                tf.GraphKeys.GLOBAL_VARIABLES,
+                                tf.GraphKeys.MODEL_VARIABLES,
+                            ] + collections
+                            _shape = [1, 1, x.shape[-1]]
+                            _dtype = x.dtype
+                            _get_initializer = \
+                                lambda val: tf.constant_initializer(val, _dtype)
+
+                            xlo = tf.get_variable(
+                                name="xlo", shape=_shape, dtype=_dtype,
+                                trainable=False, collections=_collections,
+                                initializer=_get_initializer(1000.0))
+                            xhi = tf.get_variable(
+                                name="xhi", shape=_shape, dtype=_dtype,
+                                trainable=False, collections=_collections,
+                                initializer=_get_initializer(0.0))
+
+                            if mode == tf_estimator.ModeKeys.TRAIN:
+                                xmin = tf.reduce_min(x, [0, 1], True, 'xmin')
+                                xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
+                                xlo_op = tf.assign(xlo, tf.minimum(xmin, xlo))
+                                xhi_op = tf.assign(xhi, tf.maximum(xmax, xhi))
+                                update_ops = [xlo_op, xhi_op]
+                            else:
+                                update_ops = []
+                            with tf.control_dependencies(update_ops):
+                                x = tf.div_no_nan(xhi - x, xhi - xlo, name='x')
+
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
@@ -120,7 +156,8 @@ class AtomicNN(BasicNN):
                     outputs.append(yi)
             return outputs
 
-    def _get_internal_energy_op(self, outputs, features, name='energy', verbose=True):
+    def _get_internal_energy_op(self, outputs, features, name='energy',
+                                verbose=True):
         """
         Return the Op to compute internal energy E.
 
