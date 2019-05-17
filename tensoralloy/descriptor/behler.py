@@ -462,6 +462,9 @@ class SymmetryFunction(AtomicDescriptor):
             column_split_axis = self._get_column_split_axis()
             splits = tf.split(
                 g, row_split_sizes, axis=row_split_axis, name='rows')[1:]
+            atom_masks = tf.split(
+                placeholders.mask, row_split_sizes, axis=row_split_axis,
+                name='atom_masks')[1:]
             if len(self._elements) > 1:
                 # Further split the element arrays to remove redundant zeros
                 blocks = []
@@ -475,9 +478,7 @@ class SymmetryFunction(AtomicDescriptor):
                     blocks.append(block)
             else:
                 blocks = splits
-            with tf.name_scope("Mask"):
-                masks = [tf.no_op(el) for el in self._elements]
-            return dict(zip(self._elements, zip(blocks, masks)))
+            return dict(zip(self._elements, zip(blocks, atom_masks)))
 
     def _check_keys(self, placeholders: AttributeDict):
         """
@@ -487,6 +488,7 @@ class SymmetryFunction(AtomicDescriptor):
         assert 'cells' in placeholders
         assert 'volume' in placeholders
         assert 'g2' in placeholders
+        assert 'mask' in placeholders
         assert 'n_atoms_plus_virt' in placeholders
         assert 'row_splits' in placeholders
         assert 'ilist' in placeholders.g2
@@ -646,6 +648,7 @@ class BatchSymmetryFunction(SymmetryFunction):
         assert 'cells' in placeholders
         assert 'volume' in placeholders
         assert 'g2' in placeholders
+        assert 'mask' in placeholders
         assert 'ilist' in placeholders.g2
         assert 'jlist' in placeholders.g2
         assert 'shift' in placeholders.g2

@@ -734,6 +734,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         inputs.positions = batch_features.positions
         inputs.cells = batch_features.cells
         inputs.volume = batch_features.volume
+        inputs.mask = batch_features.mask
 
         if self._k_max == 3:
             inputs.g4 = AttributeDict(

@@ -99,7 +99,7 @@ class AtomicNN(BasicNN):
         with tf.variable_scope("ANN"):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
-            for element, (value, _) in descriptors.items():
+            for element, (value, atom_mask) in descriptors.items():
                 with tf.variable_scope(element):
                     x = tf.identity(value, name='input')
                     if mode == tf_estimator.ModeKeys.PREDICT:
@@ -109,6 +109,7 @@ class AtomicNN(BasicNN):
                     if self._minmax_scale:
                         with tf.name_scope("MinMax"):
                             _collections = [
+                                GraphKeys.TRAIN_METRICS,
                                 tf.GraphKeys.GLOBAL_VARIABLES,
                                 tf.GraphKeys.MODEL_VARIABLES,
                             ] + collections
@@ -127,8 +128,11 @@ class AtomicNN(BasicNN):
                                 initializer=_get_initializer(0.0))
 
                             if mode == tf_estimator.ModeKeys.TRAIN:
-                                xmin = tf.reduce_min(x, [0, 1], True, 'xmin')
                                 xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
+                                xmin = tf.reshape(
+                                    tf.reduce_min(
+                                        tf.boolean_mask(x, atom_mask), axis=0),
+                                    xmax.shape, name='xmin')
                                 xlo_op = tf.assign(xlo, tf.minimum(xmin, xlo))
                                 xhi_op = tf.assign(xhi, tf.maximum(xmax, xhi))
                                 update_ops = [xlo_op, xhi_op]
