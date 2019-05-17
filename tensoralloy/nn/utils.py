@@ -19,7 +19,7 @@ def neg_lrelu(features, alpha=0.2, name=None):
     """
     Regative Leaky Relu.
     """
-    with ops.name_scope(name, "LeakyRelu", [features, alpha]) as name:
+    with ops.name_scope(name, "NegLeakyRelu", [features, alpha]) as name:
         features = ops.convert_to_tensor(features, name="features")
         if features.dtype.is_integer:
             features = math_ops.to_float(features)
