@@ -64,10 +64,21 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         """
         Create restoring operations before the graph been finalized.
         """
+        trainable_op_names = [var.op.name for var in tf.trainable_variables()]
+
         if self._ema is not None:
             var_list = self._ema.variables_to_restore()
             if self._restart and 'global_step' in var_list:
                 var_list.pop('global_step')
+            if not self._restore_all_variables:
+                pop_list = []
+                for var_op_ema_name in var_list:
+                    var_op_name = var_op_ema_name.replace(
+                        '/ExponentialMovingAverage', '')
+                    if var_op_name not in trainable_op_names:
+                        pop_list.append(var_op_ema_name)
+                for var_op_name in pop_list:
+                    var_list.pop(var_op_name)
             tf.logging.info('Initialize a Saver to restore EMA variables.')
         else:
             global_step = tf.train.get_global_step()
