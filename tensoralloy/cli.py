@@ -675,10 +675,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     data['percentile'].append(q)
                     if q == 100:
                         data['percentile'].append('MAE')
+                        data['percentile'].append('Median')
                     for prop in properties:
                         data[prop].append(np.percentile(abs_diff[prop], q))
                         if q == 100:
                             data[prop].append(np.mean(abs_diff[prop]))
+                            data[prop].append(np.median(abs_diff[prop]))
 
                 dataframe = pd.DataFrame(data)
                 dataframe.set_index('percentile', inplace=True)
