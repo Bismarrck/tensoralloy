@@ -108,11 +108,17 @@ class TrainingManager:
         """
         Initialize the hyper parameters.
         """
+        opt_dict = self._reader['opt']
+        method = opt_dict['method']
+        minimizer_kwargs = opt_dict.pop(method)
+        opt_parameters = OptParameters(additional_kwargs=minimizer_kwargs,
+                                       **opt_dict)
+
         hparams = AttributeDict(
             seed=self._reader['seed'],
             precision=self._reader['precision'],
             train=TrainParameters(**self._reader['train']),
-            opt=OptParameters(**self._reader['opt']),
+            opt=opt_parameters,
             loss=LossParameters(**self._reader['nn.loss']),
             debug=AttributeDict(self._reader['debug'])
         )

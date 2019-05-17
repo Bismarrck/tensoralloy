@@ -154,7 +154,12 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
 
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            optimizer = get_optimizer(learning_rate, opt_parameters.method)
+            kwargs = opt_parameters.additional_kwargs or {}
+            optimizer = get_optimizer(
+                learning_rate=learning_rate,
+                method=opt_parameters.method,
+                **kwargs
+            )
 
         grads_and_vars = {}
         _properties = list(minimize_properties) + ["l2"]
@@ -244,14 +249,16 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
         if train_parameters.previous_checkpoint:
             with tf.name_scope("Restore"):
                 ckpt = train_parameters.previous_checkpoint
-                if train_parameters.use_previous_ema_variables:
+                if train_parameters.ckpt.use_previous_ema_variables:
                     _ema = ema
                 else:
                     _ema = None
+                restore_all = train_parameters.ckpt.restore_global_variables
                 warm_start_hook = WarmStartFromVariablesHook(
                     previous_checkpoint=ckpt,
                     ema=_ema,
-                    restart=train_parameters.restart)
+                    restart=train_parameters.restart,
+                    restore_all_variables=restore_all)
             hooks.append(warm_start_hook)
 
     return hooks

@@ -46,6 +46,7 @@ class InitializationTest(unittest.TestCase):
         manager = TrainingManager(input_file)
         transformer = manager.dataset.transformer
         hparams = manager.hparams
+        nn = manager.nn
 
         assert_equal(manager.dataset.transformer.descriptor, 'behler')
         assert_equal(manager.dataset.test_size, 1)
@@ -54,13 +55,14 @@ class InitializationTest(unittest.TestCase):
         assert isinstance(transformer, BatchSymmetryFunctionTransformer)
         assert_equal(transformer.trainable, True)
 
-        assert_equal(hparams.opt.method, 'adam')
+        assert_equal(hparams.opt.method, 'sgd')
         assert_equal(hparams.opt.learning_rate, 0.01)
         assert_is_none(hparams.opt.decay_function)
         assert_equal(hparams.precision, 'medium')
         assert_equal(hparams.seed, 1958)
+        assert_dict_equal(hparams.opt.additional_kwargs,
+                          {'use_nesterov': True, 'momentum': 0.8})
 
-        nn = manager.nn
         assert_true(isinstance(nn, AtomicResNN))
         assert_true(nn.fixed_static_energy)
         assert_equal(getattr(nn, "_kernel_init_method"), "he_uniform")

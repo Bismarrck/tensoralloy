@@ -30,6 +30,7 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
     def __init__(self,
                  previous_checkpoint: str,
                  ema: tf.train.ExponentialMovingAverage,
+                 restore_all_variables=True,
                  restart=True):
         """
         Initialization method.
@@ -40,6 +41,10 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
             The previous checkpoint to load.
         ema : tf.train.ExponentialMovingAverage
             A function to obtain exponentially moving averaged variables.
+        restore_all_variables : bool
+            If True, all (global) varaibles will be restored from the ckpt. If
+            False, only trainable variables and the global step variable
+            (restart == False) will be restored.
         restart : bool
             A boolean. If True, the global step tensor will not be read and the
             training will start only with weights inherited from the checkpoint.
@@ -53,6 +58,7 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         self._ema = ema
         self._saver = None
         self._restart = restart
+        self._restore_all_variables = restore_all_variables
 
     def begin(self):
         """
@@ -64,10 +70,16 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
                 var_list.pop('global_step')
             tf.logging.info('Initialize a Saver to restore EMA variables.')
         else:
-            var_list = tf.global_variables()
-            if self._restart:
-                name = tf.train.get_global_step().op.name
-                var_list = [x for x in var_list if x.op.name != name]
+            global_step = tf.train.get_global_step()
+            if self._restore_all_variables:
+                var_list = tf.global_variables()
+                if self._restart:
+                    var_list = [x for x in var_list
+                                if x.op.name != global_step.op.name]
+            else:
+                var_list = tf.trainable_variables()
+                if not self._restart:
+                    var_list += [global_step, ]
             tf.logging.info('Initialize a Saver to restore variables.')
 
         self._saver = tf.train.Saver(var_list=var_list)

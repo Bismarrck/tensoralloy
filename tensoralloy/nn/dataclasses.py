@@ -5,7 +5,7 @@ This module defines data classes for `tensoralloy.nn` package.
 from __future__ import print_function, absolute_import
 
 from dataclasses import dataclass, fields, is_dataclass
-from typing import List, Union
+from typing import List, Union, Dict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,6 +76,7 @@ class _LossOptions:
     """
     The basic options for a loss.
     """
+
     weight: float = 1.0
 
 
@@ -85,6 +86,7 @@ class EnergyLossOptions(_LossOptions):
     """
     Special options for the loss of energies.
     """
+
     per_atom_loss: bool = False
     method: str = 'rmse'
 
@@ -95,6 +97,7 @@ class ForcesLossOptions(_LossOptions):
     """
     Special options for the loss of atomic forces.
     """
+
     method: str = 'rmse'
 
 
@@ -104,6 +107,7 @@ class StressLossOptions(_LossOptions):
     """
     Special options for the loss of stress tensors.
     """
+
     method: str = 'rmse'
 
 
@@ -113,6 +117,7 @@ class PressureLossOptions(_LossOptions):
     """
     Special options for the loss of total pressures.
     """
+
     method: str = 'rmse'
 
 
@@ -123,6 +128,7 @@ class L2LossOptions(_LossOptions):
     Special options for the L2 regularization.
     The default weight is changed to 0.01.
     """
+
     weight: float = 0.01
     decayed: bool = True
     decay_rate: float = 0.99
@@ -176,7 +182,6 @@ class _HyperParameters:
 
 @add_slots
 @nested_dataclass
-@dataclass
 class LossParameters(_HyperParameters):
     """
     Hyper parameters for constructing the total loss.
@@ -205,10 +210,22 @@ class OptParameters(_HyperParameters):
     decay_rate: float = 0.99
     decay_steps: int = 1000
     staircase: bool = False
+    additional_kwargs: Dict = None
 
 
 @add_slots
 @dataclass
+class CkptParameters(_HyperParameters):
+    """
+    Hyper parameters for restoring from a checkpoint.
+    """
+
+    use_previous_ema_variables: bool = True
+    restore_global_variables: bool = True
+
+
+@add_slots
+@nested_dataclass
 class TrainParameters(_HyperParameters):
     """
     Hyper parameters for handling the training.
@@ -218,7 +235,6 @@ class TrainParameters(_HyperParameters):
     restart: bool = True
     batch_size: int = 50
     previous_checkpoint: Union[str, None, bool] = None
-    use_previous_ema_variables: bool = True
     shuffle: bool = True
     max_checkpoints_to_keep: int = 20
     train_steps: int = 10000
@@ -226,6 +242,7 @@ class TrainParameters(_HyperParameters):
     summary_steps: int = 100
     log_steps: int = 100
     profile_steps: int = 2000
+    ckpt: CkptParameters = CkptParameters()
 
 
 @dataclass(frozen=True)

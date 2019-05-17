@@ -9,6 +9,7 @@ import nose
 from nose.tools import assert_equal, assert_raises, assert_is_none
 
 from tensoralloy.nn.dataclasses import OptParameters, LossParameters
+from tensoralloy.nn.dataclasses import TrainParameters
 from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
@@ -25,7 +26,10 @@ def test_dataclasses():
             energy=dict(per_atom_loss=True),
             forces=dict(method='logcosh'),
             elastic=dict(crystals=['Ni'], constraint=dict(stress_weight=1.5))
-        )
+        ),
+        train=dict(model_dir="..",
+                   ckpt=dict(restore_global_variables=False,
+                             use_previous_ema_variables=False))
     )
 
     opt_parameters = OptParameters(**hparams.opt)
@@ -42,6 +46,9 @@ def test_dataclasses():
 
     assert_is_none(loss_parameters.rose.crystals, None)
     assert_equal(loss_parameters.rose.dx, 0.10)
+
+    train_parameters = TrainParameters(**hparams['train'])
+    assert_equal(train_parameters.ckpt.use_previous_ema_variables, False)
 
     with assert_raises(Exception):
         _ = OptParameters(**AttributeDict(decay_method='adam'))

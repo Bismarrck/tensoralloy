@@ -36,6 +36,11 @@ S = [64, 32]
 [opt]
 learning_rate = 0.01
 decay_function = false
+method = 'sgd'
+
+[opt.sgd]
+momentum = 0.8
+use_nesterov = true
 
 [train]
 restart = true
@@ -48,3 +53,7 @@ eval_steps = 200
 summary_steps = 10
 log_steps = 10
 profile_steps = 0
+
+[train.ckpt]
+use_previous_ema_variables = false
+restore_global_variables = false
