@@ -48,9 +48,13 @@ nrho = 10000
 drho = 0.001
 
 [opt]
+method = 'sgd'
 learning_rate = 0.01
 decay_function = "exponential"
 decay_rate = 0.98
+
+[opt.sgd]
+use_nesterov = false
 
 [train]
 restart = true

@@ -102,13 +102,32 @@ decay_rate = 0.95
 decay_steps = 1000
 staircase = false
 
+[opt.sgd]
+momentum = 0.9
+use_nesterov = true
+
+[opt.adam]
+beta1 = 0.9
+beta2 = 0.999
+
+[opt.nadam]
+beta1 = 0.9
+beta2 = 0.999
+
+[opt.adadelta]
+rho = 0.95
+
+[opt.rmsprop]
+decay = 0.9
+momentum = 0.0
+
 [train]
 restart = true
 batch_size = 50
 previous_checkpoint = false
 use_previous_ema_variables = true
 shuffle = true
-model_dir = "required"
+model_dir = "train"
 max_checkpoints_to_keep = 20
 train_steps = 10000
 eval_steps = 1000
