@@ -112,7 +112,11 @@ class InputReader:
                         raise InputValueError(_keypath, _val, _options)
                     else:
                         _val = None
-            nested_set(results, _keypath, _val)
+            if isinstance(_val, dict):
+                for _subkey, _subval in _val.items():
+                    _safe_set(f'{_keypath}.{_subkey}', _subval)
+            else:
+                nested_set(results, _keypath, _val)
 
         def _safe_update(_keypath, _dst=None, required=False):
             _new_val = nested_get(configs, _keypath)
@@ -134,21 +138,20 @@ class InputReader:
 
         _safe_update('precision')
         _safe_update('seed')
-        
-        for section in ("dataset", "nn", "opt", "train", "debug"):
-            for key, val in defaults[section].items():
-                if isinstance(val, dict):
-                    continue
-                _safe_update(f"{section}.{key}", required=(val == 'required'))
 
-        _safe_update("nn.loss")
-        _safe_update("nn.loss.energy")
-        _safe_update("nn.loss.forces")
-        _safe_update("nn.loss.stress")
-        _safe_update("nn.loss.total_pressure")
-        _safe_update("nn.loss.l2")
-        _safe_update("nn.loss.elastic")
-        _safe_update("nn.loss.rose")
+        for key, val in defaults['dataset'].items():
+            if isinstance(val, dict):
+                continue
+            _safe_update(f"dataset.{key}", required=(val == 'required'))
+
+        _safe_update("opt")
+        for method in nested_get(choices, "opt.method"):
+            if method != nested_get(results, 'opt.method'):
+                del results['opt'][method]
+
+        _safe_update("nn")
+        _safe_update("train")
+        _safe_update("debug")
 
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
@@ -156,10 +159,6 @@ class InputReader:
         descriptor = nested_get(configs, 'dataset.descriptor')
 
         if descriptor == 'behler':
-            _safe_update("nn.atomic.behler")
-            _safe_update("nn.atomic")
-            _safe_update("nn.atomic.resnet")
-
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):
                 for key, val in layers.items():
@@ -169,9 +168,6 @@ class InputReader:
                 del results['nn']['eam']
 
         else:
-            _safe_update("nn.eam.arch")
-            _safe_update("nn.eam.setfl")
-
             for attr in ('constant', 'type'):
                 values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")
                 if isinstance(values, dict):
