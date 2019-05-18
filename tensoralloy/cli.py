@@ -562,6 +562,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             action='store_true',
             help="Use training data instead of test data."
         )
+        subparser.add_argument(
+            '--use-fnorm',
+            action='store_true',
+            default=False,
+            help="Print the errors w.r.t RMS of true forces."
+        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -632,6 +638,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         saver.restore(sess, args.ckpt)
 
                         true_vals = {x: [] for x in properties}
+                        true_vals['f_norm'] = []
                         pred_vals = {x: [] for x in properties}
 
                         for i in range(size // batch_size):
@@ -650,12 +657,14 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                         predictions_[prop] / n_atoms_)
                                 elif prop == 'forces':
                                     f_true = labels_[prop][:, 1:, :]
+                                    f_norm = np.linalg.norm(f_true, axis=(1, 2))
                                     f_pred = predictions_[prop]
                                     for j in range(batch_size):
                                         true_vals[prop].extend(
                                             f_true[j, mask_[j], :].flatten())
                                         pred_vals[prop].extend(
                                             f_pred[j, mask_[j], :].flatten())
+                                        true_vals['f_norm'].append(f_norm[j])
                                 elif prop == 'stress':
                                     true_vals[prop].extend(labels_[prop] / GPa)
                                     pred_vals[prop].extend(
@@ -669,27 +678,45 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 abs_diff = {}
                 for prop in properties:
                     abs_diff[prop] = np.abs(
-                        np.array(true_vals[prop]) - np.array(pred_vals[prop]))
+                        np.subtract(np.array(true_vals[prop]),
+                                    np.array(pred_vals[prop])))
 
-                for q in range(0, 101, args.q):
-                    data['percentile'].append(q)
-                    if q == 100:
-                        data['percentile'].append('MAE')
-                        data['percentile'].append('Median')
-                    for prop in properties:
-                        data[prop].append(np.percentile(abs_diff[prop], q))
+                if not args.use_fnorm:
+                    for q in range(0, 101, args.q):
+                        data['percentile'].append(q)
                         if q == 100:
-                            data[prop].append(np.mean(abs_diff[prop]))
-                            data[prop].append(np.median(abs_diff[prop]))
+                            data['percentile'].append('MAE')
+                            data['percentile'].append('Median')
+                        for prop in properties:
+                            data[prop].append(np.percentile(abs_diff[prop], q))
+                            if q == 100:
+                                data[prop].append(np.mean(abs_diff[prop]))
+                                data[prop].append(np.median(abs_diff[prop]))
 
-                dataframe = pd.DataFrame(data)
-                dataframe.set_index('percentile', inplace=True)
-                dataframe.rename(
-                    columns={'energy': 'energy/atom'}, inplace=True)
-                pd.options.display.float_format = "{:.6f}".format
+                    dataframe = pd.DataFrame(data)
+                    dataframe.set_index('percentile', inplace=True)
+                    dataframe.rename(
+                        columns={'energy': 'energy/atom'}, inplace=True)
+                    pd.options.display.float_format = "{:.6f}".format
+                    print(f"Mode: {mode} ({n_used}/{size})")
+                    print(dataframe.to_string())
 
-                print(f"Mode: {mode} ({n_used}/{size})")
-                print(dataframe)
+                else:
+                    true_vals['f_norm'] = np.asarray(true_vals['f_norm'])
+                    f_orders = np.argsort(true_vals['f_norm'])
+                    reordered_fnorm = true_vals['f_norm'][f_orders]
+                    reordered_ediff = abs_diff['energy'][f_orders]
+                    data = {'energy': [], 'f_norm': [], 'percentile': []}
+                    for q in range(args.q, 101, args.q):
+                        data['percentile'].append(q)
+                        data['energy'].append(np.mean(reordered_ediff[:q]))
+                        data['f_norm'].append(reordered_fnorm[q])
+                    dataframe = pd.DataFrame(data)
+                    dataframe.set_index('percentile', inplace=True)
+                    dataframe.rename(
+                        columns={'energy': 'energy/atom'}, inplace=True)
+                    pd.options.display.float_format = "{:.6f}".format
+                    print(dataframe.to_string())
 
         return func
 
