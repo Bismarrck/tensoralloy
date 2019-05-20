@@ -565,6 +565,7 @@ class BasicNN:
                         base_nn=self,
                         list_of_crystal=loss_parameters.elastic.crystals,
                         weight=loss_parameters.elastic.weight,
+                        options=loss_parameters.elastic.constraint,
                         verbose=verbose)
 
             if 'rose' in self._minimize_properties:

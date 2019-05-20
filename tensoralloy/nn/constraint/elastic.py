@@ -185,7 +185,8 @@ def get_elastic_constant_loss(base_nn,
                         cijkl = _get_cijkl_op(
                             total_stress, cell, volume, i, j, k, l,
                             name=f"C{vi}{vj}")
-                        log_tensor(cijkl)
+                        if verbose:
+                            log_tensor(cijkl)
                         predictions.append(cijkl)
                         labels.append(
                             tf.convert_to_tensor(elastic_constant.value,
@@ -212,6 +213,12 @@ def get_elastic_constant_loss(base_nn,
                                  name='sd/weighted')
                 mse = tf.reduce_mean(sd, name='mse')
                 mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
+
+                if not options.exact_loss:
+                    thres = tf.convert_to_tensor(1.0, mae.dtype, name='1GPa')
+                    gate = tf.cast(tf.math.greater(mae, thres), mae.dtype)
+                    mse = tf.multiply(mse, gate, name='mse/gate')
+
                 mse = tf.add(mse, eps, name='mse/safe')
                 weight = tf.convert_to_tensor(weight, dtype, name='weight')
                 raw_loss = tf.sqrt(mse, name='rmse')

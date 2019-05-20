@@ -58,6 +58,7 @@ weight = 0.1
 use_kbar = true
 forces_weight = 1.0
 stress_weight = 0.1
+exact_loss = true
 
 [nn.atomic]
 arch = "AtomicNN"
