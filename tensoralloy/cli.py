@@ -719,13 +719,14 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         new_abs_diff = abs_diff[prop][indices]
                         reordered[prop] = []
                         for q in range(args.q, 101, args.q):
-                            reordered[prop].append(np.mean(new_abs_diff[:q]))
+                            rbound = int(size * np.round(q / 100.0, 2)) - 1
+                            reordered[prop].append(
+                                np.mean(new_abs_diff[:rbound]))
 
                     reordered[order] = []
                     true_vals[key] = np.asarray(true_vals[key])[indices]
-                    total_size = len(true_vals[key])
                     for q in range(args.q, 101, args.q):
-                        rbound = int(total_size * np.round(q / 100.0, 2)) - 1
+                        rbound = int(size * np.round(q / 100.0, 2)) - 1
                         reordered[order].append(true_vals[key][rbound])
 
                     dataframe = pd.DataFrame(reordered)
