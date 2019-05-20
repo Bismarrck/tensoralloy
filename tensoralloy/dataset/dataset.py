@@ -326,12 +326,22 @@ class Dataset:
         Load tfrecords files for this dataset.
         """
         signature = self._get_signature()
+        total_size = len(self._database)
 
         def _get_file_size(filename):
             suffix = str(splitext(basename(filename))[0].split('-')[5])
             return int(suffix.split('.')[0])
 
-        def _load(key):
+        def _load(is_test=False):
+            if is_test:
+                key = 'test'
+                target_size = test_size
+            else:
+                key = 'train'
+                if test_size is None:
+                    target_size = None
+                else:
+                    target_size = total_size - test_size
             try:
                 files = list(glob.glob(
                     '{}/{}-{}-{}-*.{}.tfrecords'.format(
@@ -340,23 +350,23 @@ class Dataset:
             except Exception:
                 return None, 0
             if len(files) >= 1:
-                if test_size is None:
+                if target_size is None:
                     return files[idx], _get_file_size(files[idx])
                 else:
                     for _idx in range(len(files)):
                         _size = _get_file_size(files[_idx])
-                        if _size == test_size:
+                        if _size == target_size:
                             return files[_idx], _size
                     else:
                         tf.logging.info(
-                            f"The {key} tfrecords of size {test_size} cannot "
+                            f"The {key} tfrecords of size {target_size} cannot "
                             f"be accessed in {savedir}")
                         return None, 0
             else:
                 return None, 0
 
-        test_file, test_size = _load('test')
-        train_file, train_size = _load('train')
+        test_file, test_size = _load(is_test=True)
+        train_file, train_size = _load(is_test=False)
         success = (test_file is not None) and (train_file is not None)
 
         self._files = {tf_estimator.ModeKeys.TRAIN: train_file,
