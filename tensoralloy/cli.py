@@ -544,7 +544,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             help="The directory where tfrecord files should be found."
         )
         subparser.add_argument(
-            '-q',
+            '--q',
             type=int,
             default=5,
             help="Percentile or sequence of percentiles to compute, "
@@ -723,8 +723,10 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                     reordered[order] = []
                     true_vals[key] = np.asarray(true_vals[key])[indices]
+                    total_size = len(true_vals[key])
                     for q in range(args.q, 101, args.q):
-                        reordered[order].append(np.mean(true_vals[key][:q]))
+                        rbound = int(total_size * np.round(q / 100.0, 2)) - 1
+                        reordered[order].append(true_vals[key][rbound])
 
                     dataframe = pd.DataFrame(reordered)
                     dataframe.set_index(order, inplace=True)
