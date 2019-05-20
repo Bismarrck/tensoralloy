@@ -299,6 +299,7 @@ class EamAlloyNN(EamNN):
 
             sess = tf.Session()
             with sess:
+                tf.global_variables_initializer().run()
                 if checkpoint is not None:
                     if use_ema_variables:
                         # Restore the moving averaged variables
@@ -308,8 +309,6 @@ class EamAlloyNN(EamNN):
                     else:
                         saver = tf.train.Saver(tf.trainable_variables())
                     saver.restore(sess, checkpoint)
-                else:
-                    tf.global_variables_initializer().run()
 
                 results = AttributeDict(sess.run(
                     {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals}))
