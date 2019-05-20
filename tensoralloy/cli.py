@@ -563,9 +563,10 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             help="Use training data instead of test data."
         )
         subparser.add_argument(
-            '--use-fnorm',
-            action='store_true',
-            default=False,
+            '--order',
+            type=str,
+            choices=['f_norm', 'dE'],
+            default=None,
             help="Print the errors w.r.t RMS of true forces."
         )
 
@@ -598,6 +599,10 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             avail_properties = ('energy', 'forces', 'stress', 'total_pressure')
             properties = [x for x in config['nn.minimize']
                           if x in avail_properties]
+            if args.order == 'f_norm':
+                if 'forces' not in properties:
+                    properties.append('forces')
+
             config['nn.minimize'] = properties
             precision = config['precision']
 
@@ -681,7 +686,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         np.subtract(np.array(true_vals[prop]),
                                     np.array(pred_vals[prop])))
 
-                if not args.use_fnorm:
+                if args.order is None:
                     for q in range(0, 101, args.q):
                         data['percentile'].append(q)
                         if q == 100:
@@ -692,31 +697,43 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                             if q == 100:
                                 data[prop].append(np.mean(abs_diff[prop]))
                                 data[prop].append(np.median(abs_diff[prop]))
-
                     dataframe = pd.DataFrame(data)
                     dataframe.set_index('percentile', inplace=True)
-                    dataframe.rename(
-                        columns={'energy': 'energy/atom'}, inplace=True)
-                    pd.options.display.float_format = "{:.6f}".format
-                    print(f"Mode: {mode} ({n_used}/{size})")
-                    print(dataframe.to_string())
 
                 else:
-                    true_vals['f_norm'] = np.asarray(true_vals['f_norm'])
-                    f_orders = np.argsort(true_vals['f_norm'])
-                    reordered_fnorm = true_vals['f_norm'][f_orders]
-                    reordered_ediff = abs_diff['energy'][f_orders]
-                    data = {'energy': [], 'f_norm': [], 'percentile': []}
+                    order = args.order
+                    mapping = {'dE': 'energy', 'f_norm': 'f_norm'}
+                    key = mapping[order]
+
+                    if order == 'dE':
+                        emin = min(true_vals[key])
+                        true_vals[key] = np.asarray(true_vals[key]) - emin
+                    else:
+                        true_vals[key] = np.asarray(true_vals[key])
+                    indices = np.argsort(true_vals[key])
+
+                    reordered = {}
+                    for prop in ('energy', 'total_pressure'):
+                        if prop not in abs_diff:
+                            continue
+                        new_abs_diff = abs_diff[prop][indices]
+                        reordered[prop] = []
+                        for q in range(args.q, 101, args.q):
+                            reordered[prop].append(np.mean(new_abs_diff[:q]))
+
+                    reordered[order] = []
+                    true_vals[key] = np.asarray(true_vals[key])[indices]
                     for q in range(args.q, 101, args.q):
-                        data['percentile'].append(q)
-                        data['energy'].append(np.mean(reordered_ediff[:q]))
-                        data['f_norm'].append(reordered_fnorm[q])
-                    dataframe = pd.DataFrame(data)
-                    dataframe.set_index('percentile', inplace=True)
-                    dataframe.rename(
-                        columns={'energy': 'energy/atom'}, inplace=True)
-                    pd.options.display.float_format = "{:.6f}".format
-                    print(dataframe.to_string())
+                        reordered[order].append(np.mean(true_vals[key][:q]))
+
+                    dataframe = pd.DataFrame(reordered)
+                    dataframe.set_index(order, inplace=True)
+
+                dataframe.rename(
+                    columns={'energy': 'energy/atom'}, inplace=True)
+                pd.options.display.float_format = "{:.6f}".format
+                print(f"Mode: {mode} ({n_used}/{size})")
+                print(dataframe.to_string())
 
         return func
 
