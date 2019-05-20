@@ -321,9 +321,9 @@ class Dataset:
 
         self.load_tfrecords(savedir)
 
-    def load_tfrecords(self, savedir, idx=0) -> bool:
+    def load_tfrecords(self, savedir: str, idx=0, test_size=None) -> bool:
         """
-        Load converted tfrecords files for this dataset.
+        Load tfrecords files for this dataset.
         """
         signature = self._get_signature()
 
@@ -340,13 +340,24 @@ class Dataset:
             except Exception:
                 return None, 0
             if len(files) >= 1:
-                return files[idx], _get_file_size(files[idx])
+                if test_size is None:
+                    return files[idx], _get_file_size(files[idx])
+                else:
+                    for _idx in range(len(files)):
+                        _size = _get_file_size(files[_idx])
+                        if _size == test_size:
+                            return files[_idx], _size
+                    else:
+                        tf.logging.info(
+                            f"The {key} tfrecords of size {test_size} cannot "
+                            f"be accessed in {savedir}")
+                        return None, 0
             else:
                 return None, 0
 
         test_file, test_size = _load('test')
         train_file, train_size = _load('train')
-        success = bool(test_file) and bool(train_file)
+        success = (test_file is not None) and (train_file is not None)
 
         self._files = {tf_estimator.ModeKeys.TRAIN: train_file,
                        tf_estimator.ModeKeys.EVAL: test_file}

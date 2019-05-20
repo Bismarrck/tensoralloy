@@ -262,7 +262,7 @@ class TrainingManager:
 
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
-        if not dataset.load_tfrecords(tfrecords_dir):
+        if not dataset.load_tfrecords(tfrecords_dir, test_size=test_size):
             if validate_tfrecords:
                 dataset.to_records(
                     tfrecords_dir, test_size=test_size, verbose=True)
