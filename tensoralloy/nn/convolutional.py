@@ -83,8 +83,8 @@ class Conv(keras_Conv, base.Layer):
 
 
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
-                   variable_scope, kernel_initializer='xavier', l2_weight=0.0,
-                   collections=None, verbose=False):
+                   variable_scope, kernel_initializer='he_normal',
+                   l2_weight=0.0, collections=None, verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 

@@ -209,7 +209,7 @@ def _absolute_forces_loss(labels: tf.Tensor,
             val = tf.math.add(val, eps, name='mse/safe')
             loss = tf.sqrt(val, name='rmse')
         else:
-            loss = tf.reduce_mean(val, name='logcosh')
+            loss = tf.reduce_mean(val, name='logcosh/mean')
 
     return loss, mae
 
