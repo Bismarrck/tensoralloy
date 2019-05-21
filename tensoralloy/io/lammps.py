@@ -12,17 +12,19 @@ from typing import List, Dict
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+__all__ = ["SetFL", "AdpFL", "read_adp_setfl", "read_eam_alloy_setfl"]
+
 
 @dataclass
 class SetFL:
     """
-    All details of a Lammps eam/alloy file.
+    Representation of a Lammps eam/alloy file.
     """
 
     elements: List[str]
     rho: Dict[str, np.ndarray]
     phi: Dict[str, np.ndarray]
-    embed: Dict[str, np.ndarray]
+    frho: Dict[str, np.ndarray]
     nr: int
     dr: float
     nrho: int
@@ -32,18 +34,34 @@ class SetFL:
     lattice_constants: List[float]
     lattice_types: List[str]
 
-    __slots__ = ("elements", "rho", "phi", "embed", "nr", "dr", "nrho", "drho",
+    __slots__ = ("elements", "rho", "phi", "frho", "nr", "dr", "nrho", "drho",
                  "rcut", "atomic_masses", "lattice_constants", "lattice_types")
 
 
-def read_eam_alloy(filename) -> SetFL:
+@dataclass
+class AdpFL(SetFL):
     """
-    Read tabulated rho, phi and F(rho) values from a Lammps eam/alloy file.
+    Representation of a Lammps adp file.
+    """
+    dipole: Dict[str, np.ndarray]
+    quadrupole: Dict[str, np.ndarray]
+
+    __slots__ = ("elements", "rho", "phi", "frho", "dipole", "quadrupole",
+                 "nr", "dr", "nrho", "drho", "rcut", "atomic_masses",
+                 "lattice_constants", "lattice_types")
+
+
+def _read_setfl(filename, is_adp=False):
+    """
+    Read tabulated rho, phi, F(rho), dipole and quadrupole values from a Lammps
+    setfl file.
     """
     with open(filename) as fp:
         rho = {}
         frho = {}
         phi = {}
+        dipole = {}
+        quadrupole = {}
         n_el = None
         nrho = None
         nr = None
@@ -56,6 +74,8 @@ def read_eam_alloy(filename) -> SetFL:
         lattice_types = []
         ab = []
         stage = 0
+        ab_cycle = 0
+        nab = None
         for number, line in enumerate(fp):
             line = line.strip()
             if number < 3:
@@ -86,7 +106,15 @@ def read_eam_alloy(filename) -> SetFL:
                         phi[key] = np.zeros((2, nr))
                         phi[key][0] = np.linspace(0.0, nr * dr, nr,
                                                   endpoint=False)
+                        if is_adp:
+                            dipole[key] = np.zeros((2, nr))
+                            dipole[key][0] = np.linspace(0.0, nr * dr, nr,
+                                                         endpoint=False)
+                            quadrupole[key] = np.zeros((2, nr))
+                            quadrupole[key][0] = np.linspace(0.0, nr * dr, nr,
+                                                             endpoint=False)
                         ab.append(key)
+                nab = len(ab)
                 curr_element = elements[0]
                 stage = 1
             elif 1 <= stage <= n_el:
@@ -111,15 +139,43 @@ def read_eam_alloy(filename) -> SetFL:
                         stage += 1
                         base = number + 1
             elif stage > n_el:
-                div, residual = divmod(number - base, nr)
+                rdiv, residual = divmod(number - base, nr)
+                div = rdiv % nab
                 key = ab[div]
-                inc = number - base - nr * div
-                if inc == 0:
-                    phi[key][1, inc] = float(line)
+                inc = number - base - nr * rdiv
+                if ab_cycle == 0:
+                    adict = phi
+                elif ab_cycle == 1:
+                    adict = dipole
                 else:
-                    phi[key][1, inc] = float(line) / phi[key][0, inc]
+                    adict = quadrupole
+                if inc == 0:
+                    adict[key][1, inc] = float(line)
+                else:
+                    adict[key][1, inc] = float(line) / adict[key][0, inc]
+                if div + 1 == nab and inc + 1 == nr and is_adp:
+                    ab_cycle += 1
 
-        return SetFL(elements, rho, phi, frho, nr, dr, nrho, drho, rcut,
-                     atomic_masses=atomic_masses,
-                     lattice_constants=lattice_constants,
-                     lattice_types=lattice_types)
+        return {'elements': elements, 'rho': rho, 'phi': phi, 'frho': frho,
+                'dipole': dipole, 'quadrupole': quadrupole, 'nr': nr, 'dr': dr,
+                'nrho': nrho, 'drho': drho, 'rcut': rcut,
+                'atomic_masses': atomic_masses,
+                'lattice_constants': lattice_constants,
+                'lattice_types': lattice_types}
+
+
+def read_eam_alloy_setfl(filename) -> SetFL:
+    """
+    Read a Lammps eam/alloy setfl file.
+    """
+    adict = _read_setfl(filename, is_adp=False)
+    adict.pop('dipole')
+    adict.pop('quadrupole')
+    return SetFL(**adict)
+
+
+def read_adp_setfl(filename) -> AdpFL:
+    """
+    Read a Lammps adp setfl file.
+    """
+    return AdpFL(**_read_setfl(filename, is_adp=True))
