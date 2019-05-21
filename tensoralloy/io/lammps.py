@@ -5,14 +5,18 @@ Lammps I/O helper functions.
 from __future__ import print_function, absolute_import
 
 import numpy as np
+import sys
 
+from io import StringIO
 from dataclasses import dataclass
 from typing import List, Dict
+from atsim.potentials import writeSetFL
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["SetFL", "AdpFL", "read_adp_setfl", "read_eam_alloy_setfl"]
+__all__ = ["SetFL", "AdpFL", "read_adp_setfl", "read_eam_alloy_setfl",
+           "write_adp_setfl"]
 
 
 @dataclass
@@ -179,3 +183,58 @@ def read_adp_setfl(filename) -> AdpFL:
     Read a Lammps adp setfl file.
     """
     return AdpFL(**_read_setfl(filename, is_adp=True))
+
+
+def _write_setfl_pairpots(nr, dr, eampots, pairpots, out):
+    """
+    A helper function to write pairwise potentials.
+    """
+    workout = StringIO()
+
+    def pairkey(a, b):
+        """ The unique key of interaction AB. """
+        _k = [a, b]
+        _k.sort()
+        return tuple(_k)
+
+    class ZeroPair(object):
+        """ A wrapper class. """
+
+        @staticmethod
+        def energy(_):
+            """ Return a zero. """
+            return 0.0
+
+    zero_pair = ZeroPair()
+
+    # Make a dictionary of available pair pots
+    pairpotsdict = {}
+    for pp in pairpots:
+        pairpotsdict[pairkey(pp.speciesA, pp.speciesB)] = pp
+
+    # Make list of required pots
+    for i in range(len(eampots)):
+        for j in range(i + 1):
+            k = pairkey(eampots[i].species, eampots[j].species)
+            pp = pairpotsdict.get(k, zero_pair)
+            for k in range(nr):
+                r = float(k) * dr
+                val = r * pp.energy(r)
+                print(u"% 20.16e" % val, file=workout)
+    out.write(workout.getvalue())
+
+
+def write_adp_setfl(nrho, drho, nr, dr, eampots, pairpots, out=sys.stdout,
+                    comments=("", "", ""), cutoff=None):
+    """
+    Write an ADP potential to a setfl file.
+    """
+    n = len(eampots)
+    nab = n * (n + 1) // 2
+    if len(pairpots) != nab * 3:
+        raise ValueError(f"{nab * 3} pair potentials are required")
+
+    writeSetFL(nrho, drho, nr, dr, eampots, pairpots[:nab], out, comments,
+               cutoff)
+    _write_setfl_pairpots(nr, dr, eampots, pairpots[nab * 1: nab * 2], out)
+    _write_setfl_pairpots(nr, dr, eampots, pairpots[nab * 2: nab * 3], out)
