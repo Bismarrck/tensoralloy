@@ -6,6 +6,8 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
+from tensorflow.python.framework import ops
+
 from tensoralloy.extension.interp.utils import load_op_library
 from tensoralloy.extension.interp.solver import tri_diag_solve
 
@@ -26,8 +28,7 @@ class CubicInterpolator(object):
     Cubic spline interpolation for a scalar function in one dimension
     """
 
-    def __init__(self, x, y, bc_start=None, bc_end=None, name=None,
-                 natural_boundary=False):
+    def __init__(self, x, y, bc_start=None, bc_end=None, natural_boundary=False):
         """
         Initialization method.
 
@@ -46,90 +47,13 @@ class CubicInterpolator(object):
         bc_end : float or tf.Tensor or None
             The value of the derivative of the function at the last data point.
             By default this is zero.
-        name : str
-            The name of this interpolator.
+
         """
-        self.name = name
-
-        with tf.name_scope(name, "CubicInterpolator"):
-
-            x = tf.convert_to_tensor(x, name='x')
-
-            # Compute the deltas
-            size = tf.shape(x)[-1]
-            axis = tf.rank(x) - 1
-            dx = tf.gather(x, tf.range(1, size), axis=axis) \
-                - tf.gather(x, tf.range(size-1), axis=axis)
-            dy = tf.gather(y, tf.range(1, size), axis=axis) \
-                - tf.gather(y, tf.range(size-1), axis=axis)
-
-            # Compute the slices
-            upper_inds = tf.range(1, size-1)
-            lower_inds = tf.range(size-2)
-            s_up = lambda a: tf.gather(a, upper_inds, axis=axis)  # NOQA
-            s_lo = lambda a: tf.gather(a, lower_inds, axis=axis)  # NOQA
-            dx_up = s_up(dx)
-            dx_lo = s_lo(dx)
-            dy_up = s_up(dy)
-            dy_lo = s_lo(dy)
-
-            first = lambda a: tf.gather(a, tf.zeros(1, dtype=tf.int64),  # NOQA
-                                        axis=axis)
-            last = lambda a: tf.gather(a, [size-2], axis=axis)  # NOQA
-
-            if bc_start is None:
-                bc_start = 0.0
-            bc_start = tf.convert_to_tensor(
-                bc_start, dtype=x.dtype, name='bc_start')
-
-            if bc_end is None:
-                bc_end = 0.0
-            bc_end = tf.convert_to_tensor(bc_end, dtype=x.dtype, name='bc_end')
-
-            two = tf.constant(2.0, dtype=x.dtype, name='two')
-            three = tf.constant(3.0, dtype=x.dtype, name='three')
-
-            if not natural_boundary:
-                upper = dx
-                lower = dx
-                diag = two * tf.concat((first(dx), dx_up + dx_lo, last(dx)),
-                                       axis=axis)
-                Y = three * tf.concat((first(dy)/first(dx) - bc_start,
-                                       dy_up/dx_up - dy_lo/dx_lo,
-                                       bc_end - last(dy) / last(dx)),
-                                      axis=axis, name='y')
-
-            else:
-                diag = two * tf.concat(
-                    (first(dx) / two,
-                     dx_up + dx_lo,
-                     last(dx) / two),
-                    axis=axis, name='diag')
-
-                shape = dx.shape.as_list()[:-1] + [1]
-                zeros = tf.zeros(shape, dtype=x.dtype)
-
-                upper = tf.concat((zeros, dx[..., 1:]),
-                                  axis=axis, name='upper')
-                lower = tf.concat((dx[..., :-1], zeros),
-                                  axis=axis, name='lower')
-                Y = three * tf.concat((tf.fill(shape, bc_start),
-                                       dy_up / dx_up - dy_lo / dx_lo,
-                                       tf.fill(shape, bc_end)),
-                                      axis=axis, name=name)
-
-            # Solve the tri-diagonal system Ax = b
-            c = tri_diag_solve(diag, upper, lower, Y)
-            c_up = tf.gather(c, tf.range(1, size), axis=axis)
-            c_lo = tf.gather(c, tf.range(size - 1), axis=axis)
-            b = dy / dx - dx * (c_up + two * c_lo) / three
-            d = (c_up - c_lo) / (three * dx)
-
-            self.x = x
-            self.y = y
-            self.b = b
-            self.c = c_lo
-            self.d = d
+        self.x = x
+        self.y = y
+        self.bc_start = bc_start
+        self.bc_end = bc_end
+        self.use_natural_boundary = natural_boundary
 
     def evaluate(self, t, name=None):
         """
@@ -147,13 +71,85 @@ class CubicInterpolator(object):
             The name.
 
         """
-        with tf.name_scope(self.name, "CubicInterpolator"):
-            with tf.name_scope(name, "evaluate"):
-                res = cubic_op.cubic_gather(t, self.x, self.y, self.b, self.c,
-                                            self.d)
-                tau = t - res.xk
-                mod = res.ak + res.bk * tau + res.ck * tau**2 + res.dk * tau**3
-                return mod
+        with ops.name_scope(name, "CubicInterpolator", [t]):
+
+            x = tf.convert_to_tensor(self.x, name='x')
+            y = tf.convert_to_tensor(self.y, name='y')
+
+            # Compute the deltas
+            size = tf.shape(x)[-1]
+            axis = tf.rank(x) - 1
+            dx = tf.math.subtract(tf.gather(x, tf.range(1, size), axis=axis),
+                                  tf.gather(x, tf.range(size - 1), axis=axis),
+                                  name='dx')
+            dy = tf.math.subtract(tf.gather(y, tf.range(1, size), axis=axis),
+                                  tf.gather(y, tf.range(size - 1), axis=axis),
+                                  name='dy')
+
+            # Compute the slices
+            upper_inds = tf.range(1, size - 1)
+            lower_inds = tf.range(size - 2)
+            s_up = lambda a: tf.gather(a, upper_inds, axis=axis)  # NOQA
+            s_lo = lambda a: tf.gather(a, lower_inds, axis=axis)  # NOQA
+            dx_up = s_up(dx)
+            dx_lo = s_lo(dx)
+            dy_up = s_up(dy)
+            dy_lo = s_lo(dy)
+
+            first = lambda a: tf.gather(a, tf.zeros(1, dtype=tf.int64),  # NOQA
+                                        axis=axis)
+            last = lambda a: tf.gather(a, [size - 2], axis=axis)  # NOQA
+
+            if self.bc_start is None:
+                bc_start = 0.0
+            bc_start = tf.convert_to_tensor(
+                bc_start, dtype=x.dtype, name='bc_start')
+
+            if self.bc_end is None:
+                bc_end = 0.0
+            bc_end = tf.convert_to_tensor(bc_end, dtype=x.dtype, name='bc_end')
+
+            two = tf.constant(2.0, dtype=x.dtype, name='two')
+            three = tf.constant(3.0, dtype=x.dtype, name='three')
+
+            if not self.use_natural_boundary:
+                upper = dx
+                lower = dx
+                diag = two * tf.concat((first(dx), dx_up + dx_lo, last(dx)),
+                                       axis=axis)
+                Y = three * tf.concat((first(dy) / first(dx) - bc_start,
+                                       dy_up / dx_up - dy_lo / dx_lo,
+                                       bc_end - last(dy) / last(dx)),
+                                      axis=axis, name='y')
+
+            else:
+                diag = two * tf.concat((first(dx) / two,
+                                        dx_up + dx_lo,
+                                        last(dx) / two),
+                                       axis=axis, name='diag')
+
+                shape = dx.shape.as_list()[:-1] + [1]
+                zeros = tf.zeros(shape, dtype=x.dtype)
+                upper = tf.concat((zeros, dx[..., 1:]),
+                                  axis=axis, name='upper')
+                lower = tf.concat((dx[..., :-1], zeros),
+                                  axis=axis, name='lower')
+                Y = three * tf.concat((tf.fill(shape, bc_start),
+                                       dy_up / dx_up - dy_lo / dx_lo,
+                                       tf.fill(shape, bc_end)),
+                                      axis=axis, name=name)
+
+            # Solve the tri-diagonal system Ax = b
+            c = tri_diag_solve(diag, upper, lower, Y)
+            c_up = tf.gather(c, tf.range(1, size), axis=axis)
+            c_lo = tf.gather(c, tf.range(size - 1), axis=axis)
+            b = dy / dx - dx * (c_up + two * c_lo) / three
+            d = (c_up - c_lo) / (three * dx)
+
+            res = cubic_op.cubic_gather(t, x, y, b, c_lo, d)
+            tau = t - res.xk
+            mod = res.ak + res.bk * tau + res.ck * tau**2 + res.dk * tau**3
+            return mod
 
 
 @tf.RegisterGradient("CubicGather")
