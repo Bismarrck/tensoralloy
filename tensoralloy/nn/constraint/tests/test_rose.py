@@ -12,7 +12,7 @@ from ase.build import bulk
 from ase.units import GPa
 from os.path import join
 from collections import Counter
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error
 from nose.tools import assert_almost_equal, assert_equal
 from tensorflow_estimator import estimator as tf_estimator
 
@@ -20,7 +20,7 @@ from tensoralloy.nn.constraint.rose import get_rose_constraint_loss
 from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.nn import EamAlloyNN
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
-from tensoralloy.nn.dataclasses import LossParameters
+from tensoralloy.nn.dataclasses import LossParameters, RoseLossOptions
 from tensoralloy.transformer import BatchEAMTransformer
 from tensoralloy.precision import set_precision
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
@@ -100,6 +100,8 @@ def test_rose_eos_constraint():
             hparams = AttributeDict(
                 train=train_params, loss=LossParameters(), opt=OptParameters()
             )
+            tf.train.get_or_create_global_step()
+
             nn.model_fn(
                 features=batch,
                 labels=labels,
@@ -107,12 +109,12 @@ def test_rose_eos_constraint():
                 params=hparams,
             )
 
-            loss = get_rose_constraint_loss(
-                base_nn=nn,
-                list_of_crystal=[built_in_crystals['Mo']],
+            options = RoseLossOptions(
+                crystals=[built_in_crystals['Mo']],
                 beta=[beta],
                 dx=dx,
                 delta=delta)
+            loss = get_rose_constraint_loss(base_nn=nn, options=options)
 
             zjw04_vars = [var for var in tf.global_variables()
                           if var.op.name.startswith('nnEAM/Shared/Mo')
@@ -123,9 +125,9 @@ def test_rose_eos_constraint():
                 loss.name.replace('loss', 'mae'))
 
             ax_op = tf.get_default_graph().get_tensor_by_name(
-                'Rose/Mo/Params/ax:0')
+                'Rose/Mo/bcc/Params/ax:0')
             alpha_op = tf.get_default_graph().get_tensor_by_name(
-                'Rose/Mo/Params/alpha:0')
+                'Rose/Mo/bcc/Params/alpha:0')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -139,7 +141,7 @@ def test_rose_eos_constraint():
     assert_array_almost_equal(ax_list, ax_vals, delta=eps)
     assert_almost_equal(mean_absolute_error(y_rose_list, y_list), mae_val,
                         delta=eps)
-    assert_almost_equal(np.sqrt(mean_squared_error(y_rose_list, y_list)),
+    assert_almost_equal(np.linalg.norm(np.subtract(y_rose_list, y_list)),
                         loss_val, delta=eps)
 
 

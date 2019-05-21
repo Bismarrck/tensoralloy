@@ -10,11 +10,12 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.units import GPa
-from typing import List, Union
+from typing import List
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.nn.constraint.data import Crystal, get_crystal
+from tensoralloy.nn.constraint.data import get_crystal
+from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.utils import AttributeDict, GraphKeys
@@ -82,11 +83,7 @@ def get_batch_transformer(original_clf: BatchDescriptorTransformer,
 
 
 def get_rose_constraint_loss(base_nn,
-                             list_of_crystal: List[Union[str, Crystal]],
-                             beta: List[float],
-                             dx=0.10,
-                             delta=0.01,
-                             weight=1.0,
+                             options: RoseLossOptions = None,
                              verbose=True) -> tf.Tensor:
     """
     Create a Rose Equation of State constraint. This constraint is used to fit
@@ -96,17 +93,8 @@ def get_rose_constraint_loss(base_nn,
     ----------
     base_nn : BasicNN
         A `BasicNN`. Its variables will be reused.
-    list_of_crystal : List[Union[str, Crystal]]
-        A list of `Crystal` objects. It can also be a list of str as the names
-        of the built-in crystals.
-    beta : List[float]
-        The adjustable parameter for each crystal.
-    dx : float
-        The volume scaling range, 0.30 <= dx <= 0.01.
-    delta : float
-        The delta between two adjacents. n_total = int(2 * dx / delta) + 1.
-    weight : float
-        The loss weight.
+    options : RoseLossOptions
+        The options for this loss tensor.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -126,7 +114,10 @@ def get_rose_constraint_loss(base_nn,
     configs['export_properties'] = ['energy']
     configs['minimize_properties'] = ['energy']
 
-    for crystal_or_name_or_file in list_of_crystal:
+    if options is None:
+        options = RoseLossOptions()
+
+    for crystal_or_name_or_file in options.crystals:
         crystal = get_crystal(crystal_or_name_or_file)
         if crystal.bulk_modulus == 0:
             continue
@@ -153,15 +144,18 @@ def get_rose_constraint_loss(base_nn,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=verbose)
                 e0 = tf.identity(output.energy, name='E0')
-                v0 = tf.identity(features.volume, name='v0')
+                v0 = tf.identity(features.volume, name='V0')
 
             dtype = e0.dtype
+            dx = options.dx
+            delta = options.delta
+            beta = options.beta
             eqx = np.arange(-dx, dx + delta, delta)
 
             with tf.name_scope("Params"):
-                b = tf.convert_to_tensor(crystal.bulk_modulus * GPa,
-                                         dtype=dtype, name='B')
-                alpha = tf.sqrt(tf.abs(9.0 * v0 * b / e0), name='alpha')
+                bulk_modulus = tf.convert_to_tensor(
+                    crystal.bulk_modulus * GPa, dtype=dtype, name='B')
+                alpha = tf.sqrt(tf.abs(9.0 * v0 * bulk_modulus / e0), 'alpha')
                 x = tf.convert_to_tensor(eqx, dtype=dtype, name='x')
                 ax = tf.math.multiply(alpha, x, name='ax')
                 beta = tf.convert_to_tensor(beta, dtype=dtype, name='beta')
@@ -219,16 +213,17 @@ def get_rose_constraint_loss(base_nn,
                 with tf.name_scope("Loss"):
                     diff = tf.math.subtract(predictions, labels, name='diff')
                     mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
-                    mse = tf.reduce_mean(tf.math.square(diff), name='mse')
+
+                    sds = tf.reduce_sum(tf.math.square(diff), name='sds')
                     eps = tf.convert_to_tensor(
                         get_float_dtype().eps, dtype, 'eps')
-                    weight = tf.convert_to_tensor(weight, dtype, 'weight')
-                    rmse = tf.sqrt(mse + eps, name='rmse')
-                    loss = tf.multiply(rmse, weight, name='loss')
+                    weight = tf.convert_to_tensor(
+                        options.weight, dtype, name='weight')
+                    residual = tf.sqrt(sds + eps, name='residual')
+                    loss = tf.multiply(residual, weight, name='loss')
 
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                 tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-                tf.add_to_collection(GraphKeys.EVAL_METRICS, rmse)
                 tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
 
                 return loss

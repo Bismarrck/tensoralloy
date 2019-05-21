@@ -572,11 +572,7 @@ class BasicNN:
                 if loss_parameters.rose.crystals is not None:
                     losses.rose = rose_ops.get_rose_constraint_loss(
                         base_nn=self,
-                        list_of_crystal=loss_parameters.rose.crystals,
-                        beta=loss_parameters.rose.beta,
-                        dx=loss_parameters.rose.dx,
-                        delta=loss_parameters.rose.delta,
-                        weight=loss_parameters.rose.weight,
+                        options=loss_parameters.rose,
                         verbose=verbose)
 
             for tensor in losses.values():
