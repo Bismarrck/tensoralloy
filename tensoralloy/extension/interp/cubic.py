@@ -10,7 +10,7 @@ from tensorflow.python.framework import ops
 
 from tensoralloy.extension.interp.utils import load_op_library
 from tensoralloy.extension.interp.solver import tri_diag_solve
-
+from tensoralloy.extension.grad_ops import safe_pow
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,7 +28,8 @@ class CubicInterpolator(object):
     Cubic spline interpolation for a scalar function in one dimension
     """
 
-    def __init__(self, x, y, bc_start=None, bc_end=None, natural_boundary=False):
+    def __init__(self, x, y, name=None, bc_start=None, bc_end=None,
+                 natural_boundary=False):
         """
         Initialization method.
 
@@ -41,6 +42,8 @@ class CubicInterpolator(object):
             The dependent coordinates of the training points. This must be the
             same shape as ``x`` and the interpolation is always performed along
             the last axis. The shape should be `[..., N]`.
+        name : str
+            The name of this interpolator.
         bc_start : float or tf.Tensor or None
             The value of the derivative of the function at the first data point.
             By default this is zero.
@@ -51,6 +54,7 @@ class CubicInterpolator(object):
         """
         self.x = x
         self.y = y
+        self.name = name
         self.bc_start = bc_start
         self.bc_end = bc_end
         self.use_natural_boundary = natural_boundary
@@ -71,6 +75,8 @@ class CubicInterpolator(object):
             The name.
 
         """
+        name = self.name or name
+
         with ops.name_scope(name, "CubicInterpolator", [t]):
 
             x = tf.convert_to_tensor(self.x, name='x')
@@ -148,7 +154,10 @@ class CubicInterpolator(object):
 
             res = cubic_op.cubic_gather(t, x, y, b, c_lo, d)
             tau = t - res.xk
-            mod = res.ak + res.bk * tau + res.ck * tau**2 + res.dk * tau**3
+            mod = tf.add_n([res.ak,
+                            res.bk * tau,
+                            res.ck * safe_pow(tau, two),
+                            res.dk * safe_pow(tau, three)], name='eval')
             return mod
 
 
