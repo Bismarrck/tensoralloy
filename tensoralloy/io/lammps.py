@@ -221,7 +221,7 @@ def _write_setfl_pairpots(nr, dr, eampots, pairpots, out):
                 r = float(k) * dr
                 val = r * pp.energy(r)
                 print(u"% 20.16e" % val, file=workout)
-    out.write(workout.getvalue())
+    out.write(workout.getvalue().encode())
 
 
 def write_adp_setfl(nrho, drho, nr, dr, eampots, pairpots, out=sys.stdout,
