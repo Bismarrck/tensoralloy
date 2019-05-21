@@ -104,6 +104,7 @@ def test_inference():
 
         nn = AtomicNN(elements, hidden_sizes,
                       activation='tanh',
+                      minmax_scale=False,
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
 
@@ -152,7 +153,9 @@ def test_inference_from_transformer():
         elements = ['Al', 'Cu']
         clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
                                           angular=False)
-        nn = AtomicResNN(clf.elements, export_properties=['energy', 'forces'])
+        nn = AtomicResNN(elements=clf.elements,
+                         minmax_scale=False,
+                         export_properties=['energy', 'forces'])
         nn.attach_transformer(clf)
         prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
@@ -200,6 +203,7 @@ def test_export_to_pb():
 
         nn = AtomicResNN(elements=elements,
                          hidden_sizes=[64, 32],
+                         minmax_scale=False,
                          activation='leaky_relu',
                          export_properties=['energy', 'forces', 'stress'],
                          atomic_static_energy=atomic_static_energy)

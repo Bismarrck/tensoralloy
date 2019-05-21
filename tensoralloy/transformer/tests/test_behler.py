@@ -774,6 +774,7 @@ def test_batch_multi_elements():
             positions = []
             cells = []
             volumes = []
+            masks = []
             for i, atoms in enumerate(qm7m.trajectory):
                 clf = sf.get_index_transformer(atoms)
                 indexed_slices.append(sf.get_indexed_slices(atoms))
@@ -782,11 +783,13 @@ def test_batch_multi_elements():
                 cells.append(
                     atoms.get_cell(complete=True).array.astype(np_dtype))
                 volumes.append(np_dtype(atoms.get_volume()))
+                masks.append(np.asarray(clf.mask, dtype=np_dtype))
 
             batch = _merge_indexed_slices(indexed_slices)
             batch.positions = np.asarray(positions)
             batch.cells = np.asarray(cells)
             batch.volume = volumes
+            batch.mask = np.asarray(masks)
 
             # Use a large delta because we use float32 in this test.
             delta = 1e-5

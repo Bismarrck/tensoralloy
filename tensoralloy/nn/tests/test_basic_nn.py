@@ -213,7 +213,9 @@ def test_build_nn_with_properties():
         Run a test.
         """
         with tf.Graph().as_default():
-            nn = AtomicNN(elements, minimize_properties=list_of_properties)
+            nn = AtomicNN(elements=elements,
+                          minmax_scale=False,
+                          minimize_properties=list_of_properties)
             clf = _get_transformer()
             nn.attach_transformer(clf)
             protobuf = tf.convert_to_tensor(
@@ -239,6 +241,8 @@ def test_build_nn_with_properties():
             loss_parameters.elastic.constraint.use_kbar = True
 
             mode = tf_estimator.ModeKeys.TRAIN
+
+            tf.train.get_or_create_global_step()
 
             try:
                 predictions = nn.build(batch, mode=mode, verbose=True)
