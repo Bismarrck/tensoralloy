@@ -9,9 +9,12 @@ import numpy as np
 import nose
 
 from scipy.interpolate import CubicSpline
+from os.path import join
 
 from tensoralloy.extension.interp.cubic import CubicInterpolator
-from tensoralloy.test_utils import assert_array_almost_equal
+from tensoralloy.io.lammps import read_adp_setfl
+from tensoralloy.test_utils import assert_array_almost_equal, test_dir
+from tensoralloy.precision import set_precision, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -67,6 +70,35 @@ def test_cubic_spline_2d():
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             sess.run(z, feed_dict={r: rlist})
+
+
+def test_reconstruct_lammps_adp():
+    """
+    Test the reconstruction of the Al-Cu ADP potential.
+    """
+    with set_precision('high'):
+        with tf.Graph().as_default():
+
+            filename = join(test_dir(), 'lammps', 'AlCu.adp')
+            adpfl = read_adp_setfl(filename)
+
+            dtype = get_float_dtype()
+
+            rlist = tf.convert_to_tensor(
+                adpfl.dipole['AlCu'][0], name='rlist', dtype=dtype)
+
+            u_alcu = adpfl.dipole['AlCu'][0] * adpfl.dipole['AlCu'][1]
+            u_alcu[0] = adpfl.dipole['AlCu'][1][0]
+
+            ux = adpfl.dipole['AlCu'][0][0:-1:50]
+            uy = u_alcu[0:-1:50]
+
+            func = CubicInterpolator(ux, uy, natural_boundary=True)
+            u_op = func.evaluate(rlist, name='Dipole')
+
+            with tf.Session() as sess:
+                u_reconstruct = sess.run(u_op)
+                assert_array_almost_equal(u_reconstruct, u_alcu, delta=1e-5)
 
 
 if __name__ == "__main__":
