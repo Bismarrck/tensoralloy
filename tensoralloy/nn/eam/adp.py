@@ -12,13 +12,20 @@ import numpy as np
 
 from tensorflow_estimator import estimator as tf_estimator
 from collections import Counter
+from datetime import datetime
+from os.path import join, dirname
+from ase import data
+from atsim.potentials import Potential, EAMPotential
 from functools import partial
 
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
+from tensoralloy.nn.eam.eam import plot_potential
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.utils import AttributeDict, get_elements_from_kbody_term
 from tensoralloy.utils import get_kbody_terms, Defaults, safe_select
+from tensoralloy.precision import get_float_dtype
+from tensoralloy.io.lammps import write_adp_setfl
 
 
 class AdpNN(EamAlloyNN):
@@ -189,8 +196,8 @@ class AdpNN(EamAlloyNN):
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
-            `mask` is a 4D tensor, `[batch_size, 1, max_n_element, nnl]`.
-            `value` is a 5D tensor, `[4, batch_size, 1, max_n_element, nnl]`.
+            `mask` is a 3D tensor, `[batch_size, 1, max_n_element, nnl]`.
+            `value` is a 4D tensor, `[4, batch_size, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
         mode : tf_estimator.ModeKeys
@@ -218,7 +225,8 @@ class AdpNN(EamAlloyNN):
                 with tf.name_scope(f"{kbody_term}"):
                     # In this class, `value[0]` corresponds to `value` in
                     # `EamAlloyNN._build_rho_nn`.
-                    x = tf.expand_dims(value[0], axis=-1, name='input')
+                    x = tf.expand_dims(value[0], axis=-1)
+                    x = tf.expand_dims(x, axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_rho_fn(other, verbose=verbose)
@@ -276,7 +284,8 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Phi"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-                    x = tf.expand_dims(value[0], axis=-1, name='input')
+                    x = tf.expand_dims(value[0], axis=-1)
+                    x = tf.expand_dims(x, axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_phi_fn(kbody_term, verbose=verbose)
@@ -337,7 +346,8 @@ class AdpNN(EamAlloyNN):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
 
-                    rij = tf.expand_dims(value[0], axis=-1, name='input')
+                    rij = tf.expand_dims(value[0], axis=-1)
+                    rij = tf.expand_dims(rij, axis=1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -354,11 +364,12 @@ class AdpNN(EamAlloyNN):
                     components = []
                     for ia, alpha in enumerate(('x', 'y', 'z')):
                         with tf.name_scope(f"{alpha}"):
-                            dij = tf.identity(value[ia + 1], name=f'd{alpha}')
+                            dij = tf.expand_dims(value[ia + 1], axis=-1)
+                            dij = tf.expand_dims(dij, axis=1, name=f'd{alpha}')
                             udaij = tf.multiply(uij, dij, name='udaij')
                             uda = tf.reduce_sum(udaij,
                                                 axis=(3, 4),
-                                                keep_dims=False,
+                                                keepdims=False,
                                                 name='uda')
                             uda2 = tf.square(uda, name='uda2')
                             components.append(uda2)
@@ -417,11 +428,12 @@ class AdpNN(EamAlloyNN):
         """
         outputs = {}
         values = {}
-        with tf.name_scope("Dipole"):
+        with tf.name_scope("Quadrupole"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
 
-                    rij = tf.expand_dims(value[0], axis=-1, name='input')
+                    rij = tf.expand_dims(value[0], axis=-1)
+                    rij = tf.expand_dims(rij, axis=1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -441,19 +453,28 @@ class AdpNN(EamAlloyNN):
                     for ia, alpha in enumerate(('x', 'y', 'z')):
                         for ib, beta in enumerate(('x', 'y', 'z')):
                             with tf.name_scope(f"{alpha}{beta}"):
-                                dija = tf.identity(value[ia + 1], f'd{alpha}')
-                                dijb = tf.identity(value[ib + 1], f'd{beta}')
-                                wdabij = tf.multiply(wij, dija * dijb, 'udabij')
+                                dija = tf.expand_dims(value[ia + 1], -1)
+                                dija = tf.expand_dims(dija, 1, f'd{alpha}/a')
+                                dijb = tf.expand_dims(value[ib + 1], -1)
+                                dijb = tf.expand_dims(dijb, 1, f'd{beta}/b')
+                                wdabij = tf.multiply(wij, dija * dijb, 'wdabij')
                                 wdab = tf.reduce_sum(wdabij,
                                                      axis=(3, 4),
-                                                     keep_dims=False,
-                                                     name='udab')
-                                wdab2 = tf.square(wdab, name='udab2')
+                                                     keepdims=False,
+                                                     name='wdab')
+                                wdab2 = tf.square(wdab, name='wdab2')
                                 components.append(wdab2)
                                 if alpha == beta:
-                                    diag.append(wdab2)
-                    y_full = tf.add_n(components)
-                    y_diag = tf.add_n(diag)
+                                    diag.append(wdab)
+                    y_full = tf.add_n(components, name='y_full')
+
+                    with tf.name_scope("Diag"):
+                        y_diag = tf.add_n(diag)
+                        y_diag = tf.square(y_diag)
+                        y_diag = tf.reduce_sum(y_diag,
+                                               axis=2,
+                                               keepdims=True,
+                                               name='y_diag')
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
@@ -493,8 +514,9 @@ class AdpNN(EamAlloyNN):
             the value mask. `value` and `mask` have the same shape.
                 * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
                   `[4, batch_size, max_n_terms, max_n_element, nnl]`.
-                * If `mode` is PREDICT, both should be 3D tensors of shape
-                  `[4, max_n_terms, max_n_element, nnl]`.
+                * If `mode` is PREDICT, `value` should be a 4D tensor of shape
+                  `[4, max_n_terms, max_n_element, nnl]` and `mask` should be
+                  a 3D tensor of shape `[max_n_terms, max_n_element, nnl]`.
             The size of the first axis is fixed to 4. Here 4 denotes:
                 * r  = 0
                 * dx = 1
@@ -650,8 +672,9 @@ class AdpNN(EamAlloyNN):
             return y
 
     def export_to_setfl(self, setfl: str, nr: int, dr: float, nrho: int,
-                        drho: float, checkpoint=None, lattice_constants=None,
-                        lattice_types=None):
+                        drho: float, r0=1.0, rt=None, rho0=0.0, rhot=None,
+                        checkpoint=None, lattice_constants=None,
+                        lattice_types=None, use_ema_variables=True):
         """
         Export this ADP model to a setfl potential file for LAMMPS.
 
@@ -667,6 +690,14 @@ class AdpNN(EamAlloyNN):
             The number of `rho` used to describe embedding functions.
         drho : float
             The delta `rho` used for tabulating embedding functions.
+        r0 : float
+            The initial `r` for plotting density and pair potentials.
+        rt : float
+            The final `r` for plotting density and pair potentials.
+        rho0 : float
+            The initial `rho` for plotting embedding functions.
+        rhot : float
+            The final `rho` for plotting embedding functions.
         checkpoint : str or None
             The tensorflow checkpoint file to restore. If None, the default
             (or initital) parameters will be used.
@@ -674,9 +705,181 @@ class AdpNN(EamAlloyNN):
             The lattice constant for each type of element.
         lattice_types : Dict[str, str] or None
             The lattice type, e.g 'fcc', for each type of element.
+        use_ema_variables : bool
+            If True, exponentially moving averaged variables will be used.
 
         """
-        # TODO: fix this function
-        super(AdpNN, self).export_to_setfl(setfl, nr, dr, nrho, drho,
-                                           checkpoint, lattice_constants,
-                                           lattice_types)
+        dtype = get_float_dtype().as_numpy_dtype
+        outdir = dirname(setfl)
+        rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
+                      reps=len(self._elements))
+        rho = np.atleast_2d(rho)
+        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
+        r = np.tile(r, [4, 1, 1, 1])
+        elements = self._elements
+        lattice_constants = safe_select(lattice_constants, {})
+        lattice_types = safe_select(lattice_types, {})
+        all_kbody_terms = get_kbody_terms(self._elements, k_max=2)[0]
+
+        with tf.Graph().as_default():
+
+            with tf.name_scope("Inputs"):
+                rho = tf.convert_to_tensor(rho, name='rho')
+
+                descriptors = AttributeDict()
+                for element in self._elements:
+                    value = tf.convert_to_tensor(r, name=f'r{element}')
+                    mask = tf.ones_like(value, name=f'm{element}')
+                    descriptors[element] = (value, mask)
+
+                partitions = AttributeDict()
+                symmetric_partitions = AttributeDict()
+                for kbody_term in all_kbody_terms:
+                    value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
+                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    partitions[kbody_term] = (value, mask)
+                    a, b = get_elements_from_kbody_term(kbody_term)
+                    if a == b:
+                        symmetric_partitions[kbody_term] = (value, mask)
+                    elif kbody_term in self._unique_kbody_terms:
+                        rr = np.concatenate((r, r), axis=2)
+                        value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
+                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                        symmetric_partitions[kbody_term] = (value, mask)
+
+            with tf.variable_scope("nnEAM"):
+                embed_vals = self._build_embed_nn(
+                    rho,
+                    max_occurs=Counter({el: nrho for el in elements}),
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    verbose=False)
+                _, rho_vals = self._build_rho_nn(
+                    partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    verbose=False)
+                _, phi_vals = self._build_phi_nn(
+                    symmetric_partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    verbose=False)
+                _, dipole_vals = self._build_dipole_nn(
+                    symmetric_partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    verbose=False)
+                _, quadrupole_vals = self._build_quadrupole_nn(
+                    symmetric_partitions,
+                    max_occurs=Counter({el: 1 for el in elements}),
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    verbose=False)
+
+            sess = tf.Session()
+            with sess:
+                tf.global_variables_initializer().run()
+                if checkpoint is not None:
+                    if use_ema_variables:
+                        # Restore the moving averaged variables
+                        ema = tf.train.ExponentialMovingAverage(
+                            Defaults.variable_moving_average_decay)
+                        saver = tf.train.Saver(ema.variables_to_restore())
+                    else:
+                        saver = tf.train.Saver(tf.trainable_variables())
+                    saver.restore(sess, checkpoint)
+
+                results = AttributeDict(sess.run(
+                    {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals,
+                     'dipole': dipole_vals, 'quadrupole': quadrupole_vals}))
+
+                def make_density(_element):
+                    """
+                    Return the density function for `element`.
+                    """
+
+                    def _func(_r):
+                        """ Return `rho(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        _kbody_term = f'{_element}{_element}'
+                        return results.rho[_kbody_term][0, 0, 0, idx, 0]
+
+                    return _func
+
+                def make_embed(_element):
+                    """
+                    Return the embedding energy function for `element`.
+                    """
+                    base = nr * self._elements.index(_element)
+
+                    def _func(_rho):
+                        """ Return `F(rho)` for the given `rho`. """
+                        idx = int(round(_rho / drho, 6))
+                        return results.embed[0, base + idx]
+
+                    return _func
+
+                def make_pairwise(_kbody_term, _key):
+                    """
+                    Return the embedding energy function for `element`.
+                    """
+
+                    def _func(_r):
+                        """ Return `phi(r)` for the given `r`. """
+                        idx = int(round(_r / dr, 6))
+                        return results[_key][_kbody_term][0, 0, 0, idx, 0]
+
+                    return _func
+
+            eam_potentials = []
+            for element in self._elements:
+                number = data.atomic_numbers[element]
+                mass = data.atomic_masses[number]
+                embed_fn = make_embed(element)
+                density_fn = make_density(element)
+                potential = EAMPotential(
+                    element, number, mass, embed_fn, density_fn,
+                    latticeConstant=lattice_constants.get(element, 0.0),
+                    latticeType=lattice_types.get(element, 'fcc'))
+                eam_potentials.append(potential)
+
+                plot_potential(nrho, drho, embed_fn, x0=rho0, xt=rhot,
+                               filename=join(outdir, f"{element}.embed.png"),
+                               xlabel=r"$\rho$",
+                               ylabel=r"$\mathbf{F}(\rho)$ (eV)",
+                               title=r"$\mathbf{F}(\rho)$ of " + element)
+                plot_potential(nr, dr, density_fn, x0=r0, xt=rt,
+                               filename=join(outdir, f"{element}.rho.png"),
+                               xlabel=r"$r (\AA)$",
+                               ylabel=r"$\mathbf{\rho}(r)$ (eV)",
+                               title=r"$\mathbf{\rho}(r)$ of " + element)
+
+            pair_potentials = []
+            pp_dict = {'phi': r'$\mathbf{\phi}(r)$',
+                       'dipole': r'$\mathbf{\mu}(r)$',
+                       'quadrupole': r'$\mathbf{w}(r)$'}
+
+            for pairwise_type, latex in pp_dict.items():
+                for kbody_term in self._unique_kbody_terms:
+                    a, b = get_elements_from_kbody_term(kbody_term)
+                    pairwise_fn = make_pairwise(kbody_term, pairwise_type)
+                    potential = Potential(a, b, pairwise_fn)
+                    pair_potentials.append(potential)
+
+                    png_file = f"{kbody_term}.{pairwise_type}.png"
+                    plot_potential(nr, dr, pairwise_fn, x0=r0, xt=rt,
+                                   filename=join(outdir, png_file),
+                                   xlabel=r"$r (\AA)$",
+                                   ylabel=latex + r" (eV)",
+                                   title=latex + " of " + kbody_term)
+
+            comments = [
+                "Date: {} Contributor: Xin Chen (Bismarrck@me.com)".format(
+                    datetime.today()),
+                "LAMMPS setfl format",
+                "Conversion by tensoralloy.nn.eam.adp.AdpNN"
+            ]
+
+            with open(setfl, 'wb') as fp:
+                write_adp_setfl(nrho, drho, nr, dr, eam_potentials,
+                                pair_potentials, out=fp, comments=comments)
+
+            tf.logging.info(f"Model exported to {setfl}")
