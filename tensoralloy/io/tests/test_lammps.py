@@ -56,8 +56,7 @@ def test_read_adp_setfl():
     assert_equal(np.all(adpfl.dipole['CuCu'][1] == 0.0), True)
     assert_equal(np.all(adpfl.dipole['AlAl'][1] == 0.0), True)
 
-    w = adpfl.quadrupole['AlCu'][1] * adpfl.quadrupole['AlCu'][0]
-    w[0] = adpfl.quadrupole['AlCu'][1][0]
+    w = adpfl.quadrupole['AlCu'][1]
     assert_almost_equal(w[0], 2.6740386039473818e-01, delta=1e-8)
     assert_almost_equal(w[1], 2.6728751808066320e-01, delta=1e-8)
     assert_almost_equal(w[2], 2.6717121145664957e-01, delta=1e-8)

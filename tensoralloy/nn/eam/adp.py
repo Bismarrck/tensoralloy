@@ -366,12 +366,12 @@ class AdpNN(EamAlloyNN):
                         with tf.name_scope(f"{alpha}"):
                             dij = tf.expand_dims(value[ia + 1], axis=-1)
                             dij = tf.expand_dims(dij, axis=1, name=f'd{alpha}')
-                            udaij = tf.multiply(uij, dij, name='udaij')
+                            udaij = tf.multiply(uij, dij, name=f'u{alpha}ij')
                             uda = tf.reduce_sum(udaij,
                                                 axis=(3, 4),
                                                 keepdims=False,
-                                                name='uda')
-                            uda2 = tf.square(uda, name='uda2')
+                                                name=f'u{alpha}')
+                            uda2 = tf.square(uda, name=f'u{alpha}2')
                             components.append(uda2)
                     y = tf.add_n(components)
 
@@ -448,43 +448,48 @@ class AdpNN(EamAlloyNN):
                     values[kbody_term] = wij
 
                     # Compute the total dipole contribution
-                    components = []
+                    two = tf.constant(2.0, dtype=rij.dtype, name='two')
+                    w2 = []
                     diag = []
                     for ia, alpha in enumerate(('x', 'y', 'z')):
                         for ib, beta in enumerate(('x', 'y', 'z')):
+                            if ib < ia:
+                                continue
                             with tf.name_scope(f"{alpha}{beta}"):
                                 dija = tf.expand_dims(value[ia + 1], -1)
                                 dija = tf.expand_dims(dija, 1, f'd{alpha}/a')
                                 dijb = tf.expand_dims(value[ib + 1], -1)
                                 dijb = tf.expand_dims(dijb, 1, f'd{beta}/b')
-                                wdabij = tf.multiply(wij, dija * dijb, 'wdabij')
+                                dab = tf.multiply(dija, dijb, name='dab')
+                                wdabij = tf.multiply(wij, dab,
+                                                     f'w{alpha}{beta}ij')
                                 wdab = tf.reduce_sum(wdabij,
                                                      axis=(3, 4),
                                                      keepdims=False,
-                                                     name='wdab')
-                                wdab2 = tf.square(wdab, name='wdab2')
-                                components.append(wdab2)
+                                                     name=f'w{alpha}{beta}')
+                                wdab2 = tf.square(wdab, name=f'w{alpha}{beta}2')
                                 if alpha == beta:
                                     diag.append(wdab)
-                    y_full = tf.add_n(components, name='y_full')
+                                else:
+                                    wdab2 = tf.multiply(two, wdab2)
+                                w2.append(wdab2)
+                    y_full = tf.add_n(w2)
 
+                    # Subtract the additional diagonal contribution
                     with tf.name_scope("Diag"):
                         y_diag = tf.add_n(diag)
                         y_diag = tf.square(y_diag)
-                        y_diag = tf.reduce_sum(y_diag,
-                                               axis=2,
-                                               keepdims=True,
-                                               name='y_diag')
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
-                    y_full = tf.squeeze(y_full, axis=1)
-                    y_diag = tf.squeeze(y_diag, axis=1)
                     half = tf.constant(0.5, dtype=rij.dtype, name='half')
                     three = tf.constant(3.0, dtype=rij.dtype, name='three')
-                    y = tf.math.subtract(half * y_full,
-                                         half * y_diag / three,
-                                         name='atomic')
+                    isix = tf.div(half, three, name='isix')
+                    y_full = tf.multiply(tf.squeeze(y_full, axis=1), half,
+                                         name='y_full')
+                    y_diag = tf.multiply(tf.squeeze(y_diag, axis=1), isix,
+                                         name='y_diag')
+                    y = tf.math.subtract(y_full, y_diag, name='atomic')
                     if verbose:
                         log_tensor(y)
                     outputs[kbody_term] = y

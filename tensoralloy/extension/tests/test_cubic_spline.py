@@ -87,10 +87,8 @@ def test_reconstruct_lammps_adp():
             with tf.name_scope("Dipole"):
                 rlist = tf.convert_to_tensor(
                     adpfl.dipole['AlCu'][0], name='rlist', dtype=dtype)
-                u_alcu = adpfl.dipole['AlCu'][0] * adpfl.dipole['AlCu'][1]
-                u_alcu[0] = adpfl.dipole['AlCu'][1][0]
-                ux = adpfl.dipole['AlCu'][0][0:-1:50]
-                uy = u_alcu[0:-1:50]
+                ux = adpfl.dipole['AlCu'][0]
+                uy = adpfl.dipole['AlCu'][1]
                 func = CubicInterpolator(ux, uy, natural_boundary=True)
                 u_op = func.evaluate(rlist, name='Dipole')
 
@@ -138,7 +136,7 @@ def test_reconstruct_lammps_adp():
                 reconstructs = sess.run(
                     [u_op, q_op, rho_op, frho_op, phi_alal_op, phi_alcu_op])
                 assert_array_almost_equal(
-                    reconstructs[0], u_alcu, delta=1e-5)
+                    reconstructs[0], adpfl.dipole['AlCu'][1], delta=1e-5)
                 assert_array_almost_equal(
                     reconstructs[1], adpfl.quadrupole['AlCu'][1], delta=1e-5)
                 assert_array_almost_equal(

@@ -153,7 +153,9 @@ def _read_setfl(filename, is_adp=False):
                     adict = dipole
                 else:
                     adict = quadrupole
-                if inc == 0:
+                # ADP dipole and quadrupole tabulated values are just raw values
+                # but not u(r) * r.
+                if inc == 0 or ab_cycle > 0:
                     adict[key][1, inc] = float(line)
                 else:
                     adict[key][1, inc] = float(line) / adict[key][0, inc]
@@ -185,7 +187,7 @@ def read_adp_setfl(filename) -> AdpFL:
     return AdpFL(**_read_setfl(filename, is_adp=True))
 
 
-def _write_setfl_pairpots(nr, dr, eampots, pairpots, out):
+def _write_setfl_pairpots(nr, dr, eampots, pairpots, out, is_phi=True):
     """
     A helper function to write pairwise potentials.
     """
@@ -219,7 +221,10 @@ def _write_setfl_pairpots(nr, dr, eampots, pairpots, out):
             pp = pairpotsdict.get(k, zero_pair)
             for k in range(nr):
                 r = float(k) * dr
-                val = r * pp.energy(r)
+                if is_phi:
+                    val = r * pp.energy(r)
+                else:
+                    val = pp.energy(r)
                 print(u"% 20.16e" % val, file=workout)
     out.write(workout.getvalue().encode())
 
@@ -234,7 +239,9 @@ def write_adp_setfl(nrho, drho, nr, dr, eampots, pairpots, out=sys.stdout,
     if len(pairpots) != nab * 3:
         raise ValueError(f"{nab * 3} pair potentials are required")
 
-    writeSetFL(nrho, drho, nr, dr, eampots, pairpots[:nab], out, comments,
-               cutoff)
-    _write_setfl_pairpots(nr, dr, eampots, pairpots[nab * 1: nab * 2], out)
-    _write_setfl_pairpots(nr, dr, eampots, pairpots[nab * 2: nab * 3], out)
+    writeSetFL(
+        nrho, drho, nr, dr, eampots, pairpots[:nab], out, comments, cutoff)
+    _write_setfl_pairpots(
+        nr, dr, eampots, pairpots[nab * 1: nab * 2], out, False)
+    _write_setfl_pairpots(
+        nr, dr, eampots, pairpots[nab * 2: nab * 3], out, False)
