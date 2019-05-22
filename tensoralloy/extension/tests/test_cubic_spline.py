@@ -94,6 +94,14 @@ def test_reconstruct_lammps_adp():
                 func = CubicInterpolator(ux, uy, natural_boundary=True)
                 u_op = func.evaluate(rlist, name='Dipole')
 
+            with tf.name_scope("Quadrupole"):
+                rlist = tf.convert_to_tensor(
+                    adpfl.quadrupole['AlCu'][0], name='rlist', dtype=dtype)
+                qx = adpfl.quadrupole['AlCu'][0]
+                qy = adpfl.quadrupole['AlCu'][1]
+                func = CubicInterpolator(qx, qy, natural_boundary=True)
+                q_op = func.evaluate(rlist, name='Quadrupole')
+
             with tf.name_scope("Rho"):
                 rlist = tf.convert_to_tensor(
                     adpfl.rho['Al'][0], name='rlist', dtype=dtype)
@@ -128,17 +136,19 @@ def test_reconstruct_lammps_adp():
 
             with tf.Session() as sess:
                 reconstructs = sess.run(
-                    [u_op, rho_op, frho_op, phi_alal_op, phi_alcu_op])
-                assert_array_almost_equal(reconstructs[0], u_alcu, delta=1e-5)
+                    [u_op, q_op, rho_op, frho_op, phi_alal_op, phi_alcu_op])
                 assert_array_almost_equal(
-                    reconstructs[1], adpfl.rho['Al'][1], delta=1e-5)
-
+                    reconstructs[0], u_alcu, delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[2], adpfl.frho['Al'][1][1:], delta=1e-5)
+                    reconstructs[1], adpfl.quadrupole['AlCu'][1], delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[3], adpfl.phi['AlAl'][1][1:], delta=1e-5)
+                    reconstructs[2], adpfl.rho['Al'][1], delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[4], adpfl.phi['AlCu'][1][1:], delta=1e-5)
+                    reconstructs[3], adpfl.frho['Al'][1][1:], delta=1e-5)
+                assert_array_almost_equal(
+                    reconstructs[4], adpfl.phi['AlAl'][1][1:], delta=1e-5)
+                assert_array_almost_equal(
+                    reconstructs[5], adpfl.phi['AlCu'][1][1:], delta=1e-5)
 
 
 if __name__ == "__main__":
