@@ -17,6 +17,7 @@ from os.path import join, dirname
 from ase import data
 from atsim.potentials import Potential, EAMPotential
 from functools import partial
+from typing import Dict
 
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
@@ -196,8 +197,8 @@ class AdpNN(EamAlloyNN):
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
-            `mask` is a 3D tensor, `[batch_size, 1, max_n_element, nnl]`.
-            `value` is a 4D tensor, `[4, batch_size, max_n_element, nnl]`.
+            `mask` is a 4D tensor, `[batch_size, 1, max_n_element, nnl]`.
+            `value` is a 5D tensor, `[4, batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
         mode : tf_estimator.ModeKeys
@@ -221,12 +222,14 @@ class AdpNN(EamAlloyNN):
         values = {}
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
+                assert isinstance(value, tf.Tensor)
+                assert value.shape.ndims == 5
+
                 center, other = get_elements_from_kbody_term(kbody_term)
                 with tf.name_scope(f"{kbody_term}"):
                     # In this class, `value[0]` corresponds to `value` in
                     # `EamAlloyNN._build_rho_nn`.
-                    x = tf.expand_dims(value[0], axis=-1)
-                    x = tf.expand_dims(x, axis=1, name='input')
+                    x = tf.expand_dims(value[0], axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_rho_fn(other, verbose=verbose)
@@ -284,8 +287,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Phi"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-                    x = tf.expand_dims(value[0], axis=-1)
-                    x = tf.expand_dims(x, axis=1, name='input')
+                    x = tf.expand_dims(value[0], axis=-1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_phi_fn(kbody_term, verbose=verbose)
@@ -345,9 +347,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Dipole"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-
-                    rij = tf.expand_dims(value[0], axis=-1)
-                    rij = tf.expand_dims(rij, axis=1, name='input')
+                    rij = tf.expand_dims(value[0], axis=-1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -364,8 +364,7 @@ class AdpNN(EamAlloyNN):
                     components = []
                     for ia, alpha in enumerate(('x', 'y', 'z')):
                         with tf.name_scope(f"{alpha}"):
-                            dij = tf.expand_dims(value[ia + 1], axis=-1)
-                            dij = tf.expand_dims(dij, axis=1, name=f'd{alpha}')
+                            dij = tf.expand_dims(value[ia + 1], -1, f'd{alpha}')
                             udaij = tf.multiply(uij, dij, name=f'u{alpha}ij')
                             uda = tf.reduce_sum(udaij,
                                                 axis=(3, 4),
@@ -431,9 +430,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Quadrupole"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-
-                    rij = tf.expand_dims(value[0], axis=-1)
-                    rij = tf.expand_dims(rij, axis=1, name='input')
+                    rij = tf.expand_dims(value[0], axis=-1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -456,10 +453,10 @@ class AdpNN(EamAlloyNN):
                             if ib < ia:
                                 continue
                             with tf.name_scope(f"{alpha}{beta}"):
-                                dija = tf.expand_dims(value[ia + 1], -1)
-                                dija = tf.expand_dims(dija, 1, f'd{alpha}/a')
-                                dijb = tf.expand_dims(value[ib + 1], -1)
-                                dijb = tf.expand_dims(dijb, 1, f'd{beta}/b')
+                                dija = tf.expand_dims(value[ia + 1], axis=-1,
+                                                      name=f'd{alpha}/a')
+                                dijb = tf.expand_dims(value[ib + 1], axis=-1,
+                                                      name=f'd{beta}/b')
                                 dab = tf.multiply(dija, dijb, name='dab')
                                 wdabij = tf.multiply(wij, dab,
                                                      f'w{alpha}{beta}ij')
@@ -484,7 +481,7 @@ class AdpNN(EamAlloyNN):
                     # `[batch_size, max_n_atoms]`
                     half = tf.constant(0.5, dtype=rij.dtype, name='half')
                     three = tf.constant(3.0, dtype=rij.dtype, name='three')
-                    isix = tf.div(half, three, name='isix')
+                    isix = tf.math.divide(half, three, name='isix')
                     y_full = tf.multiply(tf.squeeze(y_full, axis=1), half,
                                          name='y_full')
                     y_diag = tf.multiply(tf.squeeze(y_diag, axis=1), isix,
@@ -567,18 +564,16 @@ class AdpNN(EamAlloyNN):
                     # differences `dx`, `dy` and `dz` are all required.
                     if mode == tf_estimator.ModeKeys.PREDICT:
                         assert values.shape.ndims == 4
+                        values = tf.expand_dims(values, axis=1)
                         masks = tf.expand_dims(masks, axis=0)
-                        max_occurs[element] = tf.shape(values)[2]
-                        g_axis = 1
+                        max_occurs[element] = tf.shape(values)[3]
                     else:
                         assert values.shape.ndims == 5
                         max_occurs[element] = values.shape[3].value
-                        g_axis = 2
 
                     num = len(kbody_terms)
                     glists = tf.split(
-                        values, num_or_size_splits=num, axis=g_axis,
-                        name='glist')
+                        values, num_or_size_splits=num, axis=2, name='glist')
                     mlists = tf.split(
                         masks, num_or_size_splits=num, axis=1, name='mlist')
 
@@ -590,7 +585,7 @@ class AdpNN(EamAlloyNN):
                                     kbody_term)))
                             if kbody_term in partitions:
                                 value = tf.concat(
-                                    (partitions[kbody_term][0], value), axis=2)
+                                    (partitions[kbody_term][0], value), axis=3)
                                 mask = tf.concat(
                                     (partitions[kbody_term][1], mask), axis=2)
                         partitions[kbody_term] = (value, mask)
@@ -629,7 +624,7 @@ class AdpNN(EamAlloyNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.variable_scope("nnEAM"):
+        with tf.variable_scope("nnADP"):
             partitions, max_occurs = self._dynamic_partition(
                 descriptors=descriptors,
                 mode=mode,
@@ -719,8 +714,8 @@ class AdpNN(EamAlloyNN):
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
-        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
-        r = np.tile(r, [4, 1, 1, 1])
+        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1, 1))
+        r = np.tile(r, [4, 1, 1, 1, 1])
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})

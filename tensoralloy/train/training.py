@@ -19,12 +19,12 @@ from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn import EamFsNN, EamAlloyNN, AtomicNN, AtomicResNN
+from tensoralloy.nn import EamFsNN, EamAlloyNN, AdpNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer import BatchEAMTransformer
+from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
 from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import set_precision
@@ -173,7 +173,7 @@ class TrainingManager:
         hidden_sizes = {}
         custom_potentials = {}
 
-        for pot in ('rho', 'embed', 'phi'):
+        for pot in ('rho', 'embed', 'phi', 'dipole', 'quadrupole'):
             keypath = f'nn.eam.{pot}'
             if self._reader[keypath] is None:
                 continue
@@ -194,10 +194,14 @@ class TrainingManager:
                            custom_potentials=custom_potentials))
 
         arch = self._reader['nn.eam.arch']
-        if arch == 'EamAlloyNN':
+        if arch == "EamAlloyNN":
             return EamAlloyNN(**kwargs)
-        else:
+        elif arch == "EamFsNN":
             return EamFsNN(**kwargs)
+        elif arch == "AdpNN":
+            return AdpNN(**kwargs)
+        else:
+            raise ValueError(f"Unknown arch {arch}")
 
     def _get_nn(self):
         """
@@ -247,13 +251,13 @@ class TrainingManager:
                 **self._reader['nn.atomic.behler'])
         else:
             nnl_max = database.get_nnl_max(rc, allow_calculation=True)
-            clf = BatchEAMTransformer(
-                rc=rc,
-                max_occurs=max_occurs,
-                nij_max=nij_max,
-                nnl_max=nnl_max,
-                use_forces=database.has_forces,
-                use_stress=database.has_stress)
+            if self._reader['nn.eam.arch'] == 'AdpNN':
+                cls = BatchADPTransformer
+            else:
+                cls = BatchEAMTransformer
+            clf = cls(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
+                      nnl_max=nnl_max, use_forces=database.has_forces,
+                      use_stress=database.has_stress)
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']

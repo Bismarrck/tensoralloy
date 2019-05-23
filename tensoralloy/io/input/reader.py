@@ -174,12 +174,12 @@ class InputReader:
                     for element in values.keys():
                         _safe_update(f"nn.eam.setfl.lattice.{attr}.{element}")
 
-            for func in ('embed', 'phi', 'rho'):
+            for func in ('embed', 'phi', 'rho', 'dipole', 'quadrupole'):
                 pots = nested_get(configs, f"nn.eam.{func}")
                 if isinstance(pots, dict):
                     for key in pots.keys():
                         src = f"nn.eam.{func}.{key}"
-                        if func == 'phi':
+                        if func in ('phi', 'dipole', 'quadrupole'):
                             key = "".join(
                                 sorted(get_elements_from_kbody_term(key)))
                             dst = f"nn.eam.{func}.{key}"

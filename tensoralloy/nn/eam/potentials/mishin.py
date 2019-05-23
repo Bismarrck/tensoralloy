@@ -31,7 +31,8 @@ def mishin_cutoff(x):
     """
     with tf.name_scope("Psi"):
         x = tf.nn.relu(-x, name='ix')
-        x4 = safe_pow(x, 4)
+        four = tf.convert_to_tensor(4.0, dtype=x.dtype, name='four')
+        x4 = safe_pow(x, four)
         one = tf.constant(1.0, dtype=x.dtype, name='one')
         return tf.math.truediv(x4, one + x4, name='psi')
 
@@ -77,6 +78,13 @@ class MishinH(EamAlloyPotential):
             "H": {
                 "s1": 8.08612, "s2": 1.46294e-2, "s3": -6.86143e-3,
                 "s4": 3.19616, "s5": 1.17247e-1, "s6": 50, "s7": 15e5,
+            },
+            "Ni": {
+                "h": 3.323, "rc": 5.168
+            },
+            "NiNi": {
+                "d1": 4.4657e-1, "d2": -1.3702e2, "d3": -0.9611e1,
+                "q1": 6.4502e3, "q2": 0.2608e1, "q3": -6.0208e3,
             }
         }
         return params
@@ -293,7 +301,7 @@ class MishinH(EamAlloyPotential):
             psi = mishin_cutoff(drh)
 
             left = tf.add(d1 * tf.exp(-d2 * r), d3, name='left')
-            dipole = tf.multiply(left, psi, name='dipole')
+            dipole = tf.multiply(left, psi, name='u2r')
             if verbose:
                 log_tensor(dipole)
             return dipole
@@ -308,7 +316,7 @@ class MishinH(EamAlloyPotential):
         """
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
 
-        with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
+        with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
             dtype = r.dtype
             q1 = self._get_variable("q1", dtype, kbody_term, variable_scope)
             q2 = self._get_variable("q2", dtype, kbody_term, variable_scope)
@@ -326,7 +334,7 @@ class MishinH(EamAlloyPotential):
             psi = mishin_cutoff(drh)
 
             left = tf.add(q1 * tf.exp(-q2 * r), q3, name='left')
-            quadrupole = tf.multiply(left, psi, name='quadrupole')
+            quadrupole = tf.multiply(left, psi, name='w2r')
             if verbose:
                 log_tensor(quadrupole)
             return quadrupole

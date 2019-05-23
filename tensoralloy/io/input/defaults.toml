@@ -86,6 +86,8 @@ arch = "EamAlloyNN"
 [nn.eam.rho]
 [nn.eam.phi]
 [nn.eam.embed]
+[nn.eam.dipole]
+[nn.eam.quadrupole]
 
 [nn.eam.setfl]
 nr = 10000

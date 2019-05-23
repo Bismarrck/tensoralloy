@@ -16,4 +16,5 @@ __email__ = 'Bismarrck@me.com'
 
 __all__ = ["IndexTransformer",
            "BatchSymmetryFunctionTransformer", "SymmetryFunctionTransformer",
-           "BatchEAMTransformer", "EAMTransformer"]
+           "BatchEAMTransformer", "EAMTransformer",
+           "BatchADPTransformer", "ADPTransformer"]
