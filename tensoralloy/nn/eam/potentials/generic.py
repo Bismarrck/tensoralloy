@@ -6,6 +6,10 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
+from tensorflow.python.framework import ops
+
+from tensoralloy.extension.grad_ops import safe_pow
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -44,3 +48,35 @@ def buckingham(r, A, rho, C, order=6, name='Buckingham'):
         return tf.math.subtract(A * tf.exp(-r / rho),
                                 tf.div_no_nan(C, rs, name='right'),
                                 name='value')
+
+
+def mishin_cutoff(x, name=None):
+    """
+    The cutoff function proposed by Y. Mishin:
+
+        psi(x) = x**4 / (1 + x**4)  x <  0
+                 0                  x >= 0
+
+    """
+    with ops.name_scope(name, "Psi", [x]):
+        x = tf.nn.relu(-x, name='ix')
+        four = tf.convert_to_tensor(4.0, dtype=x.dtype, name='four')
+        x4 = safe_pow(x, four)
+        one = tf.constant(1.0, dtype=x.dtype, name='one')
+        return tf.math.truediv(x4, one + x4, name='psi')
+
+
+def mishin_polar(x, p1, p2, p3, rc, h, name=None):
+    """
+    The polarization function proposed by Y. Mishin:
+
+        f(x) = (p1 * exp(-p2 * x) + p3) * psi((x - rc) / h)
+
+    """
+    with ops.name_scope(name, "Polar", [x]):
+        x = tf.convert_to_tensor(x, name='x')
+        z = tf.math.divide(tf.math.subtract(x, rc, name='dr'), h, name='dr/h')
+        psi = mishin_cutoff(z)
+        left = tf.add(p1 * tf.exp(-p2 * x), p3, name='left')
+        polar = tf.multiply(left, psi, name='polar')
+        return polar
