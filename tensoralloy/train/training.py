@@ -412,7 +412,7 @@ class TrainingManager:
                 use_ema_variables=use_ema_variables,
                 keep_tmp_files=False)
 
-            if isinstance(self._nn, (EamAlloyNN, EamFsNN)):
+            if isinstance(self._nn, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']
 
                 if 'lattice' in setfl_kwargs:

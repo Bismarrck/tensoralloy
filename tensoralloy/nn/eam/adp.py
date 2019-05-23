@@ -35,10 +35,17 @@ class AdpNN(EamAlloyNN):
     quadrupole interactions are introduced to the ADP model.
     """
 
+    def __init__(self, *args, **kwargs):
+        """
+        Initialization method.
+        """
+        super(AdpNN, self).__init__(*args, **kwargs)
+        self._nn_scope = "nnADP"
+
     @property
     def tag(self):
         """ Return the tag. """
-        return "alloy"
+        return "adp"
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -624,7 +631,7 @@ class AdpNN(EamAlloyNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.variable_scope("nnADP"):
+        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
             partitions, max_occurs = self._dynamic_partition(
                 descriptors=descriptors,
                 mode=mode,
@@ -747,7 +754,7 @@ class AdpNN(EamAlloyNN):
                         mask = tf.ones_like(value, name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.variable_scope("nnEAM"):
+            with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),

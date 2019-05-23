@@ -93,6 +93,7 @@ class EamNN(BasicNN):
         """
         self._unique_kbody_terms = None
         self._kbody_terms = None
+        self._nn_scope = "nnEAM"
 
         super(EamNN, self).__init__(
             elements=elements,
@@ -600,7 +601,7 @@ class EamNN(BasicNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.variable_scope("nnEAM"):
+        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
 
             partitions, max_occurs = self._dynamic_partition(
                 descriptors=descriptors,

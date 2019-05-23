@@ -76,7 +76,10 @@ def mishin_polar(x, p1, p2, p3, rc, h, name=None):
     with ops.name_scope(name, "Polar", [x]):
         x = tf.convert_to_tensor(x, name='x')
         z = tf.math.divide(tf.math.subtract(x, rc, name='dr'), h, name='dr/h')
-        psi = mishin_cutoff(z)
-        left = tf.add(p1 * tf.exp(-p2 * x), p3, name='left')
+        with tf.name_scope("Psi"):
+            psi = tf.identity(mishin_cutoff(z), name='psi')
+        exp2x = tf.exp(-p2 * x, name='exp2x')
+        p12 = tf.math.multiply(p1, exp2x, name='p12')
+        left = tf.add(p12, p3, name='left')
         polar = tf.multiply(left, psi, name='polar')
         return polar

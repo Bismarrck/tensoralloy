@@ -280,7 +280,7 @@ class EamAlloyNN(EamNN):
                         mask = tf.ones_like(value, name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.variable_scope("nnEAM"):
+            with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
