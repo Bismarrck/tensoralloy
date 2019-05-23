@@ -9,7 +9,7 @@ import sys
 from setuptools import setup, find_packages
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
-from tensoralloy.extension import interp
+from tensoralloy.extension.interp import build_ext as interp_build_ext
 
 
 __version__ = "1.0"
@@ -22,7 +22,7 @@ if sys.version_info < (3, 7, 0):
 
 
 extensions = [
-    interp.build_ext.get_interp_extension(),
+    interp_build_ext.get_interp_extension(),
 ]
 
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         version=__version__,
         cmdclass={
             'bdist_wheel': bdist_wheel,
-            "build_ext": interp.build_ext.BuildExtension
+            "build_ext": interp_build_ext.BuildExtension
         },
         ext_modules=extensions,
         description="Tensor-graph based machine learning framework for alloys.",

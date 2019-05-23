@@ -20,7 +20,10 @@ __all__ = [
 ]
 
 
-cubic_op = load_op_library("cubic_op")
+try:
+    cubic_op = load_op_library("cubic_op")
+except Exception:
+    cubic_op = None
 
 
 class CubicInterpolator(object):

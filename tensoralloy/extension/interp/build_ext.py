@@ -18,7 +18,8 @@ from setuptools.command.build_ext import build_ext
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-__all__ = ["BuildExtension", "CppExtension", 'CUDAExtension']
+__all__ = ["BuildExtension", "CppExtension", 'CUDAExtension',
+           "get_interp_extension"]
 
 
 def get_interp_extension() -> setuptools.Extension:

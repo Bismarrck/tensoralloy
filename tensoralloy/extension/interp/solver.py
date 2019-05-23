@@ -13,7 +13,10 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["tri_diag_solve"]
 
 
-ops = load_op_library("cubic_op")
+try:
+    ops = load_op_library("cubic_op")
+except Exception:
+    ops = None
 
 
 def tri_diag_solve(diag, upper, lower, y, **kwargs):
