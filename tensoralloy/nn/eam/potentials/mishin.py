@@ -68,8 +68,14 @@ class MishinH(EamAlloyPotential):
                 "d1": 4.4657e-3, "d2": -1.3702e0, "d3": -0.9611e-1,
                 "q1": 6.4502e0, "q2": 0.2608e-1, "q3": -6.0208e0,
                 "h": 3.323, "rc": 5.168
-            }
+            },
+            "FeFe": {
+                "d1": 1.9135e-1, "d2": -1.0796e0, "d3": -0.8928e-1,
+                "q1": -5.8954e-2, "q2": -1.3872e0, "q3": 2.4790e0,
+                "h": 6.202, "rc": 5.055
+            },
         }
+        params['PuPu'] = params['FeFe'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
