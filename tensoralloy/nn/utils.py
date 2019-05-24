@@ -141,6 +141,6 @@ def log_tensor(tensor: tf.Tensor):
     """
     Print the name and shape of the input Tensor.
     """
-    dimensions = ",".join(["{:4d}".format(dim if dim is not None else -1)
+    dimensions = ",".join(["{:5d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
     tf.logging.info("{:<60s} : [{}]".format(tensor.op.name, dimensions))
