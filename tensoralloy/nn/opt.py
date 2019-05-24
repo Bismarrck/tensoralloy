@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from typing import List
 from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
 from tensoralloy.nn.utils import get_optimizer, get_learning_rate
@@ -234,6 +235,7 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
         if len(tf.get_collection(GraphKeys.TRAIN_METRICS)) > 0:
             logging_tensor_hook = LoggingTensorHook(
                 tensors=get_tensors_dict_for_hook(GraphKeys.TRAIN_METRICS),
+                mode=tf_estimator.ModeKeys.TRAIN,
                 every_n_iter=train_parameters.log_steps,
                 at_end=True)
             hooks.append(logging_tensor_hook)

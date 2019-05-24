@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import shutil
 
+from tensorflow_estimator import estimator as tf_estimator
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
@@ -174,6 +175,37 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
     """
     A modified implementation of `LoggingTensorHook`.
     """
+
+    def __init__(self, tensors, mode: tf_estimator.ModeKeys, every_n_iter=None,
+                 every_n_secs=None, at_end=False, formatter=None):
+        """
+        Initialization method.
+        """
+        super(LoggingTensorHook, self).__init__(
+            tensors, every_n_iter=every_n_iter, every_n_secs=every_n_secs,
+            at_end=at_end, formatter=formatter)
+        self._mode = mode
+
+    def after_create_session(self, session, coord):
+        """
+        When this is called, the graph is finalized and ops can no longer be
+        added to the graph.
+        """
+        if self._mode != tf_estimator.ModeKeys.TRAIN:
+            return
+
+        tf.logging.info("All Trainable Ops: ")
+        for i, var in enumerate(tf.trainable_variables()):
+            tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
+
+        if isinstance(self._tensors, dict):
+            ops = self._tensors.values()
+        else:
+            ops = self._tensors
+
+        tf.logging.info("All monitored Ops: ")
+        for i, var in enumerate(ops):
+            tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
 
     def _log_tensors(self, tensor_values):
         original = np.get_printoptions()
