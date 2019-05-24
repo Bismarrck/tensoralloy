@@ -117,7 +117,7 @@ def get_rose_constraint_loss(base_nn,
     if options is None:
         options = RoseLossOptions()
 
-    for crystal_or_name_or_file in options.crystals:
+    for idx, crystal_or_name_or_file in enumerate(options.crystals):
         crystal = get_crystal(crystal_or_name_or_file)
         if crystal.bulk_modulus == 0:
             continue
@@ -149,7 +149,7 @@ def get_rose_constraint_loss(base_nn,
             dtype = e0.dtype
             dx = options.dx
             delta = options.delta
-            beta = options.beta
+            beta = options.beta[idx]
             eqx = np.arange(-dx, dx + delta, delta)
 
             with tf.name_scope("Params"):
