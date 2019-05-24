@@ -16,7 +16,6 @@ from tensoralloy.extension.grad_ops import safe_pow
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-
 zjw04_defaults = {
     'Al': {
         'r_eq': 2.863924, 'f_eq': 1.403115,
@@ -584,6 +583,21 @@ class Zjw04xcp(Zjw04xc):
         """
         params = zjw04_defaults.copy()
 
+        params['Ni'] = dict(
+            A=0.357279, B=0.636160, F0=-3.364763, F1=0.783672,
+            F2=0.416552, F3=-1.759651, Fe=-3.283860, Fn0=-3.477237,
+            Fn1=0.341075, Fn2=-0.820325, Fn3=-5.843294, alpha=8.622847,
+            beta=4.003686, eta=0.855591, f_eq=1.867650, kappa=0.391314,
+            lamda=0.803132, r_eq=2.488746, rho_e=28.684626, rho_s=26.427996,
+        )
+        params['Mo'] = dict(
+            A=1.070673, B=1.841668, F0=-6.225342, F1=2.505509,
+            F2=0.541575, F3=-1.710172, Fe=-6.524611, Fn0=-6.590627,
+            Fn1=1.901117, Fn2=0.258314, Fn3=-2.570307, alpha=7.361967,
+            beta=5.022795, eta=0.717354, f_eq=3.074363, kappa=0.163736,
+            lamda=0.218441, r_eq=2.728100, rho_e=31.278753, rho_s=20.474680,
+        )
+
         kbody_terms = ["MoNi", ]
         param_names = ['r_eq', 'A', 'B', 'alpha', 'beta', 'kappa', 'lamda']
 
@@ -595,7 +609,6 @@ class Zjw04xcp(Zjw04xc):
                 params[kbody_term][key] = avg
 
         return params
-
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
             verbose=False):
