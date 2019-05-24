@@ -83,3 +83,20 @@ def mishin_polar(x, p1, p2, p3, rc, h, name=None):
         left = tf.add(p12, p3, name='left')
         polar = tf.multiply(left, psi, name='polar')
         return polar
+
+
+def zhou_exp(r, A, B, C, r_eq, name=None):
+    """
+    The exponential-form function proposed by Zhou.
+
+        f(r) = A * exp(-B * (r / r_eq - 1)) / (1 + (r / r_eq - C)**20)
+
+    """
+    with ops.name_scope(name, "ZhouExp", [r]):
+        r = tf.convert_to_tensor(r, name='r')
+        one = tf.convert_to_tensor(1.0, dtype=r.dtype, name='one')
+        order = tf.convert_to_tensor(20.0, dtype=r.dtype, name='order')
+        x = tf.math.divide(r, r_eq, name='x')
+        upper = tf.math.multiply(A, tf.exp(-B * (x - one)), name='upper')
+        lower = tf.math.add(one, safe_pow(x - C, order))
+        return tf.math.divide(upper, lower, name=name)

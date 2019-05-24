@@ -9,6 +9,7 @@ import tensorflow as tf
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.eam.potentials.generic import zhou_exp
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.extension.grad_ops import safe_pow
 
@@ -152,21 +153,6 @@ zjw04_defaults = {
 }
 
 
-def _zjw04_exp_func(r_eq, a, b, c, one, name=None):
-    def func(r):
-        """
-        A helper function to get a function of the form:
-
-            a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**20)
-
-        """
-        r_re = tf.math.truediv(r, r_eq)
-        upper = a * tf.exp(-b * (r_re - one))
-        lower = one + tf.pow(r_re - c, 20)
-        return tf.math.truediv(upper, lower, name=name)
-    return func
-
-
 class Zjw04(EamAlloyPotential):
     """
     A set of eam/alloy potentials proposed by Zhou et al. at 2004.
@@ -231,10 +217,9 @@ class Zjw04(EamAlloyPotential):
                 beta = self._get_shared_variable('beta', r.dtype, el_a, )
                 kappa = self._get_shared_variable('kappa', r.dtype, el_a)
                 lamda = self._get_shared_variable('lamda', r.dtype, el_a)
-                one = tf.constant(1.0, dtype=r.dtype, name='one')
                 phi = tf.subtract(
-                    _zjw04_exp_func(r_eq, A, alpha, kappa, one, name='A')(r),
-                    _zjw04_exp_func(r_eq, B, beta, lamda, one, name='B')(r),
+                    zhou_exp(r, A=A, B=alpha, C=kappa, r_eq=r_eq, name='A'),
+                    zhou_exp(r, A=B, B=beta, C=lamda, r_eq=r_eq, name='B'),
                     name='phi')
                 if verbose:
                     log_tensor(phi)
@@ -248,8 +233,8 @@ class Zjw04(EamAlloyPotential):
                 rho_b = self.rho(r, f'{el_b}', variable_scope, False)
             half = tf.constant(0.5, dtype=r.dtype, name='half')
             phi = tf.multiply(half,
-                              tf.add(tf.math.truediv(rho_a, rho_b) * phi_b,
-                                     tf.math.truediv(rho_b, rho_a) * phi_a),
+                              tf.add(tf.math.divide(rho_a, rho_b) * phi_b,
+                                     tf.math.divide(rho_b, rho_a) * phi_a),
                               name='phi')
             if verbose:
                 log_tensor(phi)
@@ -282,8 +267,7 @@ class Zjw04(EamAlloyPotential):
             f_eq = self._get_shared_variable('f_eq', r.dtype, element)
             beta = self._get_shared_variable('beta', r.dtype, element)
             lamda = self._get_shared_variable('lamda', r.dtype, element)
-            one = tf.constant(1.0, dtype=r.dtype, name='one')
-            rho = _zjw04_exp_func(r_eq, f_eq, beta, lamda, one, name='rho')(r)
+            rho = zhou_exp(r, A=f_eq, B=beta, C=lamda, r_eq=r_eq)
             if verbose:
                 log_tensor(rho)
             return rho
@@ -576,7 +560,8 @@ class Zjw04uxc(Zjw04xc):
 
 class Zjw04xcp(Zjw04xc):
     """
-    A modified version of `Zjw04xc`. The embedding function is fixed.
+    A modified version of `Zjw04xc`. The pairwise interaction of AB is also
+    described by the .
     """
 
     def __init__(self):
