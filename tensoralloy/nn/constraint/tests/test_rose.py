@@ -114,13 +114,15 @@ def test_rose_eos_constraint():
                 beta=[beta],
                 dx=dx,
                 delta=delta)
-            loss = get_rose_constraint_loss(base_nn=nn, options=options)
+            get_rose_constraint_loss(base_nn=nn, options=options)
 
             zjw04_vars = [var for var in tf.global_variables()
                           if var.op.name.startswith('nnEAM/Shared/Mo')
                           and 'ExponentialMovingAverage' not in var.op.name
                           and 'Adam' not in var.op.name]
 
+            loss = tf.get_default_graph().get_tensor_by_name(
+                'Rose/Mo/bcc/EOS/Loss/loss:0')
             mae = tf.get_default_graph().get_tensor_by_name(
                 loss.name.replace('loss', 'mae'))
 
