@@ -73,9 +73,11 @@ class MishinH(EamAlloyPotential):
                 "d1": 1.9135e-1, "d2": -1.0796e0, "d3": -0.8928e-1,
                 "q1": -5.8954e-2, "q2": -1.3872e0, "q3": 2.4790e0,
                 "h": 6.202, "rc": 5.055
-            },
+            }
         }
         params['PuPu'] = params['FeFe'].copy()
+        params['MoMo'] = params['NiNi'].copy()
+        params['MoNi'] = params['NiNi'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
@@ -104,6 +106,8 @@ class MishinH(EamAlloyPotential):
 
         with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
             dtype = r.dtype
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{kbody_term}"
             key = kbody_term
             V0 = self._get_variable("V0", dtype, key, variable_scope)
             alpha = self._get_variable("alpha", dtype, key, variable_scope)
@@ -271,6 +275,8 @@ class MishinH(EamAlloyPotential):
         The dipole function.
         """
         with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{kbody_term}"
             dtype = r.dtype
             d1 = self._get_variable("d1", dtype, kbody_term, variable_scope)
             d2 = self._get_variable("d2", dtype, kbody_term, variable_scope)
@@ -291,6 +297,8 @@ class MishinH(EamAlloyPotential):
         The quadrupole function.
         """
         with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{kbody_term}"
             dtype = r.dtype
             q1 = self._get_variable("q1", dtype, kbody_term, variable_scope)
             q2 = self._get_variable("q2", dtype, kbody_term, variable_scope)

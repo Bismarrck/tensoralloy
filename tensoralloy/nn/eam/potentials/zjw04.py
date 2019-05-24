@@ -418,7 +418,8 @@ class Zjw04xc(Zjw04):
         """
         super(Zjw04xc, self).__init__()
 
-        self._fixed = {element: ['r_eq'] for element in self.defaults.keys()}
+        self._fixed = {element: ['r_eq'] for element in self.defaults.keys()
+                       if len(get_elements_from_kbody_term(element)) == 1}
         self._name = 'Zjw04xc'
 
     @property
@@ -561,14 +562,91 @@ class Zjw04uxc(Zjw04xc):
 class Zjw04xcp(Zjw04xc):
     """
     A modified version of `Zjw04xc`. The pairwise interaction of AB is also
-    described by the .
+    described by the exponential function.
     """
 
     def __init__(self):
+        """
+        Initialization method.
+        """
         super(Zjw04xcp, self).__init__()
 
         self._name = "Zjw04xcp"
-        self._fixed = {
-            element: ['F0', 'F1', 'F2', 'F3', 'Fn0', 'Fn1', 'Fn2', 'Fn3',
-                      'Fe', 'eta', 'rho_e', 'rho_s', 'r_eq']
-            for element in zjw04_defaults.keys()}
+
+        # `r_eq` of A-B should be minimized.
+        self._fixed = {element: ['r_eq'] for element in self.defaults.keys()
+                       if len(get_elements_from_kbody_term(element)) == 1}
+
+    @property
+    def defaults(self):
+        """
+        The default potential parameters of `Zjw04xcp`.
+        """
+        params = zjw04_defaults.copy()
+
+        kbody_terms = ["MoNi", ]
+        param_names = ['r_eq', 'A', 'B', 'alpha', 'beta', 'kappa', 'lamda']
+
+        for kbody_term in kbody_terms:
+            aa, bb = get_elements_from_kbody_term(kbody_term)
+            params[kbody_term] = {}
+            for key in param_names:
+                avg = (params[aa][key] + params[bb][key]) * 0.5
+                params[kbody_term][key] = avg
+
+        return params
+
+
+    def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
+            verbose=False):
+        """
+        The pairwise potential function.
+
+        Parameters
+        ----------
+        r : tf.Tensor
+            A 5D tensor of shape `[batch_size, 1, max_n_element, nnl, 1]`.
+        kbody_term : str
+            The corresponding k-body term.
+        variable_scope : str
+            The scope for variables of this potential function.
+        verbose : bool
+            A bool. If True, key tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 2D tensor of shape `[batch_size, max_n_elements]`.
+
+        """
+        aa, bb = get_elements_from_kbody_term(kbody_term)
+
+        with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
+            r = tf.convert_to_tensor(r, name='r')
+            dtype = r.dtype
+            if aa == bb:
+                r_eq = self._get_shared_variable('r_eq', dtype, aa)
+                A = self._get_shared_variable('A', dtype, aa)
+                B = self._get_shared_variable('B', dtype, aa)
+                alpha = self._get_shared_variable('alpha', dtype, aa)
+                beta = self._get_shared_variable('beta', dtype, aa, )
+                kappa = self._get_shared_variable('kappa', dtype, aa)
+                lamda = self._get_shared_variable('lamda', dtype, aa)
+            else:
+                assert isinstance(variable_scope, str)
+                variable_scope = f"{variable_scope}/{kbody_term}"
+                args = (kbody_term, variable_scope)
+                r_eq = self._get_variable('r_eq', dtype, *args)
+                A = self._get_variable('A', dtype, *args)
+                B = self._get_variable('B', dtype, *args)
+                alpha = self._get_variable('alpha', dtype, *args)
+                beta = self._get_variable('beta', dtype, *args, )
+                kappa = self._get_variable('kappa', dtype, *args)
+                lamda = self._get_variable('lamda', dtype, *args)
+            phi = tf.subtract(
+                zhou_exp(r, A=A, B=alpha, C=kappa, r_eq=r_eq, name='A'),
+                zhou_exp(r, A=B, B=beta, C=lamda, r_eq=r_eq, name='B'),
+                name='phi')
+            if verbose:
+                log_tensor(phi)
+            return phi

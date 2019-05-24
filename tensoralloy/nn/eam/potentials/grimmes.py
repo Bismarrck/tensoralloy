@@ -45,7 +45,8 @@ class RWGrimes(EamAlloyPotential):
         """
         with tf.variable_scope('RWGrimes'):
             dtype = r.dtype
-
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{kbody_term}"
             A = self._get_variable('A', dtype, kbody_term, variable_scope)
             rho = self._get_variable('rho', dtype, kbody_term, variable_scope)
             C = self._get_variable('C', dtype, kbody_term, variable_scope)
@@ -68,6 +69,8 @@ class RWGrimes(EamAlloyPotential):
         """
         with tf.variable_scope('RWGrimes'):
             dtype = r.dtype
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{element}"
             n = self._get_variable('n', dtype, element, variable_scope)
             half = tf.constant(0.5, dtype=dtype, name='half')
             one = tf.constant(1.0, dtype=dtype, name='two')
@@ -90,6 +93,8 @@ class RWGrimes(EamAlloyPotential):
         """
         with tf.variable_scope('RWGrimes'):
             dtype = rho.dtype
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{element}"
             G = self._get_variable('G', dtype, element, variable_scope)
             embed = tf.multiply(-tf.sqrt(rho), G, name='embed')
             if verbose:

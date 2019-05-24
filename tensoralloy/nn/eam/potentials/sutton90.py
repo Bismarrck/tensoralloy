@@ -49,6 +49,8 @@ class AgSutton90(EamAlloyPotential):
 
         """
         with tf.variable_scope('Sutton'):
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{kbody_term}"
             one = tf.constant(1.0, r.dtype, name='one')
             b = self._get_variable('b', r.dtype, kbody_term, variable_scope)
             with tf.name_scope("ussafe_div"):
@@ -68,6 +70,8 @@ class AgSutton90(EamAlloyPotential):
 
         """
         with tf.variable_scope('Sutton'):
+            assert isinstance(variable_scope, str)
+            variable_scope = f"{variable_scope}/{element}"
             one = tf.constant(1.0, r.dtype, name='one')
             a = self._get_variable('a', r.dtype, element, variable_scope)
             with tf.name_scope("ussafe_div"):
