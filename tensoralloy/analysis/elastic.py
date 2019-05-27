@@ -12,9 +12,10 @@ import spglib as spg
 import re
 
 from numpy import array
-from typing import Callable
+from typing import Callable, Tuple
 from ase import Atoms
 from ase.units import GPa
+from pymatgen.analysis.elasticity import ElasticTensor
 from matplotlib.pyplot import Axes
 
 __author__ = 'Xin Chen'
@@ -447,6 +448,54 @@ def get_elementary_deformations(cryst, n=5, d=2):
     return systems
 
 
+def get_cij_order(lattice_type_num: int):
+    """
+    Give order of of elastic constants for the structure.
+
+    Parameters
+    ----------
+    lattice_type_num : int
+        The lattice type number (1 - 7).
+
+    Returns
+    -------
+    cij_names : Tuple[str]
+        A tuple of str as the names of the elastic constants.
+
+    """
+    orders = {
+        1: ('C_11', 'C_22', 'C_33', 'C_12', 'C_13', 'C_23',
+            'C_44', 'C_55', 'C_66', 'C_16', 'C_26', 'C_36',
+            'C_46', 'C_56', 'C_14', 'C_15', 'C_25', 'C_45'),
+        2: ('C_11', 'C_22', 'C_33', 'C_12', 'C_13', 'C_23',
+            'C_44', 'C_55', 'C_66', 'C_16', 'C_26', 'C_36', 'C_45'),
+        3: ('C_11', 'C_22', 'C_33', 'C_12', 'C_13', 'C_23', 'C_44',
+            'C_55', 'C_66'),
+        4: ('C_11', 'C_33', 'C_12', 'C_13', 'C_44', 'C_14'),
+        5: ('C_11', 'C_33', 'C_12', 'C_13', 'C_44', 'C_14'),
+        6: ('C_11', 'C_33', 'C_12', 'C_13', 'C_44'),
+        7: ('C_11', 'C_12', 'C_44'),
+    }
+    return orders[lattice_type_num]
+
+
+def _array2tensor(values: np.ndarray, lattice_type_num: int) -> ElasticTensor:
+    """
+    Convert the elastic constants array to an `ElasticTensor` object.
+    """
+    order = get_cij_order(lattice_type_num)
+    if len(values) != len(order):
+        raise ValueError(f"The number of Cij values should be {len(order)}")
+
+    voigt = np.zeros((6, 6))
+    for i, notation in enumerate(order):
+        vi_idx = int(notation[-2]) - 1
+        vj_idx = int(notation[-1]) - 1
+        voigt[vi_idx, vj_idx] = values[i]
+
+    return ElasticTensor.from_voigt(voigt)
+
+
 def get_elastic_tensor(cryst, systems):
     """
     Calculate elastic tensor of the crystal.
@@ -474,8 +523,8 @@ def get_elastic_tensor(cryst, systems):
 
     Returns
     -------
-    elastic_constants : array_like
-        The elastic constants.
+    elastic_constants : ElasticTensor
+        The elastic constants tensor.
     results : array_like
         Fitting results, including residuals, solution rank and singular values.
 
@@ -530,7 +579,7 @@ def get_elastic_tensor(cryst, systems):
                                  p, p, p, p, p, p, p, p, p])
     else:
         Cij = None
-    return Cij, Bij
+    return _array2tensor(Cij, lattyp), Bij
 
 
 def plot_cubic_elastic_constants(crystal: Atoms, get_calc_fn: Callable,
