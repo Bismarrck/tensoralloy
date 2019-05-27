@@ -20,6 +20,8 @@ from os.path import exists, dirname, join, basename, splitext
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.analysis.eos import EquationOfState
+from tensoralloy.analysis.elastic import get_elastic_tensor
+from tensoralloy.analysis.elastic import get_elementary_deformations
 from tensoralloy.io.read import read_file
 from tensoralloy.io.input import InputReader
 from tensoralloy.nn.constraint.data import read_external_crystal
@@ -471,7 +473,8 @@ class ComputeMetricsProgram(CLIProgram):
         
         self._programs = [
             ComputeEvaluationPercentileProgram(),
-            EquationOfStateProgram()
+            EquationOfStateProgram(),
+            ComputeElasticTensorProgram(),
         ]
     
     @property
@@ -505,6 +508,92 @@ class ComputeMetricsProgram(CLIProgram):
         function is empty. """
         def func(_):
             pass
+        return func
+
+
+def _get_atoms(name_or_filename: str):
+    """
+    A helper function to initialize an `Atoms` given a name or a filename.
+    """
+    try:
+        atoms = bulk(name_or_filename)
+    except Exception:
+        try:
+            if name_or_filename.endswith("toml"):
+                atoms = read_external_crystal(name_or_filename).atoms
+            else:
+                atoms = read(name_or_filename, index=0)
+        except Exception:
+            raise ValueError(f"Unrecognized str: {name_or_filename}")
+    return atoms
+
+
+class ComputeElasticTensorProgram(CLIProgram):
+    """
+    Compute the elastic constants tensor of a crystal.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "elastic"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Compute the elastic constants tensor of a crystal."
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'crystal',
+            type=str,
+            help="The name or filename of the target crystal."
+        )
+        subparser.add_argument(
+            "graph_model_file",
+            type=str,
+            help="The graph model file to use."
+        )
+        subparser.add_argument(
+            "--analytic",
+            default=False,
+            action="store_true",
+            help="Compute the elastic constants analytically if possible."
+        )
+
+        super(ComputeElasticTensorProgram, self).config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function of this program.
+        """
+        def func(args: argparse.Namespace):
+            crystal = _get_atoms(args.crystal)
+            calc = TensorAlloyCalculator(args.graph_model_file)
+            crystal.calc = calc
+
+            if args.analytic and "elastic" in calc.implemented_properties:
+                tensor = calc.get_elastic_constant_tensor(
+                    crystal, auto_conventional_standard=True)
+            else:
+                systems = get_elementary_deformations(crystal, n=10, d=0.5)
+                for atoms in systems:
+                    atoms.calc = calc
+                tensor = get_elastic_tensor(crystal, systems)[0]
+
+            np.set_printoptions(precision=0, suppress=True)
+
+            print("The elastic constants tensor: ")
+            print(tensor.voigt / GPa)
+
         return func
 
 
@@ -813,18 +902,8 @@ class EquationOfStateProgram(CLIProgram):
             assert 0.80 <= args.xlo <= 0.99
             assert 1.01 <= args.xhi <= 1.20
 
+            crystal = _get_atoms(args.crystal)
             calc = TensorAlloyCalculator(args.graph_model_path)
-
-            try:
-                crystal = bulk(args.crystal)
-            except Exception:
-                try:
-                    if args.crystal.endswith("toml"):
-                        crystal = read_external_crystal(args.crystal).atoms
-                    else:
-                        crystal = read(args.crystal, index=0)
-                except Exception:
-                    raise ValueError(f"Unrecognized {args.crystal}")
             crystal.calc = calc
             cell = crystal.cell.copy()
             formula = crystal.get_chemical_formula()
