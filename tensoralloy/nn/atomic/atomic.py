@@ -100,7 +100,7 @@ class AtomicNN(BasicNN):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
             for element, (value, atom_mask) in descriptors.items():
-                with tf.variable_scope(element):
+                with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                     x = tf.identity(value, name='input')
                     if mode == tf_estimator.ModeKeys.PREDICT:
                         assert x.shape.ndims == 2
