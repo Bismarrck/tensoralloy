@@ -20,7 +20,7 @@ from os.path import exists, dirname, join, basename, splitext
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.analysis.eos import EquationOfState
-from tensoralloy.analysis.elastic import get_elastic_tensor
+from tensoralloy.analysis.elastic import get_elastic_tensor, get_lattice_type
 from tensoralloy.analysis.elastic import get_elementary_deformations
 from tensoralloy.io.read import read_file
 from tensoralloy.io.input import InputReader
@@ -583,14 +583,22 @@ class ComputeElasticTensorProgram(CLIProgram):
             if args.analytic and "elastic" in calc.implemented_properties:
                 tensor = calc.get_elastic_constant_tensor(
                     crystal, auto_conventional_standard=True)
+                lattyp, brav, sg_name, sg_nr = get_lattice_type(crystal)
             else:
                 systems = get_elementary_deformations(crystal, n=10, d=0.5)
                 for atoms in systems:
                     atoms.calc = calc
-                tensor = get_elastic_tensor(crystal, systems)[0]
+                tensor, _, lattice = get_elastic_tensor(crystal, systems)
+                lattyp = lattice['lattice_number']
+                brav = lattice['lattice_name']
+                sg_name = lattice['spacegroup']
+                sg_nr = lattice['spacegroup_number']
 
             np.set_printoptions(precision=0, suppress=True)
 
+            print(f"Crystal: {args.crystal}")
+            print(f"Lattice: {brav}({lattyp})")
+            print(f"SpaceGroup: {sg_name}({sg_nr})")
             print("The elastic constants tensor: ")
             print(tensor.voigt / GPa)
 

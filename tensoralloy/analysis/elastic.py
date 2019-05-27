@@ -527,6 +527,8 @@ def get_elastic_tensor(cryst, systems):
         The elastic constants tensor.
     results : array_like
         Fitting results, including residuals, solution rank and singular values.
+    lattice_info : dict
+        The lattice info of the crystal.
 
     """
 
@@ -579,7 +581,10 @@ def get_elastic_tensor(cryst, systems):
                                  p, p, p, p, p, p, p, p, p])
     else:
         Cij = None
-    return _array2tensor(Cij, lattyp), Bij
+
+    lattice_info = {'lattice_number': lattyp, 'lattice_name': brav,
+                    'spacegroup': sg_name, 'spacegroup_number': sg_nr}
+    return _array2tensor(Cij, lattyp), Bij, lattice_info
 
 
 def plot_cubic_elastic_constants(crystal: Atoms, get_calc_fn: Callable,
