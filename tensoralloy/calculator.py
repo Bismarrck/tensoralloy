@@ -10,6 +10,8 @@ import json
 import warnings
 import glob
 
+from os.path import exists
+from os import remove
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.units import GPa
@@ -426,6 +428,11 @@ class TensorAlloyCalculator(Calculator):
 
         # Need to calculate full force constant tensors
         phonon.produce_force_constants(use_alm=False)
+
+        # Remove files
+        for afile in [disp_filename, force_sets_filename] + force_filenames:
+            if exists(afile):
+                remove(afile)
 
     def get_phonon_spectrum(self, atoms=None, supercell=(4, 4, 4),
                             numeric_hessian=False, primitive_axes=None,
