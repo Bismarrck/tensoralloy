@@ -81,7 +81,8 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
             vj = voigt_notation(k, l, return_py_index=True)
             if filled[vi, vj]:
                 continue
-            cijkl = _get_cijkl_op(total_stress, cell, volume, i, j, k, l)
+            with tf.name_scope(f"{i}{j}{k}{l}"):
+                cijkl = _get_cijkl_op(total_stress, cell, volume, i, j, k, l)
             components.append(cijkl)
             v2c_map.append((vi, vj))
             filled[vi, vj] = True
