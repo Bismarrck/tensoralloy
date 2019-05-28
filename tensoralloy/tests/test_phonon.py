@@ -41,14 +41,19 @@ def phonon_spectrum_example():
     ]
 
     atoms = bulk('Ni')
-    calc = TensorAlloyCalculator(join(test_dir(), 'Ni', 'Ni.zjw04xc.pb'))
+    calc = TensorAlloyCalculator(join(test_dir(), 'models', 'Ni.sf.r40.pb'))
     atoms.calc = calc
     calc.get_phonon_spectrum(
         atoms,
         primitive_axes='auto',
         supercell=(4, 4, 4),
+        numeric_hessian=False,
         band_paths=band_paths,
         band_labels=labels,
         npoints=101,
         use_wavenumber=True, plot_vertical_lines=True,
         verbose=True)
+
+
+if __name__ == "__main__":
+    phonon_spectrum_example()
