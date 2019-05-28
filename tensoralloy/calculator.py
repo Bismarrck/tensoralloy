@@ -10,7 +10,7 @@ import json
 import warnings
 import glob
 
-from os.path import exists
+from os.path import exists, dirname, join
 from os import remove
 from ase import Atoms
 from ase.calculators.calculator import Calculator
@@ -30,8 +30,8 @@ from phonopy.structure.atoms import PhonopyAtoms
 from phonopy.interface import parse_disp_yaml
 from phonopy.interface import get_default_physical_units
 from phonopy.interface import get_default_displacement_distance
-from phonopy.interface import write_supercells_with_displacements
 from phonopy.interface import write_FORCE_SETS
+from phonopy.interface.vasp import write_vasp
 from phonopy.structure.cells import guess_primitive_matrix
 from phonopy.units import VaspToCm
 from phonopy import file_IO
@@ -92,6 +92,7 @@ class TensorAlloyCalculator(Calculator):
                 importer.import_graph_def(output_graph_def, name="")
 
             self._graph_model_path = graph_model_path
+            self._model_dir = dirname(graph_model_path)
 
             if serial_mode:
                 config = tf.ConfigProto(device_count={'CPU': 1})
@@ -360,6 +361,25 @@ class TensorAlloyCalculator(Calculator):
             force_sets.append(self.get_forces(atoms))
         return force_sets
 
+    @staticmethod
+    def _write_supercells_with_displacements(supercell,
+                                             cells_with_displacements,
+                                             pre_filename="POSCAR",
+                                             sposcar_filename="SPOSCAR",
+                                             width=3):
+        """
+        A wrapper of the original function.
+        """
+        write_vasp(sposcar_filename, supercell, direct=True)
+        for i, cell in enumerate(cells_with_displacements):
+            if cell is not None:
+                write_vasp("{pre_filename}-{0:0{width}}".format(
+                    i + 1,
+                    pre_filename=pre_filename,
+                    width=width),
+                    cell,
+                    direct=True)
+
     def get_numeric_force_sets(self, phonon: Phonopy, supercell: Atoms,
                                displacement_distance=None,
                                force_sets_zero_mode=False,
@@ -367,6 +387,10 @@ class TensorAlloyCalculator(Calculator):
         """
         Compute the force constants using the numeric method.
         """
+        force_sets_filename = join(self._model_dir, "FORCE_SETS")
+        disp_filename = join(self._model_dir, "disp.yaml")
+        poscar_prefilename = join(self._model_dir, "POSCAR")
+        sposcar_filename = join(self._model_dir, "SPOSCAR")
 
         if displacement_distance is None:
             displacement_distance = get_default_displacement_distance('vasp')
@@ -383,24 +407,21 @@ class TensorAlloyCalculator(Calculator):
                                   pbc=supercell.pbc,
                                   cell=supercell.cell)
 
-        file_IO.write_disp_yaml(displacements, _supercell)
+        file_IO.write_disp_yaml(displacements, _supercell, disp_filename)
 
         # Write supercells with displacements
         cells_with_disps = phonon.get_supercells_with_displacements()
-        N = abs(np.linalg.det(phonon.supercell_matrix))
+        self._write_supercells_with_displacements(
+            supercell=_supercell,
+            cells_with_displacements=cells_with_disps,
+            pre_filename=poscar_prefilename,
+            sposcar_filename=sposcar_filename,
+        )
 
-        write_supercells_with_displacements('vasp',
-                                            _supercell,
-                                            cells_with_disps,
-                                            N,
-                                            ("POSCAR", ))
-
-        force_sets_filename = "FORCE_SETS"
-        disp_filename = "disp.yaml"
         disp_dataset = parse_disp_yaml(filename=disp_filename)
         num_displacements = len(disp_dataset['first_atoms'])
         n_atoms = disp_dataset['natom']
-        force_filenames = glob.glob("POSCAR-*")
+        force_filenames = glob.glob(join(self._model_dir, "POSCAR-*"))
 
         if force_sets_zero_mode:
             num_displacements += 1
@@ -430,7 +451,9 @@ class TensorAlloyCalculator(Calculator):
         phonon.produce_force_constants(use_alm=False)
 
         # Remove files
-        for afile in [disp_filename, force_sets_filename] + force_filenames:
+        filenames = force_filenames
+        filenames += [disp_filename, force_sets_filename, sposcar_filename]
+        for afile in filenames:
             if exists(afile):
                 remove(afile)
 
