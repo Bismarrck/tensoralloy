@@ -18,8 +18,6 @@ from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.utils import Defaults, GraphKeys
 from tensoralloy.extension.grad_ops import safe_pow
 
-# TODO: use a custom `PowGrad` to fix the NaN bug when `zeta` is 1
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 

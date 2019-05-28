@@ -344,8 +344,6 @@ class Zjw04(EamAlloyPotential):
                        `tf.gradients(tf.gradientx(tf.pow(x, 1), x), x)`
                    if `x` is zero.
 
-                TODO: fix `tf.pow` and create a pull request.
-
                 """
                 with tf.name_scope("e2"):
                     x1 = _rho / rho_e - one
