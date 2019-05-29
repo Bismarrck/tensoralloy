@@ -12,6 +12,7 @@ from collections import Counter
 from typing import Dict, List
 from ase import Atoms
 from ase.units import GPa
+from ase.calculators.singlepoint import SinglePointCalculator
 
 from tensoralloy.utils import AttributeDict, get_pulay_stress
 from tensoralloy.precision import get_float_dtype
@@ -385,6 +386,14 @@ class BatchDescriptorTransformer(BaseTransformer):
         """
         Encode the basic properties of an `Atoms` object.
         """
+        if atoms.calc is None:
+            # Add a dummy calculator
+            sp = SinglePointCalculator(
+                atoms, **{'energy': 0.0,
+                          'forces': np.zeros((len(atoms), 3)),
+                          'stress': np.zeros(6)})
+            atoms.calc = sp
+
         clf = self.get_index_transformer(atoms)
         np_dtype = get_float_dtype().as_numpy_dtype
         positions = clf.map_positions(atoms.positions).astype(np_dtype)
