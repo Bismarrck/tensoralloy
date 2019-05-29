@@ -710,11 +710,14 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     if args.use_train_data:
                         mode = tf_estimator.ModeKeys.TRAIN
                         size = manager.dataset.train_size
+                        batch_size = manager.hparams.train.batch_size
                     else:
                         mode = tf_estimator.ModeKeys.EVAL
                         size = manager.dataset.test_size
-
-                    batch_size = manager.hparams.train.batch_size
+                        batch_size = manager.hparams.train.batch_size
+                        batch_size = min(size, batch_size)
+                        if size % batch_size != 0:
+                            batch_size = 1
                     n_used = size - divmod(size, batch_size)[1]
 
                     input_fn = manager.dataset.input_fn(
@@ -829,8 +832,19 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     dataframe = pd.DataFrame(reordered)
                     dataframe.set_index(order, inplace=True)
 
-                dataframe.rename(
-                    columns={'energy': 'energy/atom'}, inplace=True)
+                # Convert to meV/atoms
+                dataframe['energy'] *= 1000.0
+
+                name_mapping = {
+                    'energy': 'Energy (meV/atom)',
+                    'forces': 'Force (eV/Ang)',
+                    'stress': 'Stress (GPa)',
+                    'total_pressure': 'Pressure (GPa)'
+                }
+                rename_cols = {old: new for old, new in name_mapping.items()
+                               if old in dataframe.columns.to_list()}
+                dataframe.rename(columns=rename_cols, inplace=True)
+
                 pd.options.display.float_format = "{:.6f}".format
                 print(f"Mode: {mode} ({n_used}/{size})")
                 print(dataframe.to_string())
