@@ -145,7 +145,7 @@ class ElasticConstraintOptions:
     use_kbar: bool = True
     forces_weight: float = 1.0
     stress_weight: float = 0.1
-    exact_loss: bool = True
+    tau: float = 1.0
 
 
 @add_slots

@@ -126,14 +126,21 @@ def get_elastic_constant_loss(base_nn,
 
     with tf.name_scope("Elastic/"):
 
-        predictions = []
-        labels = []
-        cijkl_weights = []
+        losses = []
         dtype = get_float_dtype()
         eps = tf.convert_to_tensor(dtype.eps, dtype=dtype, name='eps')
+        tau = tf.convert_to_tensor(options.tau, dtype=dtype, name='tau')
+        weight = tf.convert_to_tensor(weight, dtype, name='weight/loss')
+        f_weight = tf.convert_to_tensor(
+            options.forces_weight, dtype, name='weight/f')
+        p_weight = tf.convert_to_tensor(
+            options.stress_weight, dtype, name='weight/p')
         constraints = {'forces': [eps], 'stress': [eps]}
 
         for crystal_or_name_or_file in list_of_crystal:
+            predictions = []
+            labels = []
+            cijkl_weights = []
             crystal = get_crystal(crystal_or_name_or_file)
 
             symbols = set(crystal.atoms.get_chemical_symbols())
@@ -201,49 +208,42 @@ def get_elastic_constant_loss(base_nn,
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
                         tf.add_to_collection(GraphKeys.EVAL_METRICS, cijkl)
 
-        with tf.name_scope("Loss"):
-
-            # Loss contribution from elastic constants
-            with tf.name_scope("Elastic"):
-                predictions = tf.stack(predictions, name='predictions')
-                labels = tf.stack(labels, name='labels')
-                cijkl_weights = tf.stack(cijkl_weights, name='weights')
-
-                sd = tf.multiply(cijkl_weights,
-                                 tf.squared_difference(predictions, labels),
-                                 name='sd/weighted')
-                mse = tf.reduce_mean(sd, name='mse')
-                mae = tf.reduce_mean(tf.abs(predictions - labels), name='mae')
-
-                if not options.exact_loss:
-                    thres = tf.convert_to_tensor(1.0, mae.dtype, name='1GPa')
-                    gate = tf.cast(tf.math.greater(mae, thres), mae.dtype)
+                # Loss contribution from elastic constants
+                with tf.name_scope("Loss"):
+                    predictions = tf.stack(predictions, name='predictions')
+                    labels = tf.stack(labels, name='labels')
+                    cijkl_weights = tf.stack(cijkl_weights, name='weights')
+                    diff = tf.math.subtract(predictions, labels)
+                    sd = tf.multiply(
+                        cijkl_weights,
+                        tf.square(diff),
+                        name='sd/weighted')
+                    mse = tf.reduce_mean(sd, name='mse')
+                    mae = tf.reduce_mean(tf.abs(diff), name='mae')
+                    gate = tf.nn.relu(mae - tau, name='gate')
                     mse = tf.multiply(mse, gate, name='mse/gate')
+                    mse = tf.add(mse, eps, name='mse/safe')
+                    rmse = tf.sqrt(mse, name='rmse')
+                    losses.append(rmse)
+                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
 
-                mse = tf.add(mse, eps, name='mse/safe')
-                weight = tf.convert_to_tensor(weight, dtype, name='weight')
-                raw_loss = tf.sqrt(mse, name='rmse')
-                e_loss = tf.multiply(raw_loss, weight, name='weighted/loss')
+        with tf.name_scope("Loss"):
 
             # Loss contribution from constraints because the 2-norm of the total
             # forces and stress of the crystal structure should be zero.
             with tf.name_scope("Constraint"):
                 f_loss = tf.add_n(constraints['forces'], name='f_loss')
-                f_weight = tf.convert_to_tensor(
-                    options.forces_weight, dtype, name='weight/f')
                 f_loss = tf.multiply(f_loss, f_weight, name='weighted/f_loss')
-
                 p_loss = tf.add_n(constraints['stress'], name='p_loss')
-                p_weight = tf.convert_to_tensor(
-                    options.stress_weight, dtype, name='weight/p')
                 p_loss = tf.multiply(p_loss, p_weight, name='weighted/p_loss')
+                c_loss = tf.add(p_loss, f_loss, name='loss/weighted')
 
-                c_loss = tf.add(p_loss, f_loss, name='c_loss')
+            with tf.name_scope("Elastic"):
+                e_loss = tf.add_n(losses, name='loss')
+                e_loss = tf.multiply(weight, e_loss, name='loss/weighted')
 
-        total_loss = tf.add(e_loss, c_loss, name='total_loss')
-
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+            total_loss = tf.add(e_loss, c_loss, name='total_loss')
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
 
         return total_loss

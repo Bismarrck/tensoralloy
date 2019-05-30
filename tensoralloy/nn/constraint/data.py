@@ -154,10 +154,10 @@ def read_external_crystal(toml_file: str) -> Crystal:
 
             if np.isscalar(value):
                 weight = 1.0
-                cijkl = value
+                cijkl = float(value)
             elif isinstance(value, (tuple, list)):
                 assert len(value) == 2
-                cijkl, weight = value[0], value[1]
+                cijkl, weight = float(value[0]), float(value[1])
             else:
                 raise ValueError("The value of Cij should be a float or list")
 
