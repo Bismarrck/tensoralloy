@@ -872,7 +872,7 @@ def test_batch_transformer_as_dict():
     nijk_max = 400
     angular = True
     trainable = True
-    use_forces =  False
+    use_forces = False
     old = BatchSymmetryFunctionTransformer(
         rc, max_occurs, nij_max=nij_max, nijk_max=nijk_max, angular=angular,
         trainable=trainable, use_forces=use_forces)

@@ -23,6 +23,9 @@ from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress
 
+
+# TODO: universal v2gmap
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
