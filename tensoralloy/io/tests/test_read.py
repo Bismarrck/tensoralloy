@@ -6,6 +6,7 @@ import nose
 
 from ase import Atoms
 from ase.units import GPa
+from ase.geometry import cell_to_cellpar
 from nose.tools import assert_equal, assert_almost_equal, assert_true
 from nose.tools import assert_dict_equal
 from os.path import join
@@ -82,6 +83,16 @@ def test_read_pulay_stress():
     pulay = get_pulay_stress(atoms) / GPa * 10.0 * (-1)
     net = kbar[:3].mean() - pulay
     assert_almost_equal(net, -0.78, delta=0.01)
+
+
+def test_read_stepmax_xyz():
+    xyzfile = join(test_dir(), "Pu8.stepmax.xyz")
+    database = read_file(xyzfile, num_examples=1, file_type='stepmax')
+    atoms = database.get_atoms(id=1, add_additional_information=True)
+    cellpars = cell_to_cellpar(atoms.cell)
+    assert_almost_equal(atoms.positions[0, 2], 3.301309)
+    assert_almost_equal(cellpars[2], 6.7942123514756485, delta=1e-6)
+    assert_almost_equal(atoms.get_potential_energy(), -32.4, delta=1e-6)
 
 
 if __name__ == '__main__':
