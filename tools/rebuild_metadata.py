@@ -15,23 +15,33 @@ __email__ = 'Bismarrck@me.com'
 
 built_in_datasets = {
     'qm7': {
-        'rc': [6.5, 6.5],
-        'k_max': [2, 3],
+        'rc': {
+            6.5: True
+        },
         'path': join(datasets_dir(), 'qm7.db'),
     },
     'snap-Ni': {
-        'rc': [4.6, 4.6, 6.0, 6.5],
-        'k_max': [2, 3, 2, 2],
+        'rc': {
+            4.6: True,
+            6.0: False,
+            6.5: False,
+        },
         'path': join(datasets_dir(), 'snap-Ni.db'),
     },
     'snap-Mo': {
-        'rc': [4.6, 4.6, 6.0, 6.5],
-        'k_max': [2, 3, 2, 2],
+        'rc': {
+            4.6: True,
+            6.0: False,
+            6.5: False,
+        },
         'path': join(datasets_dir(), 'snap-Mo.db'),
     },
     'snap': {
-        'rc': [4.6, 4.6, 6.0, 6.5],
-        'k_max': [2, 3, 2, 2],
+        'rc': {
+            4.6: True,
+            6.0: True,
+            6.5: True,
+        },
         'path': join(datasets_dir(), 'snap.db'),
     }
 }
@@ -46,14 +56,15 @@ def rebuild():
         print(f"Dataset: {name} @ {config['path']}")
         db = connect(config['path'])
 
-        for index in range(len(config['rc'])):
-            rc = config['rc'][index]
-            k_max = config['k_max'][index]
-
-            if db.get_nij_max(k_max, rc, allow_calculation=False) is None:
-                db.update_neighbor_meta(k_max, rc, verbose=True)
+        for rc, angular in config['rc'].items():
+            if angular:
+                value = db.get_nijk_max(rc, allow_calculation=False)
             else:
-                print(f"Skip {name}/neighbor with rc={rc}, k_max={k_max}")
+                value = db.get_nij_max(rc, allow_calculation=False)
+            if not value:
+                db.update_neighbor_meta(rc, angular, verbose=True)
+            else:
+                print(f"Skip {name}/neighbor with rc={rc}, angular={angular}")
 
         if not db.get_atomic_static_energy(allow_calculation=False):
             db.get_atomic_static_energy(allow_calculation=True)
