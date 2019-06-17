@@ -423,10 +423,16 @@ class TrainingManager:
                     lattice_constants = None
                     lattice_types = None
 
-                if tag is not None:
-                    setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+                if isinstance(self._nn, AdpNN):
+                    if tag is not None:
+                        setfl = f'{self._dataset.name}.{tag}.adp'
+                    else:
+                        setfl = f'{self._dataset.name}.adp'
                 else:
-                    setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
+                    if tag is not None:
+                        setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+                    else:
+                        setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
 
                 self._nn.export_to_setfl(
                     setfl=join(self._hparams.train.model_dir, setfl),
