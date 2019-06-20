@@ -281,8 +281,8 @@ class MishinH(EamAlloyPotential):
             d1 = self._get_variable("d1", dtype, kbody_term, variable_scope)
             d2 = self._get_variable("d2", dtype, kbody_term, variable_scope)
             d3 = self._get_variable("d3", dtype, kbody_term, variable_scope)
-            rc = self._get_variable('rc', dtype, kbody_term, variable_scope)
-            h = self._get_variable('h', dtype, kbody_term, variable_scope)
+            rc = self._get_shared_variable('rc', dtype, kbody_term)
+            h = self._get_shared_variable('h', dtype, kbody_term)
             dipole = mishin_polar(r, d1, d2, d3, rc, h, name="U")
             if verbose:
                 log_tensor(dipole)
@@ -303,8 +303,8 @@ class MishinH(EamAlloyPotential):
             q1 = self._get_variable("q1", dtype, kbody_term, variable_scope)
             q2 = self._get_variable("q2", dtype, kbody_term, variable_scope)
             q3 = self._get_variable("q3", dtype, kbody_term, variable_scope)
-            rc = self._get_variable('rc', dtype, kbody_term, variable_scope)
-            h = self._get_variable('h', dtype, kbody_term, variable_scope)
+            rc = self._get_shared_variable('rc', dtype, kbody_term)
+            h = self._get_shared_variable('h', dtype, kbody_term)
             quadrupole = mishin_polar(r, q1, q2, q3, rc, h, name='W')
             if verbose:
                 log_tensor(quadrupole)
