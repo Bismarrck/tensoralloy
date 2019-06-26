@@ -1,102 +1,50 @@
+#!coding=utf-8
 from __future__ import print_function
 
 import numpy as np
-import re
+import pandas as pd
+
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
-
-examples_per_second = {
-    'GPU': {
-        'Angular': {
-            1: 120,
-            10: 780,
-            20: 1600,
-            50: 2400,
-            100: 2800,
-        },
-        'Radial': {
-            1: 90,
-            10: 1000,
-            20: 2400,
-            50: 6000,
-            100: 10800,
-        }
-    },
-    'CPU': {
-        'Angular': {
-            1: 270,
-            10: 690,
-            20: 750,
-            50: 610,
-            100: 660,
-        },
-        'Radial': {
-            1: 400,
-            10: 2800,
-            20: 3800,
-            50: 5100,
-            100: 5800,
-        }
-    }
-}
 
 orders = [
     ('CPU', 'Radial'), ('CPU', 'Angular'), 
     ('GPU', 'Radial'), ('GPU', 'Angular'),
 ]
 
-traj_files = [
-    (1, 'Radial', 'Radial / Batch Size 1', 'fig4-traj/g2.1.gpu.traj'),
-    (50, 'Radial', 'Radial / Batch Size 50', 'fig4-traj/g2.50.gpu.traj'),
-    (100, 'Radial', 'Radial / Batch Size 100', 'fig4-traj/g2.100.gpu.traj'),
-    (1, 'Angular', 'Angular / Batch Size 1', 'fig4-traj/g4.1.gpu.traj'),
-    (50, 'Angular', 'Angular / Batch Size 50', 'fig4-traj/g4.50.gpu.traj'),
-    (100, 'Angular', 'Angular / Batch Size 100', 'fig4-traj/g4.100.gpu.traj'),
-]
-
-traj_patt = re.compile(r"Step\s=\s+(\d+)\sy_mae/atom\s=\s+([0-9.]+)")
-
-
-def read_traj(filename, batch_size: int, sf: str):
-    """ 
-    Read the trajectory and return the MAE/time(GPU) curve.
-    """
-    speed = examples_per_second['GPU'][sf][batch_size]
-    factor = 1.0 / (speed / batch_size * 3600)
-    with open(filename) as fp:
-        data = []
-        tail = []
-        for line in fp:
-            line = line.strip()
-            m = traj_patt.search(line)
-            if m:
-                step = float(m.group(1))
-                x = step * factor
-                y = float(m.group(2)) * 1000.0
-                data.append([x, y])
-        data = np.asarray(data)
-        return data
-
-
-speed_flatten = []
-for (device, sf) in orders:
-    speed_flatten.append([
-        examples_per_second[device][sf][batch_size] 
-        for batch_size in (1, 10, 20, 50, 100)])
-
-traj = []
-for (batch_size, sf, tag, filename) in traj_files:
-    traj.append((tag, read_traj(filename, batch_size, sf)))
-
-
 fig = plt.figure(figsize=[12, 10])
 grid_spec = GridSpec(2, 24)
 
+# ----------
+# Fig.A
+# ----------
+
 ax = plt.subplot(grid_spec[0, 0: 11])
+assert isinstance(ax, plt.Axes)
+
+df1 = pd.read_csv("qm7/qm7.speed.csv", index_col=0)
+speed_flatten = np.zeros((4, 4))
+batch_size_idx_map = {1: 0, 25: 1, 50: 2, 100: 3}
+
+for i, (device, sf) in enumerate(orders):
+    if device == "CPU":
+        use_cpu = True
+    else:
+        use_cpu = False
+    if sf == "Angular":
+        angular = True
+    else:
+        angular = False
+    rows = df1.loc[(df1["cpu"] == use_cpu) &
+                   (df1["angular"] == angular) &
+                   (df1["arch"] == "AtomicResNN")]
+    for _, row in rows.iterrows():
+        j = batch_size_idx_map[row.batch_size]
+        speed_flatten[i, j] = row.examples_per_sec
 
 n_groups = 5
 bar_width = 0.2
-index = np.arange(n_groups) * 1.5
+index = np.arange(4) * 1.5
 
 ax.bar(
     index + bar_width * 0,
@@ -126,42 +74,80 @@ ax.set_ylabel(r"Structures per Second", fontsize=16)
 ax.legend(frameon=False, fontsize=12)
 ax.text(-0.1, 1.05, "a)", transform=ax.transAxes, size=16, weight='bold')
 
-ax = plt.subplot(grid_spec[0, 13: 24])
+# ----------
+# Fig.B
+# ----------
 
-ax.plot(traj[0][1][:, 0], traj[0][1][:, 1], 'r-', label=traj_files[0][2])
-ax.plot(traj[3][1][:, 0], traj[3][1][:, 1], 'r--', label=traj_files[3][2])
-ax.plot(traj[1][1][:, 0], traj[1][1][:, 1], 'g-', label=traj_files[1][2])
-ax.plot(traj[4][1][:, 0], traj[4][1][:, 1], 'g--', label=traj_files[4][2])
-ax.plot(traj[2][1][:, 0], traj[2][1][:, 1], 'b-', label=traj_files[2][2])
-ax.plot(traj[5][1][:, 0], traj[5][1][:, 1], 'b--', label=traj_files[5][2])
+new_traj = []
+t_factors = []
+labels = []
+idx = 0
+
+for batch_size in [1, 50, 100]:
+    for angular in [False, True]:
+        row = df1[(df1["cpu"] == False) &
+                  (df1["angular"] == angular) &
+                  (df1["arch"] == "AtomicResNN") &
+                  (df1["batch_size"] == batch_size)]
+        t_factor = 1.0 / (row.examples_per_sec.values[0] / batch_size * 3600)
+        t_factors.append(t_factor)
+        if angular:
+            tag = "Angular"
+            gval = 4
+        else:
+            tag = "Radial"
+            gval = 2
+        labels.append(f"{tag} / Batch Size {batch_size}")
+        new_traj.append(pd.read_csv(f"qm7/g{gval}.{batch_size}.res.csv"))
+
+
+ax = plt.subplot(grid_spec[0, 13: 24])
+assert isinstance(ax, plt.Axes)
+
+idx = 0
+for color in "rgb":
+    for style in ["-", "--"]:
+        ax.plot(new_traj[idx]['global_step'] * t_factors[idx],
+                new_traj[idx]['Energy/mae/atom'] * 1000.0,
+                f'{color}{style}',
+                label=labels[idx])
+        idx += 1
+
 ax.set_xlabel(r"GPU Hour", fontsize=16)
 ax.set_ylabel(r"MAE (meV/atom)", fontsize=16)
-ax.set_xlim([0.0, 1.2])
-ax.set_ylim([0, 50])
+ax.set_xlim(0.0, 1.01)
+
 ax.legend(frameon=False, fontsize=12)
 ax.text(-0.1, 1.05, "b)", transform=ax.transAxes, size=16, weight='bold')
 
+# ----------
+# Fig.C
+# ----------
+
+new_traj.append(pd.read_csv("qm7/g4.100.ann.csv"))
+t_factors.append(t_factors[-1])
 
 ax = plt.subplot(grid_spec[1, 7: 17])
+assert isinstance(ax, plt.Axes)
 
-ax.plot(traj[5][1][:, 0], traj[5][1][:, 1], 'b--',
+ax.plot(new_traj[5]['global_step'] * t_factors[5],
+        new_traj[5]['Energy/mae/atom'] * 1000.0,
+        'b--',
         label="AtomicResNN")
 
-ann_traj = [
-    (read_traj("fig4-traj/g4.100.gpu.ann.traj", 100, "Angular"), 
-     "AtomicNN")
-]
-ax.plot(ann_traj[0][0][:, 0], ann_traj[0][0][:, 1], '--', color="orange", 
-        label=ann_traj[0][1])
+ax.plot(new_traj[6]['global_step'] * t_factors[6],
+        new_traj[6]['Energy/mae/atom'] * 1000.0,
+        '--',
+        color='orange',
+        label="AtomicNN")
 
 ax.set_xlabel(r"GPU Hour (Angular, Batch Size 100)", fontsize=16)
 ax.set_ylabel(r"MAE (meV/atom)", fontsize=16)
-ax.set_xlim([0.0, 1.2])
-ax.set_ylim([0, 100])
+ax.set_ylim(0.0, 50.0)
 ax.text(-0.2, 0.95, "c)", transform=ax.transAxes, size=16, weight='bold')
 ax.legend(frameon=False, fontsize=12, loc='upper center')
 
 grid_spec.tight_layout(fig, pad=0)
 
-plt.savefig("Fig4-qm7.pdf")
+plt.savefig("qm7_speed.pdf")
 plt.show()
