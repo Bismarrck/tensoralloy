@@ -65,6 +65,7 @@ class ExportablePropertyError(_PropertyError):
 
 all_properties = (
     StructuralProperty(name='energy'),
+    StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
     StructuralProperty(name='stress'),
     StructuralProperty(name='total_pressure'),
@@ -95,7 +96,7 @@ class BasicNN:
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'hessian')):
+                 export_properties=('energy', 'forces', 'atomic', 'hessian')):
         """
         Initialization method.
 
@@ -141,6 +142,7 @@ class BasicNN:
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
         self._transformer = None
+        self._y_atomic_op_name = None
 
     @property
     def elements(self):
@@ -169,6 +171,12 @@ class BasicNN:
         Return a list of str as the properties to predict.
         """
         return self._export_properties
+
+    def _get_atomic_energy_tensor_name(self) -> str:
+        """
+        Return the name of the atomic energy tensor.
+        """
+        return self._y_atomic_op_name
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -900,6 +908,8 @@ class BasicNN:
             # Add a timestamp to the graph
             with tf.name_scope("Metadata/"):
                 timestamp = tf.constant(str(datetime.today()), name='timestamp')
+                y_atomic = tf.constant(nn._get_atomic_energy_tensor_name(),
+                                       name="y_atomic")
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -932,7 +942,8 @@ class BasicNN:
 
             output_node_names = [
                 transformer_params.op.name,
-                timestamp.op.name
+                timestamp.op.name,
+                y_atomic.op.name,
             ]
 
             for tensor in predictions.values():

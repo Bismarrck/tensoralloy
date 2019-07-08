@@ -161,6 +161,16 @@ class TensorAlloyCalculator(Calculator):
         else:
             raise ValueError(f"Unknown transformer: {cls}")
 
+    def _get_y_atomic_tensor_name(self):
+        """
+        Decode the name of the atomic energy tensor.
+        """
+        try:
+            op = self._graph.get_tensor_by_name('Metadata/y_atomic:0')
+        except Exception:
+            return None
+        return self._sess.run(op).decode('utf-8')
+
     def _get_ops(self):
         """
         Return a dict of output Ops.
@@ -175,12 +185,17 @@ class TensorAlloyCalculator(Calculator):
             'hessian': 'Output/Hessian/hessian:0',
             'elastic': 'Output/Elastic/Cijkl/elastic:0'
         }
+        op_name = self._get_y_atomic_tensor_name()
+        if op_name is not None:
+            props_and_names['atomic'] = op_name
         ops = {}
         for prop, name in props_and_names.items():
             try:
-                ops[prop] = graph.get_tensor_by_name(name)
+                tensor = graph.get_tensor_by_name(name)
             except KeyError:
                 continue
+            else:
+                ops[prop] = tensor
         self._predict_properties = list(ops.keys())
         if ops['energy'].dtype == tf.float32:
             fp_precision = 'medium'
@@ -211,6 +226,15 @@ class TensorAlloyCalculator(Calculator):
         Return the PV energy (eV).
         """
         return self.get_property('pv', atoms=atoms)
+
+    def get_atomic_energy(self, atoms=None):
+        """
+        Return an array as the atomic energies.
+        """
+        values = self.get_property('atomic', atoms=atoms)
+        values = np.insert(values, 0, 0, 0)
+        clf = self.transformer.get_index_transformer(atoms)
+        return clf.map_array(values.reshape((-1, 1)), reverse=True).flatten()
 
     def get_hessian(self, atoms=None):
         """

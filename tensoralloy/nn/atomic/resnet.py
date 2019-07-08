@@ -16,6 +16,8 @@ from tensoralloy.utils import GraphKeys, AttributeDict
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
+# TODO: fix the atomic energy
+
 
 class AtomicResNN(AtomicNN):
     """
@@ -137,6 +139,7 @@ class AtomicResNN(AtomicNN):
                 mask = tf.split(
                     features.mask, [1, -1], axis=axis, name='split')[1]
                 y_mask = tf.multiply(y_atomic, mask, name='mask')
+                self._y_atomic_op_name = y_mask.name
             y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
                                   name='residual')
             if verbose:

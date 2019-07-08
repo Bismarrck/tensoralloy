@@ -270,6 +270,7 @@ class EamNN(BasicNN):
             mask = tf.split(
                 features.mask, [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
+            self._y_atomic_op_name = y_mask.name
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)
         if verbose:
