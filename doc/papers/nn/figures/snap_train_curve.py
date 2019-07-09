@@ -43,7 +43,7 @@ ax1.yaxis.set_minor_locator(MultipleLocator(1))
 
 assert isinstance(ax1, plt.Axes)
 ax1.set_yscale('log')
-ax1.plot((yx, yx), (0.0, yy), linestyle="--", color='r', linewidth=0.8)
+# ax1.plot((yx, yx), (0.0, yy), linestyle="--", color='r', linewidth=0.8)
 
 
 ax2 = ax1.twinx()
