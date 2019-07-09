@@ -68,7 +68,7 @@ ax.bar(
     alpha=0.4, color='k', label=f"{orders[3][0]}/{orders[3][1]}")
 
 ax.set_xticks(index + bar_width * 1.5)
-ax.set_xticklabels(('1', '10', '20', '50', '100'))
+ax.set_xticklabels(('1', '25', '50', '100'))
 ax.set_xlabel(r"Batch Size", fontsize=16)
 ax.set_ylabel(r"Structures per Second", fontsize=16)
 ax.legend(frameon=False, fontsize=12)
