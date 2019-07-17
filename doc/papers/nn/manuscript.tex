@@ -16,7 +16,7 @@
 \begin{document}
 
 \title{
-    TensorAlloy: a highly efficient atomistic neural network program for alloys
+    TensorAlloy: an automatic atomistic neural network program for alloys
 }
 \author{Xin Chen}
 \author{Xing-Yu Gao}
@@ -42,28 +42,21 @@ within negligible time. Currently, the symmetry function descriptor based
 atomistic neural network is the most widely used model for modeling alloys. 
 To precisely describe complex potential energy surfaces, integrating advanced 
 metrics, such as force or virial stress, into training can be of great help. 
-However, the traditional way to construct a 
-machine learning model computation graph starts from pre-computed descriptors, 
-but not positions, due to technical challenges. Thus, deriving analytical atomic 
-force and virial stress of a machine learning model becomes quite difficult as 
-the partial derivations of descriptors with respect to positions need separate 
-implementations, which requires plenty of efforts and its efficiency can not be 
-guaranteed.
-In this paper, we designed a new method, named the virtual atom approach, for 
-implementing the symmetry function descriptor and the corresponding atomistic 
-neural networks. With the virtual atom approach, we are able to build 
-computation graph from atomic positions \textemdash but not descriptors 
-\textemdash to total energy directly, thus asking modern machine learning 
-platforms to compute atomic force and virial stress becoming possible. We also 
-derived a simple and machine learning friendly equation for calculating virial 
-stress. All these new algorithms have been implemented in our Python package, 
-TensorAlloy. TensorAlloy supports constructing machine learning interaction 
-potentials for both \textit{molecules} and \textit{solids}.
+The traditional way of implementing machine learning models starts from 
+pre-computed descriptor and the analytical (model-derived) atomic forces and 
+virial stress are handled by separate codes which require plenty of efforts. 
+In this work, we choose a new route to overcome this challenge by building 
+computation graph from atomic positions directly. Thus, TensorFlow or other 
+modern machine learning platforms can handle the derivations of forces and 
+stress, both automatically and efficiently. We demonstrate our core algorithm 
+\textemdash the virtual atom approach \textemdash using Behler-Parinello's 
+symmetry function atomic descriptor. This algorithm is implemented in our Python 
+program TensorAlloy. TensorAlloy supports constructing machine learning 
+interaction potentials for both \textit{molecules} and \textit{solids}. The QM7 
+and SNAP/Ni-Mo datasets are used to discuss performances of our program.
 \end{abstract}
 
 \maketitle
-
-\newcommand{\tensoralloy}{\textbf{TensorAlloy}}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -107,9 +100,9 @@ published by researchers. The Amp\cite{AMP} package, developed by Peterson's
 group, is the first open-source framework that implements the symmetry function 
 descriptor. Amp can be used to learn interaction potentials for both 
 \textit{molecules} and \textit{solids} and it has successfully powered quite a 
-few researches since 2016\cite{Amp-works-hammer,amp-work-1}. ANI\cite{ANI} and 
-TensorMol\cite{TensorMol} are also symmetry function based packages but they 
-mainly focus on \textit{molecules}.
+few researches since 2016\cite{Amp-works-hammer,amp-work-1}. 
+TensorMol\cite{TensorMol} and its sucessor TorchANI\cite{ANI} are also symmetry 
+function based ANN programs but they mainly focus on \textit{molecules}. 
 
 In order to precisely model atomistic interactions, both total energy and atomic 
 forces are necessary. For \textit{solids}, the virial stress tensor is also an
@@ -118,12 +111,12 @@ is not an easy task. The machine learning approaches favor vectorizable
 operations but the calculations of atomic descriptors are typically complicated 
 so that many traditional ML packages (Amp, kCON, etc) choose to pre-compute 
 descriptors and only build computation graph from descriptors to total energy. 
-This approach can significantly reduce technical difficulty and works very well 
-if only total energy is considered in the loss function. But to fit atomic 
-forces, numerous codes must be written manually, such as the derivation of 
-descriptors with respect to positions. Although the derivation is theoretically
-clear, the implementation is challenging and the efficiency can not be 
-guaranteed.
+This traditional approach can significantly reduce technical difficulty and 
+works very well if only total energy is considered in the loss function. But to 
+fit atomic forces, numerous codes must be written manually, such as the 
+derivation of descriptors with respect to positions. Although the derivation is 
+theoreticallyclear, the implementation is challenging and the efficiency can not 
+be guaranteed.
 
 Recently, machine learning platforms (TensorFlow\cite{tensorflow}, 
 PyTorch\cite{pytorch}, MXNet\cite{MXNet}, etc) have gain significant 
@@ -154,13 +147,33 @@ be obtained from GitHub (https://github.com/Bismarrck/vap) freely.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
+% New Commands
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+
+\newcommand{\rijn}{r_{ij\mathbf{n}}}
+\newcommand{\rijna}{r_{ij\mathbf{n_1}}}
+\newcommand{\rikna}{r_{ik\mathbf{n_2}}}
+\newcommand{\rjkna}{r_{jk\mathbf{n_3}}}
+
+\newcommand{\nmax}{
+    N_{\mathrm{Ni}}^{\mathrm{max}}+N_{\mathrm{Mo}}^{\mathrm{max}}
+}
+\newcommand{\nijmax}{N_{ij}^{\mathrm{max}}}
+\newcommand{\nijkmax}{N_{ijk}^{\mathrm{max}}}
+\newcommand{\nelmax}{N^{\mathrm{max}}_{\mathrm{el}}}
+\newcommand{\nel}{N_{\mathrm{element}}}
+\newcommand{\nvap}{N^{\mathrm{vap}}}
+\newcommand{\nnimax}{N^{\mathrm{max}}_{\mathrm{Ni}}}
+\newcommand{\nmomax}{N^{\mathrm{max}}_{\mathrm{Mo}}}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
 % Section 2. Theory
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \section{Theory}
 \label{section:theory}
-
-\newcommand{\rijn}{r_{ij\mathbf{n}}}
 
 In the atomistic neural network (\textbf{ANN}) framework, the total energy, 
 $E^{total}$, of a structure with $N$ atoms, is the sum of all atomic energies:
@@ -207,16 +220,12 @@ and $\mathbf{h}$ is the \textbf{row-major} $3 \times 3$ lattice tensor:
     \end{pmatrix}
 \end{equation}
 
-\newcommand{\rijna}{r_{ij\mathbf{n_1}}}
-\newcommand{\rikna}{r_{ik\mathbf{n_2}}}
-\newcommand{\rjkna}{r_{jk\mathbf{n_3}}}
-
 There are many choices of $F_G$. The symmetry function descriptor, proposed 
 by Parinello and Behler in 2007\cite{Behler}, is currently the most widely used 
-atomic descriptor, especially for alloys. The symmetry function descriptor 
-consists of two sets of invariant (tranlational, rotational and permutational) 
-functions: the radial symmetry function $\mathbf{G}^{(2)}$ and the angular 
-symmetry function $\mathbf{G}^{(4)}$:
+atomic descriptor. The symmetry function descriptor consists of two sets of 
+invariant (tranlational, rotational and permutational) functions: the radial 
+symmetry function $\mathbf{G}^{(2)}$ and the angular symmetry function 
+$\mathbf{G}^{(4)}$:
 \begin{align}
 \label{eq:G2}
 \mathbf{G}^{(2)}_i(\eta, \omega) = & \sum_{j \neq i}{
@@ -314,8 +323,8 @@ and
 \end{align}
 
 The derivations are theoretically straightforward but their implementations are 
-challenging \cite{AMP}. Later we will provide a new approach to address this 
-problem.
+challenging \cite{AMP}. Later we will provide an automatic approach to address 
+this problem.
 
 The $3 \times 3$ virial stress tensor $\epsilon$ is an important metric to 
 describe solids under deformation or external pressure. For arbitrary many-body 
@@ -335,7 +344,7 @@ energy and atomic forces, very few of them\cite{DeePMD,DeePMD_rl,DeePMD_kit} had
 attempted to include stress in their loss functions. 
 The current expression of Equation \ref{eq:stress_lammps} is not very compatible 
 with NN or other ML potentials since the partial forces are difficult to compute 
-with vectorized operations. To resolve this issue, we derived an equivalent form 
+with vectorized operations. However, we find an "equivalent" form 
 of Equation \ref{eq:stress_lammps}:
 \begin{equation}
 \label{eq:stress}
@@ -343,8 +352,8 @@ V \cdot \epsilon = -F^{T} R +
 \left(\frac{\partial E^{total}}{\partial \mathbf{h}}\right)^T \mathbf{h}
 \end{equation}
 where $R$ is the $N \times 3$ positions matrix and $F$ is the 
-corresponding total forces matrix. The new equation can be easily implemented 
-with simple matrix operations. The detailed derivation is given in the appendix.
+corresponding total forces matrix. This new form can be easily implemented 
+within TensorFlow. The detailed derivation is given in the appendix.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -354,49 +363,73 @@ with simple matrix operations. The detailed derivation is given in the appendix.
 \section{Method}
 \label{section:method}
 
-\newcommand{\nmax}{
-    N_{\mathrm{Ni}}^{\mathrm{max}}+N_{\mathrm{Mo}}^{\mathrm{max}}
-}
-\newcommand{\nijmax}{N_{ij}^{\mathrm{max}}}
-\newcommand{\nijkmax}{N_{ijk}^{\mathrm{max}}}
-\newcommand{\nelmax}{N^{\mathrm{max}}_{\mathrm{el}}}
-\newcommand{\nel}{N_{\mathrm{element}}}
-\newcommand{\nvap}{N^{\mathrm{vap}}}
-\newcommand{\nnimax}{N^{\mathrm{max}}_{\mathrm{Ni}}}
-\newcommand{\nmomax}{N^{\mathrm{max}}_{\mathrm{Mo}}}
+In this section we will describe the architecture of TensorAlloy and the core 
+algorithm: the virtual atom approach (VAP). The most noticable feature of the 
+TensorAlloy program is that the calculation of symmetry function descriptors is 
+automatically handled by the \textbf{AutoGrad}\cite{tensorflow} routine of 
+TensorFlow because we successfully find a route (VAP) to build the direct 
+computation graph from atomic positions to total energy.
 
-In this section we will describe the program design and the core algorithm: 
-the virtual atom approach (VAP). The most noticable feature of the TensorAlloy 
-program is that the calculation of symmetry function descriptors is finally 
-implemented in the compuation graph with the help of VAP. Thus, we can utilize 
-the \textbf{AutoGrad} routine of TensorFlow to derive atomic forces and virial 
-stress automatically and also efficiently.
+The Ni-Mo binary alloy system will be used as the example to show our 
+algorithms. The original dataset (SNAP) is published by Shyue Ping 
+Ong\cite{SNAP_2018}. 
+For simplicity, only radial symmetry function related algorithms are 
+visualized in the figures. Python3.7 implementations of key algorithms and 
+functions are given in the appendix. A full demo (including the alloy datasets) 
+can be obtained from GitHub freely (https://github.com/Bismarrck/vap).
 
-The Ni-Mo binary alloy system will be used as the example to show this 
-algorithm. For simplicity, only radial symmetry function related algorithms are 
-visualized in the figures. The associated Python implementation (Python3.7) are 
-given in the appendix. A full demo can be obtained from GitHub freely 
-(https://github.com/Bismarrck/vap).
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Section 3.A
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\subsection{General design}
+\label{section:principles}
 
 Fig \ref{fig:program_design} shows the general design of TensorAlloy.
-TensorAlloy has two phases: 1) is the training phase and 2) represents the 
-prediction phase. These two phases have slightly different focusing points:
+TensorAlloy has two phases: the training phase \textbf{(1)} and the prediction 
+phase \textbf{(2)}. These two phases share many common requirements, but they 
+also have their own concerns.
 
-In the training phase, efficiency is the major concern. To accelerate model 
-training, batching (or mini-batch training) is one of the most commonly used 
-techniques. Batching requires aligned inputs. However, hundreds of different 
-stoichiometries may exist in one dataset. To batch such structures, an universal 
-approach of expressing different structures in a single reference system (the 
-global symbol list or GSL) is necessary.
+For the training phase, in order to make TensorAlloy a general-purpose and
+efficient machine learning potential training program, these three key 
+challenges shall be resolved:
+\begin{itemize}
+    
+    \item[1.] 
+    Stoichiometry-free: the training dataset should not have any stoichiometry 
+    restriction. Any type of \textit{solid} or \textit{molecule} is acceptable. 
+    A universal approach of expressing different structures in a single 
+    reference system may be necessary.
+    
+    \item[2.] 
+    Mini-batch training: mini-batch based stochastic training is 
+    currently the most efficient way to train neural networks on large datasets.
+    However, batch training requires \textit{vectorized} and \textit{aligned} 
+    expressions. Here \textit{aligned} means feature arrays of structures of 
+    different stoichiometries share the same shape. 
+    
+    \item[3.] 
+    Cache: some intermediate arrays may be pre-computed and stored in cache 
+    files. During training, these values can be loaded from cache directly, thus 
+    saving significantly amount of resources.
 
-In the prediction phase, things may be a bit different. The stoichiometry of 
-the input structure may not be included in the training dataset and it can vary 
-significantly. Taking the example of Ni-Mo, the trained model must be capable of 
-predicting any $\mathrm{Ni}_{x}\mathrm{Mo}_{y}$ solid while $x$ and $y$ can be 
-either as large as 50000 or just zero. Hence, VAP must be flexible enough to 
-handle these situations.
+\end{itemize}
 
-In the following subsection, we will discuss the details of VAP.
+In the prediction phase, the situation is a bit different. The stoichiometry of 
+the target structure or molecule may not be included in the training dataset and 
+it can vary significantly. TensorAlloy must be capable of handling such 
+(extreme) situations. For example, the trained Ni-Mo shall be applicable to any 
+any $\mathrm{Ni}_{x}\mathrm{Mo}_{y}$ structure while $x$ and $y$ can be 
+either as large as 100000 or as small as 0. 
+
+Besides, we also want our TensorAlloy program have an \textit{independent} and
+\textit{user-friendly} prediction phase. Users can just focus on the integration 
+of machine learning potentials with their own researches.
+
+The virtual-atom approach plays a central role in handling all the challenges 
+above and unify the training and prediction phases. In the following sections, 
+we will gradually discuss the details of this approach.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -414,7 +447,7 @@ prediction phase.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.A
+% Section 3.B
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{Preparation}
@@ -436,22 +469,23 @@ represents the inserted virtual atom.
 }
 \end{figure}
 
-Fig \ref{fig:Fig2} shows the initialization of VAP. The cutoff radius $r_{cut}$ 
-must be fixed. The initialization involves two steps. The first step is to build 
-the global symbol list (GSL), which acts as the universal reference system. A 
-virtual atom is inserted at the very first position of this list. The benefits 
-will be discussed later. To build GSL, all $\nelmax$ must be obtained. 
-$\nelmax$ indicates the maximum appearances of an element in any structure and 
-$\nel$ represents the total number of unique chemical elements:
+Fig \ref{fig:Fig2} shows the preparation stage of VAP. The cutoff radius 
+$r_{cut}$ must be fixed. This stage has two major steps. The first step is to 
+build the global symbol list (GSL), which acts as the universal reference 
+system. A virtual atom is inserted at the very first position of GSL. The 
+benefits will be discussed later. To build GSL, all $\{\nelmax\}$ must be 
+pre-determined where $\nelmax$ is the maximum appearances of element 
+\textit{el} in any structure. $\nel$ represents the number of unique chemical 
+elements in the dataset. Then, $\nvap$, the dimension of GSL, can be determined:
 \begin{equation}
 \label{eq:n_vap}
 \nvap = 1 + \sum_{\mathrm{el}}{\nelmax}
 \end{equation}
-For the Ni-Mo dataset, $\mathrm{el} \in [\mathrm{Ni}, \mathrm{Mo}]$ and 
+For the Ni-Mo dataset, $el \in [\mathrm{Ni}, \mathrm{Mo}]$ and 
 $\nel = 2$. 
 Table \ref{table:GSL} gives some examples of the GSL mapping. 'X' denotes the 
 inserted virtual atom and Ni$_{108(54)}$ means the first 54 Ni atoms are mapped 
-from the local stoichiometry. In the training phase, all $\nelmax$ are constant.
+from the local stoichiometry. In the training phase, all $\nelmax$ are fixed.
 In the prediction phase, $\nelmax$ shall be determined dynamically. One should 
 note that the minimum value of $\nelmax$ should be 1 due to technical reason (so 
 that the computation graph of TensorFlow can be properly executed). The codes to
@@ -468,7 +502,7 @@ the virtual-atom mapping mechanism.
 \centering
 \begin{tabular}{lccccc}
 \hline
- & Stoichiometry & $\nnimax$ & $\nmomax$ & $N^{\mathrm{vap}}$ 
+ & Stoichiometry (Local) & $\nnimax$ & $\nmomax$ & $N^{\mathrm{vap}}$ 
  & Stoichiometry (GSL) \\
 \hline
  & Ni$_{54}$ &  &  &  & XNi$_{108(54)}$Mo$_{176(0)}$ \\
@@ -488,12 +522,12 @@ SNAP/Ni-Mo dataset.
 \end{table}
 
 Then we can determine another two key constants: $\nijmax$ and $\nijkmax$. 
-Here $N_{ij}^{\mathrm{max}}$ represents the maximum number of neighbor pairs in
-arbitrary structure and the subscript 'ijk' denotes triples. 
-$N_{ij}^{\mathrm{max}}$ and $N_{ijk}^{\mathrm{max}}$ only depend on 
+Here $\nijmax$ represents the maximum number of atom-atom pairs in
+arbitrary structure and the subscript 'ijk' denotes triples 
+(or three-atoms interactions). $\nijmax$ and $\nijkmax$ only depend on 
 $r_{cut}$ and the associated codes are given in Appendix(B). 
 Table \ref{table:nij_nijk_max} summarizes $\nijmax$ and $\nijkmax$ at different
-$r_{cut}$ of the two tested datasets: QM7 and SNAP/Ni-Mo.
+$r_{cut}$ of the two demo datasets: QM7 and Ni-Mo (SNAP).
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -520,7 +554,7 @@ $\nijmax$ and $\nijkmax$ of SNAP/Ni-Mo and QM7 at different $r_{cut}$.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.B
+% Section 3.C
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{Interatomic distances}
@@ -541,11 +575,11 @@ $\mathbf{R}$ and lattice tensor $\mathbf{h}$.
 \end{figure}
 
 Both the radial (Equation \ref{eq:g2}) and the angular (Equation \ref{eq:g4}) 
-functions only interact with interatomic distances. In order to compute symmetry
-function descriptors, local atomic positions shall be transformed to GSL 
-interatomic distances first. Fig \ref{fig:Fig3} demonstrates the pseudo 
-computation graph for calculating interatomic distances 
-$\mathbf{r}^{\mathrm{GSL}}$ for radial descriptors: 
+symmetry functions interact with interatomic distances only. In order to compute 
+the descriptors, local atomic positions should be transformed to interatomic 
+distances first. Fig \ref{fig:Fig3} demonstrates the pseudo graph of 
+$\mathbf{R} \rightarrow \mathbf{r}^{\mathrm{GSL}}$ for radial symmetry function
+descriptors: 
 
 \begin{itemize}
     
@@ -560,9 +594,13 @@ $\mathbf{r}^{\mathrm{GSL}}$ for radial descriptors:
     prediction phase, $\nijmax$ is exactly equal to $N_{\mathrm{ij}}$.
     
     \item[2.] 
-    Map $\mathbf{R}$, $\mathbf{i}$, $\mathbf{j}$ and $\mathbf{n}$ to
-    their corresponding GSL forms with padding zeros. One should note that these 
-    GSL arrays can be cached for training.
+    Transform and expand local $\mathbf{R}$, $\mathbf{i}$, $\mathbf{j}$ and 
+    $\mathbf{n}$ to their corresponding GSL arrays. These GSL arrays can be 
+    cached for training. The transformations of $\mathbf{i}$, $\mathbf{j}$ and 
+    $\mathbf{n}$ are straightforward: just appending $\nijmax - N_{ij}$ trailing 
+    zeros. Fig \ref{fig:Fig3si} shows the mapping of 
+    $\mathbf{R} \rightarrow \mathbf{R}^{\mathrm{GSL}}$ taking the example of 
+    Ni$_3$Mo$_2$.
 
     \item[3.] 
     Broadcast $\mathbf{R}^{\mathrm{GSL}}$ to $\mathbf{R}_{i}^{\mathrm{GSL}}$ and
@@ -570,11 +608,11 @@ $\mathbf{r}^{\mathrm{GSL}}$ for radial descriptors:
     $\mathbf{j}^{\mathrm{GSL}}$ respectively.
 
     \item[4.]
-    Compute the displacements in the original cell:
+    Compute the displacement vectors in the original cell:
     $\mathbf{D}_{ij} = \mathbf{j}^{\mathrm{GSL}} - \mathbf{i}^{\mathrm{GSL}}$
     
     \item[5.]
-    Compute the total periodic displacements:
+    Compute the periodic displacements:
     $\mathbf{D}_{pbc} = \mathbf{n}^{\mathrm{GSL}} \mathbf{h}$
     
     \item[6.]
@@ -582,9 +620,23 @@ $\mathbf{r}^{\mathrm{GSL}}$ for radial descriptors:
     $\mathbf{D}^{\mathrm{GSL}} = \mathbf{D}_{pbc} + \mathbf{D}_{ij}$
     
     \item[7.] 
-    Compute the interatomic distances $\mathbf{r}^{\mathrm{GSL}}$.
+    Compute the interatomic distances $\mathbf{r}^{\mathrm{GSL}}$ by calculating
+    the 2-norm of each row of matrix $\mathbf{D}^{\mathrm{GSL}}$.
 
 \end{itemize}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Fig.3 (SI)
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=0.8]{figures/Fig3si.pdf}
+\caption{\label{fig:Fig3si} The transformation of local $\mathbf{R}$ of 
+Ni$_3$Mo$_2$ to $\mathbf{R}^{\mathrm{GSL}}$ of XNi$_{108(3)}$Mo$_{176(2)}$.
+}
+\end{figure}
 
 Steps 1-2 are implemented in the function \textit{get\_g2\_map} in Appendix(E).
 Steps 3-7 are implemented in the method \textit{get\_rij} of class 
@@ -592,17 +644,11 @@ Steps 3-7 are implemented in the method \textit{get\_rij} of class
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.C
+% Section 3.D
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{Radial descriptors}
 \label{section:radial_descriptors}
-
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
-% Fig.4
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 
 Now we can start the last step: computing radial symmetry descriptors 
 $\mathbf{G}^{(2)}$ from $\mathbf{r}^{\mathrm{GSL}}$. For simplicity, we will use 
@@ -615,16 +661,26 @@ be a vector of length $\nijmax$ and the desired output $\mathbf{G}^{(2)}$ will
 be a matrix of shape $[\nvap, (\nel)^2 \cdot N_{\tau}]$, as shown in 
 Fig \ref{fig:Fig5}\textbf{d}:
 \begin{itemize}
+    
     \item[1.] 
     The total number of rows is $\nvap$ (Equation \ref{eq:n_vap}) and each row
     represents the complete radial symmetry function descriptors of an atom. The 
     first row always corresponds to the inserted virtual atom.
+    
     \item[2.]
     The total number of columns is $\nel \cdot \nel \cdot N_{\tau}$. Here 
     $\nel \cdot \nel$ indicates the number of element-element interaction types 
-    and each interaction is described by $N_{\tau}$ feature values.
+    and each interaction is described by $N_{\tau}$ feature values. For the 
+    Ni-Mo dataset, there should be four unqiue interaction types: Ni-Ni, Ni-Mo, 
+    Mo-Mo and Mo-Ni.
+
 \end{itemize}
 
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Fig.4
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
 \centering
 \includegraphics[scale=1.0]{figures/Fig4.pdf}
@@ -660,9 +716,8 @@ $\mathbf{G}^{(2)}$.
 \begin{figure}[h!]
 \centering
 \includegraphics[scale=0.95]{figures/Fig5.pdf}
-\caption{\label{fig:Fig5} The definition of $f^{(2,4)}_{\nu}$: map the 
-vector $\nu$ to array $g$ of shape [2, 4], or mathematically
-$g(i,j) = \sum_{k}^{f^{(2,4)}_{\nu}(k) = (i,j)}{\nu(k)}$.
+\caption{\label{fig:Fig5} The calculation of 
+$\mathbf{G}^{(2)}((\eta, \omega)_{\tau})$ from $\mathbf{r}^{\mathrm{GSL}}$. 
 }
 \end{figure}
 
@@ -735,8 +790,7 @@ implemented in method \textit{get\_g2\_op\_for\_tau} of class
 \textit{SymmetryFunction} in Appendix(G).
 
 The workflow for the batch training phase is almost identical to the prediction 
-phase introduced above. There are still some noticable diiferences. Assume 
-$N_{b}$ represents the batch size:
+phase described above. Meanwhile, there are some noticable diiferences:
 
 \begin{itemize}
     
@@ -744,39 +798,43 @@ $N_{b}$ represents the batch size:
     Most of the variables ($\mathbf{r}^{\mathrm{GSL}}$, 
     $\mathbf{i}^{\mathrm{GSL}}$, $\mathbf{R}^{\mathrm{GSL}}$, etc.) have one 
     more dimension. For example, $\mathbf{R}^{\mathrm{GSL}}$ should be an array
-    of shape $[N_b, \nijmax, 3]$.
+    of shape $[N_b, \nijmax, 3]$. Here $N_{b}$ represents the batch size.
 
-    \item[2.] 
-    The base mapping $f_{g}^{S}$ becomes a matrix of shape $[\nijmax, 3]$. Its 
-    last two columns remain unchanged. However, the newly inserted first column 
+    \item[2.]
+    The atomic descriptors $\mathbf{G}^{(2)}$ becomes a 3D array of shape 
+    $[N_b, \nvap, (\nel)^2 \cdot N_{\tau}]$.
+
+    \item[3.] 
+    The base mapping $f_{g}^{S}$ becomes a matrix of shape $[\nijmax, 3]$ in the 
+    batch training phase. The newly inserted first column 
     \textemdash representing the batch indices \textemdash is 
-    \textbf{not cacheable} because batching is a random action. The first column
-    should be generated dynamically. 
-
-    \item[3.]
-    $\tau$ should be added to the third column of $f_{g}^{S}$.
+    \textbf{not cacheable} because structures are selected randomly to form a 
+    batch. Thus, the first column should be generated runtimely.
 
     \item[4.]
     In the training phase, $\nvap$ is a constant determined before training. In 
-    the contrast, $\nvap$ becomes a tensor that should be manually specified in 
-    the prediction phase.
+    the contrast, $\nvap$ should be a dynamic tensor 
+    (or a \textit{tf.Placeholder} technically) in the prediction phase.
+    Its value shall be runtimely determined according to the input structure. 
+    Thus, the stoichiometry challenge mentioned in Section 
+    \ref{section:principles} can be overcame.
 
     \item[5.]
-    In the training phase, the reference atomic forces should be transformed to 
-    its corresponding GSL array because the NN-derived force array 
-    $\mathbf{F}^{\mathrm{NN}}$ is in GSL reference:
+    In the training phase, the reference (or dft) atomic forces should be 
+    transformed to GSL arrays before computing the loss contribution. The 
+    NN-derived forces $\mathbf{F}^{\mathrm{NN}}$ are indeed GSL forces:
     \begin{equation}
         \mathbf{F}^{\mathrm{NN}} = 
         -\frac{\partial{E}}{\partial{\mathbf{R}^{\mathrm{GSL}}}}
     \end{equation}
-    Hence, in the prediction phase, a reverse VAP mapping is required to convert
-    $\mathbf{F}^{\mathrm{NN}}$ to its local form.
+    Hence, in the prediction phase, a reverse transformation should be applied 
+    to obtain local \textbf{F}.
 
 \end{itemize}
 
 The training phase is implemented in \textit{BatchSymmetryFunction} which 
 inherits most of methods from its parent class \textit{SymmetryFunction}. 
-The dynamic batching is implemented in method 
+The dynamic batching scheme is implemented in method 
 \textit{get\_v2g\_map\_batch\_indexing\_matrix}. The method 
 \textit{get\_g\_shape} will return a fixed array instead. The function
 \textit{map\_gsl\_array\_to\_local} of \textit{VirtualAtomMap} is used to do the 
@@ -784,7 +842,7 @@ reverse mapping.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.D
+% Section 3.E
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{Angular descriptors}
@@ -801,7 +859,7 @@ in Appendix(G).
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.E
+% Section 3.F
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{Min-max normalization}
@@ -820,7 +878,7 @@ determined in the training phase and remain constant in the prediction phase.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 3.F
+% Section 3.G
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \subsection{The residual model}
@@ -844,6 +902,16 @@ solving the linear system $Ax=b$ where $A$ is a $N_{data} \times \nel$ matrix
 and $b$ is a vector of length $N_{data}$. $N_{data}$ is the number of training 
 examples. $A(i,j)$ is the number of $j$-th element in structure $i$ and $b(i)$ 
 is the corresponding total energy.
+
+In the training phase, the atomic descriptors array $\mathbf{G}^{(2)}$ is a 3D 
+array because of the structure-based batching scheme. Thus, it's necessarily to 
+use convolutional neural networks (CNNs) with 1x1 kernels\cite{kCON}. 
+The traditional feed-forward neural networks with an additional 
+atom-to-structure indexing\cite{Behler,ANI,TensorMol,DeePMD,BIMNN} are 
+mathematically equivalent to CNNs with 1x1 kernels. However, using CNNs can make
+the calculations of the \textit{automatically-differentiated per-structure} 
+$\partial E/\partial \mathbf{R}$ and $\partial E/\partial \mathbf{h}$ much 
+easier.
 
 To train the model, we use the following root mean-squared error (RMSE) total 
 loss function:
@@ -1115,18 +1183,13 @@ GitHub repo (https://github.com/Bismarrck/vap) freely.
 \section{Conclusions}
 \label{section:conclusions}
 
-In this work, we proposed a two-phases (training, prediction) approach 
-(the virtual atom approach) to construct symmetry function based atomistic 
-neural networks. 
-With this method, we can build direct computation graph from atomic positions to 
-total energy within TensorFlow, thus making the technical barrier of calculating 
-NN-derived atomic forces and virial stress neglectable. We also derived an 
-alternative form of the general virial stress equation. This equation can be 
-calculated with simple matrix operations, which makes it suitable for machine 
-learning based interaction potentials.
-With these new features, we developed a Python program, TensorAlloy. This 
-program can be used to learn interaction potentials of \textit{molecules} or 
-\textit{solids}. 
+In this work, we introduced our virtual atom approach and a smart way of 
+constructing symmetry function based atomistic neural networks. 
+With the virtual atom approach, the calculations of the symmetry function 
+descriptors can be implemented within TensorFlow. Thus, we can now build direct 
+computation graph from atomic positions to total energy, making the technical 
+barrier of calculating NN-derived atomic forces and virial stress neglectable.
+This new algorithm is implemented in our Python program, TensorAlloy.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
