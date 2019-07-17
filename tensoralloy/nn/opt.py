@@ -100,25 +100,6 @@ def add_grads_and_vars_summary(grads_and_vars, name):
         return None
 
 
-def add_gradients_cos_dist_summary(energy_grad_vars, grads_and_vars):
-    """
-    Compute the cosine distance of dL(energy)/dvars and dL(target)/dvars
-    where `target` is `forces` or `stress`.
-    """
-    dtype = get_float_dtype()
-    eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-    for i, (grad, var) in enumerate(grads_and_vars):
-        if grad is None:
-            continue
-        energy_grad = energy_grad_vars[i][0]
-        dot = tf.tensordot(
-            tf.reshape(grad, (-1,)),
-            tf.reshape(energy_grad, (-1,)), axes=1)
-        norm = tf.norm(grad) * tf.norm(energy_grad) + eps
-        cos_dist = tf.math.truediv(dot, norm, name=var.op.name + '/cos_dist')
-        tf.summary.scalar(cos_dist.op.name + '/summary', cos_dist)
-
-
 def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
                  minimize_properties: List[str]):
     """
@@ -191,15 +172,6 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
                 ema = tf.train.ExponentialMovingAverage(
                     Defaults.variable_moving_average_decay)
                 variable_averages_op = ema.apply(tf.trainable_variables())
-
-    # Use an absolute name scope for cosine distances.
-    with tf.name_scope("CosDist"):
-        if 'energy' in grads_and_vars:
-            for prop, g in grads_and_vars.items():
-                if prop == 'energy':
-                    continue
-                with tf.name_scope(prop):
-                    add_gradients_cos_dist_summary(grads_and_vars['energy'], g)
 
     return ema, variable_averages_op
 
