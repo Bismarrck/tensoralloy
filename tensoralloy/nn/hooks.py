@@ -9,11 +9,12 @@ import numpy as np
 import shutil
 
 from tensorflow_estimator import estimator as tf_estimator
-from tensorflow.python import pywrap_tensorflow
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
 from tensorflow.python.training import training_util
+
+from tensoralloy.nn.dataclasses import CkptParameters
 
 
 __author__ = 'Xin Chen'
@@ -24,42 +25,25 @@ __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
            "NanTensorHook"]
 
 
-def get_varlist_of_checkpoint(ckpt: str):
-    """
-    Return the variable names of a ckpt file.
-    """
-    var_op_list = []
-    reader = pywrap_tensorflow.NewCheckpointReader(ckpt)
-    var_to_shape_map = reader.get_variable_to_shape_map()
-    for var_op_name in sorted(var_to_shape_map):
-        var_op_list.append(var_op_name)
-    return var_op_list
-
-
 class WarmStartFromVariablesHook(tf.train.SessionRunHook):
     """
     This hook can be used to replace `tf_estimator.WarmStartSettings`.
     """
 
     def __init__(self,
-                 previous_checkpoint: str,
+                 ckpt_params: CkptParameters,
                  ema: tf.train.ExponentialMovingAverage,
-                 restore_all_variables=True,
-                 restart=True):
+                 reset_global_step=False):
         """
         Initialization method.
 
         Parameters
         ----------
-        previous_checkpoint : str
-            The previous checkpoint to load.
+        ckpt_params : str
+            The checkpoint related options.
         ema : tf.train.ExponentialMovingAverage
             A function to obtain exponentially moving averaged variables.
-        restore_all_variables : bool
-            If True, all (global) varaibles will be restored from the ckpt. If
-            False, only trainable variables and the global step variable
-            (restart == False) will be restored.
-        restart : bool
+        reset_global_step : bool
             A boolean. If True, the global step tensor will not be read and the
             training will start only with weights inherited from the checkpoint.
             If False, the global step tensor will also be loaded and the
@@ -68,67 +52,40 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         """
         tf.logging.info("Create WarmStartFromVariablesHook.")
 
-        self._previous_checkpoint = previous_checkpoint
+        self._ckpt_params = ckpt_params
         self._ema = ema
-        self._saver = None
-        self._restart = restart
-        self._restore_all_variables = restore_all_variables
+        self._reset_global_step = reset_global_step
 
     def begin(self):
         """
         Create restoring operations before the graph been finalized.
         """
-        safe_var_op_list = get_varlist_of_checkpoint(self._previous_checkpoint)
-        trainable_op_names = [var.op.name for var in tf.trainable_variables()]
+        assignment_map = {}
 
-        if self._ema is not None:
-            var_list = self._ema.variables_to_restore()
-            if self._restart and 'global_step' in var_list:
-                var_list.pop('global_step')
-            pop_list = []
-            for var_op_ema_name in var_list:
-                var_op_name = var_op_ema_name.replace(
-                    '/ExponentialMovingAverage', '')
-                if var_op_name not in safe_var_op_list:
-                    pop_list.append(var_op_name)
-            if not self._restore_all_variables:
-                for var_op_ema_name in var_list:
-                    var_op_name = var_op_ema_name.replace(
-                        '/ExponentialMovingAverage', '')
-                    if var_op_name not in trainable_op_names:
-                        pop_list.append(var_op_ema_name)
-            for var_op_name in pop_list:
-                var_list.pop(var_op_name)
-            tf.logging.info('Initialize a Saver to restore EMA variables.')
+        if self._ckpt_params.use_ema_variables:
+            for name, var in self._ema.variables_to_restore().items():
+                ema_var = self._ema.average(var)
+                if ema_var is None:
+                    if self._ckpt_params.restore_all_variables:
+                        assignment_map[name] = var
+                else:
+                    assignment_map[name] = self._ema.average(var)
+                    assignment_map[var.op.name] = var
         else:
-            global_step = tf.train.get_global_step()
-            if self._restore_all_variables:
+            if self._ckpt_params.restore_all_variables:
                 var_list = tf.global_variables()
-                if self._restart:
-                    var_list = [x for x in var_list
-                                if x.op.name != global_step.op.name]
             else:
                 var_list = tf.trainable_variables()
-                if not self._restart:
-                    var_list += [global_step, ]
-            var_list = [x for x in var_list if x.op.name in safe_var_op_list]
-            tf.logging.info('Initialize a Saver to restore variables.')
+            for var in var_list:
+                if "MovingAverage" not in var.op.name:
+                    assignment_map[var.op.name] = var
 
-        for i, var in enumerate(var_list):
-            if isinstance(var, tf.Variable):
-                tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
-            else:
-                tf.logging.info("{:3d}. {:s}".format(i, var))
-        self._saver = tf.train.Saver(var_list=var_list)
+        if self._reset_global_step:
+            if "global_step" in assignment_map:
+                del assignment_map["global_step"]
 
-    def after_create_session(self, session, coord):
-        """
-        When this is called, the graph is finalized and ops can no longer be
-        added to the graph.
-        """
-        tf.logging.info(
-            f'Restore EMA variables from {self._previous_checkpoint}')
-        self._saver.restore(session, self._previous_checkpoint)
+        tf.train.init_from_checkpoint(self._ckpt_params.checkpoint_filename,
+                                      assignment_map=assignment_map)
 
 
 class RestoreEmaVariablesHook(tf.train.SessionRunHook):
