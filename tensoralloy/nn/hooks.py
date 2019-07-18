@@ -210,6 +210,8 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
             tensors, every_n_iter=every_n_iter, every_n_secs=every_n_secs,
             at_end=at_end, formatter=formatter)
         self._mode = mode
+        self._iter_count = 0
+        self._should_trigger = False
 
     def after_create_session(self, session, coord):
         """
@@ -221,7 +223,7 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
 
         tf.logging.info("All Trainable Ops: ")
         for i, var in enumerate(tf.trainable_variables()):
-            tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
+            tf.logging.info(f"{i:3d}. {var.op.name:s}")
 
         if isinstance(self._tensors, dict):
             ops = self._tensors.values()
@@ -230,7 +232,20 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
 
         tf.logging.info("All monitored Ops: ")
         for i, var in enumerate(ops):
-            tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
+            tf.logging.info(f"{i:3d}. {var.op.name:s}")
+
+        self._iter_count = session.run(tf.train.get_or_create_global_step())
+        if self._iter_count > 0:
+            self._should_trigger = True
+        tf.logging.info(f"Global step starts from: {self._iter_count}")
+
+    def begin(self):
+        """ Called once before using the session. """
+        super(LoggingTensorHook, self).begin()
+
+    def before_run(self, run_context):
+        """ Called before each call to run(). """
+        return super(LoggingTensorHook, self).before_run(run_context)
 
     def _log_tensors(self, tensor_values):
         original = np.get_printoptions()
@@ -259,6 +274,14 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
             else:
                 logging.info('\n' + contents)
         np.set_printoptions(**original)
+
+    def after_run(self, run_context, run_values):
+        """ Called after each call to run(). """
+        super(LoggingTensorHook, self).after_run(run_context, run_values)
+
+    def end(self, session):
+        """ Called at the end of session. """
+        super(LoggingTensorHook, self).end(session)
 
 
 class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
@@ -304,6 +327,13 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
         if self._global_step_tensor is None:
             raise RuntimeError(
                 'Global step should be created to use ExamplesPerSecondHook.')
+
+    def after_create_session(self, session, coord):
+        """
+        When this is called, the graph is finalized and ops can no longer be
+        added to the graph.
+        """
+        self._total_steps = session.run(tf.train.get_or_create_global_step())
 
     def before_run(self, run_context):  # pylint: disable=unused-argument
         """
