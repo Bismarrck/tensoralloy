@@ -196,11 +196,11 @@ class InputReader:
         for keypath in ("dataset.sqlite3",
                         "dataset.tfrecords_dir",
                         "train.model_dir",
-                        "train.previous_checkpoint"):
-            filepath = nested_get(results, keypath)
-            if keypath == "train.previous_checkpoint" and filepath is False:
+                        "train.ckpt.checkpoint_filename"):
+            path = nested_get(results, keypath)
+            if keypath == "train.ckpt.checkpoint_filename" and path is False:
                 continue
-            nested_set(results, keypath, _convert_filepath(filepath))
+            nested_set(results, keypath, _convert_filepath(path))
 
         for keypath in ("nn.loss.elastic.crystals",
                         "nn.loss.rose.crystals"):

@@ -221,8 +221,9 @@ class CkptParameters(_HyperParameters):
     Hyper parameters for restoring from a checkpoint.
     """
 
-    use_previous_ema_variables: bool = True
-    restore_global_variables: bool = True
+    checkpoint_filename: Union[str, None, bool] = None
+    use_ema_variables: bool = True
+    restore_all_variables: bool = True
 
 
 @add_slots
@@ -233,9 +234,8 @@ class TrainParameters(_HyperParameters):
     """
 
     model_dir: str = "train"
-    restart: bool = True
+    reset_global_step: bool = True
     batch_size: int = 50
-    previous_checkpoint: Union[str, None, bool] = None
     shuffle: bool = True
     max_checkpoints_to_keep: int = 20
     train_steps: int = 10000

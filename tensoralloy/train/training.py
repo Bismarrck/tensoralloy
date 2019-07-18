@@ -125,8 +125,8 @@ class TrainingManager:
 
         if not hparams.opt.decay_function:
             hparams.opt.decay_function = None
-        if not hparams.train.previous_checkpoint:
-            hparams.train.previous_checkpoint = None
+        if not hparams.train.ckpt.checkpoint_filename:
+            hparams.train.ckpt.checkpoint_filename = None
 
         if self._dataset.test_size % hparams.train.batch_size != 0:
             eval_batch_size = next(
@@ -283,19 +283,19 @@ class TrainingManager:
         deleted = False
 
         if exists(model_dir):
-            if hparams.train.restart:
+            if hparams.train.reset_global_step:
                 shutil.rmtree(model_dir, ignore_errors=True)
                 tf.gfile.MakeDirs(hparams.train.model_dir)
                 deleted = True
         else:
             tf.gfile.MakeDirs(hparams.train.model_dir)
 
-        if hparams.train.previous_checkpoint:
-            ckpt_dir = dirname(hparams.train.previous_checkpoint)
+        if hparams.train.ckpt.checkpoint_filename:
+            ckpt_dir = dirname(hparams.train.ckpt.checkpoint_filename)
             if (realpath(ckpt_dir) == realpath(model_dir)) and deleted:
-                print(f"Warning: {hparams.train.previous_checkpoint} "
+                print(f"Warning: {hparams.train.ckpt.checkpoint_filename} "
                       f"was already deleted")
-                hparams.train.previous_checkpoint = None
+                hparams.train.ckpt.checkpoint_filename = None
 
     @staticmethod
     def _get_logging_level(hparams: AttributeDict):
@@ -351,7 +351,7 @@ class TrainingManager:
                     config=tf_estimator.RunConfig(
                         save_checkpoints_steps=hparams.train.eval_steps,
                         tf_random_seed=hparams.seed,
-                        log_step_count_steps=hparams.train.log_steps,
+                        log_step_count_steps=None,
                         keep_checkpoint_max=max_ckpts_to_keep,
                         session_config=session_config),
                     params=hparams)
@@ -381,10 +381,10 @@ class TrainingManager:
                         num_epochs=1,
                         shuffle=False),
                     steps=hparams.train.eval_steps,
-                    start_delay_secs=300,
+                    start_delay_secs=hparams.debug.start_delay_secs,
                     # Explicitly set these thresholds to lower values so that
                     # every checkpoint can be evaluated.
-                    throttle_secs=60,
+                    throttle_secs=hparams.debug.throttle_secs,
                 )
                 tf_estimator.train_and_evaluate(
                     estimator, train_spec, eval_spec)

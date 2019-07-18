@@ -119,13 +119,15 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
     -------
     ema : tf.train.ExponentialMovingAverage
         The ExponentialMovingAverage controller.
-    train_op : tf.Operation
+    train_op : tf.Tensor
         The Op for a training step.
 
     """
     with tf.name_scope("Optimize"):
 
         global_step = tf.train.get_or_create_global_step()
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, global_step)
+
         learning_rate = get_learning_rate(
             global_step,
             learning_rate=opt_parameters.learning_rate,
@@ -134,6 +136,7 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
             decay_steps=opt_parameters.decay_steps,
             staircase=opt_parameters.staircase
         )
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, learning_rate)
 
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
@@ -221,19 +224,12 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
                     show_memory=True)
             hooks.append(profiler_hook)
 
-        if train_parameters.previous_checkpoint:
-            with tf.name_scope("Restore"):
-                ckpt = train_parameters.previous_checkpoint
-                if train_parameters.ckpt.use_previous_ema_variables:
-                    _ema = ema
-                else:
-                    _ema = None
-                restore_all = train_parameters.ckpt.restore_global_variables
+        if train_parameters.ckpt.checkpoint_filename:
+            with tf.name_scope("WarmStart"):
                 warm_start_hook = WarmStartFromVariablesHook(
-                    previous_checkpoint=ckpt,
-                    ema=_ema,
-                    restart=train_parameters.restart,
-                    restore_all_variables=restore_all)
+                    ckpt_params=train_parameters.ckpt,
+                    ema=ema,
+                    reset_global_step=train_parameters.reset_global_step)
             hooks.append(warm_start_hook)
 
     return hooks

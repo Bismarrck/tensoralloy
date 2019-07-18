@@ -586,7 +586,10 @@ class BasicNN:
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
 
-        return tf.add_n(list(losses.values()), name='loss'), losses
+        total_loss = tf.add_n(list(losses.values()), name='total_loss')
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_loss)
+
+        return total_loss, losses
 
     def _get_model_outputs(self,
                            features: AttributeDict,
@@ -822,6 +825,7 @@ class BasicNN:
                                                  mask=features.mask,
                                                  loss_parameters=params.loss,
                                                  mode=mode)
+
         ema, train_op = get_train_op(
             losses=losses,
             opt_parameters=params.opt,
