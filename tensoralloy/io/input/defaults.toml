@@ -126,9 +126,8 @@ decay = 0.9
 momentum = 0.0
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 50
-previous_checkpoint = false
 shuffle = true
 model_dir = "train"
 max_checkpoints_to_keep = 20
@@ -139,9 +138,12 @@ log_steps = 100
 profile_steps = 2000
 
 [train.ckpt]
-use_previous_ema_variables = true
-restore_global_variables = true
+checkpoint_filename = false
+use_ema_variables = true
+restore_all_variables = true
 
 [debug]
 allow_gpu_growth = true
 logging_level = 'info'
+start_delay_secs = 300
+throttle_secs = 60
