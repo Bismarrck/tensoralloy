@@ -825,7 +825,8 @@ class BasicNN:
         ema, train_op = get_train_op(
             losses=losses,
             opt_parameters=params.opt,
-            minimize_properties=self._minimize_properties)
+            minimize_properties=self._minimize_properties,
+            mode=mode)
 
         if mode == tf_estimator.ModeKeys.TRAIN:
             training_hooks = get_training_hooks(

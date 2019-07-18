@@ -16,7 +16,6 @@ from tensoralloy.nn.utils import get_tensors_dict_for_hook
 from tensoralloy.nn.dataclasses import OptParameters, TrainParameters
 from tensoralloy.nn.hooks import LoggingTensorHook, ExamplesPerSecondHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook
-from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -101,7 +100,7 @@ def add_grads_and_vars_summary(grads_and_vars, name):
 
 
 def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
-                 minimize_properties: List[str]):
+                 minimize_properties: List[str], mode: tf_estimator.ModeKeys):
     """
     Return the Op for a training step.
 
@@ -113,6 +112,8 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
         The hyper parameters for minimizing the total loss.
     minimize_properties : List[str]
         A list of str as the structural properties to minimize.
+    mode : tf_estimator.ModeKeys
+        Specifies if this is training, evaluation or prediction.
 
     Returns
     -------
@@ -169,8 +170,8 @@ def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
 
         with tf.control_dependencies([apply_gradients_op]):
             with tf.name_scope("Average"):
-                ema = tf.train.ExponentialMovingAverage(
-                    Defaults.variable_moving_average_decay)
+                decay = Defaults.variable_moving_average_decay
+                ema = tf.train.ExponentialMovingAverage(decay=decay)
                 variable_averages_op = ema.apply(tf.trainable_variables())
 
     return ema, variable_averages_op

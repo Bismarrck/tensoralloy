@@ -9,6 +9,7 @@ import numpy as np
 import shutil
 
 from tensorflow_estimator import estimator as tf_estimator
+from tensorflow.python import pywrap_tensorflow
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
@@ -21,6 +22,18 @@ __email__ = 'Bismarrck@me.com'
 __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
            "ExamplesPerSecondHook", "WarmStartFromVariablesHook",
            "NanTensorHook"]
+
+
+def get_varlist_of_checkpoint(ckpt: str):
+    """
+    Return the variable names of a ckpt file.
+    """
+    var_op_list = []
+    reader = pywrap_tensorflow.NewCheckpointReader(ckpt)
+    var_to_shape_map = reader.get_variable_to_shape_map()
+    for var_op_name in sorted(var_to_shape_map):
+        var_op_list.append(var_op_name)
+    return var_op_list
 
 
 class WarmStartFromVariablesHook(tf.train.SessionRunHook):
@@ -65,21 +78,27 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
         """
         Create restoring operations before the graph been finalized.
         """
+        safe_var_op_list = get_varlist_of_checkpoint(self._previous_checkpoint)
         trainable_op_names = [var.op.name for var in tf.trainable_variables()]
 
         if self._ema is not None:
             var_list = self._ema.variables_to_restore()
             if self._restart and 'global_step' in var_list:
                 var_list.pop('global_step')
+            pop_list = []
+            for var_op_ema_name in var_list:
+                var_op_name = var_op_ema_name.replace(
+                    '/ExponentialMovingAverage', '')
+                if var_op_name not in safe_var_op_list:
+                    pop_list.append(var_op_name)
             if not self._restore_all_variables:
-                pop_list = []
                 for var_op_ema_name in var_list:
                     var_op_name = var_op_ema_name.replace(
                         '/ExponentialMovingAverage', '')
                     if var_op_name not in trainable_op_names:
                         pop_list.append(var_op_ema_name)
-                for var_op_name in pop_list:
-                    var_list.pop(var_op_name)
+            for var_op_name in pop_list:
+                var_list.pop(var_op_name)
             tf.logging.info('Initialize a Saver to restore EMA variables.')
         else:
             global_step = tf.train.get_global_step()
@@ -92,8 +111,14 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
                 var_list = tf.trainable_variables()
                 if not self._restart:
                     var_list += [global_step, ]
+            var_list = [x for x in var_list if x.op.name in safe_var_op_list]
             tf.logging.info('Initialize a Saver to restore variables.')
 
+        for i, var in enumerate(var_list):
+            if isinstance(var, tf.Variable):
+                tf.logging.info("{:3d}. {:s}".format(i, var.op.name))
+            else:
+                tf.logging.info("{:3d}. {:s}".format(i, var))
         self._saver = tf.train.Saver(var_list=var_list)
 
     def after_create_session(self, session, coord):

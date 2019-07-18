@@ -70,7 +70,8 @@ def _get_train_op(trainable=False):
         mask=features.mask,
         loss_parameters=loss_parameters)
 
-    return get_train_op(losses, opt_parameters, nn.minimize_properties)
+    return get_train_op(losses, opt_parameters, nn.minimize_properties,
+                        tf_estimator.ModeKeys.TRAIN)
 
 
 def test_get_train_op():
