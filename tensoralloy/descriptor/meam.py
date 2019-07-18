@@ -314,32 +314,38 @@ class MEAM(AtomicDescriptor):
         """
         self._check_keys(placeholders)
 
-        with tf.name_scope("EAM"):
+        with tf.name_scope("MEAM"):
 
-            rij, dij = self._get_rij(placeholders.positions,
-                                     placeholders.cells,
-                                     placeholders.ilist,
-                                     placeholders.jlist,
-                                     placeholders.shift,
-                                     name='rij')
+            with tf.name_scope("G2"):
+                p_rij, _ = self._get_rij(placeholders.positions,
+                                         placeholders.cells,
+                                         placeholders.ilist,
+                                         placeholders.jlist,
+                                         placeholders.shift,
+                                         name='rij')
 
-            dijx = tf.identity(dij[..., 0], name='dijx')
-            dijy = tf.identity(dij[..., 0], name='dijy')
-            dijz = tf.identity(dij[..., 0], name='dijz')
+            with tf.name_scope("G4"):
 
-            shape = self._get_g_shape(placeholders)
-            v2g_map, v2g_mask = self._get_v2g_map(placeholders)
+                t_rij, _ = self._get_rij(placeholders.positions)
 
-            g = tf.scatter_nd(v2g_map, rij, shape, name='g')
-            dx = tf.scatter_nd(v2g_map, dijx, shape, name='dx')
-            dy = tf.scatter_nd(v2g_map, dijy, shape, name='dy')
-            dz = tf.scatter_nd(v2g_map, dijz, shape, name='dz')
 
-            v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
-            mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
-            mask = tf.cast(mask, dtype=rij.dtype, name='mask')
-
-            sij = self._get_sij(rij, placeholders)
-
-            return self._split_descriptors(g, dx, dy, dz, sij, mask,
-                                           placeholders)
+            # dijx = tf.identity(dij[..., 0], name='dijx')
+            # dijy = tf.identity(dij[..., 0], name='dijy')
+            # dijz = tf.identity(dij[..., 0], name='dijz')
+            #
+            # shape = self._get_g_shape(placeholders)
+            # v2g_map, v2g_mask = self._get_v2g_map(placeholders)
+            #
+            # g = tf.scatter_nd(v2g_map, rij, shape, name='g')
+            # dx = tf.scatter_nd(v2g_map, dijx, shape, name='dx')
+            # dy = tf.scatter_nd(v2g_map, dijy, shape, name='dy')
+            # dz = tf.scatter_nd(v2g_map, dijz, shape, name='dz')
+            #
+            # v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
+            # mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
+            # mask = tf.cast(mask, dtype=rij.dtype, name='mask')
+            #
+            # sij = self._get_sij(rij, placeholders)
+            #
+            # return self._split_descriptors(g, dx, dy, dz, sij, mask,
+            #                                placeholders)

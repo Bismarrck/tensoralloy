@@ -9,7 +9,7 @@ import numpy as np
 
 from ase import Atoms
 from ase.neighborlist import neighbor_list
-from typing import List
+from typing import List, Dict
 from collections import Counter
 
 from tensoralloy.descriptor.meam import MEAM
@@ -29,11 +29,14 @@ class MeamTransformer(MEAM, DescriptorTransformer):
     The feature transformer for the EAM model.
     """
 
-    def __init__(self, rc: float, elements: List[str]):
+    def __init__(self, rc: float, elements: List[str], angular_rc_scale=1.0):
         """
         Initialization method.
         """
-        MEAM.__init__(self, rc=rc, elements=elements)
+        MEAM.__init__(self,
+                      rc=rc,
+                      elements=elements,
+                      angular_rc_scale=angular_rc_scale)
         DescriptorTransformer.__init__(self)
 
     def as_dict(self):
@@ -42,7 +45,8 @@ class MeamTransformer(MEAM, DescriptorTransformer):
         """
         d = {'class': self.__class__.__name__,
              'rc': self._rc,
-             'elements': self._elements}
+             'elements': self._elements,
+             'angular_rc_scale': self._angular_rc_scale}
         return d
 
     def _initialize_placeholders(self):
@@ -113,15 +117,20 @@ class MeamTransformer(MEAM, DescriptorTransformer):
 
         return self._placeholders
 
-    def _get_g2_indexed_slices(self, atoms,
-                               index_transformer: IndexTransformer):
+    @staticmethod
+    def _get_g2_indexed_slices_with_rc(atoms: Atoms,
+                                       rc: float,
+                                       kbody_index: Dict[str, int],
+                                       index_transformer: IndexTransformer):
         """
-        Return the corresponding indexed slices.
+        Return the corresponding indexed slices given a cutoff radius.
 
         Parameters
         ----------
         atoms : Atoms
             The target `ase.Atoms` object.
+        rc : float
+            The cutoff radius.
         index_transformer : IndexTransformer
             The corresponding index transformer.
 
@@ -132,7 +141,7 @@ class MeamTransformer(MEAM, DescriptorTransformer):
 
         """
         symbols = atoms.get_chemical_symbols()
-        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
+        ilist, jlist, Slist = neighbor_list('ijS', atoms, cutoff=rc)
         nij = len(ilist)
 
         v2g_map = np.zeros((nij, 4), dtype=np.int32)
@@ -141,7 +150,7 @@ class MeamTransformer(MEAM, DescriptorTransformer):
         for i in range(nij):
             symboli = symbols[ilist[i]]
             symbolj = symbols[jlist[i]]
-            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+            tlist[i] = kbody_index['{}{}'.format(symboli, symbolj)]
 
         ilist = index_transformer.inplace_map_index(ilist + 1)
         jlist = index_transformer.inplace_map_index(jlist + 1)
@@ -168,16 +177,81 @@ class MeamTransformer(MEAM, DescriptorTransformer):
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
-    def _get_sij_indexed_slices(self,
-                                atoms: Atoms,
-                                g2: G2IndexedSlices,
-                                transformer: IndexTransformer):
+    def _get_g2_indexed_slices(self,
+                               atoms: Atoms,
+                               transformer: IndexTransformer):
+        """
+        Return the indexed slices for pairwise interactions.
+        """
+        return self._get_g2_indexed_slices_with_rc(
+            atoms, self._rc, self._kbody_index, transformer)
+
+    def _get_g4_indexed_slices(self,
+                               atoms: Atoms,
+                               g2: G2IndexedSlices,
+                               transformer: IndexTransformer):
         """
         Return the indexed slices for mapping Cikj to Sij.
         """
         symbols = atoms.get_chemical_symbols()
         dtype = get_float_dtype()
         np_dtype = dtype.as_numpy_dtype
+
+        if self._angular_rc_scale != 1.0:
+            g2 = self._get_g2_indexed_slices_with_rc(
+                atoms, self._angular_rc, self._kbody_index, transformer)
+
+        indices = {}
+        vectors = {}
+        for i, atomi in enumerate(g2.ilist):
+            if atomi not in indices:
+                indices[atomi] = []
+                vectors[atomi] = []
+            indices[atomi].append(g2.jlist[i])
+            vectors[atomi].append(g2.shift[i])
+
+        nijk = 0
+        for atomi, nl in indices.items():
+            n = len(nl)
+            nijk += (n - 1) * n // 2
+
+        v2g_map = np.zeros((nijk, 2), dtype=np.int32)
+        ij = np.zeros((nijk, 2), dtype=np.int32)
+        ik = np.zeros((nijk, 2), dtype=np.int32)
+        jk = np.zeros((nijk, 2), dtype=np.int32)
+        ij_shift = np.zeros((nijk, 3), dtype=np_dtype)
+        ik_shift = np.zeros((nijk, 3), dtype=np_dtype)
+        jk_shift = np.zeros((nijk, 3), dtype=np_dtype)
+
+        count = 0
+        for atomi, nl in indices.items():
+            num = len(nl)
+            indexi = transformer.inplace_map_index(atomi, True, True)
+            symboli = symbols[indexi]
+            prefix = '{}'.format(symboli)
+            for j in range(num):
+                atomj = nl[j]
+                indexj = transformer.inplace_map_index(atomj, True, True)
+                symbolj = symbols[indexj]
+                for k in range(j + 1, num):
+                    atomk = nl[k]
+                    indexk = transformer.inplace_map_index(atomk, True, True)
+                    symbolk = symbols[indexk]
+                    suffix = ''.join(sorted([symbolj, symbolk]))
+                    kbody_term = '{}{}'.format(prefix, suffix)
+                    ij[count] = atomi, atomj
+                    ik[count] = atomi, atomk
+                    jk[count] = atomj, atomk
+                    ij_shift[count] = vectors[atomi][j]
+                    ik_shift[count] = vectors[atomi][k]
+                    jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
+                    index = self._kbody_index[kbody_term]
+                    v2g_map[count, 0] = atomi
+                    v2g_map[count, 1] = self._offsets[index]
+                    count += 1
+        return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
+                               ij_shift=ij_shift, ik_shift=ik_shift,
+                               jk_shift=jk_shift)
 
         indices = {}
         vectors = {}
