@@ -22,7 +22,7 @@ from tensoralloy.nn import EamAlloyNN
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters, RoseLossOptions
 from tensoralloy.transformer import BatchEAMTransformer
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
@@ -74,7 +74,7 @@ def test_rose_eos_constraint():
     y_list = np.asarray(y_list)
     ax_list = np.asarray(ax_list)
 
-    with set_precision('high'):
+    with precision_scope('high'):
         with tf.Graph().as_default():
             rc = calc.transformer.rc
             elements = ['Mo', 'Ni']

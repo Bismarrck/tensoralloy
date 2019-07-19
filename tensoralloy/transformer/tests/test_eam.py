@@ -19,7 +19,7 @@ from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.index_transformer import IndexTransformer
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -71,7 +71,7 @@ def test_eam_transformer():
     size = find_neighbor_size_of_atoms(atoms, rc=rc)
     ref = eam(atoms, max_occurs, nnl=size.nnl, rc=rc)
 
-    with set_precision('high'):
+    with precision_scope('high'):
         with tf.Graph().as_default():
 
             clf = EAMTransformer(rc=6.5, elements=elements)
@@ -102,7 +102,7 @@ def test_batch_eam_transformer():
     nnl_max = size.nnl + 2
     ref = eam(atoms, max_occurs, nnl=nnl_max, rc=rc)
 
-    with set_precision('high'):
+    with precision_scope('high'):
         with tf.Graph().as_default():
 
             clf = BatchEAMTransformer(
@@ -142,7 +142,7 @@ def test_encode_atoms():
     nij_max = db.get_nij_max(rc, allow_calculation=True)
     nnl_max = db.get_nnl_max(rc)
 
-    with set_precision('high'):
+    with precision_scope('high'):
         with tf.Graph().as_default():
             clf = BatchEAMTransformer(rc=rc, max_occurs=max_occurs,
                                       nij_max=nij_max, nnl_max=nnl_max,

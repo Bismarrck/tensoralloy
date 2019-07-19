@@ -30,7 +30,7 @@ from tensoralloy.transformer import EAMTransformer
 from tensoralloy.utils import AttributeDict, Defaults, set_pulay_stress
 from tensoralloy.test_utils import assert_array_equal, datasets_dir, test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -46,7 +46,7 @@ def test_energy_pv():
     elements = ['Ni']
     mode = tf_estimator.ModeKeys.PREDICT
 
-    with set_precision("high"):
+    with precision_scope("high"):
 
         with tf.Graph().as_default():
 
@@ -261,7 +261,7 @@ def test_build_nn_with_properties():
             else:
                 return True
 
-    with set_precision('medium'):
+    with precision_scope('medium'):
         for case in (['energy', 'elastic'],
                      ['energy', 'stress'],
                      ['energy', 'elastic']):

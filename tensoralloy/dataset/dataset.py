@@ -23,7 +23,7 @@ from tensoralloy.dataset.utils import should_be_serial
 from tensoralloy.dataset.utils import brange
 from tensoralloy.io.sqlite import CoreDatabase
 from tensoralloy.io.db import connect
-from tensoralloy.precision import get_float_dtype, set_precision
+from tensoralloy.precision import get_float_dtype, precision_scope
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -218,7 +218,7 @@ class Dataset:
                     not be accessed by child processes. So here we must set
                     `precision` on every child process.
                     """
-                    with set_precision(_precision):
+                    with precision_scope(_precision):
                         return self._transformer.encode(_atoms)
 
                 for istart, istop in brange(0, num_examples, batch_size):
@@ -243,7 +243,7 @@ class Dataset:
                     atoms = self._database.get_atoms(
                         id=atoms_id,
                         add_additional_information=True)
-                    with set_precision(precision):
+                    with precision_scope(precision):
                         example = self._transformer.encode(atoms)
                     writer.write(example.SerializeToString())
                     if (index + 1) % 10 == 0 and verbose:

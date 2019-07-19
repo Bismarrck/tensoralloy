@@ -596,6 +596,21 @@ class Zjw04xcp(Zjw04xc):
             lamda=0.218441, r_eq=2.728100, rho_e=31.278753, rho_s=20.474680,
         )
 
+        params['Ni'] = dict(
+            A=0.333956, B=0.576165, F0=-3.291077, F1=0.395187,
+            F2=0.533360, F3=-2.154562, Fe=-3.206066, Fn0=-3.353943,
+            Fn1=0.041024, Fn2=-2.098675, Fn3=-7.605803, alpha=8.401944,
+            beta=3.288919, eta=1.182809, f_eq=1.543016, kappa=0.419188,
+            lamda=0.857673, r_eq=2.488746, rho_e=25.423122, rho_s=26.498945,
+        )
+        params['Mo'] = dict(
+            A=1.070439, B=1.762964, F0=-6.613181, F1=2.160862,
+            F2=0.587255, F3=-4.271510, Fe=-6.847272, Fn0=-6.931113,
+            Fn1=1.532229, Fn2=0.354207, Fn3=-2.301498, alpha=7.639637,
+            beta=5.295918, eta=0.642979, f_eq=3.321370, kappa=0.142495,
+            lamda=0.211357, r_eq=2.728100, rho_e=32.766506, rho_s=21.342554,
+        )
+
         kbody_terms = ["MoNi", ]
         param_names = ['r_eq', 'A', 'B', 'alpha', 'beta', 'kappa', 'lamda']
 
@@ -605,6 +620,11 @@ class Zjw04xcp(Zjw04xc):
             for key in param_names:
                 avg = (params[aa][key] + params[bb][key]) * 0.5
                 params[kbody_term][key] = avg
+
+        params['MoNi'] = dict(
+            A=0.949134, B=1.360144, alpha=9.168006, beta=3.449561,
+            kappa=0.478692, lamda=0.424937, r_eq=2.235219,
+        )
 
         return params
 

@@ -28,7 +28,7 @@ from tensoralloy.nn.constraint.data import read_external_crystal
 from tensoralloy.test_utils import datasets_dir
 from tensoralloy.train import TrainingManager
 from tensoralloy.utils import Defaults
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 from tensoralloy.calculator import TensorAlloyCalculator
 
 __author__ = 'Xin Chen'
@@ -703,7 +703,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             config['nn.minimize'] = properties
             precision = config['precision']
 
-            with set_precision(precision):
+            with precision_scope(precision):
                 with tf.Graph().as_default():
 
                     manager = TrainingManager(config, validate_tfrecords=True)

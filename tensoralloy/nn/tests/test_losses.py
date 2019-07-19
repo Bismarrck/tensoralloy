@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
 from tensoralloy.nn.losses import get_stress_loss
-from tensoralloy.precision import set_precision, get_float_dtype
+from tensoralloy.precision import precision_scope, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -23,7 +23,7 @@ def test_energy_loss():
     """
     Test the function `get_energy_loss`.
     """
-    with set_precision('medium'):
+    with precision_scope('medium'):
 
         dtype = get_float_dtype()
 
@@ -55,7 +55,7 @@ def test_forces_loss():
     """
     Test the function `get_forces_loss`.
     """
-    with set_precision('high'):
+    with precision_scope('high'):
 
         x = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
         y = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
@@ -100,7 +100,7 @@ def test_stress_loss():
     """
     Test the function `get_stress_loss`.
     """
-    with set_precision('high'):
+    with precision_scope('high'):
 
         x = np.random.uniform(0.1, 3.0, size=(8, 6))
         y = np.random.uniform(0.1, 3.0, size=(8, 6))

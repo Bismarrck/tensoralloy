@@ -11,7 +11,7 @@ import nose
 from nose.tools import assert_almost_equal, assert_true
 
 from tensoralloy.extension.grad_ops import safe_pow
-from tensoralloy.precision import set_precision, get_float_dtype
+from tensoralloy.precision import precision_scope, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -26,7 +26,7 @@ def test_safe_pow():
         """ A wrapper. """
         return assert_almost_equal(a, b, delta=1e-12)
 
-    with set_precision("high"):
+    with precision_scope("high"):
         dtype = get_float_dtype()
         with tf.Graph().as_default():
             x = tf.placeholder(dtype, name='x')
@@ -68,7 +68,7 @@ def test_safe_pow():
 
 def test_safe_pow_1():
 
-    with set_precision("medium"):
+    with precision_scope("medium"):
 
         dtype = get_float_dtype()
 

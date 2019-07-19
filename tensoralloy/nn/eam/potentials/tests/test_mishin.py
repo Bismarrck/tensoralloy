@@ -22,7 +22,7 @@ from nose.tools import assert_almost_equal
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer.adp import ADPTransformer
 from tensoralloy.nn.eam.adp import AdpNN
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -71,7 +71,7 @@ class AlCuAdpTest(unittest.TestCase):
         """
         Run a test.
         """
-        with set_precision("high"):
+        with precision_scope("high"):
             with tf.Graph().as_default():
                 elements = sorted(list(set(atoms.get_chemical_symbols())))
                 clf = ADPTransformer(rc, elements)

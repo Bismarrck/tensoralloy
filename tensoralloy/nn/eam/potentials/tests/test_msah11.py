@@ -11,7 +11,7 @@ import nose
 
 from tensoralloy.nn.eam.potentials.msah11 import AlFeMsah11
 from tensoralloy.test_utils import assert_array_almost_equal
-from tensoralloy.precision import get_float_dtype, set_precision, Precision
+from tensoralloy.precision import get_float_dtype, precision_scope, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -215,7 +215,7 @@ def test_msah11(precision=Precision.high, delta=1e-12):
     """
     Test the tensorflow based implementation of MSAH11 Al-Fe potential.
     """
-    with set_precision(precision):
+    with precision_scope(precision):
         dtype = get_float_dtype()
         np_dtype = dtype.as_numpy_dtype
 

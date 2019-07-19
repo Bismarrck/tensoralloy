@@ -18,7 +18,7 @@ from tensoralloy.transformer import IndexTransformer
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.utils import AttributeDict, Defaults
 from tensoralloy.test_utils import qm7m, test_dir
-from tensoralloy.precision import set_precision, get_float_dtype
+from tensoralloy.precision import precision_scope, get_float_dtype
 from tensoralloy.io.read import read_file
 from tensoralloy.io.db import connect
 
@@ -51,7 +51,7 @@ def test_qm7m():
     Test the qm7m dataset for energy only and k_max = 2.
     """
 
-    with set_precision("high"):
+    with precision_scope("high"):
 
         ref = qm7m_compute()
 
@@ -104,7 +104,7 @@ def test_ethanol():
     """
     Test the ethanol MD dataset for energy and forces and k_max = 3.
     """
-    with set_precision('medium'):
+    with precision_scope('medium'):
         with tf.Graph().as_default():
 
             savedir = join(test_dir(), 'ethanol')
@@ -158,7 +158,7 @@ def test_nickel():
     """
     Test the nickel dataset for stress.
     """
-    with set_precision("high"):
+    with precision_scope("high"):
         with tf.Graph().as_default():
 
             savedir = join(test_dir(), 'Ni')

@@ -8,7 +8,7 @@ import nose
 
 from nose.tools import assert_equal
 
-from tensoralloy.precision import set_precision, get_float_precision, Precision
+from tensoralloy.precision import precision_scope, get_float_precision, Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -18,10 +18,10 @@ def test_set_precision():
     """
     Test the with statement of `set_precision`.
     """
-    with set_precision(Precision.medium):
+    with precision_scope(Precision.medium):
         assert_equal(get_float_precision(), Precision.medium)
 
-    with set_precision(Precision.high):
+    with precision_scope(Precision.high):
         assert_equal(get_float_precision(), Precision.high)
 
 

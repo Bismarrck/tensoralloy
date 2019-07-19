@@ -41,7 +41,7 @@ from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.analysis.phonon import Phonopy
 from tensoralloy.analysis.phonon import print_phonopy_version, print_phonopy
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -661,7 +661,7 @@ class TensorAlloyCalculator(Calculator):
 
         """
         Calculator.calculate(self, atoms, properties, *args)
-        with set_precision(self._fp_precision):
+        with precision_scope(self._fp_precision):
             with self._graph.as_default():
                 ops = {target: self._ops[target] for target in properties}
                 self.results = self._sess.run(

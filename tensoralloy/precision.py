@@ -14,7 +14,7 @@ from typing import Union
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["Precision", "set_precision", "get_float_dtype",
+__all__ = ["Precision", "precision_scope", "get_float_dtype",
            "get_float_precision"]
 
 
@@ -33,7 +33,7 @@ class Precision(enum.Enum):
 _floating_point_precision = Precision.high
 
 
-class set_precision:
+class precision_scope:
     """
     A wrapper for setting precision using the with statement.
     """

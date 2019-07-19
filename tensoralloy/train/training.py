@@ -27,7 +27,7 @@ from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
 from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
 from tensoralloy.utils import check_path
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -63,7 +63,7 @@ class TrainingManager:
 
         self._float_precision = self._reader['precision']
 
-        with set_precision(self._float_precision):
+        with precision_scope(self._float_precision):
             self._dataset = self._get_dataset(validate_tfrecords)
             self._hparams = self._get_hparams()
             self._nn = self._get_nn()
@@ -319,7 +319,7 @@ class TrainingManager:
         graph = tf.Graph()
         precision = self._float_precision
 
-        with set_precision(precision):
+        with precision_scope(precision):
             with graph.as_default():
 
                 dataset = self._dataset
@@ -395,7 +395,7 @@ class TrainingManager:
         Export the trained model.
         """
         precision = self._float_precision
-        with set_precision(precision):
+        with precision_scope(precision):
             if checkpoint is None:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)

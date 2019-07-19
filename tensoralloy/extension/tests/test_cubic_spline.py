@@ -14,7 +14,7 @@ from os.path import join
 from tensoralloy.extension.interp.cubic import CubicInterpolator
 from tensoralloy.io.lammps import read_adp_setfl
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
-from tensoralloy.precision import set_precision, get_float_dtype
+from tensoralloy.precision import precision_scope, get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,7 +76,7 @@ def test_reconstruct_lammps_adp():
     """
     Test the reconstruction of the Al-Cu ADP potential.
     """
-    with set_precision('high'):
+    with precision_scope('high'):
         with tf.Graph().as_default():
 
             filename = join(test_dir(), 'lammps', 'AlCu.adp')

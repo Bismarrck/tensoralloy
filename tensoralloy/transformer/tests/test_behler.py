@@ -21,7 +21,7 @@ from collections import Counter
 from dataclasses import dataclass
 from os.path import join
 
-from tensoralloy.precision import set_precision, Precision, get_float_dtype
+from tensoralloy.precision import precision_scope, Precision, get_float_dtype
 from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
@@ -579,7 +579,7 @@ def test_monoatomic_molecule_with_omega():
     rc = 6.0
     z = get_radial_fingerprints_v2(coords, rr, rc, Defaults.eta, omegas)
 
-    with set_precision(Precision.high):
+    with precision_scope(Precision.high):
         with tf.Graph().as_default():
             sf = SymmetryFunctionTransformer(rc=rc, elements=['B'],
                                              eta=Defaults.eta,
@@ -629,7 +629,7 @@ def test_legacy_and_new_flexible():
         atoms.set_pbc([False, False, False])
         targets[i] = legacy_symmetry_function(atoms, rc)[0]
 
-    with set_precision(Precision.high):
+    with precision_scope(Precision.high):
         with tf.Graph().as_default():
             sf = SymmetryFunctionTransformer(
                 rc=rc, elements=['B'], angular=True)
@@ -655,7 +655,7 @@ def test_manybody_k():
     ref = ref[[3, 4, 0, 1, 2]]
     ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
 
-    with set_precision(Precision.high):
+    with precision_scope(Precision.high):
         for k_max in (2, 3):
             with tf.Graph().as_default():
                 sf = SymmetryFunctionTransformer(
@@ -762,7 +762,7 @@ def test_batch_multi_elements():
     targets = _compute_qm7m_descriptors_legacy(rc)
 
     with tf.Graph().as_default():
-        with set_precision(Precision.medium):
+        with precision_scope(Precision.medium):
             float_dtype = get_float_dtype()
             np_dtype = float_dtype.as_numpy_dtype
 
@@ -820,7 +820,7 @@ def test_splits():
     elements = sorted(max_occurs.keys())
     ref, _, _ = legacy_symmetry_function(Pd3O2, rc)
 
-    with set_precision(Precision.high):
+    with precision_scope(Precision.high):
         with tf.Graph().as_default():
 
             sf = SymmetryFunctionTransformer(rc, elements, angular=True)

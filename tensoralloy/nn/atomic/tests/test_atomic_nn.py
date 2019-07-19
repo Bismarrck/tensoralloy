@@ -20,7 +20,7 @@ from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys, AttributeDict
-from tensoralloy.precision import set_precision
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -194,7 +194,7 @@ def test_export_to_pb():
     max_occurs = db.metadata['max_occurs']
     elements = list(sorted(max_occurs.keys()))
 
-    with set_precision('medium'):
+    with precision_scope('medium'):
         clf = SymmetryFunctionTransformer(
             rc=6.5, elements=elements, angular=False, trainable=True,
             eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
