@@ -5,7 +5,7 @@ This module defines tests for file-io functions.
 import nose
 
 from ase import Atoms
-from ase.units import GPa
+from ase.units import GPa, Ha
 from ase.geometry import cell_to_cellpar
 from nose.tools import assert_equal, assert_almost_equal, assert_true
 from nose.tools import assert_dict_equal
@@ -92,7 +92,7 @@ def test_read_stepmax_xyz():
     cellpars = cell_to_cellpar(atoms.cell)
     assert_almost_equal(atoms.positions[0, 2], 3.301309)
     assert_almost_equal(cellpars[2], 6.7942123514756485, delta=1e-6)
-    assert_almost_equal(atoms.get_potential_energy(), -32.4, delta=1e-6)
+    assert_almost_equal(atoms.get_potential_energy(), -32.4 * Ha, delta=1e-6)
 
 
 if __name__ == '__main__':
