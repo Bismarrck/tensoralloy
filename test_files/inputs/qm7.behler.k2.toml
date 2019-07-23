@@ -30,7 +30,7 @@ learning_rate = 0.01
 decay_function = false
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 25
 shuffle = true
 model_dir = "./qm7/model"

@@ -43,7 +43,7 @@ momentum = 0.8
 use_nesterov = true
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 25
 shuffle = true
 model_dir = "./model"
@@ -55,5 +55,5 @@ log_steps = 10
 profile_steps = 0
 
 [train.ckpt]
-use_previous_ema_variables = false
-restore_global_variables = false
+use_ema_variables = false
+restore_all_variables = false

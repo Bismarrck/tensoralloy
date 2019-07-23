@@ -29,14 +29,16 @@ decay_function = "exponential"
 decay_rate = 0.98
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 50
 shuffle = true
 model_dir = "./first"
-previous_checkpoint = false
 train_steps = 100
 max_checkpoints_to_keep = 2
 eval_steps = 100
 summary_steps = 100
 log_steps = 100
 profile_steps = 0
+
+[train.ckpt]
+checkpoint_filename = false

@@ -57,14 +57,16 @@ decay_rate = 0.98
 use_nesterov = false
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 20
 shuffle = true
 model_dir = "snap_Ni_zjw04"
-previous_checkpoint = false
 train_steps = 10
 max_checkpoints_to_keep = 5
 eval_steps = 10
 summary_steps = 5
 log_steps = 50
 profile_steps = 0
+
+[train.ckpt]
+checkpoint_filename = false

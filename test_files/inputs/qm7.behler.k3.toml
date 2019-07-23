@@ -49,7 +49,7 @@ decay_steps = 1000
 staircase = false
 
 [train]
-restart = false
+reset_global_step = false
 batch_size = 25
 shuffle = true
 model_dir = "../../experiments/qm7-k3/train"
