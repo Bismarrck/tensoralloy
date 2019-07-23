@@ -48,7 +48,7 @@ def test_dataclasses():
     assert_equal(loss_parameters.rose.dx, 0.10)
 
     train_parameters = TrainParameters(**hparams['train'])
-    assert_equal(train_parameters.ckpt.use_previous_ema_variables, False)
+    assert_equal(train_parameters.ckpt.use_ema_variables, False)
 
     with assert_raises(Exception):
         _ = OptParameters(**AttributeDict(decay_method='adam'))

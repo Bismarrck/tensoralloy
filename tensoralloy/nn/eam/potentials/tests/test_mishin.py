@@ -8,7 +8,6 @@ import tensorflow as tf
 import nose
 import unittest
 import shutil
-import os
 
 from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
@@ -23,6 +22,7 @@ from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer.adp import ADPTransformer
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.precision import precision_scope
+from tensoralloy.io.lammps import LAMMPS_COMMAND
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -53,19 +53,20 @@ class AlCuAdpTest(unittest.TestCase):
             pot_file = join(test_dir(), 'lammps', 'AlCu.adp')
         else:
             pot_file = join(self.work_dir, 'AlCu.adp')
-        parameters = {'pair_style': 'adp',
-                      'pair_coeff': [f"* * AlCu.adp {' '.join(elements)}"]}
         work_dir = join(self.work_dir, ''.join(elements))
         if not exists(work_dir):
             makedirs(work_dir)
 
-        if 'LAMMPS_COMMAND' not in os.environ:
-            LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-            os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
-
-        return LAMMPS(files=[pot_file], parameters=parameters,
-                      tmp_dir=work_dir, keep_tmp_files=True,
-                      keep_alive=False, no_data_file=False)
+        return LAMMPS(files=[pot_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=work_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="adp",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=[f"* * AlCu.adp {' '.join(elements)}"])
 
     def _run(self, atoms: Atoms, rc=7.5):
         """
@@ -107,7 +108,6 @@ class AlCuAdpTest(unittest.TestCase):
         assert_array_almost_equal(results.stress,
                                   mishin.get_stress(atoms),
                                   delta=1e-5)
-
 
     def test_alloy(self):
         """

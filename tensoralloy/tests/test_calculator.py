@@ -28,6 +28,7 @@ from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.nn import EamAlloyNN
 from tensoralloy.utils import Defaults
+from tensoralloy.io.lammps import LAMMPS_COMMAND
 from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 
@@ -127,6 +128,7 @@ def test_elastic_constant_tensor():
     assert_array_almost_equal(tensor, tensor_p, delta=1e-6)
 
 
+@skipUnless(exists(LAMMPS_COMMAND), f"LAMMPS not found!")
 class SurfaceSlabTest(unittest.TestCase):
     """
     Test total energy calculation of `TensorAlloyCalculator` with EAM method for
@@ -137,26 +139,26 @@ class SurfaceSlabTest(unittest.TestCase):
         """
         The setup function.
         """
-        # Setup the environment for `LAMMPS`
-        if 'LAMMPS_COMMAND' not in os.environ:
-            LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-            os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
-
         self.tmp_dir = join(test_dir(), "tmp")
+        if not exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
 
     def get_lammps_calculator(self):
         """
         Return a LAMMPS calculator for Ag.
         """
         eam_file = join(test_dir(absolute=True), 'lammps', 'zjw04_Ni.alloy.eam')
-        parameters = {'pair_style': 'eam/alloy',
-                      'pair_coeff': ['* * zjw04_Ni.alloy.eam Ni']}
-        if not exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
 
-        return LAMMPS(files=[eam_file], parameters=parameters,
-                      tmp_dir=self.tmp_dir, keep_tmp_files=False,
-                      keep_alive=False, no_data_file=False)
+        return LAMMPS(files=[eam_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=self.tmp_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="eam/alloy",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=['* * zjw04_Ni.alloy.eam Ni'])
 
     def tearDown(self):
         """

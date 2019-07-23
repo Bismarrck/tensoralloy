@@ -23,20 +23,13 @@ from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.utils import AttributeDict
 from tensoralloy.test_utils import test_dir
+from tensoralloy.io.lammps import LAMMPS_COMMAND
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-# Setup the environment for `LAMMPS`
-if 'LAMMPS_COMMAND' not in os.environ:
-    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
-else:
-    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
-
-
-@skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
+@skipUnless(exists(LAMMPS_COMMAND), f"LAMMPS not found!")
 class EamSutton90Test(unittest.TestCase):
 
     def setUp(self):

@@ -68,38 +68,35 @@ class InitializationTest(unittest.TestCase):
         assert_equal(getattr(nn, "_kernel_init_method"), "he_uniform")
 
 
-def teardown_initialize_eam_training():
-    """
-    The cleanup function for `test_initialize_eam_training`.
-    """
-    model_dir = join(test_dir(), 'inputs', 'snap_Ni_zjw04')
-    if exists(model_dir):
-        shutil.rmtree(model_dir, ignore_errors=True)
-
-    tfrecords_dir = join(test_dir(), 'inputs', 'temp')
-    if exists(tfrecords_dir):
-        shutil.rmtree(tfrecords_dir, ignore_errors=True)
-
-
 @skipUnless(os.environ.get('TEST_EXPERIMENTS'),
             "The flag 'TEST_EXPERIMENTS' is not set")
-@with_setup(teardown=teardown_initialize_eam_training)
-def test_initialize_eam_training():
-    """
-    Test initializing an EAM training experiment.
-    """
-    input_file = join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml')
-    manager = TrainingManager(input_file)
+class EamSgdTrainingTest(unittest.TestCase):
 
-    assert_equal(manager.dataset.transformer.rc, 6.0)
+    def setUp(self):
+        self.model_dir = join(test_dir(), 'inputs', 'snap_Ni_zjw04')
+        self.tfrecords_dir = join(test_dir(), 'inputs', 'temp')
 
-    nn = manager.nn
-    assert isinstance(nn, EamAlloyNN)
+    def tearDown(self):
+        """
+        The cleanup function for `test_initialize_eam_training`.
+        """
+        if exists(self.model_dir):
+            shutil.rmtree(self.model_dir, ignore_errors=True)
 
-    assert_dict_equal(nn.potentials, {"Ni": {"rho": "zjw04", "embed": "zjw04"},
-                                      "NiNi": {"phi": "zjw04"}})
+        if exists(self.tfrecords_dir):
+            shutil.rmtree(self.tfrecords_dir, ignore_errors=True)
 
-    manager.train_and_evaluate()
+    def test(self):
+        """
+        Test initializing an EAM training experiment.
+        """
+        input_file = join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml')
+        manager = TrainingManager(input_file)
+        assert_equal(manager.dataset.transformer.rc, 6.0)
+        assert_dict_equal(getattr(manager.nn, "potentials"),
+                          {"Ni": {"rho": "zjw04", "embed": "zjw04"},
+                           "NiNi": {"phi": "zjw04"}})
+        manager.train_and_evaluate()
 
 
 class DebugWarmStartFromVariablesHook(tf.train.SessionRunHook):

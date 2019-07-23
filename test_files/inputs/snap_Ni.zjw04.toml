@@ -49,7 +49,7 @@ drho = 0.001
 
 [opt]
 method = 'sgd'
-learning_rate = 0.01
+learning_rate = 0.00001
 decay_function = "exponential"
 decay_rate = 0.98
 

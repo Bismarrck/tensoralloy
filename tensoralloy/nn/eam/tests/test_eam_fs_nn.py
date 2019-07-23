@@ -9,9 +9,10 @@ import numpy as np
 import nose
 import os
 import shutil
+import unittest
 
 from tensorflow_estimator import estimator as tf_estimator
-from unittest import skipUnless, skip
+from unittest import skipUnless
 from nose.tools import assert_list_equal, assert_dict_equal, with_setup
 from nose.tools import assert_equal, assert_almost_equal
 from os.path import exists, join
@@ -22,7 +23,9 @@ from ase.build import bulk
 from tensoralloy.nn.eam import EamFsNN
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
-from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys, AttributeDict
+from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
+from tensoralloy.utils import AttributeDict
+from tensoralloy.io.lammps import LAMMPS_COMMAND
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -217,91 +220,82 @@ def test_export_setfl():
     assert_list_equal(out_key_lines, ref_key_lines)
 
 
-@skip
-def test_export_eam_fs_from_ckpt():
-    """
-    Test exporting eam/fs model by loading variables from a checkpoint.
-    """
-    pass
+class EamFsTest(unittest.TestCase):
 
+    def setUp(self):
+        """
+        The setup function.
+        """
+        self.work_dir = join(test_dir(), 'lammps', 'msah11')
+        if not exists(self.work_dir):
+            os.mkdir(self.work_dir)
 
-# Setup the environment for `LAMMPS`
-if 'LAMMPS_COMMAND' not in os.environ:
-    LAMMPS_COMMAND = '/usr/local/bin/lmp_serial'
-    os.environ['LAMMPS_COMMAND'] = LAMMPS_COMMAND
-else:
-    LAMMPS_COMMAND = os.environ['LAMMPS_COMMAND']
+    def get_lammps_calculator(self):
+        """
+        Return a LAMMPS calculator for Ag.
+        """
+        eam_file = join(test_dir(), 'lammps', 'Mendelev_Al_Fe.fs.eam')
+        return LAMMPS(files=[eam_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=self.work_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="eam/fs",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=['* * Mendelev_Al_Fe.fs.eam Al Fe'])
 
+    def tearDown(self):
+        """
+        Delete the tmp dir.
+        """
+        if exists(self.work_dir):
+            shutil.rmtree(self.work_dir, ignore_errors=True)
 
-def get_lammps_calculator():
-    """
-    Return a LAMMPS calculator for Ag.
-    """
-    eam_file = join(test_dir(absolute=True), 'lammps', 'Mendelev_Al_Fe.fs.eam')
-    parameters = {'pair_style': 'eam/fs',
-                  'pair_coeff': ['* * Mendelev_Al_Fe.fs.eam Al Fe']}
-    work_dir = join(test_dir(absolute=True), 'lammps', 'msah11')
-    if not exists(work_dir):
-        os.makedirs(work_dir)
+    @skipUnless(exists(LAMMPS_COMMAND), f"LAMMPS_COMMAND not found!")
+    def test_eam_fs_msah11(self):
+        """
+        Test the total energy calculation of `EamFsNN` with `Msah11`.
+        """
+        rc = 6.5
 
-    return LAMMPS(files=[eam_file], parameters=parameters, tmp_dir=work_dir,
-                  keep_tmp_files=True, keep_alive=False, no_data_file=False)
+        atoms = bulk('Fe') * [2, 2, 2]
+        symbols = atoms.get_chemical_symbols()
+        symbols[0: 2] = ['Al', 'Al']
+        atoms.set_chemical_symbols(symbols)
+        elements = sorted(set(symbols))
 
+        with tf.Graph().as_default():
+            clf = EAMTransformer(rc=rc, elements=elements)
+            nn = EamFsNN(elements=elements,
+                         export_properties=['energy', 'forces', 'stress'],
+                         custom_potentials={
+                             "Al": {"embed": "msah11"},
+                             "Fe": {"embed": "msah11"},
+                             "AlAl": {"phi": "msah11", "rho": "msah11"},
+                             "AlFe": {"phi": "msah11", "rho": "msah11"},
+                             "FeFe": {"phi": "msah11", "rho": "msah11"},
+                             "FeAl": {"phi": "msah11", "rho": "msah11"}})
+            nn.attach_transformer(clf)
+            predictions = nn.build(
+                features=clf.get_placeholder_features(),
+                mode=tf_estimator.ModeKeys.PREDICT,
+                verbose=True)
 
-lammps = get_lammps_calculator()
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
 
+        lammps = self.get_lammps_calculator()
+        atoms.calc = lammps
+        lammps.calculate(atoms)
 
-def teardown():
-    """
-    Delete the tmp dir.
-    """
-    if exists(lammps.tmp_dir):
-        shutil.rmtree(lammps.tmp_dir, ignore_errors=True)
-
-
-@with_setup(teardown=teardown)
-@skipUnless(exists(LAMMPS_COMMAND), f"{LAMMPS_COMMAND} not set!")
-def test_eam_fs_msah11():
-    """
-    Test the total energy calculation of `EamFsNN` with `Msah11`.
-    """
-    rc = 6.5
-
-    atoms = bulk('Fe') * [2, 2, 2]
-    symbols = atoms.get_chemical_symbols()
-    symbols[0: 2] = ['Al', 'Al']
-    atoms.set_chemical_symbols(symbols)
-    elements = sorted(set(symbols))
-
-    with tf.Graph().as_default():
-        clf = EAMTransformer(rc=rc, elements=elements)
-        nn = EamFsNN(elements=elements,
-                     export_properties=['energy', 'forces', 'stress'],
-                     custom_potentials={
-                         "Al": {"embed": "msah11"},
-                         "Fe": {"embed": "msah11"},
-                         "AlAl": {"phi": "msah11", "rho": "msah11"},
-                         "AlFe": {"phi": "msah11", "rho": "msah11"},
-                         "FeFe": {"phi": "msah11", "rho": "msah11"},
-                         "FeAl": {"phi": "msah11", "rho": "msah11"}})
-        nn.attach_transformer(clf)
-        predictions = nn.build(
-            features=clf.get_placeholder_features(),
-            mode=tf_estimator.ModeKeys.PREDICT,
-            verbose=True)
-
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
-
-    atoms.calc = lammps
-    lammps.calculate(atoms)
-
-    assert_almost_equal(result['energy'],
-                        lammps.get_potential_energy(atoms), delta=1e-6)
-    assert_array_almost_equal(result['forces'],
-                              lammps.get_forces(atoms), delta=1e-9)
+        assert_almost_equal(result['energy'],
+                            lammps.get_potential_energy(atoms), delta=1e-6)
+        assert_array_almost_equal(result['forces'],
+                                  lammps.get_forces(atoms), delta=1e-9)
 
 
 if __name__ == "__main__":
-    nose.run()
+    nose.main()

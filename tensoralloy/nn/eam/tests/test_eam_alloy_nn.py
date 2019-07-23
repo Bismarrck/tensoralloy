@@ -9,7 +9,6 @@ import numpy as np
 import nose
 import os
 import shutil
-import ase
 import unittest
 
 from tensorflow_estimator import estimator as tf_estimator
@@ -21,7 +20,7 @@ from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
 from os import remove
 from collections import Counter
-from unittest import skipUnless, skip
+from unittest import skipUnless
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 from ase.db import connect
@@ -35,6 +34,7 @@ from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults
 from tensoralloy.calculator import TensorAlloyCalculator
+from tensoralloy.io.lammps import LAMMPS_COMMAND
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -114,7 +114,6 @@ def test_dynamic_stitch_2el():
     Test the method `EamNN._dynamic_stitch` with two types of element.
     """
     with tf.Graph().as_default():
-
         data = AlCuFakeData()
         max_occurs = data.max_occurs
 
@@ -144,7 +143,6 @@ def test_dynamic_stitch_3el():
     Test the method `EamNN._dynamic_stitch` with three types of element.
     """
     with tf.Graph().as_default():
-
         batch_size = 10
         max_n_al = 5
         max_n_cu = 7
@@ -193,7 +191,6 @@ def test_dynamic_partition():
     Test the method `EamNN._dynamic_partition`.
     """
     with tf.Graph().as_default():
-
         data = AlCuFakeData()
         mode = tf_estimator.ModeKeys.TRAIN
 
@@ -271,7 +268,6 @@ def test_custom_potentials():
     Test setting layers of `EamAlloyNN`.
     """
     with tf.Graph().as_default():
-
         data = AlCuFakeData()
         custom_potentials = {
             'AlCu': {'phi': 'zjw04'},
@@ -318,7 +314,6 @@ def test_inference_nn():
     Test the inference of `EamAlloyNN` with only NN potentials.
     """
     with tf.Graph().as_default():
-
         data = AlCuFakeData()
         mode = tf_estimator.ModeKeys.TRAIN
 
@@ -339,7 +334,6 @@ def test_inference_mixed():
     Test the inference of `EamAlloyNN` with mixed potentials.
     """
     with tf.Graph().as_default():
-
         data = AlCuFakeData()
         batch_size = data.batch_size
         max_n_atoms = data.max_n_atoms
@@ -354,7 +348,6 @@ def test_inference_mixed():
                             'CuCu': {'phi': 'zjw04'}})
 
         with tf.variable_scope("nnEAM"):
-
             partitions, max_occurs = nn._dynamic_partition(
                 descriptors=data.features.descriptors,
                 mode=mode,
@@ -443,22 +436,6 @@ def test_export_setfl():
     assert_array_equal(np.asarray(out), np.asarray(ref))
 
 
-@skip
-def test_export_setfl_from_ckpt():
-    """
-    Test exporting eam/alloy model by loading variables from a checkpoint.
-    # TODO: to be implemented
-    """
-    pass
-
-
-if 'LAMMPS_COMMAND' not in os.environ:
-    lmp_bin = '/usr/local/bin/lmp_serial'
-    os.environ['LAMMPS_COMMAND'] = lmp_bin
-else:
-    lmp_bin = os.environ['LAMMPS_COMMAND']
-
-
 def voigt_to_full(tensor):
     """
     A helper function converting the Voigt tensor to a full 3x3 tensor.
@@ -468,14 +445,6 @@ def voigt_to_full(tensor):
     return np.array([[xx, xy, xz],
                      [xy, yy, yz],
                      [xz, yz, zz]])
-
-
-def rotate_lammps_stress(stress, rot):
-    """
-    A helper function converting the orientation of LAMMPS stress tensor.
-    """
-    full = voigt_to_full(stress)
-    return rot @ full @ np.linalg.inv(rot)
 
 
 class NiMoAlloyTest(unittest.TestCase):
@@ -507,11 +476,16 @@ class NiMoAlloyTest(unittest.TestCase):
         Return a LAMMPS calculator for Ag.
         """
         eam_file = join(test_dir(True), 'lammps', 'MoNi_Zhou04.eam.alloy')
-        parameters = {'pair_style': 'eam/alloy',
-                      'pair_coeff': ['* * MoNi_Zhou04.eam.alloy Mo Ni']}
-        return LAMMPS(files=[eam_file], parameters=parameters,
-                      tmp_dir=self.work_dir, keep_tmp_files=True,
-                      keep_alive=False, no_data_file=False)
+        return LAMMPS(files=[eam_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=self.work_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="eam/alloy",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=['* * MoNi_Zhou04.eam.alloy Mo Ni'])
 
     def test(self):
         """
@@ -524,31 +498,26 @@ class NiMoAlloyTest(unittest.TestCase):
             'Ni3Mo': 'Ni3Mo_mp-11506_conventional_standard.cif',
             'Ni4Mo': 'Ni4Mo_mp-11507_conventional_standard.cif'
         }
-
-        e_eps = 1e-5
-        f_eps = 1e-5
-        s_eps = 1e-5
+        eps = 1e-5
 
         for name, cif in files.items():
-
             cryst = read(join(crysts_dir, cif))
 
             lmp = self.get_lammps_calculator()
             lmp.calculate(cryst)
-            rot = lmp.prism.R
 
             energy = lmp.get_potential_energy(cryst)
             forces = lmp.get_forces(cryst)
-            stress = rotate_lammps_stress(lmp.get_stress(cryst), rot)
+            stress = lmp.get_stress(cryst)
 
             calc.calculate(cryst)
 
             assert_almost_equal(energy, calc.get_potential_energy(cryst),
-                                delta=e_eps, msg=f'{name}.energy')
+                                delta=eps, msg=f'{name}.energy')
             assert_array_almost_equal(forces, calc.get_forces(cryst),
-                                      delta=f_eps, msg=f'{name}.forces')
-            assert_array_almost_equal(stress, calc.get_stress(cryst, False),
-                                      delta=s_eps, msg=f'{name}.stress')
+                                      delta=eps, msg=f'{name}.forces')
+            assert_array_almost_equal(stress, calc.get_stress(cryst, True),
+                                      delta=eps, msg=f'{name}.stress')
 
     def tearDown(self):
         """
@@ -580,11 +549,16 @@ class BulkStressOpTest(unittest.TestCase):
         Return a LAMMPS calculator for Ag.
         """
         eam_file = join(test_dir(True), 'lammps', 'Zhou_AlCu.alloy.eam')
-        parameters = {'pair_style': 'eam/alloy',
-                      'pair_coeff': ['* * Zhou_AlCu.alloy.eam Al Cu']}
-        return LAMMPS(files=[eam_file], parameters=parameters,
-                      tmp_dir=self.work_dir, keep_tmp_files=True,
-                      keep_alive=False, no_data_file=False)
+        return LAMMPS(files=[eam_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=self.work_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="eam/alloy",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=['* * Zhou_AlCu.alloy.eam Al Cu'])
 
     def tearDown(self):
         """
@@ -593,7 +567,7 @@ class BulkStressOpTest(unittest.TestCase):
         if exists(self.lammps.tmp_dir):
             shutil.rmtree(self.lammps.tmp_dir, ignore_errors=True)
 
-    @skipUnless(exists(lmp_bin), 'The environment var LAMMPS_COMMAND not set!')
+    @skipUnless(exists(LAMMPS_COMMAND), 'LAMMPS not found!')
     def test_eam_alloy_zjw04_bulk(self):
         """
         Test the energy, forces and stress results of `EamAlloyNN` with `Zjw04`
@@ -632,13 +606,7 @@ class BulkStressOpTest(unittest.TestCase):
                                   self.lammps.get_forces(atoms), delta=1e-9)
 
         lmp_voigt_stress = self.lammps.get_stress(atoms)
-
-        if ase.__version__ < '3.18.0':
-            rot = self.lammps.prism.R
-            stress = rotate_lammps_stress(lmp_voigt_stress, rot)
-        else:
-            stress = voigt_to_full(lmp_voigt_stress)
-
+        stress = voigt_to_full(lmp_voigt_stress)
         assert_array_almost_equal(voigt_to_full(result['stress']),
                                   stress,
                                   delta=1e-5)
@@ -670,7 +638,6 @@ def test_batch_stress():
             tf.global_variables_initializer().run()
             s_true = sess.run(predictions.stress,
                               feed_dict=clf.get_feed_dict(atoms)) * volume
-
 
     with tf.Graph().as_default():
         size = find_neighbor_size_of_atoms(atoms, rc=rc)
@@ -760,14 +727,23 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
         """
         Return a LAMMPS calculator for Ag.
         """
-        potential_file = join(test_dir(True), 'lammps', 'zjw04_Ni.alloy.eam')
-        parameters = {'pair_style': 'eam/alloy',
-                      'pair_coeff': ['* * zjw04_Ni.alloy.eam Ni']}
-        return LAMMPS(files=[potential_file], parameters=parameters,
-                      tmp_dir=join(self.work_dir, tag),
-                      keep_tmp_files=True, keep_alive=False, no_data_file=False)
+        tmp_dir = join(self.work_dir, tag)
+        if not exists(tmp_dir):
+            os.makedirs(tmp_dir)
 
-    @skipUnless(exists(lmp_bin), 'The environment var LAMMPS_COMMAND not set!')
+        potential_file = join(test_dir(True), 'lammps', 'zjw04_Ni.alloy.eam')
+        return LAMMPS(files=[potential_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=tmp_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="eam/alloy",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=['* * zjw04_Ni.alloy.eam Ni'])
+
+    @skipUnless(exists(LAMMPS_COMMAND), 'LAMMPS not found!')
     def test_surface_slab(self):
         """
         Test the stress calculations for surface slabs.
@@ -815,11 +791,6 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
             atoms.calc = lmp
             lmp.calculate(atoms)
             lmp_stress = lmp.get_stress(atoms) / GPa
-
-            if ase.__version__ < '3.18.0':
-                rot = lmp.prism.R
-                lmp_stress = rotate_lammps_stress(lmp_stress, rot)
-                lmp_stress = lmp_stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
             lmp_results[key] = lmp_stress
 
         eps = 1e-6

@@ -550,7 +550,7 @@ def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
     """
-    atoms = read(join('test_files', 'B28.xyz'), index=0, format='xyz')
+    atoms = read(join(test_dir(), 'B28.xyz'), index=0, format='xyz')
     atoms.set_cell([20.0, 20.0, 20.0])
     atoms.set_pbc([False, False, False])
     coords = atoms.get_positions()
@@ -597,7 +597,7 @@ def test_single_structure():
     """
     Test computing descriptors of a single multi-elements periodic structure.
     """
-    amp = np.load(join('test_files', 'amp_Pd3O2.npz'))['g']
+    amp = np.load(join(test_dir(), 'amp_Pd3O2.npz'))['g']
     g, _, _ = legacy_symmetry_function(Pd3O2, rc=6.5)
     assert_less(np.abs(amp - g).max(), 1e-8)
 

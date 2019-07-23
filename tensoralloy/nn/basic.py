@@ -8,10 +8,11 @@ import tensorflow as tf
 import numpy as np
 import json
 import shutil
+import os
 
 from datetime import datetime
 from typing import List, Dict
-from os.path import join, dirname
+from os.path import join, dirname, exists
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from tensorflow.python.framework.tensor_util import is_tensor
@@ -876,6 +877,9 @@ class BasicNN:
         graph = tf.Graph()
 
         logdir = join(dirname(output_graph_path), 'export')
+        if not exists(logdir):
+            os.makedirs(logdir)
+
         input_graph_name = 'input_graph.pb'
         saved_model_ckpt = join(logdir, 'saved_model')
         saved_model_meta = f"{saved_model_ckpt}.meta"
