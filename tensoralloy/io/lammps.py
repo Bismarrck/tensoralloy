@@ -6,6 +6,8 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import sys
+import shutil
+import os
 
 from io import StringIO
 from dataclasses import dataclass
@@ -15,8 +17,33 @@ from atsim.potentials import writeSetFL
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["SetFL", "AdpFL", "read_adp_setfl", "read_eam_alloy_setfl",
-           "write_adp_setfl"]
+__all__ = ["LAMMPS_COMMAND", "SetFL", "AdpFL", "read_adp_setfl",
+           "read_eam_alloy_setfl", "write_adp_setfl"]
+
+
+def get_lammps_command():
+    """
+    Return the Bash command to run Lammps.
+
+    The look up orders:
+        1. lmp_serial
+        2. lammps
+        3. ${LAMMPS_COMMAND}
+        4. None
+
+    """
+    lmp = shutil.which("lmp_serial")
+    if lmp:
+        return lmp
+    elif shutil.which("lammps"):
+        return shutil.which("lammps")
+    elif "LAMMPS_COMMAND" in os.environ:
+        return os.environ["LAMMPS_COMMAND"]
+    else:
+        return None
+
+
+LAMMPS_COMMAND = get_lammps_command()
 
 
 @dataclass
