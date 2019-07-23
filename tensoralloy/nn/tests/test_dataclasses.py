@@ -28,8 +28,8 @@ def test_dataclasses():
             elastic=dict(crystals=['Ni'], constraint=dict(stress_weight=1.5))
         ),
         train=dict(model_dir="..",
-                   ckpt=dict(restore_global_variables=False,
-                             use_previous_ema_variables=False))
+                   ckpt=dict(restore_all_variables=False,
+                             use_ema_variables=False))
     )
 
     opt_parameters = OptParameters(**hparams.opt)

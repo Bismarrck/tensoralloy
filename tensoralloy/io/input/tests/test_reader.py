@@ -34,7 +34,7 @@ def test_read_behler_angular_toml():
                  realpath(join(project_dir(True), 'experiments/qm7-k3')))
     assert_equal(realpath(reader['train.model_dir']),
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
-    assert_equal(reader['train.previous_checkpoint'], False)
+    assert_equal(reader['train.ckpt.checkpoint_filename'], False)
 
     assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
@@ -115,7 +115,7 @@ def test_read_eam_fs_toml():
     assert_equal(len(nested_get(configs, 'nn.eam.embed')), 2)
     assert_list_equal(nested_get(configs, 'nn.eam.phi.AlFe'), [32, 32])
     assert_equal(reader['nn.eam.phi.AlAl'], 'msah11')
-    assert_equal(reader['train.previous_checkpoint'], False)
+    assert_equal(reader['train.ckpt.checkpoint_filename'], False)
 
 
 if __name__ == "__main__":
