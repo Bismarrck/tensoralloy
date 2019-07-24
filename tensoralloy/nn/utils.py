@@ -15,26 +15,12 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def neg_lrelu(features, alpha=0.2, name=None):
-    """
-    Regative Leaky Relu.
-    """
-    with ops.name_scope(name, "NegLeakyRelu", [features, alpha]) as name:
-        features = ops.convert_to_tensor(features, name="features")
-        if features.dtype.is_integer:
-            features = math_ops.to_float(features)
-        alpha = ops.convert_to_tensor(alpha, dtype=features.dtype, name="alpha")
-        return math_ops.minimum(alpha * features, features, name=name)
-
-
 def get_activation_fn(fn_name: str):
     """
     Return the corresponding activation function.
     """
     if fn_name.lower() == 'leaky_relu':
         return tf.nn.leaky_relu
-    elif fn_name.lower() == 'neg_lrelu':
-        return neg_lrelu
     elif fn_name.lower() == 'relu':
         return tf.nn.relu
     elif fn_name.lower() == 'tanh':
