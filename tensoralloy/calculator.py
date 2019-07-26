@@ -108,6 +108,7 @@ class TensorAlloyCalculator(Calculator):
             self._transformer = self._get_transformer()
             self._ops, self._fp_precision = self._get_ops()
             self.implemented_properties = self._predict_properties
+            self._ncalls = 0
 
     @property
     def elements(self) -> List[str]:
@@ -666,3 +667,17 @@ class TensorAlloyCalculator(Calculator):
                 ops = {target: self._ops[target] for target in properties}
                 self.results = self._sess.run(
                     ops, feed_dict=self._transformer.get_feed_dict(atoms))
+                self._ncalls += 1
+
+    def reset_call_counter(self):
+        """
+        Reset the `ncall` counter.
+        """
+        self._ncalls = 0
+
+    @property
+    def ncalls(self):
+        """
+        Return the accummulative number of `calculate` calls.
+        """
+        return self._ncalls
