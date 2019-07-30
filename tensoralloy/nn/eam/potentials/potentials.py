@@ -17,6 +17,7 @@ __email__ = 'Bismarrck@me.com'
 
 def get_variable(name,
                  dtype=None,
+                 shape=None,
                  initializer=None,
                  regularizer=None,
                  trainable=None,
@@ -33,7 +34,7 @@ def get_variable(name,
         for collection in collections:
             if collection not in _collections:
                 _collections.append(collection)
-    return tf.get_variable(name, shape=(), dtype=dtype,
+    return tf.get_variable(name, shape=shape or (), dtype=dtype,
                            initializer=initializer, regularizer=regularizer,
                            trainable=trainable, collections=_collections,
                            validate_shape=validate_shape)
