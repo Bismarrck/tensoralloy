@@ -41,19 +41,15 @@ more attentions as they can provide density functional theory level predictions
 within negligible time. Currently, the symmetry function descriptor based 
 atomistic neural network is the most widely used model for modeling alloys. 
 To precisely describe complex potential energy surfaces, integrating advanced 
-metrics, such as force or virial stress, into training can be of great help. 
-The traditional way of implementing machine learning models starts from 
-pre-computed descriptor and the analytical (model-derived) atomic forces and 
-virial stress are handled by separate codes which require plenty of efforts. 
-In this work, we choose a new route to overcome this challenge by building 
-computation graph from atomic positions directly. Thus, TensorFlow or other 
-modern machine learning platforms can handle the derivations of forces and 
-stress, both automatically and efficiently. We demonstrate our core algorithm 
-\textemdash the virtual atom approach \textemdash using Behler-Parinello's 
-symmetry function atomic descriptor. This algorithm is implemented in our Python 
-program TensorAlloy. TensorAlloy supports constructing machine learning 
-interaction potentials for both \textit{molecules} and \textit{solids}. The QM7 
-and SNAP/Ni-Mo datasets are used to discuss performances of our program.
+metrics, such as force or virial stress, into training can be of great help.  
+In this work, we propose a virtual-atom approach to model the total energy of 
+symmetry function descriptors based atomistic neural network. Our approach 
+starts from atomic positions directly so that the derivations of forces and 
+virial can be handled by TensorFlow automatically and efficiently. This new 
+approach is implemented in our program TensorAlloy, which supports constructing 
+machine learning interaction potentials for both \textit{molecules} and 
+\textit{solids}. The QM7 and SNAP/Ni-Mo datasets are used to demostrate the 
+performances of our program.
 \end{abstract}
 
 \maketitle
@@ -128,22 +124,22 @@ these metrics can be derived from positions and total energy directly. To
 achieve this, a direct computation graph from positions to total energy must be
 built. Thus, the problem becomes: how to design such route?
 
-In this work, we propose a new algorithm, named the virtual atom approach, to 
-implement the symmetry function descriptor and the ANN model based on 
-TensorFlow. This algorithm is very suitable for parallel execution. With this 
-approach, stochastic gradient descent (SGD) based mini-batch training can be 
-adopted. We also derive a general and vectorizable expression for computing 
-virial stress for arbitrary ANN model. All these algorithms have been 
-implemented in our Python program: TensorAlloy. 
+In this work, we propose a new TensorFlow-dependent apporach (the virtual atom 
+approach, VAP) to model the total energy expression of the symmetry function 
+descriptor based neural network. 
+Our apporach can move the entry of the computation graph from atomic descriptors 
+back to the raw atomic positions. Thus, calculating the derivatives of total 
+energy with respect to atomic positons (force) or lattice tensor (virial) can be 
+handled by TensorFlow directly and automatically. 
 
 This paper is organized as follows. Section \ref{section:theory} introduces the 
 theory of the symmetry function descriptor and the ANN framework. Section 
-\ref{section:method} describes the virtual atom approach and a modified ANN 
-model used by TensorAlloy. Section \ref{section:discussions} displays 
-performances of TensorAlloy on two public datasets. The appendix 
+\ref{section:method} describes the virtual atom approach and the modified ANN 
+model used by TensorAlloy. Section \ref{section:discussions} demostrates 
+the performances of TensorAlloy on two public datasets. The appendix 
 \ref{section:appendix} gives derivation and implementation details of key 
-algorithms. Implementations of the core algorithms and some trained models can 
-be obtained from GitHub (https://github.com/Bismarrck/vap) freely.
+routines of VAP. The full implementation and demo codes can be obtained from 
+GitHub (https://github.com/Bismarrck/vap) freely.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -222,10 +218,9 @@ and $\mathbf{h}$ is the \textbf{row-major} $3 \times 3$ lattice tensor:
 
 There are many choices of $F_G$. The symmetry function descriptor, proposed 
 by Parinello and Behler in 2007\cite{Behler}, is currently the most widely used 
-atomic descriptor. The symmetry function descriptor consists of two sets of 
-invariant (tranlational, rotational and permutational) functions: the radial 
-symmetry function $\mathbf{G}^{(2)}$ and the angular symmetry function 
-$\mathbf{G}^{(4)}$:
+atomic descriptor. The symmetry function descriptor consists of two types of 
+functions: the radial symmetry function $\mathbf{G}^{(2)}$ and the angular 
+symmetry function $\mathbf{G}^{(4)}$:
 \begin{align}
 \label{eq:G2}
 \mathbf{G}^{(2)}_i(\eta, \omega) = & \sum_{j \neq i}{
@@ -276,8 +271,11 @@ and $\cos\theta$ also has a vectorized form:
 \begin{equation}
 \cos\theta = \frac{\rijna^2 + \rikna^2 - \rjkna^2}{2 \rijna \cdot \rikna}
 \end{equation}
-The summations in $\mathbf{G}^{(2)}$ and $\mathbf{G}^{(4)}$ should go over all 
-neighbors within $r_c$. 
+The summations in Equation \ref{eq:G2} and \ref{eq:G4} should go over all 
+neighbors within $r_c$. For an atom $i$, $\mathbf{G}_i$ is a vector. For the 
+entire structure, its overall $\mathbf{G}$ is a matrix with row $i$ represents 
+the atomic descriptors of atom $i$ and column $j$ corresponds to a specifc 
+$(\eta, \omega)$ pair or $(\beta, \gamma, \zeta)$ combination.
 
 Analytical atomic forces can be obtained directly by computing the first-order 
 derivative of $E^{total}$ with respect to $\mathbf{r}_{a}^{(0)}$ where $a$ is an 
@@ -326,18 +324,18 @@ The derivations are theoretically straightforward but their implementations are
 challenging \cite{AMP}. Later we will provide an automatic approach to address 
 this problem.
 
-The $3 \times 3$ virial stress tensor $\epsilon$ is an important metric to 
+The $3 \times 3$ virial tensor $\epsilon$ is an important metric to 
 describe solids under deformation or external pressure. For arbitrary many-body 
 interaction potentials, $\epsilon$ can be calculated with the following equation
 \cite{lammps_stress}:
 \begin{equation}
 \label{eq:stress_lammps}
-V \cdot \epsilon = \left(-\sum_{i=1}^{N}{\mathbf{r}_i^{(0)} \otimes f_i} - 
+\epsilon = \left(-\sum_{i=1}^{N}{\mathbf{r}_i^{(0)} \otimes f_i} - 
 \sum_{\mathbf{n}}{\mathbf{h}^T\mathbf{n}} \otimes 
 \sum_{i=1}^{N}{F^{\prime}_{i\mathbf{n}}}
 \right)^T
 \end{equation}
-where $V$ is the volume, $\otimes$ indicates tensor product, $f_i$ is the total 
+where $\otimes$ indicates tensor product, $f_i$ is the total 
 force acting on atom $i$ and $F^{\prime}_{i\mathbf{n}}$ is the partial force. 
 Until now, most machine learning force-field models focus on fitting total 
 energy and atomic forces, very few of them\cite{DeePMD,DeePMD_rl,DeePMD_kit} had 
@@ -348,12 +346,12 @@ with vectorized operations. However, we find an "equivalent" form
 of Equation \ref{eq:stress_lammps}:
 \begin{equation}
 \label{eq:stress}
-V \cdot \epsilon = -F^{T} R + 
+\epsilon = -F^{T} R + 
 \left(\frac{\partial E^{total}}{\partial \mathbf{h}}\right)^T \mathbf{h}
 \end{equation}
 where $R$ is the $N \times 3$ positions matrix and $F$ is the 
 corresponding total forces matrix. This new form can be easily implemented 
-within TensorFlow. The detailed derivation is given in the appendix.
+within TensorFlow. The detailed derivation is given in the appendix(A).
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -383,17 +381,18 @@ can be obtained from GitHub freely (https://github.com/Bismarrck/vap).
 % Section 3.A
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\subsection{General design}
-\label{section:principles}
+\subsection{Overview}
+\label{section:overview}
 
-Fig \ref{fig:program_design} shows the general design of TensorAlloy.
+Fig \ref{fig:program_design} shows the overview of TensorAlloy and the 
+virtual-atom approach.
 TensorAlloy has two phases: the training phase \textbf{(1)} and the prediction 
 phase \textbf{(2)}. These two phases share many common requirements, but they 
 also have their own concerns.
 
 For the training phase, in order to make TensorAlloy a general-purpose and
-efficient machine learning potential training program, these three key 
-challenges shall be resolved:
+efficient machine learning potential training program, there are some key 
+technical requirements:
 \begin{itemize}
     
     \item[1.] 
@@ -427,9 +426,11 @@ Besides, we also want our TensorAlloy program have an \textit{independent} and
 \textit{user-friendly} prediction phase. Users can just focus on the integration 
 of machine learning potentials with their own researches.
 
-The virtual-atom approach plays a central role in handling all the challenges 
-above and unify the training and prediction phases. In the following sections, 
-we will gradually discuss the details of this approach.
+VAP plays a central role in handling all the technical challenge as it 
+\textbf{\textit{provides a way to describe structures of various sizes and 
+stoichiometries in unified and vectorized forms}}. 
+In the following sections, we will gradually discuss the details of this 
+approach.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -438,7 +439,7 @@ we will gradually discuss the details of this approach.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=0.58]{figures/Fig1.pdf}
+\includegraphics[scale=0.68]{figures/Fig1.pdf}
 \caption{\label{fig:program_design} The general design of TensorAlloy. 
 \textbf{(1)} demonstrates the training phase while \textbf{(2)} represents the 
 prediction phase.
@@ -472,11 +473,11 @@ represents the inserted virtual atom.
 Fig \ref{fig:Fig2} shows the preparation stage of VAP. The cutoff radius 
 $r_{cut}$ must be fixed. This stage has two major steps. The first step is to 
 build the global symbol list (GSL), which acts as the universal reference 
-system. A virtual atom is inserted at the very first position of GSL. The 
-benefits will be discussed later. To build GSL, all $\{\nelmax\}$ must be 
-pre-determined where $\nelmax$ is the maximum appearances of element 
-\textit{el} in any structure. $\nel$ represents the number of unique chemical 
-elements in the dataset. Then, $\nvap$, the dimension of GSL, can be determined:
+system. A virtual atom is inserted at the very first position of GSL. 
+To build GSL, all $\{\nelmax\}$ must be pre-determined where $\nelmax$ is the 
+maximum appearances of element \textit{el} in any structure. $\nel$ represents 
+the number of unique chemical elements in the dataset. Then, $\nvap$, the 
+dimension of GSL, can be determined:
 \begin{equation}
 \label{eq:n_vap}
 \nvap = 1 + \sum_{\mathrm{el}}{\nelmax}
@@ -575,7 +576,7 @@ $\mathbf{R}$ and lattice tensor $\mathbf{h}$.
 \end{figure}
 
 Both the radial (Equation \ref{eq:g2}) and the angular (Equation \ref{eq:g4}) 
-symmetry functions interact with interatomic distances only. In order to compute 
+symmetry functions depends on interatomic distances only. In order to compute 
 the descriptors, local atomic positions should be transformed to interatomic 
 distances first. Fig \ref{fig:Fig3} demonstrates the pseudo graph of 
 $\mathbf{R} \rightarrow \mathbf{r}^{\mathrm{GSL}}$ for radial symmetry function
@@ -650,7 +651,7 @@ Steps 3-7 are implemented in the method \textit{get\_rij} of class
 \subsection{Radial descriptors}
 \label{section:radial_descriptors}
 
-Now we can start the last step: computing radial symmetry descriptors 
+Now we can start computing radial symmetry descriptors 
 $\mathbf{G}^{(2)}$ from $\mathbf{r}^{\mathrm{GSL}}$. For simplicity, we will use 
 the prediction phase to demonstrate this final section. 
 
@@ -816,8 +817,6 @@ phase described above. Meanwhile, there are some noticable diiferences:
     the contrast, $\nvap$ should be a dynamic tensor 
     (or a \textit{tf.Placeholder} technically) in the prediction phase.
     Its value shall be runtimely determined according to the input structure. 
-    Thus, the stoichiometry challenge mentioned in Section 
-    \ref{section:principles} can be overcame.
 
     \item[5.]
     In the training phase, the reference (or dft) atomic forces should be 
@@ -936,25 +935,24 @@ loss function:
 }}
 \end{align}
 where $N_b$ is the mini-batch size and $\chi_{\mathrm{f}}$ and 
-$\chi_{\mathrm{s}}$ are weights of force and stress losses. 
-Stress tensors are converted to Voigt vectors. All energies are in \textbf{eV}, 
-all forces are in \textbf{eV/\AA} and all stress components are in 
-\textbf{eV/\AA}$\mathbf{^3}$. In most cases, we set $N_b$ to 50 or 100 and we
+$\chi_{\mathrm{s}}$ are weights of force and virial losses. 
+In most cases, we set $N_b$ to 50 or 100 and we
 use the ADAM\cite{adam} optimizer with exponentially-decayed learning rate to 
 minimize the loss function. The default activation function is softplus:
 \begin{equation}
 \sigma(x) = \log(1 + e^x)
 \end{equation}
+Softplus is a smooth approximation of the ReLU activation function.
 The kernel weights of all NNs are initialized with the 
-Xvaier\cite{pmlr-v9-glorot10a} method and kernel biases are initialized with 
+Xvaier method\cite{pmlr-v9-glorot10a} and kernel biases are initialized with 
 zeros.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Section 4. Discussions
+% Section 4. Results and Discussions
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\section{Discussions}
+\section{Results and Discussions}
 \label{section:discussions}
 
 In this section we demonstrate two experiments of TensorAlloy. All GPU benchmark
@@ -1038,19 +1036,21 @@ angumented-wave (PAW)\cite{PAW} approach.
 In this experiment, we trained three different models:
 \begin{enumerate}
     
-    \item Ni: this model uses 400 Ni structures for training and 61 for 
-    evaluation. The loss function only includes energy and force contributions.
+    \item \textbf{NN}(Ni): this model uses 400 Ni structures for training and 61 
+    for evaluation. The loss function only includes energy and force 
+    contributions.
     
-    \item Mo: this model uses 250 Mo structures for training and 34 for 
-    evaluation. The loss function includes all three (energy, force, stress) 
+    \item \textbf{NN}(Mo): this model uses 250 Mo structures for training and 34 
+    for evaluation. The loss function includes all three (energy, force, stress) 
     types of contributions. 
     
-    \item Ni-Mo: this model uses 3673 structures for training and 300 for 
-    evaluation. The loss function includes all three types of contributions.
+    \item \textbf{NN}(Mo-Ni): this model uses 3673 structures for training and 
+    300 for evaluation. The loss function includes all three types of 
+    contributions.
 
 \end{enumerate}
 
-For all these models, the cutoff radius is set to 6.5 \AA. Only radial symmetry 
+The cutoff radius is set to 6.5 \AA. Only radial symmetry 
 functions are used to compute atomic descriptors. The selected $\eta$ are 
 0.1, 0.5, 1, 2, 4, 8, 12, 16, 20, 40 and $\omega$ are 0.0, 3.0. The hidden layer
 sizes are 128, 64, 32. The activation function is softplus.
@@ -1069,7 +1069,7 @@ The learning rate starts from 0.01 and it will decay exponentially with rate
  & \multicolumn{3}{c|}{Energy (meV/atom)} & \multicolumn{3}{c|}{Force (eV/\AA)}
  & \multicolumn{2}{c}{Stress (GPa)} \\
 \hline
-Model & Mo & Ni & Ni-Mo & Mo & Ni & Ni-Mo & Mo & Ni-Mo \\
+NN Model & Mo & Ni & Ni-Mo & Mo & Ni & Ni-Mo & Mo & Ni-Mo \\
 \hline
 Mo & 4.9 (13.2) & & 16.5 (16.2) & 0.19 (0.25) & & 0.28 (0.29) & 0.24 (0.87) 
    & 0.75 \\
@@ -1104,8 +1104,8 @@ on our workstation.
 \begin{figure}[h!]
     \centering
     \includegraphics[scale=0.64]{figures/Prediction-speed.pdf}
-\caption{\label{fig:prediction_speed} Benchmarks of the Ni-Mo model in 
-the prediction phase. The test structures are (MoNi)$_{x}$ where 
+\caption{\label{fig:prediction_speed} Benchmarks of the \textbf{NN}(Mo-Ni) model 
+in the prediction phase. The test structures are (MoNi)$_{x}$ where 
 $x$ = $10^3, 15^3, 20^3, 25^3, 30^3, 35^3, 40^3$. The left figure \textbf{a)} 
 demonstrates the overall time and the right figure \textbf{b)} compares the 
 'Graph' time with/out GPU. Blue bars indicate the elapsed time (in seconds) for 
@@ -1117,7 +1117,8 @@ for obtaining energy, forces and stress).
 
 The speed of the prediction phase is also a crucial metric for measuring 
 interaction potentials. Fig \ref{fig:prediction_speed} summarizes the time 
-distribution of the Ni-Mo model in the prediction phase on the GPU workstation. 
+distribution of the \textbf{NN}(Ni-Mo) model in the prediction phase on the GPU 
+workstation. 
 Here 'prediction' is defined as calculating energy, forces and stress tensor of 
 an arbitrary \textit{ase.Atoms} object. In these tests, the primitive structure
 $\mathrm{MoNi}$ is obtained by replacing one of the two bcc Mo atoms with a Ni 
@@ -1153,12 +1154,12 @@ the DFT, Ni and Ni-Mo models.}
 \end{figure}
 
 To further validate our models, we also calculate the energy-volume curves of a 
-conventional fcc Ni cell using SFNN/Ni and SFNN/Ni-Mo models. The results are 
-plotted in Fig \ref{fig:energy_volume_Ni}. Both curves overlap the DFT curve 
-very well in the range of -17\% to 21\% from the equilibrium volume. The surface
-energy tests, as shown in Fig \ref{fig:surface_energy_Ni}, also proves the 
-accuracy of TensorAlloy-optimized models. PyMatGen\cite{pymatgen,pymatgen-1} is 
-used to generate these surface slabs.
+conventional fcc Ni cell using \textbf{NN}(Ni) and \textbf{NN}(Mo-Ni) models. 
+The results are plotted in Fig \ref{fig:energy_volume_Ni}. Both curves overlap 
+the DFT curve very well in the range of -17\% to 21\% from the equilibrium 
+volume. The surface energy tests, as shown in Fig \ref{fig:surface_energy_Ni}, 
+also proves the accuracy of TensorAlloy-optimized models. 
+PyMatGen\cite{pymatgen,pymatgen-1} is used to generate these surface slabs.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -1384,15 +1385,15 @@ Now, the virial stress can be calculated with just a few lines of codes within
 arbitrary Machine Learning framework (TensorFlow, PyTorch, etc). The following 
 codes are written in Python-3.7/TensorFlow-1.12, where \textit{energy} and 
 \textit{volume} are scalar tensors, \textit{cell} is a $3 \times 3$ tensor, 
-\textit{positions} is a $N\times 3$ tensor and \textit{forces} (the total forces 
+\textit{R} is a $N\times 3$ tensor and \textit{F} (the total forces 
 on these atoms) is also a $N\times 3$ tensor:
 \begin{verbatim}
-def get_virial_stress_tensor(energy, cell, volume, positions, forces):
+def get_virial_stress_tensor(energy, cell, volume, R, F):
     dEdh = tf.gradients(energy, cell, name='dEdh)[0]
     right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cell)
-    left = tf.matmul(tf.transpose(forces), positions)
-    stress = tf.add(tf.negative(left), right, name='stress')
-    stress = tf.div(stress, volume, name='virial')
+    left = tf.matmul(tf.transpose(F), R)
+    virial = tf.add(tf.negative(left), right, name='virial')
+    stress = tf.div(virial, volume, name='stress')
     return stress
 \end{verbatim}
 
