@@ -896,9 +896,6 @@ class BasicNN:
                 if 'class' in serialized:
                     serialized.pop('class')
                 clf = self._transformer.__class__(**serialized)
-            else:
-                raise ValueError(
-                    "The attached transformer should not be a `BaseTransformer`")
 
             configs = self.as_dict()
             configs.pop('class')
