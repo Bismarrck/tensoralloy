@@ -22,7 +22,6 @@ from typing import Dict
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.eam import plot_potential
-from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.utils import AttributeDict, get_elements_from_kbody_term
 from tensoralloy.utils import get_kbody_terms, Defaults, safe_select
 from tensoralloy.precision import get_float_dtype
@@ -107,14 +106,6 @@ class AdpNN(EamAlloyNN):
         """
         Setup the layers for nn-EAM.
         """
-
-        def _check_avail(name: str):
-            name = name.lower()
-            if name == "nn" or name in available_potentials:
-                return True
-            else:
-                return False
-
         if isinstance(custom_potentials, str):
             potentials = {el: {"rho": custom_potentials,
                                "embed": custom_potentials}
@@ -136,7 +127,7 @@ class AdpNN(EamAlloyNN):
         def _safe_update(section, key):
             if key in custom_potentials[section]:
                 value = custom_potentials[section][key]
-                assert _check_avail(value)
+                assert self._check_fn_avail(value)
                 potentials[section][key] = value
 
         for element in self._elements:
@@ -158,7 +149,8 @@ class AdpNN(EamAlloyNN):
         Return the pairwise dipole function of `name` for the given k-body
         term.
         """
-        name = self._potentials[kbody_term]['dipole']
+        name = self._may_insert_spline_fn(
+            self._potentials[kbody_term]['dipole'])
         if name == 'nn':
             return self._get_nn_fn(
                 section=kbody_term,
@@ -177,7 +169,8 @@ class AdpNN(EamAlloyNN):
         Return the pairwise quadrupole function of `name` for the given k-body
         term.
         """
-        name = self._potentials[kbody_term]['quadrupole']
+        name = self._may_insert_spline_fn(
+            self._potentials[kbody_term]['quadrupole'])
         if name == 'nn':
             return self._get_nn_fn(
                 section=kbody_term,

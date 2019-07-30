@@ -108,14 +108,6 @@ class EamFsNN(EamNN):
         """
         Setup the layers for nn-EAM.
         """
-
-        def _check_avail(name: str):
-            name = name.lower()
-            if name == "nn" or name in available_potentials:
-                return True
-            else:
-                return False
-
         if isinstance(custom_potentials, str):
             potentials = {el: {"embed": custom_potentials}
                           for el in self._elements}
@@ -134,7 +126,7 @@ class EamFsNN(EamNN):
         def _safe_update(section, key):
             if key in custom_potentials[section]:
                 value = custom_potentials[section][key]
-                assert _check_avail(value)
+                assert self._check_fn_avail(value)
                 potentials[section][key] = value
 
         for element in self._elements:

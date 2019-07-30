@@ -19,7 +19,6 @@ from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
-from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -96,14 +95,6 @@ class EamAlloyNN(EamNN):
         """
         Setup the layers for nn-EAM.
         """
-
-        def _check_avail(name: str):
-            name = name.lower()
-            if name == "nn" or name in available_potentials:
-                return True
-            else:
-                return False
-
         if isinstance(custom_potentials, str):
             potentials = {el: {"rho": custom_potentials,
                                "embed": custom_potentials}
@@ -121,7 +112,7 @@ class EamAlloyNN(EamNN):
         def _safe_update(section, key):
             if key in custom_potentials[section]:
                 value = custom_potentials[section][key]
-                assert _check_avail(value)
+                assert self._check_fn_avail(value)
                 potentials[section][key] = value
 
         for element in self._elements:
