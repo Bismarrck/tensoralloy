@@ -11,7 +11,7 @@ import re
 
 from os.path import exists, dirname, join
 
-from tensoralloy.cli.build import BuildDatabaseProgram
+from tensoralloy.cli.build import BuildProgram
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.cli.compute import ComputeMetricsProgram
 from tensoralloy.cli.export import ExportModelProgram
@@ -131,7 +131,7 @@ def main():
         metavar='Build a database or run an experiment.'
     )
 
-    for prog in (BuildDatabaseProgram(),
+    for prog in (BuildProgram(),
                  RunExperimentProgram(),
                  ExportModelProgram(),
                  StopExperimentProgram(),
