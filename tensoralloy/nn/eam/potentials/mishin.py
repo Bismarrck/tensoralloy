@@ -462,8 +462,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Embed/{element}"):
             nrho = self._adpfl.nrho
-            x = self._adpfl.frho[element][0][0:nrho:self._interval]
-            y = self._adpfl.frho[element][1][0:nrho:self._interval]
+            x = self._adpfl.embed[element][0][0:nrho:self._interval]
+            y = self._adpfl.embed[element][1][0:nrho:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(rho, name='shape')
             frho = f.evaluate(tf.reshape(rho, (-1,), name='rho/flat'))

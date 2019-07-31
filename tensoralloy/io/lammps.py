@@ -17,7 +17,7 @@ from atsim.potentials import writeSetFL
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["LAMMPS_COMMAND", "SetFL", "AdpFL", "read_adp_setfl",
+__all__ = ["LAMMPS_COMMAND", "SetFL", "read_adp_setfl",
            "read_eam_alloy_setfl", "write_adp_setfl"]
 
 
@@ -55,7 +55,9 @@ class SetFL:
     elements: List[str]
     rho: Dict[str, np.ndarray]
     phi: Dict[str, np.ndarray]
-    frho: Dict[str, np.ndarray]
+    embed: Dict[str, np.ndarray]
+    dipole: Dict[str, np.ndarray]
+    quadrupole: Dict[str, np.ndarray]
     nr: int
     dr: float
     nrho: int
@@ -65,24 +67,12 @@ class SetFL:
     lattice_constants: List[float]
     lattice_types: List[str]
 
-    __slots__ = ("elements", "rho", "phi", "frho", "nr", "dr", "nrho", "drho",
-                 "rcut", "atomic_masses", "lattice_constants", "lattice_types")
-
-
-@dataclass
-class AdpFL(SetFL):
-    """
-    Representation of a Lammps adp file.
-    """
-    dipole: Dict[str, np.ndarray]
-    quadrupole: Dict[str, np.ndarray]
-
-    __slots__ = ("elements", "rho", "phi", "frho", "dipole", "quadrupole",
+    __slots__ = ("elements", "rho", "phi", "embed", "dipole", "quadrupole",
                  "nr", "dr", "nrho", "drho", "rcut", "atomic_masses",
                  "lattice_constants", "lattice_types")
 
 
-def _read_setfl(filename, is_adp=False):
+def _read_setfl(filename, is_adp=False) -> SetFL:
     """
     Read tabulated rho, phi, F(rho), dipole and quadrupole values from a Lammps
     setfl file.
@@ -189,29 +179,27 @@ def _read_setfl(filename, is_adp=False):
                 if div + 1 == nab and inc + 1 == nr and is_adp:
                     ab_cycle += 1
 
-        return {'elements': elements, 'rho': rho, 'phi': phi, 'frho': frho,
-                'dipole': dipole, 'quadrupole': quadrupole, 'nr': nr, 'dr': dr,
-                'nrho': nrho, 'drho': drho, 'rcut': rcut,
-                'atomic_masses': atomic_masses,
-                'lattice_constants': lattice_constants,
-                'lattice_types': lattice_types}
+        return SetFL(**{'elements': elements, 'rho': rho, 'phi': phi,
+                        'embed': frho, 'dipole': dipole,
+                        'quadrupole': quadrupole, 'nr': nr, 'dr': dr,
+                        'nrho': nrho, 'drho': drho, 'rcut': rcut,
+                        'atomic_masses': atomic_masses,
+                        'lattice_constants': lattice_constants,
+                        'lattice_types': lattice_types})
 
 
 def read_eam_alloy_setfl(filename) -> SetFL:
     """
     Read a Lammps eam/alloy setfl file.
     """
-    adict = _read_setfl(filename, is_adp=False)
-    adict.pop('dipole')
-    adict.pop('quadrupole')
-    return SetFL(**adict)
+    return _read_setfl(filename, is_adp=False)
 
 
-def read_adp_setfl(filename) -> AdpFL:
+def read_adp_setfl(filename) -> SetFL:
     """
     Read a Lammps adp setfl file.
     """
-    return AdpFL(**_read_setfl(filename, is_adp=True))
+    return _read_setfl(filename, is_adp=True)
 
 
 def _write_setfl_pairpots(nr, dr, eampots, pairpots, out, is_phi=True):

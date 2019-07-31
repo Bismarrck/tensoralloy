@@ -110,9 +110,9 @@ def test_reconstruct_lammps_adp():
 
             with tf.name_scope("Frho"):
                 rholist = tf.convert_to_tensor(
-                    adpfl.frho['Al'][0][1:], name='rholist', dtype=dtype)
-                frhox = adpfl.frho['Al'][0][1:]
-                frhoy = adpfl.frho['Al'][1][1:]
+                    adpfl.embed['Al'][0][1:], name='rholist', dtype=dtype)
+                frhox = adpfl.embed['Al'][0][1:]
+                frhoy = adpfl.embed['Al'][1][1:]
                 func = CubicInterpolator(frhox, frhoy, natural_boundary=True)
                 frho_op = func.evaluate(rholist, name='Frho')
 
@@ -142,7 +142,7 @@ def test_reconstruct_lammps_adp():
                 assert_array_almost_equal(
                     reconstructs[2], adpfl.rho['Al'][1], delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[3], adpfl.frho['Al'][1][1:], delta=1e-5)
+                    reconstructs[3], adpfl.embed['Al'][1][1:], delta=1e-5)
                 assert_array_almost_equal(
                     reconstructs[4], adpfl.phi['AlAl'][1][1:], delta=1e-5)
                 assert_array_almost_equal(

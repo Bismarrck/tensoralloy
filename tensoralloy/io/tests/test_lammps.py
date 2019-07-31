@@ -30,7 +30,7 @@ def test_read_eam_alloy():
     assert_equal(setfl.lattice_types, ['fcc', 'fcc'])
     assert_equal(setfl.lattice_constants, [0.0, 0.0])
     assert_almost_equal(setfl.atomic_masses[0], 26.98, delta=1e-3)
-    assert_almost_equal(setfl.frho['Al'][1, 10], -1.8490865619220642e-01,
+    assert_almost_equal(setfl.embed['Al'][1, 10], -1.8490865619220642e-01,
                         delta=1e-10)
     assert_almost_equal(setfl.phi['CuCu'][1, 1] * setfl.phi['CuCu'][0, 1],
                         3.8671050028993639e+00,
