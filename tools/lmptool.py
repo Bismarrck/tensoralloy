@@ -26,7 +26,7 @@ from dscribe.kernels import REMatchKernel
 from enum import Enum
 
 from tensoralloy.io.xyz import read_stepmax_xyz, write_stepmax_xyz
-from tensoralloy.cli import CLIProgram
+from tensoralloy.cli.entry import CLIProgram
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.analysis.elastic import get_lattice_type
 from tensoralloy.utils import set_pulay_stress
