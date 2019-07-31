@@ -11,7 +11,7 @@ from os.path import join, exists
 from os import remove
 from nose.tools import assert_equal
 
-from tensoralloy.cli import PrintEvaluationSummaryProgram
+from tensoralloy.cli.entry import PrintEvaluationSummaryProgram
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
@@ -44,4 +44,4 @@ class PrintSummaryTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    nose.run()
+    nose.main()

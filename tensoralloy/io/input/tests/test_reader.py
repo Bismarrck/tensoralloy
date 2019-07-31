@@ -95,7 +95,7 @@ def test_read_eam_fs_toml():
 
     assert_equal(nested_get(configs, 'train.batch_size'), 50)
     assert_equal(nested_get(configs, 'train.shuffle'), True)
-    assert_equal(nested_get(configs, 'nn.activation'), 'leaky_relu')
+    assert_equal(nested_get(configs, 'nn.activation'), 'softplus')
     assert_list_equal(reader['nn.export'],
                       ['energy', 'forces', 'hessian', 'stress'])
     assert_list_equal(reader['nn.minimize'],
