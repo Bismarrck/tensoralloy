@@ -12,7 +12,7 @@ import warnings
 from os.path import dirname, join, splitext, basename, exists
 
 from tensoralloy import InputReader, TrainingManager
-from tensoralloy.cli.entry import CLIProgram
+from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.test_utils import datasets_dir
 
 __author__ = 'Xin Chen'

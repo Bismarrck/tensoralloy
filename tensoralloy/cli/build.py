@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import argparse
 
-from tensoralloy.cli.entry import CLIProgram
+from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.io import read_file
 
 __author__ = 'Xin Chen'

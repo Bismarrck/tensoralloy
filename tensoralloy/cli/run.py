@@ -10,7 +10,7 @@ import re
 from os.path import join, exists
 
 from tensoralloy import TrainingManager
-from tensoralloy.cli.entry import CLIProgram
+from tensoralloy.cli.cli import CLIProgram
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

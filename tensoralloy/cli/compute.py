@@ -23,7 +23,7 @@ from tensoralloy.analysis.elastic import get_lattice_type
 from tensoralloy.analysis.elastic import get_elementary_deformations
 from tensoralloy.analysis.elastic import get_elastic_tensor
 from tensoralloy.analysis.eos import EquationOfState
-from tensoralloy.cli.entry import CLIProgram
+from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.nn.constraint.data import read_external_crystal
 from tensoralloy.precision import precision_scope
 from tensoralloy.utils import Defaults
