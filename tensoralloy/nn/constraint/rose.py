@@ -241,6 +241,6 @@ def get_rose_constraint_loss(base_nn,
 
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-                    tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
+                    tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
 
         return tf.add_n(losses, name='total_loss')
