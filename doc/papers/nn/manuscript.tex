@@ -38,18 +38,18 @@
 Atomistic modeling is important for studying physical and chemical properties of
 materials. Recently, machine learning interaction potentials have gained much 
 more attentions as they can provide density functional theory level predictions 
-within negligible time. Currently, the symmetry function descriptor based 
+within negligible time. The symmetry function descriptor based 
 atomistic neural network is the most widely used model for modeling alloys. 
 To precisely describe complex potential energy surfaces, integrating advanced 
 metrics, such as force or virial stress, into training can be of great help.  
 In this work, we propose a virtual-atom approach to model the total energy of 
 symmetry function descriptors based atomistic neural network. Our approach 
-starts from atomic positions directly so that the derivations of forces and 
-virial can be handled by TensorFlow automatically and efficiently. This new 
-approach is implemented in our program TensorAlloy, which supports constructing 
-machine learning interaction potentials for both \textit{molecules} and 
-\textit{solids}. The QM7 and SNAP/Ni-Mo datasets are used to demostrate the 
-performances of our program.
+creates the computation graph directly from atomic positions. Thus, the 
+derivations of forces and virial can be handled by TensorFlow automatically and 
+efficiently. This new approach is implemented in our program TensorAlloy, which 
+supports constructing machine learning interaction potentials for both 
+\textit{molecules} and \textit{solids}. The QM7 and SNAP/Ni-Mo datasets are used 
+to demostrate the performances of our program.
 \end{abstract}
 
 \maketitle
@@ -111,8 +111,8 @@ This traditional approach can significantly reduce technical difficulty and
 works very well if only total energy is considered in the loss function. But to 
 fit atomic forces, numerous codes must be written manually, such as the 
 derivation of descriptors with respect to positions. Although the derivation is 
-theoreticallyclear, the implementation is challenging and the efficiency can not 
-be guaranteed.
+theoretically clear, the implementation is challenging and the efficiency can 
+not be guaranteed.
 
 Recently, machine learning platforms (TensorFlow\cite{tensorflow}, 
 PyTorch\cite{pytorch}, MXNet\cite{MXNet}, etc) have gain significant 
@@ -172,7 +172,8 @@ GitHub (https://github.com/Bismarrck/vap) freely.
 \label{section:theory}
 
 In the atomistic neural network (\textbf{ANN}) framework, the total energy, 
-$E^{total}$, of a structure with $N$ atoms, is the sum of all atomic energies:
+$E^{total}$, of a structure with $N$ atoms, can be expressed as the sum of all 
+atomic energies:
 \begin{equation}
 \label{eq:general_e_total}
 E^{total} = \sum_{i}^{N}{E_i}
@@ -183,21 +184,22 @@ network $\mathbf{NN}_{el}$ for element $el$:
 E_i = \mathbf{NN}_{el}\left( \mathbf{G}_i \right)
 \end{equation} 
 Here $\mathbf{G}_i$ is a vector representing atomic descriptors of atom $i$. 
-$\mathbf{G}_i$ typically only depends on local environments, i.e.  
-neighbors of atom $i$:
+$\mathbf{G}_i$ typically only depends on local environment of atom $i$, i.e.  
+its neighbors:
 \begin{equation}
 \mathbf{G}_i = F_G(\left\{ \rijn, |\rijn| < r_c\right\} )
 \end{equation}
-where $F_G$ can be arbitrary function, $r_c$ is the cutoff radius and $\rijn$ is 
-the interatomic distance considering the periodic boundary conditions: 
+where $F_G$ is a specifc feature function, $r_c$ is the cutoff radius and 
+$\rijn$ is the interatomic distance considering the periodic boundary 
+conditions: 
 \begin{equation}
     \label{eq:rijn}
     \rijn = \Vert \mathbf{r}_i^{(0)} - \mathbf{r}_j^{(0)} + 
     \mathbf{n}^T \mathbf{h} \Vert
 \end{equation}
-where $\mathbf{r}_i^{(0)}$ and $\mathbf{r}_j^{(0)}$ denote positions of $i$ and 
-$j$ in the primitive cell, $\mathbf{n}$ is a column vector specifying the cell 
-shifts along $(X,Y,Z)$ directions 
+where $\mathbf{r}_i^{(0)}$ and $\mathbf{r}_j^{(0)}$ denote positions of atoms 
+$i$ and $j$ in the primitive cell, $\mathbf{n}$ is a column vector specifying 
+the cell shifts along $(X,Y,Z)$ directions
 \begin{equation}
     \label{eq:ij_shift}
     \mathbf{n} = \begin{pmatrix}
@@ -525,7 +527,7 @@ SNAP/Ni-Mo dataset.
 Then we can determine another two key constants: $\nijmax$ and $\nijkmax$. 
 Here $\nijmax$ represents the maximum number of atom-atom pairs in
 arbitrary structure and the subscript 'ijk' denotes triples 
-(or three-atoms interactions). $\nijmax$ and $\nijkmax$ only depend on 
+(or three-atoms) interactions. $\nijmax$ and $\nijkmax$ only depend on 
 $r_{cut}$ and the associated codes are given in Appendix(B). 
 Table \ref{table:nij_nijk_max} summarizes $\nijmax$ and $\nijkmax$ at different
 $r_{cut}$ of the two demo datasets: QM7 and Ni-Mo (SNAP).
