@@ -140,6 +140,20 @@ class ComputeElasticTensorProgram(CLIProgram):
             help="Compute the elastic constants analytically if possible."
         )
 
+        group = subparser.add_argument_group("Numeric Options")
+        group.add_argument(
+            "--n",
+            type=int,
+            default=10,
+            help="Set the number of deformed structures. Defaults to 10.",
+        )
+        group.add_argument(
+            "--d",
+            type=float,
+            default=0.5,
+            help="The deformation distance. Defaults to 0.5."
+        )
+
         super(ComputeElasticTensorProgram, self).config_subparser(subparser)
 
     @property
@@ -157,7 +171,8 @@ class ComputeElasticTensorProgram(CLIProgram):
                     crystal, auto_conventional_standard=True)
                 lattyp, brav, sg_name, sg_nr = get_lattice_type(crystal)
             else:
-                systems = get_elementary_deformations(crystal, n=10, d=0.5)
+                systems = get_elementary_deformations(
+                    crystal, n=args.n, d=args.d)
                 for atoms in systems:
                     atoms.calc = calc
                 tensor, _, lattice = get_elastic_tensor(crystal, systems)
