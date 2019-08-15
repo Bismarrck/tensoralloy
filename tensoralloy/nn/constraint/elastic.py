@@ -39,7 +39,7 @@ def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
     cij = tf.math.truediv(cij, volume)
     cij = tf.math.truediv(
         cij, tf.convert_to_tensor(GPa, dtype=cell.dtype, name='GPa'),
-        name=f'c{i}{j}')
+        name=f'c{i}{j}xx/GPa')
     if name is None:
         name = f'c{i}{j}{k}{l}'
     return tf.identity(cij[k, l], name=name)
