@@ -5,15 +5,13 @@ This module can be used to infer RMSE loss of elastic constants.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-import numpy as np
 
 from tensorflow_estimator import estimator as tf_estimator
 from ase.units import GPa
-from typing import List, Union
-from itertools import product
+from typing import List, Union, Tuple
 
 from tensoralloy.nn.constraint.data import Crystal, get_crystal
-from tensoralloy.nn.constraint.voigt import voigt_notation
+from tensoralloy.nn.constraint.voigt import voigt_notation, voigt_to_ij
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.dataclasses import ElasticConstraintOptions
 from tensoralloy.precision import get_float_dtype
@@ -25,7 +23,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
-                  i: int, j: int, k: int, l: int, name=None):
+                  i: int, j: int, kl: List[Tuple[int, int]]):
     """
     Return the Op to compute C_{ijkl}.
     """
@@ -40,9 +38,11 @@ def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
     cij = tf.math.truediv(
         cij, tf.convert_to_tensor(GPa, dtype=cell.dtype, name='GPa'),
         name=f'c{i}{j}xx/GPa')
-    if name is None:
+    groups = {}
+    for (k, l) in kl:
         name = f'c{i}{j}{k}{l}'
-    return tf.identity(cij[k, l], name=name)
+        groups[(k, l)] = tf.identity(cij[k, l], name=name)
+    return groups
 
 
 def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
@@ -75,17 +75,17 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         assert cell.shape.as_list() == [3, 3]
         components = []
         v2c_map = []
-        filled = np.zeros((6, 6), dtype=bool)
-        for (i, j, k, l) in product([0, 1, 2], repeat=4):
-            vi = voigt_notation(i, j, return_py_index=True)
-            vj = voigt_notation(k, l, return_py_index=True)
-            if filled[vi, vj]:
-                continue
-            with tf.name_scope(f"{i}{j}{k}{l}"):
-                cijkl = _get_cijkl_op(total_stress, cell, volume, i, j, k, l)
-            components.append(cijkl)
-            v2c_map.append((vi, vj))
-            filled[vi, vj] = True
+        for vi in range(6):
+            i, j = voigt_to_ij(vi, is_py_index=True)
+            pairs = []
+            for vj in range(vi, 6):
+                k, l = voigt_to_ij(vj, is_py_index=True)
+                pairs.append((k, l))
+            ops = _get_cijkl_op(total_stress, cell, volume, i, j, pairs)
+            for (k, l), cijkl in ops.items():
+                vj = voigt_notation(k, l, return_py_index=True)
+                components.append(cijkl)
+                v2c_map.append((vi, vj))
         vector = tf.stack(components)
         elastic = tf.scatter_nd(v2c_map, vector, shape=(6, 6), name=name)
         if verbose:
@@ -186,27 +186,37 @@ def get_elastic_constant_loss(base_nn,
                     tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
+                    groups = {}
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
                         vi = voigt_notation(i, j)
-                        vj = voigt_notation(k, l)
-                        cijkl = _get_cijkl_op(
-                            total_stress, cell, volume, i, j, k, l,
-                            name=f"C{vi}{vj}")
-                        if verbose:
-                            log_tensor(cijkl)
-                        predictions.append(cijkl)
-                        labels.append(
-                            tf.convert_to_tensor(elastic_constant.value,
-                                                 dtype=total_stress.dtype,
-                                                 name=f'C{vi}{vj}/ref'))
-                        cijkl_weights.append(
-                            tf.convert_to_tensor(elastic_constant.weight,
-                                                 dtype=total_stress.dtype,
-                                                 name=f'C{vi}{vj}/weight'))
+                        groups[vi] = groups.get(vi, []) + [elastic_constant]
 
-                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
-                        tf.add_to_collection(GraphKeys.EVAL_METRICS, cijkl)
+                    for vi, elastic_constants in groups.items():
+                        i, j = voigt_to_ij(vi, is_py_index=False)
+                        pairs = []
+                        for elastic_constant in elastic_constants:
+                            k, l = elastic_constant.ijkl[2:]
+                            pairs.append((k, l))
+                        ops = _get_cijkl_op(
+                            total_stress, cell, volume, i, j, pairs)
+                        for (k, l), cijkl in ops.items():
+                            vj = voigt_notation(k, l)
+                            cijkl = tf.identity(cijkl, name=f"C{vi}{vj}")
+                            if verbose:
+                                log_tensor(cijkl)
+                            predictions.append(cijkl)
+                            labels.append(
+                                tf.convert_to_tensor(elastic_constant.value,
+                                                     dtype=total_stress.dtype,
+                                                     name=f'C{vi}{vj}/ref'))
+                            cijkl_weights.append(
+                                tf.convert_to_tensor(elastic_constant.weight,
+                                                     dtype=total_stress.dtype,
+                                                     name=f'C{vi}{vj}/weight'))
+
+                            tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
+                            tf.add_to_collection(GraphKeys.EVAL_METRICS, cijkl)
 
                 # Loss contribution from elastic constants
                 with tf.name_scope("Loss"):
