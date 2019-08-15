@@ -186,22 +186,24 @@ def get_elastic_constant_loss(base_nn,
                     tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
-                    groups = {}
+                    groups = {vi: {} for vi in range(6)}
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
                         vi = voigt_notation(i, j)
-                        groups[vi] = groups.get(vi, []) + [elastic_constant]
+                        vj = voigt_notation(k, l)
+                        groups[vi][vj] = elastic_constant
 
-                    for vi, elastic_constants in groups.items():
+                    for vi, igroup in groups.items():
                         i, j = voigt_to_ij(vi, is_py_index=False)
                         pairs = []
-                        for elastic_constant in elastic_constants:
+                        for elastic_constant in igroup.values():
                             k, l = elastic_constant.ijkl[2:]
                             pairs.append((k, l))
                         ops = _get_cijkl_op(
                             total_stress, cell, volume, i, j, pairs)
                         for (k, l), cijkl in ops.items():
                             vj = voigt_notation(k, l)
+                            elastic_constant = groups[vi][vj]
                             cijkl = tf.identity(cijkl, name=f"C{vi}{vj}")
                             if verbose:
                                 log_tensor(cijkl)
