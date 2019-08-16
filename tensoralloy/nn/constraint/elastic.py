@@ -186,7 +186,7 @@ def get_elastic_constant_loss(base_nn,
                     tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
-                    groups = {vi: {} for vi in range(6)}
+                    groups = {vi: {} for vi in range(1, 7)}
                     for elastic_constant in crystal.elastic_constants:
                         i, j, k, l = elastic_constant.ijkl
                         vi = voigt_notation(i, j)
