@@ -208,14 +208,6 @@ class CoreDatabase(SQLite3Database):
                                            prop=NeighborProperty.nijk,
                                            allow_calculation=allow_calculation)
 
-    def get_nnl_max(self, rc: float, allow_calculation=False):
-        """
-        Return the corresponding `N_nl_max`.
-        """
-        return self._get_neighbor_property(rc=rc,
-                                           prop=NeighborProperty.nnl,
-                                           allow_calculation=allow_calculation)
-
     def update_neighbor_meta(self,
                              rc: float,
                              angular=False,
@@ -270,13 +262,10 @@ class CoreDatabase(SQLite3Database):
         self._write_metadata()
 
         if verbose:
-            print('All {} jobs are done. nij_max = {}, nijk_max = {}, '
-                  'nnl_max = {}'.format(size,
-                                        maxvals.nij,
-                                        maxvals.nijk,
-                                        maxvals.nnl))
+            print('All {} jobs are done. nij_max = {}, nijk_max = {}'.format(
+                size, maxvals.nij, maxvals.nijk))
 
-        return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk, nnl=maxvals.nnl)
+        return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk)
 
 
 def _compute_atomic_static_energy(database: SQLite3Database,

@@ -96,7 +96,6 @@ class IndexTransformer:
         """
         return self._mask
 
-    # FIXME: the index here should start from one. This may be confusing.
     def inplace_map_index(self, index_or_indices, reverse=False,
                           exclude_extra=False):
         """
@@ -174,59 +173,3 @@ class IndexTransformer:
     def map_forces(self, forces: np.ndarray, reverse=False):
         """ A wrapper function. """
         return self.map_array(forces, reverse=reverse)
-
-    def reverse_map_hessian(self, hessian: np.ndarray, phonopy_format=False):
-        """
-        Transform the [Np, 3, Np, 3] Hessian matrix to [3N, 3N] where N is the
-        number of atoms (excluding the virtual atom) and Np is number of atoms
-        in the projected frame.
-
-        Parameters
-        ----------
-        hessian : array_like
-            The original hessian matrix calculated by TensorFlow. The shape is
-            [self.max_n_atoms, 3, self.max_n_atoms, 3].
-        phonopy_format : bool
-            Return the phonopy-format `(N, N, 3, 3)` hessian matrix if True.
-
-        Returns
-        -------
-        hessian : array_like
-            The transformed hessian matrix. The shape is:
-                * [self.n_atoms * 3, self.n_atoms * 3]
-                * [self.n_atoms, self.n_atoms, 3, 3] if `phonopy_format` is True
-
-        """
-        rank = np.ndim(hessian)
-        if rank != 4 or hessian.shape[1] != 3 or hessian.shape[3] != 3:
-            raise ValueError(
-                "The input array should be a 4D matrix of shape [Np, 3, Np, 3]")
-
-        indices = []
-        istart = IndexTransformer._ISTART
-        for i in range(istart, istart + len(self._symbols)):
-            indices.append(self._index_map[i])
-
-        n = len(self._symbols)
-
-        if not phonopy_format:
-            h = np.zeros((n * 3, n * 3))
-            for i in range(n):
-                for alpha in range(3):
-                    for j in range(n):
-                        for beta in range(3):
-                            row = i * 3 + alpha
-                            col = j * 3 + beta
-                            x = hessian[indices[i], alpha, indices[j], beta]
-                            h[row, col] = x
-
-        else:
-            h = np.zeros((n, n, 3, 3))
-            for i in range(n):
-                for alpha in range(3):
-                    for j in range(n):
-                        for beta in range(3):
-                            x = hessian[indices[i], alpha, indices[j], beta]
-                            h[i, j, alpha, beta] = x
-
-        return h

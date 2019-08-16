@@ -16,7 +16,7 @@ from tensoralloy.descriptor.base import AtomicDescriptor
 from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
 from tensoralloy.utils import Defaults, GraphKeys
-from tensoralloy.extension.grad_ops import safe_pow
+from tensoralloy.descriptor.grad_ops import safe_pow
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

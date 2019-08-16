@@ -11,7 +11,6 @@ import abc
 from collections import Counter
 from typing import Dict, List
 from ase import Atoms
-from ase.units import GPa
 from ase.calculators.singlepoint import SinglePointCalculator
 
 from tensoralloy.utils import AttributeDict, get_pulay_stress
@@ -227,17 +226,6 @@ def int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def _get_confidence_vector(atoms: Atoms) -> np.ndarray:
-    """
-    Return a vector as the confidences of energy, forces and stress of this
-    `Atoms`.
-    """
-    if 'data' in atoms.info:
-        return atoms.info['data'].get("weights", np.ones(3))
-    else:
-        return atoms.info.get("weights", np.ones(3))
-
-
 class BatchDescriptorTransformer(BaseTransformer):
     """
     This class represents atomic descriptor transformers for batch training and
@@ -402,8 +390,6 @@ class BatchDescriptorTransformer(BaseTransformer):
         y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         composition = self._get_composition(atoms)
         mask = clf.mask.astype(np_dtype)
-        confidences = np.reshape(
-            _get_confidence_vector(atoms).astype(np_dtype), (3, 1))
         pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
 
         feature_list = {
@@ -412,7 +398,6 @@ class BatchDescriptorTransformer(BaseTransformer):
             'n_atoms': int64_feature(len(atoms)),
             'volume': bytes_feature(volume.tostring()),
             'y_true': bytes_feature(y_true.tostring()),
-            'y_conf': bytes_feature(confidences[0].tostring()),
             'mask': bytes_feature(mask.tostring()),
             'composition': bytes_feature(composition.tostring()),
             'pulay': bytes_feature(pulay.tostring()),
@@ -420,7 +405,6 @@ class BatchDescriptorTransformer(BaseTransformer):
         if self.use_forces:
             f_true = clf.map_forces(atoms.get_forces()).astype(np_dtype)
             feature_list['f_true'] = bytes_feature(f_true.tostring())
-            feature_list['f_conf'] = bytes_feature(confidences[1].tostring())
 
         if self.use_stress:
             # Convert the unit of the stress tensor to 'eV' for simplification:
@@ -428,12 +412,8 @@ class BatchDescriptorTransformer(BaseTransformer):
             # 1 GPa = 10 kbar
             # reduced_stress (eV) = stress * volume
             virial = atoms.get_stress(voigt=True).astype(np_dtype)
-            internal_pressure = np.atleast_1d(
-                -virial[:3].mean() / GPa).astype(np_dtype)
             feature_list['stress'] = bytes_feature(virial.tostring())
-            feature_list['total_pressure'] = bytes_feature(
-                np.atleast_1d(internal_pressure).tostring())
-            feature_list['s_conf'] = bytes_feature(confidences[2].tostring())
+
         return feature_list
 
     @abc.abstractmethod
@@ -474,10 +454,6 @@ class BatchDescriptorTransformer(BaseTransformer):
         y_true.set_shape([1])
         decoded.y_true = tf.squeeze(y_true, name='y_true')
 
-        y_conf = tf.decode_raw(example['y_conf'], float_dtype)
-        y_conf.set_shape([1])
-        decoded.y_conf = tf.squeeze(y_conf, name='y_conf')
-
         cells = tf.decode_raw(example['cells'], float_dtype)
         cells.set_shape([9])
         decoded.cells = tf.reshape(cells, (3, 3), name='cells')
@@ -505,25 +481,11 @@ class BatchDescriptorTransformer(BaseTransformer):
             decoded.f_true = tf.reshape(
                 f_true, (max_n_atoms + 1, 3), name='f_true')
 
-            f_conf = tf.decode_raw(example['f_conf'], float_dtype)
-            f_conf.set_shape([1])
-            decoded.f_conf = tf.squeeze(f_conf, name='f_conf')
-
         if use_stress:
             stress = tf.decode_raw(
                 example['stress'], float_dtype, name='stress')
             stress.set_shape([6])
             decoded.stress = stress
-
-            total_pressure = tf.decode_raw(
-                example['total_pressure'], float_dtype)
-            total_pressure.set_shape([1])
-            decoded.total_pressure = tf.squeeze(
-                total_pressure, name='total_pressure')
-
-            s_conf = tf.decode_raw(example['s_conf'], float_dtype)
-            s_conf.set_shape([1])
-            decoded.s_conf = tf.squeeze(s_conf, name='s_conf')
 
         return decoded
 

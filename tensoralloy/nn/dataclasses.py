@@ -5,7 +5,7 @@ This module defines data classes for `tensoralloy.nn` package.
 from __future__ import print_function, absolute_import
 
 from dataclasses import dataclass, fields, is_dataclass
-from typing import List, Union, Dict
+from typing import Union, Dict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,7 +76,6 @@ class _LossOptions:
     """
     The basic options for a loss.
     """
-
     weight: float = 1.0
 
 
@@ -86,7 +85,6 @@ class EnergyLossOptions(_LossOptions):
     """
     Special options for the loss of energies.
     """
-
     per_atom_loss: bool = False
     method: str = 'rmse'
 
@@ -97,7 +95,6 @@ class ForcesLossOptions(_LossOptions):
     """
     Special options for the loss of atomic forces.
     """
-
     method: str = 'rmse'
 
 
@@ -107,17 +104,6 @@ class StressLossOptions(_LossOptions):
     """
     Special options for the loss of stress tensors.
     """
-
-    method: str = 'rmse'
-
-
-@add_slots
-@dataclass
-class PressureLossOptions(_LossOptions):
-    """
-    Special options for the loss of total pressures.
-    """
-
     method: str = 'rmse'
 
 
@@ -128,49 +114,10 @@ class L2LossOptions(_LossOptions):
     Special options for the L2 regularization.
     The default weight is changed to 0.01.
     """
-
     weight: float = 0.01
     decayed: bool = True
     decay_rate: float = 0.99
     decay_steps: int = 1000
-
-
-@add_slots
-@dataclass
-class ElasticConstraintOptions:
-    """
-    Options for computing loss of the elastic contraints.
-    """
-
-    use_kbar: bool = True
-    forces_weight: float = 1.0
-    stress_weight: float = 0.1
-    tau: float = 1.0
-
-
-@add_slots
-@nested_dataclass
-@dataclass
-class ElasticLossOptions(_LossOptions):
-    """
-    Special options for the loss of elastic constants.
-    """
-
-    crystals: List[str] = None
-    constraint: ElasticConstraintOptions = ElasticConstraintOptions()
-
-
-@add_slots
-@dataclass
-class RoseLossOptions(_LossOptions):
-    """
-    Special options for the Rose Equation of State loss.
-    """
-
-    dx: float = 0.10
-    delta: float = 0.01
-    crystals: List[str] = None
-    beta: List[float] = None
 
 
 @dataclass
@@ -187,15 +134,10 @@ class LossParameters(_HyperParameters):
     """
     Hyper parameters for constructing the total loss.
     """
-
-    equivalently_trusted: bool = True
     energy: EnergyLossOptions = EnergyLossOptions()
     forces: ForcesLossOptions = ForcesLossOptions()
     stress: StressLossOptions = StressLossOptions()
-    total_pressure: PressureLossOptions = PressureLossOptions()
     l2: L2LossOptions = L2LossOptions()
-    elastic: ElasticLossOptions = ElasticLossOptions()
-    rose: RoseLossOptions = RoseLossOptions()
 
 
 @add_slots
@@ -204,7 +146,6 @@ class OptParameters(_HyperParameters):
     """
     Hyper parameters for optimizing the total loss.
     """
-
     method: str = 'adam'
     learning_rate: float = 0.01
     decay_function: Union[str, None] = None
@@ -232,7 +173,6 @@ class TrainParameters(_HyperParameters):
     """
     Hyper parameters for handling the training.
     """
-
     model_dir: str = "train"
     reset_global_step: bool = True
     batch_size: int = 50
@@ -261,7 +201,6 @@ class StructuralProperty:
         A boolean indicating whether this property can be exported or not.
 
     """
-
     name: str
     minimizable: bool = True
     exportable: bool = True

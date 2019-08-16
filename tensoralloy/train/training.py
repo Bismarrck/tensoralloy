@@ -19,13 +19,11 @@ from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn import EamFsNN, EamAlloyNN, AdpNN, AtomicNN, AtomicResNN
-from tensoralloy.nn.eam.potentials import available_potentials
+from tensoralloy.nn import AtomicNN, AtomicResNN
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
-from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
+from tensoralloy.utils import set_logging_configs, AttributeDict
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
 
@@ -165,46 +163,6 @@ class TrainingManager:
                 self._reader['nn.atomic.resnet.fixed_static_energy']
             return AtomicResNN(**kwargs)
 
-    def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:
-        """
-        Initialize an `EamAlloyNN` or an 'EamFsNN'.
-        """
-
-        hidden_sizes = {}
-        custom_potentials = {}
-
-        for pot in ('rho', 'embed', 'phi', 'dipole', 'quadrupole'):
-            keypath = f'nn.eam.{pot}'
-            if self._reader[keypath] is None:
-                continue
-            for key in self._reader[keypath].keys():
-                value = self._reader[f'nn.eam.{pot}.{key}']
-                if value is None:
-                    continue
-                if isinstance(value, str):
-                    if value not in available_potentials:
-                        if not value.startswith("spline@"):
-                            raise ValueError(
-                                f"The empirical potential "
-                                f"[{pot}.{value}] is not available")
-                    nested_set(custom_potentials, f'{key}.{pot}', value)
-                else:
-                    nested_set(hidden_sizes, f'{key}.{pot}', value)
-                    nested_set(custom_potentials, f'{key}.{pot}', 'nn')
-
-        kwargs.update(dict(hidden_sizes=hidden_sizes,
-                           custom_potentials=custom_potentials))
-
-        arch = self._reader['nn.eam.arch']
-        if arch == "EamAlloyNN":
-            return EamAlloyNN(**kwargs)
-        elif arch == "EamFsNN":
-            return EamFsNN(**kwargs)
-        elif arch == "AdpNN":
-            return AdpNN(**kwargs)
-        else:
-            raise ValueError(f"Unknown arch {arch}")
-
     def _get_nn(self):
         """
         Initialize a `BasicNN` using the configs of the input file.
@@ -217,10 +175,7 @@ class TrainingManager:
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties,
                   'activation': activation}
-        if self._reader['dataset.descriptor'] == 'behler':
-            nn = self._get_atomic_nn(kwargs)
-        else:
-            nn = self._get_eam_nn(kwargs)
+        nn = self._get_atomic_nn(kwargs)
 
         # Attach the transformer
         nn.attach_transformer(self._dataset.transformer)
@@ -231,35 +186,22 @@ class TrainingManager:
         Initialize a `Dataset` using the configs of the input file.
         """
         database = connect(self._reader['dataset.sqlite3'])
-
-        descriptor = self._reader['dataset.descriptor']
-
         rc = self._reader['dataset.rc']
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-        if descriptor == 'behler':
-            if self._reader['nn.atomic.behler.angular']:
-                nijk_max = database.get_nijk_max(rc, allow_calculation=True)
-            else:
-                nijk_max = 0
-            clf = BatchSymmetryFunctionTransformer(
-                rc=rc,
-                max_occurs=max_occurs,
-                nij_max=nij_max,
-                nijk_max=nijk_max,
-                use_stress=database.has_stress,
-                use_forces=database.has_forces,
-                **self._reader['nn.atomic.behler'])
+        if self._reader['nn.atomic.behler.angular']:
+            nijk_max = database.get_nijk_max(rc, allow_calculation=True)
         else:
-            nnl_max = database.get_nnl_max(rc, allow_calculation=True)
-            if self._reader['nn.eam.arch'] == 'AdpNN':
-                cls = BatchADPTransformer
-            else:
-                cls = BatchEAMTransformer
-            clf = cls(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
-                      nnl_max=nnl_max, use_forces=database.has_forces,
-                      use_stress=database.has_stress)
+            nijk_max = 0
+        clf = BatchSymmetryFunctionTransformer(
+            rc=rc,
+            max_occurs=max_occurs,
+            nij_max=nij_max,
+            nijk_max=nijk_max,
+            use_stress=database.has_stress,
+            use_forces=database.has_forces,
+            **self._reader['nn.atomic.behler'])
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']
@@ -391,8 +333,7 @@ class TrainingManager:
                 tf_estimator.train_and_evaluate(
                     estimator, train_spec, eval_spec)
 
-    def export(self, checkpoint=None, tag=None, use_ema_variables=True,
-               **kwargs):
+    def export(self, checkpoint=None, tag=None, use_ema_variables=True):
         """
         Export the trained model.
         """
@@ -413,34 +354,3 @@ class TrainingManager:
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
                 keep_tmp_files=False)
-
-            if isinstance(self._nn, (EamAlloyNN, EamFsNN, AdpNN)):
-                setfl_kwargs = self._reader['nn.eam.setfl']
-
-                if 'lattice' in setfl_kwargs:
-                    lattice = setfl_kwargs.pop('lattice')
-                    lattice_constants = lattice.get('constant', {})
-                    lattice_types = lattice.get('type', {})
-                else:
-                    lattice_constants = None
-                    lattice_types = None
-
-                if isinstance(self._nn, AdpNN):
-                    if tag is not None:
-                        setfl = f'{self._dataset.name}.{tag}.adp'
-                    else:
-                        setfl = f'{self._dataset.name}.adp'
-                else:
-                    if tag is not None:
-                        setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
-                    else:
-                        setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
-
-                self._nn.export_to_setfl(
-                    setfl=join(self._hparams.train.model_dir, setfl),
-                    checkpoint=checkpoint,
-                    lattice_constants=lattice_constants,
-                    lattice_types=lattice_types,
-                    use_ema_variables=use_ema_variables,
-                    **setfl_kwargs,
-                    **kwargs)

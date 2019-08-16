@@ -4,12 +4,10 @@ Command-line programs under the `build` scope.
 """
 from __future__ import print_function, absolute_import
 
-import pandas as pd
 import argparse
 
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.io.read import read_file
-from tensoralloy.io.lammps import read_eam_alloy_setfl, read_adp_setfl
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -26,7 +24,6 @@ class BuildProgram(CLIProgram):
         """
         self._programs = [
             BuildDatabaseProgram(),
-            BuildSplineGuessProgram(),
         ]
 
     @property
@@ -129,110 +126,3 @@ class BuildDatabaseProgram(CLIProgram):
             help='The unit of the stress tensors in the file.',
         )
         super(BuildDatabaseProgram, self).config_subparser(subparser)
-
-
-class BuildSplineGuessProgram(CLIProgram):
-    """
-    Build the initial guess file of cubic spline potentials.
-    """
-
-    @property
-    def name(self):
-        return "spline"
-
-    @property
-    def help(self):
-        return "Build initial guess for cubic spline potentials"
-
-    @property
-    def main_func(self):
-        """
-        The main function.
-        """
-        def func(args: argparse.Namespace):
-            is_adp = False
-            try:
-                setfl = read_adp_setfl(args.setfl)
-            except Exception:
-                try:
-                    setfl = read_eam_alloy_setfl(args.setfl)
-                except Exception as excp:
-                    raise excp
-            else:
-                is_adp = True
-            data = {}
-
-            def update_field(key, pot):
-                """
-                A helper function to update the dict `data`.
-                """
-                data[f"{key}.{pot}.x"] = getattr(setfl, pot)[key][0][::step]
-                data[f"{key}.{pot}.y"] = getattr(setfl, pot)[key][1][::step]
-
-            if args.exclude_types:
-                exclude_types = [x.strip().lower()
-                                 for x in args.exclude_types.split(",")]
-            else:
-                exclude_types = []
-            if args.exclude_pairs:
-                exclude_pairs = [x.strip().lower()
-                                 for x in args.exclude_pairs.split(",")]
-            else:
-                exclude_pairs = []
-            step = args.interval
-            n = len(setfl.elements)
-            for i in range(n):
-                a = setfl.elements[i]
-                if a not in exclude_pairs:
-                    for ptype in ("rho", "embed"):
-                        if ptype not in exclude_types:
-                            update_field(a, ptype)
-                for j in range(i, n):
-                    b = setfl.elements[j]
-                    ab = "".join(sorted((a, b)))
-                    if ab not in exclude_pairs:
-                        if "phi" not in exclude_types:
-                            update_field(ab, "phi")
-                        if is_adp:
-                            for ptype in ("dipole", "quadrupole"):
-                                if ptype not in exclude_types:
-                                    update_field(ab, ptype)
-            df = pd.DataFrame(data)
-            df.to_csv(args.output, index=None)
-        return func
-
-    def config_subparser(self, subparser: argparse.ArgumentParser):
-        """
-        Config the parser.
-        """
-        subparser.add_argument(
-            "setfl",
-            type=str,
-            help="A lammps setfl potential file."
-        )
-        subparser.add_argument(
-            "output",
-            type=str,
-            help="The output initial guess csv file."
-        )
-        subparser.add_argument(
-            "--interval",
-            type=int,
-            default=100,
-            help="The slice interval for selecting reference data points."
-        )
-        subparser.add_argument(
-            "--exclude-types",
-            default=None,
-            type=str,
-            help="A comma-separated string as the excluded "
-                 "potential types (e.g. 'rho,embed')"
-        )
-        subparser.add_argument(
-            "--exclude-pairs",
-            default=None,
-            type=str,
-            help="A comma-separated string as the excluded "
-                 "elements or interaction types (e.g. 'Ni,NiMo')"
-        )
-        super(BuildSplineGuessProgram, self).config_subparser(subparser)

@@ -19,7 +19,6 @@ __email__ = 'Bismarrck@me.com'
 
 
 __all__ = ["get_energy_loss", "get_forces_loss", "get_stress_loss",
-           "get_total_pressure_loss", "get_total_pressure_loss",
            "LossMethod"]
 
 
@@ -321,58 +320,6 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, weights=None,
             tf.add_to_collections(collections, loss)
             if mae is not None:
                 tf.add_to_collections(collections, mae)
-        return loss
-
-
-def get_total_pressure_loss(labels, predictions, loss_weight=1.0, weights=None,
-                            collections=None, method=LossMethod.rmse):
-    """
-    Return the RMSE loss of the total pressure.
-
-    Parameters
-    ----------
-    labels : tf.Tensor
-        A float tensor of shape `[batch_size, ]` as the reference pressure.
-        energies.
-    predictions : tf.Tensor
-        A float tensor of shape `[batch_size, ]` as the predicted pressure.
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
-    weights : tf.Tensor or None
-        A float tensor of shape `[batch_size, ]` as the stress weights of each
-        structure. If None, all stress tensors are trusted equally.
-    collections : List[str] or None
-        A list of str as the collections where the loss tensors should be added.
-    method : LossMethod
-        The loss method to use.
-
-    Returns
-    -------
-    loss : tf.Tensor
-        A float tensor as the total loss.
-
-    """
-    assert method != LossMethod.rrmse
-
-    with tf.name_scope("Pressure"):
-        assert labels.shape.ndims == 1
-        assert predictions.shape.ndims == 1
-
-        if method == LossMethod.rmse:
-            raw_loss, mae = _get_rmse_loss(labels, predictions,
-                                           is_per_atom_loss=False,
-                                           weights=weights)
-        else:
-            raw_loss, mae = _get_logcosh_loss(labels, predictions,
-                                              weights, False)
-
-        loss_weight = tf.convert_to_tensor(
-            loss_weight, raw_loss.dtype, name='weight')
-        loss = tf.multiply(raw_loss, loss_weight, name='weighted/loss')
-        if collections is not None:
-            tf.add_to_collections(collections, mae)
-            tf.add_to_collections(collections, raw_loss)
-            tf.add_to_collections(collections, loss)
         return loss
 
 

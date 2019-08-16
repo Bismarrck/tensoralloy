@@ -13,7 +13,6 @@ from os.path import exists, dirname, join
 
 from tensoralloy.cli.build import BuildProgram
 from tensoralloy.cli.cli import CLIProgram
-from tensoralloy.cli.compute import ComputeMetricsProgram
 from tensoralloy.cli.export import ExportModelProgram
 from tensoralloy.cli.run import RunExperimentProgram, StopExperimentProgram
 
@@ -135,8 +134,7 @@ def main():
                  RunExperimentProgram(),
                  ExportModelProgram(),
                  StopExperimentProgram(),
-                 PrintEvaluationSummaryProgram(),
-                 ComputeMetricsProgram()):
+                 PrintEvaluationSummaryProgram()):
         subparser = subparsers.add_parser(prog.name, help=prog.help)
         prog.config_subparser(subparser)
 

@@ -7,8 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from tensorflow.contrib.opt import NadamOptimizer
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import math_ops
 from typing import Dict
 
 __author__ = 'Xin Chen'

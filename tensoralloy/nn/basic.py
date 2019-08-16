@@ -17,7 +17,6 @@ from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from tensorflow.python.framework.tensor_util import is_tensor
 from tensorflow_estimator import estimator as tf_estimator
-from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
@@ -26,8 +25,6 @@ from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.losses import LossMethod
-from tensoralloy.nn.constraint import elastic as elastic_ops
-from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -66,22 +63,9 @@ class ExportablePropertyError(_PropertyError):
 
 all_properties = (
     StructuralProperty(name='energy'),
-    StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
     StructuralProperty(name='stress'),
-    StructuralProperty(name='total_pressure'),
-    StructuralProperty(name='hessian', minimizable=False),
-    StructuralProperty(name='elastic'),
-    StructuralProperty(name='rose', exportable=False)
 )
-
-exportable_properties = [
-    prop for prop in all_properties if prop.exportable
-]
-
-minimizable_properties = [
-    prop for prop in all_properties if prop.minimizable
-]
 
 
 class BasicNN:
@@ -97,7 +81,7 @@ class BasicNN:
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'atomic', 'hessian')):
+                 export_properties=('energy', 'forces')):
         """
         Initialization method.
 
@@ -120,8 +104,7 @@ class BasicNN:
 
         Notes
         -----
-        At least one of `energy`, `forces`, `stress` or `total_pressure` must be
-        True.
+        At least one of `energy`, `forces`, `stress` must be True.
 
         """
         self._elements = sorted(list(elements))
@@ -133,17 +116,16 @@ class BasicNN:
             raise ValueError("At least one property should be minimized.")
 
         for prop in minimize_properties:
-            if prop not in minimizable_properties:
+            if prop not in all_properties:
                 raise MinimizablePropertyError(prop)
 
         for prop in export_properties:
-            if prop not in exportable_properties:
+            if prop not in all_properties:
                 raise ExportablePropertyError(prop)
 
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
         self._transformer = None
-        self._y_atomic_op_name = None
 
     @property
     def elements(self):
@@ -172,12 +154,6 @@ class BasicNN:
         Return a list of str as the properties to predict.
         """
         return self._export_properties
-
-    def _get_atomic_energy_tensor_name(self) -> str:
-        """
-        Return the name of the atomic energy tensor.
-        """
-        return self._y_atomic_op_name
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -392,8 +368,7 @@ class BasicNN:
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
-                       forces, pulay_stress, name='stress', return_pressure=False,
-                       verbose=True):
+                       forces, pulay_stress, name='stress', verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
@@ -413,48 +388,10 @@ class BasicNN:
         voigt = self._convert_to_voigt_stress(
             stress_per_volume, batch_size, name=name, verbose=verbose)
 
-        if return_pressure:
-            total_pressure = self._get_total_pressure_op(stress_per_volume,
-                                                         verbose=verbose)
-        else:
-            total_pressure = tf.no_op()
-
-        return voigt, total_stress, total_pressure
-
-    @staticmethod
-    def _get_total_pressure_op(stress_per_volume: tf.Tensor, name='pressure',
-                               verbose=True):
-        """
-        Return the Op to compute the reduced total pressure (eV).
-
-            reduced_total_pressure = -trace(full_stress) / 3.0
-
-        """
-        dtype = stress_per_volume.dtype
-        total_pressure = tf.math.truediv(tf.trace(stress_per_volume),
-                                         tf.constant(-3.0 * GPa, dtype=dtype),
-                                         name=f"{name}/GPa")
-        if verbose:
-            log_tensor(total_pressure)
-        return total_pressure
-
-    @staticmethod
-    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
-                        verbose=True):
-        """
-        Return the Op to compute the Hessian matrix:
-
-            hessian = d^2E / dR^2 = d(dE / dR) / dR
-
-        """
-        hessian = tf.identity(tf.hessians(energy, positions)[0], name=name)
-        if verbose:
-            log_tensor(hessian)
-        return hessian
+        return voigt, total_stress
 
     def get_total_loss(self, predictions, labels, n_atoms, mask,
-                       loss_parameters: LossParameters,
-                       mode=tf_estimator.ModeKeys.TRAIN):
+                       loss_parameters: LossParameters):
         """
         Get the total loss tensor.
 
@@ -467,8 +404,6 @@ class BasicNN:
                   required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized. Its unit should be `eV/Ang**3`.
-                * 'total_pressure' of shape `[batch_size, ]` is required if
-                  'total_pressure' should be minimized.
 
             The following prediction is included and required for computing
             elastic loss:
@@ -478,20 +413,15 @@ class BasicNN:
 
             Always required:
                 * 'energy' of shape `[batch_size, ]`.
-                * 'energy_confidence' of shape `[batch_size, ]`
 
             Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'forces_confidence' of shape `[batch_size, ]` is required if
-                  'forces' should be minimized.
 
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'pulay_stress' of shape `[batch_size, ]`
-                * 'total_pressure' of shape `[batch_size, ]`
-                * 'stress_confidence' of shape `[batch_size, ]`
 
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
@@ -499,8 +429,6 @@ class BasicNN:
             A float tensor of shape `[batch_size, n_atoms_max + 1]`.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
-        mode : tf_estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
 
         Returns
         -------
@@ -511,14 +439,6 @@ class BasicNN:
             pressure.
 
         """
-
-        def _get_per_structure_weights(key):
-            if mode == tf_estimator.ModeKeys.TRAIN and \
-                    (not loss_parameters.equivalently_trusted):
-                return labels[f"{key}_confidence"]
-            else:
-                return None
-
         with tf.name_scope("Loss"):
 
             collections = [GraphKeys.TRAIN_METRICS]
@@ -528,7 +448,6 @@ class BasicNN:
                 labels=labels.energy,
                 predictions=predictions.energy,
                 n_atoms=n_atoms,
-                weights=_get_per_structure_weights('energy'),
                 loss_weight=loss_parameters.energy.weight,
                 per_atom_loss=loss_parameters.energy.per_atom_loss,
                 method=LossMethod[loss_parameters.energy.method],
@@ -539,25 +458,14 @@ class BasicNN:
                     labels=labels.forces,
                     predictions=predictions.forces,
                     mask=mask,
-                    weights=_get_per_structure_weights('forces'),
                     loss_weight=loss_parameters.forces.weight,
                     method=LossMethod[loss_parameters.forces.method],
-                    collections=collections)
-
-            if 'total_pressure' in self._minimize_properties:
-                losses.total_pressure = loss_ops.get_total_pressure_loss(
-                    labels=labels.total_pressure,
-                    predictions=predictions.total_pressure,
-                    weights=_get_per_structure_weights('stress'),
-                    loss_weight=loss_parameters.total_pressure.weight,
-                    method=LossMethod[loss_parameters.total_pressure.method],
                     collections=collections)
 
             if 'stress' in self._minimize_properties:
                 losses.stress = loss_ops.get_stress_loss(
                     labels=labels.stress,
                     predictions=predictions.stress,
-                    weights=_get_per_structure_weights("stress"),
                     loss_weight=loss_parameters.stress.weight,
                     method=LossMethod[loss_parameters.stress.method],
                     collections=collections)
@@ -565,24 +473,6 @@ class BasicNN:
             losses.l2 = loss_ops.get_l2_regularization_loss(
                 options=loss_parameters.l2,
                 collections=collections)
-
-            verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)
-
-            if 'elastic' in self._minimize_properties:
-                if loss_parameters.elastic.crystals is not None:
-                    losses.elastic = elastic_ops.get_elastic_constant_loss(
-                        base_nn=self,
-                        list_of_crystal=loss_parameters.elastic.crystals,
-                        weight=loss_parameters.elastic.weight,
-                        options=loss_parameters.elastic.constraint,
-                        verbose=verbose)
-
-            if 'rose' in self._minimize_properties:
-                if loss_parameters.rose.crystals is not None:
-                    losses.rose = rose_ops.get_rose_constraint_loss(
-                        base_nn=self,
-                        options=loss_parameters.rose,
-                        verbose=verbose)
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -672,8 +562,6 @@ class BasicNN:
                   required if 'forces' should be minimized.
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized. Its unit should be `eV/Ang**3`.
-                * 'total_pressure' of shape `[batch_size, ]` is required if
-                  'total_pressure' should be minimized.
 
             The following prediction is included and required for computing
             elastic constants:
@@ -718,9 +606,9 @@ class BasicNN:
                         predictions.energy, features.positions, name='forces',
                         verbose=verbose)
 
-            if 'stress' in properties or 'total_pressure' in properties:
+            if 'stress' in properties:
                 with tf.name_scope("Stress"):
-                    voigt_stress, total_stress, total_pressure = \
+                    voigt_stress, total_stress = \
                         self._get_stress_op(
                             energy=predictions.energy,
                             cells=features.cells,
@@ -728,28 +616,10 @@ class BasicNN:
                             positions=features.positions,
                             forces=predictions.forces,
                             pulay_stress=features.pulay_stress,
-                            return_pressure=True,
                             name='stress',
                             verbose=verbose)
                     predictions.stress = voigt_stress
                     predictions.total_stress = total_stress
-                    predictions.total_pressure = total_pressure
-
-            if 'hessian' in properties:
-                with tf.name_scope("Hessian"):
-                    predictions.hessian = self._get_hessian_op(
-                        predictions.energy, features.positions, name='hessian',
-                        verbose=verbose)
-
-            if mode == tf_estimator.ModeKeys.PREDICT and \
-                    'elastic' in properties:
-                with tf.name_scope("Elastic"):
-                    predictions.elastic = \
-                        elastic_ops.get_elastic_constat_tensor_op(
-                            predictions.total_stress,
-                            features.cells,
-                            features.volume,
-                            name='elastic', verbose=verbose)
 
             return predictions
 
@@ -781,20 +651,15 @@ class BasicNN:
 
             Always required:
                 * 'energy' of shape `[batch_size, ]`.
-                * 'energy_confidence' of shape `[batch_size, ]`
 
             Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'forces_confidence' of shape `[batch_size, ]` is required if
-                  'forces' should be minimized.
 
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'pulay_stress' of shape `[batch_size, ]`
-                * 'total_pressure' of shape `[batch_size, ]`
-                * 'stress_confidence' of shape `[batch_size, ]`
 
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
@@ -824,8 +689,7 @@ class BasicNN:
                                                  labels=labels,
                                                  n_atoms=features.n_atoms,
                                                  mask=features.mask,
-                                                 loss_parameters=params.loss,
-                                                 mode=mode)
+                                                 loss_parameters=params.loss)
 
         ema, train_op = get_train_op(
             losses=losses,
@@ -914,8 +778,6 @@ class BasicNN:
             # Add a timestamp to the graph
             with tf.name_scope("Metadata/"):
                 timestamp = tf.constant(str(datetime.today()), name='timestamp')
-                y_atomic = tf.constant(nn._get_atomic_energy_tensor_name(),
-                                       name="y_atomic")
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -948,8 +810,7 @@ class BasicNN:
 
             output_node_names = [
                 transformer_params.op.name,
-                timestamp.op.name,
-                y_atomic.op.name,
+                timestamp.op.name
             ]
 
             for tensor in predictions.values():

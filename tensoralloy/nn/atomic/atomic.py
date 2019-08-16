@@ -45,7 +45,6 @@ class AtomicNN(BasicNN):
 
         self._kernel_init_method = kernel_initializer
         self._minmax_scale = minmax_scale
-        self._y_atomic_op_name = None
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -190,7 +189,6 @@ class AtomicNN(BasicNN):
             mask = tf.split(
                 features.mask, [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
-            self._y_atomic_op_name = y_mask.name
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)
         if verbose:

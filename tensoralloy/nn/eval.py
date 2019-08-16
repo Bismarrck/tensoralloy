@@ -112,15 +112,6 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
                 }
                 metrics.update(ops_dict)
 
-        if 'total_pressure' in eval_properties:
-            with tf.name_scope("Pressure"):
-                x = labels.total_pressure
-                y = predictions.total_pressure
-                ops_dict = {
-                    'Pressure/mae': tf.metrics.mean_absolute_error(x, y),
-                    'Pressure/mse': tf.metrics.mean_squared_error(x, y)}
-                metrics.update(ops_dict)
-
         if 'stress' in eval_properties:
             with tf.name_scope("Stress"):
                 x = labels.stress
@@ -134,14 +125,5 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
                     ops_dict['Stress/relative'] = \
                         tf.metrics.mean(upper / lower)
                 metrics.update(ops_dict)
-
-        for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
-            if tensor.op.name.startswith("Elastic"):
-                metrics[tensor.op.name] = (tensor, tf.no_op())
-            elif tensor.op.name.startswith("Rose"):
-                slist = tensor.op.name.split("/")
-                istop = slist.index('EOS')
-                key = "/".join(slist[:istop])
-                metrics[key] = (tensor, tf.no_op())
 
         return metrics

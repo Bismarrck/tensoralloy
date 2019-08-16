@@ -11,8 +11,6 @@ import time
 from collections import Counter
 from os.path import splitext
 from ase.io.extxyz import read_xyz
-from ase.geometry import cellpar_to_cell
-from ase.units import Hartree
 from enum import Enum
 
 from tensoralloy.io.sqlite import CoreDatabase
@@ -73,25 +71,12 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
         index = slice(0, num_examples, 1)
         if xyz_format == XyzFormat.ext:
             reader = read_xyz(fp, index)
-        elif xyz_format == XyzFormat.normal:
+        else:
             # The default parser for normal xyz files will ignore the energies.
             # So here we implement a single parser just converting the second
             # line of each XYZ block to a float.
             def _parser(line: str):
                 return {'energy': float(line.strip())}
-            reader = read_xyz(fp, index, properties_parser=_parser)
-
-        else:
-            # Stepmax xyz files
-            # The second lines contains the energy (a.u.), cell pararameters and
-            # a label (should be 'Cartesian').
-            def _parser(line: str):
-                _splits = line.strip().split()
-                _cellpars = [float(x) for x in _splits[1: 7]]
-                assert len(_splits) == 8
-                assert _splits[-1].lower() == 'cartesian'
-                return {'energy': float(_splits[0]) * Hartree,
-                        'Lattice': np.transpose(cellpar_to_cell(_cellpars))}
             reader = read_xyz(fp, index, properties_parser=_parser)
 
         for atoms in reader:
@@ -214,10 +199,6 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
     elif file_type == 'xyz':
         return _read_extxyz(
             filename, units, XyzFormat.normal, num_examples, verbose)
-
-    elif file_type == 'stepmax':
-        return _read_extxyz(
-            filename, units, XyzFormat.stepmax, num_examples, verbose)
 
     else:
         raise ValueError("Unknown file type: {}".format(file_type))
