@@ -59,7 +59,10 @@ computation expenses. Physical model based empirical potential (force-field),
 such as the embedded-atom method (EAM), modified embedded-atom method (MEAM), 
 bond-order potential (BoP), or angular-dependent potential (ADP), still plays 
 the major role in long-time simulations and these empirical methods can achieve 
-reasonable accuracy with much lower computation costs. 
+reasonable accuracy with much lower computation costs. Empirical potentials 
+generally have very few learnable parameters and traditionally both microscopic 
+observables (energy, forces, virial, etc.) and macroscopic observables (melting 
+point, surface energy, etc.) can be used to tune these parameters.
 
 In the last decade, machine learning (ML) has become one of the hottest 
 topics in many research areas. In the materials science, researchers have made 
@@ -73,7 +76,15 @@ extremely accurate results, although it's a bit computationally expensive.
 Spectral neighbor analysis potential (SNAP) is another quantum-accurate MLIP and
 it performs very well on a broad range of metals and alloys. 
 
-Compared with empirical potentials, MILPs have some noticable advantages. 
+Compared with empirical potentials, MILPs typically have several orders of 
+magnitudes more model parameters. The redundant parameter space greatly reduces 
+the difficulty of fitting complicated potential energy surfaces with MLIPs. 
+However, it also raises some new challenges. To effectively train MLIPs with 
+large numbers of parameters, typically tens of thousands high-quality 
+\textit{ab initio} data points are necessary. The cost of building training 
+datasets can not be ignored. The lack of physical background makes the 
+performances of MILPs outside the training 'zone' not stable. For large-scale 
+alloy systems, computation efficiency becomes a major concern.  
 
 Traditionally, to find optimal parameters of an EAM potential, global 
 optimization approaches (such as Basin Hopping or Genetic Algorithm) will be 
