@@ -3,7 +3,6 @@ precision = "medium"
 [dataset]
 sqlite3 = "../../datasets/snap.db"
 name = "snap"
-descriptor = "behler"
 rc = 6.5
 test_size = 300
 
