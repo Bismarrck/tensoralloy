@@ -14,7 +14,7 @@ serial = false
 [nn]
 activation = "softplus"
 minimize = ['energy', 'forces']
-export = ['energy', 'forces', 'hessian']
+export = ['energy', 'forces']
 
 [nn.loss]
 

@@ -6,13 +6,12 @@ from __future__ import print_function, absolute_import
 
 import os
 
-from os.path import splitext, join
+from os.path import splitext
 from pathlib import PurePath
 from ase.db import connect as ase_connect
 from ase.parallel import world
 
 from tensoralloy.io.sqlite import CoreDatabase
-from tensoralloy.test_utils import datasets_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -69,21 +68,3 @@ def connect(name, use_lock_file=True, append=True, serial=False):
                            use_lock_file=use_lock_file,
                            append=append,
                            serial=serial)
-
-
-def qm7():
-    """
-    Return the QM7 database.
-    """
-    return connect(join(datasets_dir(), "qm7.db"))
-
-
-def snap(name=None):
-    """
-    Return the SNAP or SNAP/Ni or SNAP/Mo database.
-    """
-    if name is None:
-        _name = "snap.db"
-    else:
-        _name = f"snap-{name}.db"
-    return connect(join(datasets_dir(), _name))
