@@ -4,26 +4,13 @@ The setup module.
 """
 from __future__ import print_function, absolute_import
 
-import sys
-
 from setuptools import setup, find_packages
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
-
-from tensoralloy.extension.interp import build_ext as interp_build_ext
 
 
 __version__ = "1.0"
 __author__ = "Xin Chen"
 __email__ = "Bismarrck@me.com"
-
-
-if sys.version_info < (3, 7, 0):
-    sys.exit('Python < 3.7.0 is not supported')
-
-
-extensions = [
-    interp_build_ext.get_interp_extension(),
-]
 
 
 # noinspection PyMissingOrEmptyDocstring,PyPep8Naming,PyAttributeOutsideInit
@@ -46,11 +33,6 @@ if __name__ == "__main__":
         author=__author__,
         author_email=__email__,
         version=__version__,
-        cmdclass={
-            'bdist_wheel': bdist_wheel,
-            "build_ext": interp_build_ext.BuildExtension
-        },
-        ext_modules=extensions,
         description="Tensor-graph based machine learning framework for alloys.",
         packages=packages,
         include_package_data=True,
