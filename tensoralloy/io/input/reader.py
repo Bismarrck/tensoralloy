@@ -9,7 +9,6 @@ import toml
 from os.path import dirname, join
 from typing import List, Union
 
-from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.utils import nested_get, nested_set
 
 __author__ = 'Xin Chen'
@@ -156,41 +155,10 @@ class InputReader:
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
 
-        descriptor = nested_get(configs, 'dataset.descriptor')
-
-        if descriptor == 'behler':
-            layers = nested_get(configs, 'nn.atomic.layers')
-            if isinstance(layers, dict):
-                for key, val in layers.items():
-                    nested_set(results, f'nn.atomic.layers.{key}', val)
-
-            if 'eam' in results['nn']:
-                del results['nn']['eam']
-
-        else:
-            for attr in ('constant', 'type'):
-                values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")
-                if isinstance(values, dict):
-                    for element in values.keys():
-                        _safe_update(f"nn.eam.setfl.lattice.{attr}.{element}")
-
-            for func in ('embed', 'phi', 'rho', 'dipole', 'quadrupole'):
-                pots = nested_get(configs, f"nn.eam.{func}")
-                if isinstance(pots, dict):
-                    for key in pots.keys():
-                        src = f"nn.eam.{func}.{key}"
-                        if func in ('phi', 'dipole', 'quadrupole'):
-                            key = "".join(
-                                sorted(get_elements_from_kbody_term(key)))
-                            dst = f"nn.eam.{func}.{key}"
-                        else:
-                            dst = None
-                        _safe_update(src, dst)
-
-            if 'behler' in results:
-                del results['behler']
-            if 'atomic' in results['nn']:
-                del results['nn']['atomic']
+        layers = nested_get(configs, 'nn.atomic.layers')
+        if isinstance(layers, dict):
+            for key, val in layers.items():
+                nested_set(results, f'nn.atomic.layers.{key}', val)
 
         # Convert the paths
         for keypath in ("dataset.sqlite3",
@@ -201,18 +169,5 @@ class InputReader:
             if keypath == "train.ckpt.checkpoint_filename" and path is False:
                 continue
             nested_set(results, keypath, _convert_filepath(path))
-
-        for keypath in ("nn.loss.elastic.crystals",
-                        "nn.loss.rose.crystals"):
-            list_of_values = nested_get(results, keypath)
-            if list_of_values is None:
-                continue
-
-            n = len(list_of_values)
-
-            for i in range(n):
-                assert isinstance(list_of_values[i], str)
-                if list_of_values[i].endswith("toml"):
-                    list_of_values[i] = _convert_filepath(list_of_values[i])
 
         return results

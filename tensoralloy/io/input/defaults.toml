@@ -6,7 +6,6 @@ seed = 611
 [dataset]
 sqlite3 = "required"
 name = "required"
-descriptor = "required"
 rc = 6.5
 tfrecords_dir = "."
 test_size = 0.2
@@ -18,19 +17,11 @@ minimize = ['energy', 'forces']
 export = ['energy', 'forces', 'hessian']
 
 [nn.loss]
-equivalently_trusted = true
 
 [nn.loss.energy]
 weight = 1.0
 per_atom_loss = false
 method = "rmse"
-
-[nn.loss.rose]
-weight = 1.0
-crystals = []
-beta = []
-dx = 0.10
-delta = 0.01
 
 [nn.loss.forces]
 weight = 1.0
@@ -40,25 +31,11 @@ method = "rmse"
 weight = 1.0
 method = "rmse"
 
-[nn.loss.total_pressure]
-weight = 1.0
-method = "rmse"
-
 [nn.loss.l2]
 weight = 0.01
 decayed = true
 decay_rate = 0.99
 decay_steps = 10
-
-[nn.loss.elastic]
-crystals = []
-weight = 0.1
-
-[nn.loss.elastic.constraint]
-use_kbar = true
-forces_weight = 1.0
-stress_weight = 0.1
-tau = 1.0
 
 [nn.atomic]
 arch = "AtomicNN"
@@ -79,24 +56,6 @@ gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
 
 [nn.atomic.layers]
-
-[nn.eam]
-arch = "EamAlloyNN"
-
-[nn.eam.rho]
-[nn.eam.phi]
-[nn.eam.embed]
-[nn.eam.dipole]
-[nn.eam.quadrupole]
-
-[nn.eam.setfl]
-nr = 10000
-dr = 0.00065
-nrho = 10000
-drho = 0.01
-
-[nn.eam.setfl.lattice.constant]
-[nn.eam.setfl.lattice.type]
 
 [opt]
 method = "adam"

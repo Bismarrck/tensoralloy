@@ -404,15 +404,11 @@ class Dataset:
                     shape = batch_of_tensors.shape.as_list()
                     if shape[0] is None:
                         batch_of_tensors.set_shape([batch_size] + shape[1:])
-            labels = AttributeDict(energy=batch.pop('y_true'),
-                                   energy_confidence=batch.pop('y_conf'))
+            labels = AttributeDict(energy=batch.pop('y_true'))
             if self._database.has_forces:
                 labels['forces'] = batch.pop('f_true')
-                labels['forces_confidence'] = batch.pop('f_conf')
             if self._database.has_stress:
                 labels['stress'] = batch.pop('stress')
-                labels['stress_confidence'] = batch.pop('s_conf')
-                labels['total_pressure'] = batch.pop('total_pressure')
             return batch, labels
 
         return _input_fn

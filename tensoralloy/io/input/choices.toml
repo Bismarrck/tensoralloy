@@ -2,9 +2,6 @@
 
 precision = ['high', 'medium']
 
-[dataset]
-descriptor = ['eam', 'behler']
-
 [nn]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
 
@@ -21,9 +18,6 @@ kernel_initializer = [
 [nn.atomic.behler]
 cutoff_function = ["cosine", "polynomial"]
 
-[nn.eam]
-arch = ["EamAlloyNN", "EamFsNN", "AdpNN"]
-
 [nn.loss.energy]
 method = ["rmse", "logcosh"]
 
@@ -32,9 +26,6 @@ method = ["rmse", "logcosh"]
 
 [nn.loss.stress]
 method = ["rmse", "logcosh", "rrmse"]
-
-[nn.loss.total_pressure]
-method = ["rmse", "logcosh"]
 
 [opt]
 method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd']

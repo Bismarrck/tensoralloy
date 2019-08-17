@@ -23,9 +23,6 @@ from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress
 
-
-# TODO: universal v2gmap
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -644,7 +641,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'cells': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
-                'y_conf': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
@@ -653,14 +649,10 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
-                feature_list['f_conf'] = tf.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
-                feature_list['total_pressure'] = \
-                    tf.FixedLenFeature([], tf.string)
-                feature_list['s_conf'] = tf.FixedLenFeature([], tf.string)
 
             if self._k_max == 3:
                 feature_list.update({
