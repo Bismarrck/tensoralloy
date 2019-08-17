@@ -1,0 +1,68 @@
+precision = "medium"
+
+[dataset]
+sqlite3 = "../../datasets/snap.db"
+name = "snap"
+descriptor = "behler"
+rc = 6.5
+test_size = 300
+
+[nn]
+minimize = ['energy', 'forces', 'stress']
+export = ['energy', 'forces', 'stress']
+activation = "softplus"
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+method = 'rmse'
+
+[nn.loss.forces]
+weight = 3.0
+method = 'rmse'
+
+[nn.loss.stress]
+weight = 160.0
+method = 'rmse'
+
+[nn.loss.l2]
+weight = 0.00
+
+[nn.atomic]
+arch = "AtomicResNN"
+minimax_scale = true
+kernel_initializer = "he_normal"
+
+[nn.atomic.behler]
+eta = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0]
+omega = [0.0, 3.0]
+trainable = false
+angular = false
+
+[nn.atomic.layers]
+Ni = [128, 64, 32]
+Mo = [128, 64, 32]
+
+[opt]
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.95
+decay_steps = 2000
+method = "adam"
+
+[train]
+reset_global_step = true
+batch_size = 50
+shuffle = true
+model_dir = "1_EFS_softplus_minimax_on"
+train_steps = 60000
+max_checkpoints_to_keep = 100
+eval_steps = 2000
+summary_steps = 200
+log_steps = 100
+profile_steps = 0
+
+[train.ckpt]
+restore_all_variables = true
+use_ema_variables = true
+checkpoint_filename = false
