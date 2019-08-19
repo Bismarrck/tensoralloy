@@ -52,6 +52,7 @@ def get_g2_map(atoms: Atoms,
         nij_max = nij
 
     g2_map = np.zeros((nij_max, iaxis + 2), dtype=np.int32)
+    g2_map.fill(0)
     tlist = np.zeros(nij_max, dtype=np.int32)
     symbols = atoms.get_chemical_symbols()
     tlist.fill(0)
@@ -70,6 +71,8 @@ def get_g2_map(atoms: Atoms,
         jlist[count] = vap.local_to_gsl_map[jlist[count]]
     g2_map[:, iaxis + 0] = ilist
     g2_map[:, iaxis + 1] = offsets[tlist]
+    ilist = ilist.astype(np.int32)
+    jlist = jlist.astype(np.int32)
     return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
 
 
@@ -107,6 +110,7 @@ def get_g4_map(atoms: Atoms,
         nijk_max = nijk
 
     g4_map = np.zeros((nijk_max, iaxis + 2), dtype=np.int32)
+    g4_map.fill(0)
     ilist = np.zeros(nijk_max, dtype=np.int32)
     jlist = np.zeros(nijk_max, dtype=np.int32)
     klist = np.zeros(nijk_max, dtype=np.int32)
@@ -502,24 +506,21 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         functions.
         """
         with tf.name_scope("G4"):
-            with tf.name_scope("indices"):
-                indices = tf.decode_raw(example['g4.indices'], tf.int32)
-                indices.set_shape([self._nijk_max * 6])
-                indices = tf.reshape(
-                    indices, [self._nijk_max, 6], name='g4.indices')
-                v2g_map, ilist, jlist, klist = \
-                    tf.split(indices, [3, 1, 1, 1], axis=1, name='splits')
-                ilist = tf.squeeze(ilist, axis=1, name='ilist')
-                jlist = tf.squeeze(jlist, axis=1, name='jlist')
-                klist = tf.squeeze(klist, axis=1, name='klist')
+            indices = tf.decode_raw(example['g4.indices'], tf.int32)
+            indices.set_shape([self._nijk_max * 6])
+            indices = tf.reshape(
+                indices, [self._nijk_max, 6], name='g4.indices')
+            v2g_map, ilist, jlist, klist = \
+                tf.split(indices, [3, 1, 1, 1], axis=1, name='splits')
+            ilist = tf.squeeze(ilist, axis=1, name='ilist')
+            jlist = tf.squeeze(jlist, axis=1, name='jlist')
+            klist = tf.squeeze(klist, axis=1, name='klist')
 
-            with tf.name_scope("shifts"):
-                shifts = tf.decode_raw(example['g4.shifts'], get_float_dtype())
-                shifts.set_shape([self._nijk_max * 9])
-                shifts = tf.reshape(
-                    shifts, [self._nijk_max, 9], name='g4.shifts')
-                n1, n2, n3 = \
-                    tf.split(shifts, [3, 3, 3], axis=1, name='splits')
+            shifts = tf.decode_raw(example['g4.shifts'], get_float_dtype())
+            shifts.set_shape([self._nijk_max * 9])
+            shifts = tf.reshape(
+                shifts, [self._nijk_max, 9], name='g4.shifts')
+            n1, n2, n3 = tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
         return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3)
 

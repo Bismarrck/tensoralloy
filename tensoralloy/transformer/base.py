@@ -340,34 +340,20 @@ class BatchDescriptorTransformer(BaseTransformer):
             )
         return self._vap_transformers[formula]
 
-    def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
-        """
-        A helper function to resize the given array.
-        """
-        if np.ndim(alist) == 1:
-            shape = [self.nij_max, ]
-        else:
-            shape = [self.nij_max, ] + list(alist.shape[1:])
-        nlist = np.zeros(shape, dtype=np.int32)
-        length = len(alist)
-        nlist[:length] = alist
-        if is_indices:
-            nlist[:length] += 1
-        return nlist
-
     @staticmethod
     def _encode_g2_indexed_slices(g2: G2IndexedSlices):
         """
         Encode the indexed slices of G2:
             * `v2g_map`, `ilist` and `jlist` are merged into a single array
-              with key 'r_indices'.
-            * `shift` will be encoded separately with key 'r_shifts'.
+              with key 'g2.indices'.
+            * `n1` will be encoded separately with key 'g2.shifts'.
 
         """
         indices = np.concatenate((
-            g2.v2g_map, g2.ilist[..., np.newaxis], g2.jlist[..., np.newaxis],
-        ), axis=1).tostring()
-        return {'g2.indices': bytes_feature(indices),
+            g2.v2g_map,
+            g2.ilist[..., np.newaxis],
+            g2.jlist[..., np.newaxis]), axis=1)
+        return {'g2.indices': bytes_feature(indices.tostring()),
                 'g2.shifts': bytes_feature(g2.n1.tostring())}
 
     def _encode_atoms(self, atoms: Atoms) -> dict:
