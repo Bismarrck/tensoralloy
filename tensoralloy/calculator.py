@@ -15,7 +15,6 @@ from ase.units import GPa
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
 from typing import List, Tuple
-from collections import namedtuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer
@@ -24,14 +23,6 @@ from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-# A collection of elastic properties.
-ElasticProperty = namedtuple("ElasticProperty",
-                             ("elastic_tensor", "compliance_tensor",
-                              "bulk_voigt", "bulk_reuss", "bulk_vrh",
-                              "shear_voigt", "shear_reuss", "shear_vrh",
-                              "universal_anisotropy", "poisson_ratio"))
 
 
 class TensorAlloyCalculator(Calculator):

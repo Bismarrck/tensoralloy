@@ -40,25 +40,6 @@ def set_pulay_stress(atoms: Atoms, pulay: float):
     atoms.info['pulay_stress'] = pulay
 
 
-def cantor_pairing(x, y):
-    """
-    The Cantor Pairing function:
-
-        f(x, y) = (x + y)(x + y + 1) // 2 + y
-
-    f(x, y) will only be unique if x and y are integers.
-
-    See Also
-    --------
-    https://en.wikipedia.org/wiki/Pairing_function#Cantor_pairing_function
-
-    """
-    x = np.asarray(x)
-    y = np.asarray(y)
-    assert np.issubdtype(x.dtype, np.int_) and np.issubdtype(y.dtype, np.int_)
-    return (x + y) * (x + y + 1) // 2 + y
-
-
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     """
     Return the atoms in the given k-body term.
@@ -177,9 +158,6 @@ class GraphKeys:
     DESCRIPTOR_VARIABLES = 'descriptor_variables'
     ATOMIC_NN_VARIABLES = 'atomic_nn_variables'
     ATOMIC_RES_NN_VARIABLES = 'atomic_res_nn_variables'
-    EAM_ALLOY_NN_VARIABLES = 'eam_alloy_nn_variables'
-    EAM_FS_NN_VARIABLES = 'eam_fs_nn_variables'
-    EAM_POTENTIAL_VARIABLES = 'eam_potential_variables'
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'
@@ -240,7 +218,7 @@ class Defaults:
 
     variable_moving_average_decay = 0.999
 
-    activation = 'leaky_relu'
+    activation = 'softplus'
     hidden_sizes = [64, 32]
     learning_rate = 0.01
 

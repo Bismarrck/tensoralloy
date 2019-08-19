@@ -16,8 +16,6 @@ from tensoralloy.utils import GraphKeys, AttributeDict
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-# TODO: fix the atomic energy
-
 
 class AtomicResNN(AtomicNN):
     """

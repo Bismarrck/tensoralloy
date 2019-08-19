@@ -62,9 +62,6 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
             The total number of atom-atom pairs within `rc`.
         * nijk : int
             The total number of triples within `rc` or 0 if `angular` is False.
-        * nnl : int
-            Each atom has `n_A` A-type neighbors, `n_B` B-type neigbors, etc.
-            `nnl` is the maximum of all {n_A}, {n_B}, etc.
 
     """
     ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
