@@ -47,7 +47,6 @@ fixed_static_energy = false
 
 [nn.atomic.behler]
 angular = false
-trainable = false
 eta = [0.01, 0.1, 0.5, 1.0, 4.0]
 omega = [0.0]
 beta = [0.005]

@@ -260,7 +260,10 @@ class Dataset:
         """
         Return a str as the signature of this dataset.
         """
-        k_max = self._transformer.k_max
+        if self._transformer.angular:
+            k_max = 3
+        else:
+            k_max = 2
         rc = self._transformer.rc
         sig = "k{:d}-rc{:.2f}".format(k_max, rc)
         dtype = get_float_dtype()
