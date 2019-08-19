@@ -15,9 +15,6 @@ kernel_initializer = [
     'xavier_normal', 'xavier_uniform',
     'truncated_normal']
 
-[nn.atomic.behler]
-cutoff_function = ["cosine", "polynomial"]
-
 [nn.loss.energy]
 method = ["rmse", "logcosh"]
 
