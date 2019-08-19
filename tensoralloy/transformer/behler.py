@@ -439,14 +439,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             mode=tf_estimator.ModeKeys.TRAIN,
             nijk_max=self.nijk_max)
 
-    def get_indexed_slices(self, atoms: Atoms):
-        """
-        Return both the radial and angular indexed slices for the trajectory.
-        """
-        g2 = self.get_g2_indexed_slices(atoms)
-        g4 = self.get_g4_indexed_slices(atoms, g2)
-        return g2, g4
-
     @staticmethod
     def _encode_g4_indexed_slices(g4: G4IndexedSlices):
         """
@@ -471,10 +463,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Encode the `Atoms` object and return a `tf.train.Example`.
         """
         feature_list = self._encode_atoms(atoms)
-        g2, g4 = self.get_indexed_slices(atoms)
+        g2 = self.get_g2_indexed_slices(atoms)
         feature_list.update(self._encode_g2_indexed_slices(g2))
 
         if self._angular:
+            g4 = self.get_g4_indexed_slices(atoms, g2)
             feature_list.update(self._encode_g4_indexed_slices(g4))
 
         return tf.train.Example(
