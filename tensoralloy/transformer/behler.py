@@ -18,7 +18,7 @@ from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import bytes_feature
-from tensoralloy.transformer.index_transformer import VirtualAtomMap
+from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress

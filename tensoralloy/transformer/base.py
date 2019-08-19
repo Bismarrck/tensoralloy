@@ -15,7 +15,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 
 from tensoralloy.utils import AttributeDict, get_pulay_stress
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.transformer.index_transformer import VirtualAtomMap
+from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 
 
