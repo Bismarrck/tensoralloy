@@ -29,7 +29,7 @@ weight = 0.00
 
 [nn.atomic]
 arch = "AtomicResNN"
-minimax_scale = true
+minmax_scale = true
 kernel_initializer = "he_normal"
 
 [nn.atomic.behler]
