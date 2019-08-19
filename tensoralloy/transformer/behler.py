@@ -18,7 +18,7 @@ from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import bytes_feature
-from tensoralloy.transformer.index_transformer import IndexTransformer
+from tensoralloy.transformer.index_transformer import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress
@@ -104,7 +104,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
             self._placeholders.n_atoms_plus_virt = _int('n_atoms_plus_virt')
             self._placeholders.volume = _float('volume')
-            self._placeholders.mask = _float_1d('mask')
+            self._placeholders.atom_masks = _float_1d('mask')
             self._placeholders.pulay_stress = _float('pulay_stress')
             self._placeholders.composition = _float_1d('composition')
             self._placeholders.row_splits = _int_1d(
@@ -133,7 +133,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
     def _get_g2_indexed_slices(self,
                                atoms: Atoms,
-                               index_transformer: IndexTransformer):
+                               vap: VirtualAtomMap):
         """
         Return the indexed slices for the symmetry function G2.
         """
@@ -149,8 +149,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             symbolj = symbols[jlist[i]]
             tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
 
-        ilist = index_transformer.inplace_map_index(ilist + 1)
-        jlist = index_transformer.inplace_map_index(jlist + 1)
+        ilist = vap.inplace_map_index(ilist + 1)
+        jlist = vap.inplace_map_index(jlist + 1)
         shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self._offsets[tlist]
@@ -160,7 +160,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
     def _get_g4_indexed_slices(self,
                                atoms: Atoms,
                                g2: G2IndexedSlices,
-                               transformer: IndexTransformer):
+                               vap: VirtualAtomMap):
         """
         Return the indexed slices for the symmetry function G4.
         """
@@ -191,16 +191,16 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         count = 0
         for atomi, nl in indices.items():
             num = len(nl)
-            indexi = transformer.inplace_map_index(atomi, True, True)
+            indexi = vap.inplace_map_index(atomi, True, True)
             symboli = symbols[indexi]
             prefix = '{}'.format(symboli)
             for j in range(num):
                 atomj = nl[j]
-                indexj = transformer.inplace_map_index(atomj, True, True)
+                indexj = vap.inplace_map_index(atomj, True, True)
                 symbolj = symbols[indexj]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    indexk = transformer.inplace_map_index(atomk, True, True)
+                    indexk = vap.inplace_map_index(atomk, True, True)
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     kbody_term = '{}{}'.format(prefix, suffix)
@@ -224,25 +224,25 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         feed_dict = AttributeDict()
 
-        index_transformer = self.get_index_transformer(atoms)
-        g2 = self._get_g2_indexed_slices(atoms, index_transformer)
+        vap = self.get_vap_transformer(atoms)
+        g2 = self._get_g2_indexed_slices(atoms, vap)
 
         np_dtype = get_float_dtype().as_numpy_dtype
-        positions = index_transformer.map_positions(atoms.positions)
+        positions = vap.map_positions(atoms.positions)
 
         # `max_n_atoms` must be used because every element shall have at least
         # one feature row (though it could be all zeros, a dummy or virtual row)
-        n_atoms = index_transformer.max_n_atoms
+        vap_natoms = vap.max_vap_natoms
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
-        mask = index_transformer.mask
-        splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
+        atom_masks = vap.atom_masks
+        splits = [1] + [vap.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
         pulay_stress = get_pulay_stress(atoms)
 
         feed_dict.positions = positions.astype(np_dtype)
-        feed_dict.n_atoms_plus_virt = np.int32(n_atoms + 1)
-        feed_dict.mask = mask.astype(np_dtype)
+        feed_dict.n_atoms_plus_virt = np.int32(vap_natoms)
+        feed_dict.mask = atom_masks.astype(np_dtype)
         feed_dict.cells = cells.array.astype(np_dtype)
         feed_dict.volume = np_dtype(volume)
         feed_dict.composition = composition
@@ -253,7 +253,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         )
 
         if self._k_max == 3:
-            g4 = self._get_g4_indexed_slices(atoms, g2, index_transformer)
+            g4 = self._get_g4_indexed_slices(atoms, g2, vap)
             feed_dict.g4 = AttributeDict(
                 v2g_map=g4.v2g_map,
                 ij=AttributeDict(ilist=g4.ij[:, 0], jlist=g4.ij[:, 1]),
@@ -429,7 +429,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         float_dtype = get_float_dtype()
 
         symbols = atoms.get_chemical_symbols()
-        transformer = self.get_index_transformer(atoms)
+        vap = self.get_vap_transformer(atoms)
 
         ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
         nij = len(ilist)
@@ -443,8 +443,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         ilist = self._resize_to_nij_max(ilist, True)
         jlist = self._resize_to_nij_max(jlist, True)
         Slist = self._resize_to_nij_max(Slist, False)
-        ilist = transformer.inplace_map_index(ilist)
-        jlist = transformer.inplace_map_index(jlist)
+        ilist = vap.inplace_map_index(ilist)
+        jlist = vap.inplace_map_index(jlist)
         shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self._offsets[tlist]
@@ -470,7 +470,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         jk_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
 
         symbols = atoms.get_chemical_symbols()
-        transformer = self.get_index_transformer(atoms)
+        vap = self.get_vap_transformer(atoms)
         indices = {}
         vectors = {}
         for i, atomi in enumerate(g2.ilist):
@@ -485,16 +485,16 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         count = 0
         for atomi, nl in indices.items():
             num = len(nl)
-            indexi = transformer.inplace_map_index(atomi, True, True)
+            indexi = vap.inplace_map_index(atomi, True, True)
             symboli = symbols[indexi]
             prefix = '{}'.format(symboli)
             for j in range(num):
                 atomj = nl[j]
-                indexj = transformer.inplace_map_index(atomj, True, True)
+                indexj = vap.inplace_map_index(atomj, True, True)
                 symbolj = symbols[indexj]
                 for k in range(j + 1, num):
                     atomk = nl[k]
-                    indexk = transformer.inplace_map_index(atomk, True, True)
+                    indexk = vap.inplace_map_index(atomk, True, True)
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     kbody_term = '{}{}'.format(prefix, suffix)

@@ -14,13 +14,13 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class IndexTransformer:
+class VirtualAtomMap:
     """
     If a dataset has different stoichiometries, a global ordered symbols list
     should be kept. This class is used to transform the local indices of the
     symbols of arbitrary `Atoms` to the global indexing system.
     """
-    _ISTART = 1
+    REAL_ATOM_START = 1
 
     def __init__(self, max_occurs: Counter, symbols: List[str]):
         """
@@ -28,15 +28,15 @@ class IndexTransformer:
         """
         self._max_occurs = max_occurs
         self._symbols = symbols
-        self._max_n_atoms = sum(max_occurs.values())
+        self._max_vap_natoms = sum(max_occurs.values()) + 1
 
-        istart = IndexTransformer._ISTART
+        istart = VirtualAtomMap.REAL_ATOM_START
         elements = sorted(max_occurs.keys())
         offsets = np.cumsum([max_occurs[e] for e in elements])[:-1]
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
-        mask = np.zeros(self._max_n_atoms + 1, dtype=bool)
+        mask = np.zeros(self._max_vap_natoms, dtype=bool)
         for i, symbol in enumerate(symbols):
             idx_old = i + istart
             idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
@@ -51,20 +51,12 @@ class IndexTransformer:
         self._reverse_map = reverse_map
 
     @property
-    def n_atoms(self):
+    def max_vap_natoms(self):
         """
-        Return the number of atoms, excluding the 'virtual atom', that the
-        target `Atoms` of this transformer should have.
-        """
-        return len(self._symbols)
-
-    @property
-    def max_n_atoms(self):
-        """
-        Return the number of atoms, excluding the 'virtual atom', in the
+        Return the number of atoms (including the 'virtual atom') in the global
         reference system.
         """
-        return self._max_n_atoms
+        return self._max_vap_natoms
 
     @property
     def max_occurs(self) -> Counter:
@@ -74,23 +66,7 @@ class IndexTransformer:
         return self._max_occurs
 
     @property
-    def chemical_symbols(self) -> List[str]:
-        """
-        Return a list of str as the ordered chemical symbols of the target
-        stoichiometry.
-        """
-        return self._symbols
-
-    @property
-    def reference_chemical_symbols(self) -> List[str]:
-        """
-        Return a list of str as the ordered chemical symbols of the reference
-        (global) stoichiometry.
-        """
-        return sorted(self._max_occurs.elements())
-
-    @property
-    def mask(self) -> np.ndarray:
+    def atom_masks(self) -> np.ndarray:
         """
         Return a `bool` array.
         """
@@ -154,12 +130,12 @@ class IndexTransformer:
                 raise ValueError(f"The shape should be {shape}")
 
         indices = []
-        istart = IndexTransformer._ISTART
+        istart = VirtualAtomMap.REAL_ATOM_START
         if reverse:
             for i in range(istart, istart + len(self._symbols)):
                 indices.append(self._index_map[i])
         else:
-            for i in range(self._max_n_atoms + 1):
+            for i in range(self._max_vap_natoms):
                 indices.append(self._reverse_map.get(i, 0))
         output = array[:, indices]
         if rank == 2:

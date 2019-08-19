@@ -7,10 +7,10 @@ from __future__ import print_function, absolute_import
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer.behler import SymmetryFunctionTransformer
-from tensoralloy.transformer.index_transformer import IndexTransformer
+from tensoralloy.transformer.index_transformer import VirtualAtomMap
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["IndexTransformer",
+__all__ = ["VirtualAtomMap",
            "BatchSymmetryFunctionTransformer", "SymmetryFunctionTransformer"]

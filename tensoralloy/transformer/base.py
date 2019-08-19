@@ -15,7 +15,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 
 from tensoralloy.utils import AttributeDict, get_pulay_stress
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.transformer.index_transformer import IndexTransformer
+from tensoralloy.transformer.index_transformer import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 
 
@@ -32,7 +32,7 @@ class BaseTransformer:
         """
         Initialization method.
         """
-        self._index_transformers = {}
+        self._vap_transformers = {}
 
     @property
     @abc.abstractmethod
@@ -79,9 +79,9 @@ class BaseTransformer:
         pass
 
     @abc.abstractmethod
-    def get_index_transformer(self, atoms: Atoms):
+    def get_vap_transformer(self, atoms: Atoms):
         """
-        Return the corresponding `IndexTransformer`.
+        Return the corresponding `VirtualAtomMap`.
 
         Parameters
         ----------
@@ -90,8 +90,8 @@ class BaseTransformer:
 
         Returns
         -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
+        vap : VirtualAtomMap
+            The `VirtualAtomMap` for the given `Atoms` object.
 
         """
         pass
@@ -175,9 +175,9 @@ class DescriptorTransformer(BaseTransformer):
             self._initialize_placeholders()
         return self._placeholders
 
-    def get_index_transformer(self, atoms: Atoms):
+    def get_vap_transformer(self, atoms: Atoms):
         """
-        Return the corresponding `IndexTransformer`.
+        Return the corresponding `VirtualAtomMap`.
 
         Parameters
         ----------
@@ -186,23 +186,23 @@ class DescriptorTransformer(BaseTransformer):
 
         Returns
         -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
+        vap : VirtualAtomMap
+            The `VirtualAtomMap` for the given `Atoms` object.
 
         """
         # The mode 'reduce' is important here because chemical symbol lists of
         # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
         formula = atoms.get_chemical_formula(mode='reduce')
-        if formula not in self._index_transformers:
+        if formula not in self._vap_transformers:
             symbols = atoms.get_chemical_symbols()
             max_occurs = Counter()
             counter = Counter(symbols)
             for element in self.elements:
                 max_occurs[element] = max(1, counter[element])
-            self._index_transformers[formula] = IndexTransformer(
+            self._vap_transformers[formula] = VirtualAtomMap(
                 max_occurs, symbols
             )
-        return self._index_transformers[formula]
+        return self._vap_transformers[formula]
 
 
 def bytes_feature(value):
@@ -316,9 +316,9 @@ class BatchDescriptorTransformer(BaseTransformer):
         """
         pass
 
-    def get_index_transformer(self, atoms: Atoms):
+    def get_vap_transformer(self, atoms: Atoms):
         """
-        Return the corresponding `IndexTransformer`.
+        Return the corresponding `VirtualAtomMap`.
 
         Parameters
         ----------
@@ -327,18 +327,18 @@ class BatchDescriptorTransformer(BaseTransformer):
 
         Returns
         -------
-        clf : IndexTransformer
-            The `IndexTransformer` for the given `Atoms` object.
+        vap : VirtualAtomMap
+            The `VirtualAtomMap` for the given `Atoms` object.
 
         """
         # The mode 'reduce' is important here because chemical symbol lists of
         # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
         formula = atoms.get_chemical_formula(mode='reduce')
-        if formula not in self._index_transformers:
-            self._index_transformers[formula] = IndexTransformer(
+        if formula not in self._vap_transformers:
+            self._vap_transformers[formula] = VirtualAtomMap(
                 self.max_occurs, atoms.get_chemical_symbols()
             )
-        return self._index_transformers[formula]
+        return self._vap_transformers[formula]
 
     def _resize_to_nij_max(self, alist: np.ndarray, is_indices=True):
         """
@@ -382,14 +382,14 @@ class BatchDescriptorTransformer(BaseTransformer):
                           'stress': np.zeros(6)})
             atoms.calc = sp
 
-        clf = self.get_index_transformer(atoms)
+        vap = self.get_vap_transformer(atoms)
         np_dtype = get_float_dtype().as_numpy_dtype
-        positions = clf.map_positions(atoms.positions).astype(np_dtype)
+        positions = vap.map_positions(atoms.positions).astype(np_dtype)
         cells = atoms.get_cell(complete=True).array.astype(np_dtype)
         volume = np.atleast_1d(atoms.get_volume()).astype(np_dtype)
         y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         composition = self._get_composition(atoms)
-        mask = clf.mask.astype(np_dtype)
+        mask = vap.atom_masks.astype(np_dtype)
         pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
 
         feature_list = {
@@ -403,7 +403,7 @@ class BatchDescriptorTransformer(BaseTransformer):
             'pulay': bytes_feature(pulay.tostring()),
         }
         if self.use_forces:
-            f_true = clf.map_forces(atoms.get_forces()).astype(np_dtype)
+            f_true = vap.map_forces(atoms.get_forces()).astype(np_dtype)
             feature_list['f_true'] = bytes_feature(f_true.tostring())
 
         if self.use_stress:

@@ -167,7 +167,7 @@ class TensorAlloyCalculator(Calculator):
         Return the atomic forces.
         """
         forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
-        clf = self.transformer.get_index_transformer(atoms)
+        clf = self.transformer.get_vap_transformer(atoms)
         return clf.map_forces(forces, reverse=True)
 
     def get_stress(self, atoms=None, voigt=True):
