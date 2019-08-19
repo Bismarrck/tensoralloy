@@ -47,12 +47,12 @@ staircase = false
 
 [train]
 reset_global_step = true
-batch_size = 100
+batch_size = 50
 shuffle = true
 model_dir = "train"
-train_steps = 100000
+train_steps = 50000
 max_checkpoints_to_keep = 100
-eval_steps = 10000
+eval_steps = 5000
 summary_steps = 100
 log_steps = 100
 profile_steps = 0
