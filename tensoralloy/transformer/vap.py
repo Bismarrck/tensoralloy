@@ -107,7 +107,7 @@ class VirtualAtomMap:
                 indices.append(self.local_to_gsl_map[i])
         else:
             for i in range(self._max_vap_natoms):
-                indices.append(self.gsl_to_local_map.get(i, -1))
+                indices.append(self.gsl_to_local_map.get(i, -1) + istart)
         output = array[:, indices]
         if rank == 2:
             output = np.squeeze(output, axis=0)
