@@ -43,12 +43,12 @@ class VirtualAtomMap:
             index_map[idx_old] = idx_new
             delta[symbol] += 1
             mask[idx_new] = True
-        reverse_map = {v: k for k, v in index_map.items()}
+        reverse_map = {v: k - 1 for k, v in index_map.items()}
         index_map[0] = 0
-        reverse_map[0] = 0
+        reverse_map[0] = -1
         self._mask = mask
-        self._index_map = index_map
-        self._reverse_map = reverse_map
+        self.local_to_gsl_map = index_map
+        self.gsl_to_local_map = reverse_map
 
     @property
     def max_vap_natoms(self):
@@ -71,35 +71,6 @@ class VirtualAtomMap:
         Return a `bool` array.
         """
         return self._mask
-
-    def inplace_map_index(self, index_or_indices, reverse=False,
-                          exclude_extra=False):
-        """
-        Do the in-place index transformation.
-
-        Parameters
-        ----------
-        index_or_indices : int or List[int] or array_like
-            An atom index or a list of indices. One must be aware that indices
-            here start from one!
-        reverse : bool, optional
-            If True, the indices will be mapped to the local reference from the
-            global reference.
-        exclude_extra : bool
-            Exclude the virtual atom when calculating the index.
-
-        """
-        if reverse:
-            index_map = self._reverse_map
-        else:
-            index_map = self._index_map
-        delta = int(exclude_extra)
-        if not hasattr(index_or_indices, "__len__"):
-            return index_map[index_or_indices] - delta
-        else:
-            for i in range(len(index_or_indices)):
-                index_or_indices[i] = index_map[index_or_indices[i]] - delta
-            return index_or_indices
 
     def map_array(self, array: np.ndarray, reverse=False):
         """
@@ -133,10 +104,10 @@ class VirtualAtomMap:
         istart = VirtualAtomMap.REAL_ATOM_START
         if reverse:
             for i in range(istart, istart + len(self._symbols)):
-                indices.append(self._index_map[i])
+                indices.append(self.local_to_gsl_map[i])
         else:
             for i in range(self._max_vap_natoms):
-                indices.append(self._reverse_map.get(i, 0))
+                indices.append(self.gsl_to_local_map.get(i, -1))
         output = array[:, indices]
         if rank == 2:
             output = np.squeeze(output, axis=0)

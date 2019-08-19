@@ -43,6 +43,15 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
         return super(G2IndexedSlices, cls).__new__(
             cls, v2g_map, ilist, jlist, n1)
 
+    def as_dict(self):
+        """
+        Return a dict representation.
+        """
+        return {"g2.v2g_map": self.v2g_map,
+                "g2.ilist": self.ilist,
+                "g2.jlist": self.jlist,
+                "g2.n1": self.n1}
+
 
 # noinspection PyTypeChecker,PyArgumentList
 class G4IndexedSlices(namedtuple('G4IndexedSlices',
@@ -80,3 +89,15 @@ class G4IndexedSlices(namedtuple('G4IndexedSlices',
                 n3: Union[np.ndarray, tf.Tensor]):
         return super(G4IndexedSlices, cls).__new__(
             cls, v2g_map, ilist, jlist, klist, n1, n2, n3)
+
+    def as_dict(self):
+        """
+        Return a dict representation.
+        """
+        return {"g4.v2g_map": self.v2g_map,
+                "g4.ilist": self.ilist,
+                "g4.jlist": self.jlist,
+                "g4.klist": self.klist,
+                "g4.n1": self.n1,
+                "g4.n2": self.n2,
+                "g4.n3": self.n3}

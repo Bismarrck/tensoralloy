@@ -12,6 +12,7 @@ from collections import Counter
 from typing import Dict
 from ase import Atoms
 from ase.neighborlist import neighbor_list
+from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.descriptor import SymmetryFunction, BatchSymmetryFunction
 from tensoralloy.precision import get_float_dtype
@@ -27,6 +28,119 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["SymmetryFunctionTransformer", "BatchSymmetryFunctionTransformer"]
+
+
+def get_g2_map(atoms: Atoms,
+               rc: float,
+               interactions: dict,
+               vap: VirtualAtomMap,
+               offsets: np.ndarray,
+               mode: tf_estimator.ModeKeys,
+               nij_max: int = None,
+               dtype=np.float32):
+    """
+    Build the base `v2g_map` for radial symmetry functions.
+    """
+    if mode == tf_estimator.ModeKeys.PREDICT:
+        iaxis = 0
+    else:
+        iaxis = 1
+
+    ilist, jlist, n1 = neighbor_list('ijS', atoms, rc)
+    nij = len(ilist)
+    if nij_max is None:
+        nij_max = nij
+
+    g2_map = np.zeros((nij_max, iaxis + 2), dtype=np.int32)
+    tlist = np.zeros(nij_max, dtype=np.int32)
+    symbols = atoms.get_chemical_symbols()
+    tlist.fill(0)
+    for i in range(nij):
+        symboli = symbols[ilist[i]]
+        symbolj = symbols[jlist[i]]
+        tlist[i] = interactions['{}{}'.format(symboli, symbolj)]
+    ilist = np.pad(ilist + 1, (0, nij_max - nij), 'constant')
+    jlist = np.pad(jlist + 1, (0, nij_max - nij), 'constant')
+    n1 = np.pad(n1, ((0, nij_max - nij), (0, 0)), 'constant')
+    n1 = n1.astype(dtype)
+    for count in range(len(ilist)):
+        if ilist[count] == 0:
+            break
+        ilist[count] = vap.local_to_gsl_map[ilist[count]]
+        jlist[count] = vap.local_to_gsl_map[jlist[count]]
+    g2_map[:, iaxis + 0] = ilist
+    g2_map[:, iaxis + 1] = offsets[tlist]
+    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+
+
+def get_g4_map(atoms: Atoms,
+               g2: G2IndexedSlices,
+               interactions: dict,
+               offsets: np.ndarray,
+               vap: VirtualAtomMap,
+               mode: tf_estimator.ModeKeys,
+               nijk_max: int = None):
+    """
+    Build the base `v2g_map` for angular symmetry functions.
+    """
+    if mode == tf_estimator.ModeKeys.PREDICT:
+        iaxis = 0
+    else:
+        iaxis = 1
+
+    indices = {}
+    vectors = {}
+    for i, atom_gsl_i in enumerate(g2.ilist):
+        if atom_gsl_i == 0:
+            break
+        if atom_gsl_i not in indices:
+            indices[atom_gsl_i] = []
+            vectors[atom_gsl_i] = []
+        indices[atom_gsl_i].append(g2.jlist[i])
+        vectors[atom_gsl_i].append(g2.n1[i])
+
+    if nijk_max is None:
+        nijk = 0
+        for atomi, nl in indices.items():
+            n = len(nl)
+            nijk += (n - 1) * n // 2
+        nijk_max = nijk
+
+    g4_map = np.zeros((nijk_max, iaxis + 2), dtype=np.int32)
+    ilist = np.zeros(nijk_max, dtype=np.int32)
+    jlist = np.zeros(nijk_max, dtype=np.int32)
+    klist = np.zeros(nijk_max, dtype=np.int32)
+    n1 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
+    n2 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
+    n3 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
+    symbols = atoms.get_chemical_symbols()
+
+    count = 0
+    for atom_gsl_i, nl in indices.items():
+        atom_local_i = vap.gsl_to_local_map[atom_gsl_i]
+        symboli = symbols[atom_local_i]
+        prefix = '{}'.format(symboli)
+        for j in range(len(nl)):
+            atom_vap_j = nl[j]
+            atom_local_j = vap.gsl_to_local_map[atom_vap_j]
+            symbolj = symbols[atom_local_j]
+            for k in range(j + 1, len(nl)):
+                atom_vap_k = nl[k]
+                atom_local_k = vap.gsl_to_local_map[atom_vap_k]
+                symbolk = symbols[atom_local_k]
+                interaction = '{}{}'.format(
+                    prefix, ''.join(sorted([symbolj, symbolk])))
+                ilist[count] = atom_gsl_i
+                jlist[count] = atom_vap_j
+                klist[count] = atom_vap_k
+                n1[count] = vectors[atom_gsl_i][j]
+                n2[count] = vectors[atom_gsl_i][k]
+                n3[count] = vectors[atom_gsl_i][k] - vectors[atom_gsl_i][j]
+                index = interactions[interaction]
+                g4_map[count, iaxis + 0] = atom_gsl_i
+                g4_map[count, iaxis + 1] = offsets[index]
+                count += 1
+    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
 
 
 class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
@@ -130,24 +244,15 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Return the indexed slices for the symmetry function G2.
         """
-        symbols = atoms.get_chemical_symbols()
-        float_dtype = get_float_dtype()
-        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        nij = len(ilist)
-        v2g_map = np.zeros((nij, 2), dtype=np.int32)
-
-        tlist = np.zeros(nij, dtype=np.int32)
-        for i in range(nij):
-            symboli = symbols[ilist[i]]
-            symbolj = symbols[jlist[i]]
-            tlist[i] = self.kbody_index['{}{}'.format(symboli, symbolj)]
-
-        ilist = vap.inplace_map_index(ilist + 1)
-        jlist = vap.inplace_map_index(jlist + 1)
-        n1 = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
-        v2g_map[:, 0] = ilist
-        v2g_map[:, 1] = self.offsets[tlist]
-        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist, n1=n1)
+        return get_g2_map(
+            atoms,
+            rc=self.rc,
+            nij_max=None,
+            interactions=self.kbody_index,
+            vap=vap,
+            offsets=self.offsets,
+            mode=tf_estimator.ModeKeys.PREDICT,
+            dtype=get_float_dtype().as_numpy_dtype)
 
     def _get_g4_indexed_slices(self,
                                atoms: Atoms,
@@ -156,58 +261,14 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Return the indexed slices for the symmetry function G4.
         """
-        symbols = atoms.get_chemical_symbols()
-        float_dtype = get_float_dtype()
-        indices = {}
-        vectors = {}
-        for i, atomi in enumerate(g2.ilist):
-            if atomi not in indices:
-                indices[atomi] = []
-                vectors[atomi] = []
-            indices[atomi].append(g2.jlist[i])
-            vectors[atomi].append(g2.n1[i])
-
-        nijk = 0
-        for atomi, nl in indices.items():
-            n = len(nl)
-            nijk += (n - 1) * n // 2
-
-        v2g_map = np.zeros((nijk, 2), dtype=np.int32)
-        ilist = np.zeros(nijk, dtype=np.int32)
-        jlist = np.zeros(nijk, dtype=np.int32)
-        klist = np.zeros(nijk, dtype=np.int32)
-        n1 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
-        n2 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
-        n3 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
-
-        count = 0
-        for atomi, nl in indices.items():
-            num = len(nl)
-            indexi = vap.inplace_map_index(atomi, True, True)
-            symboli = symbols[indexi]
-            prefix = '{}'.format(symboli)
-            for j in range(num):
-                atomj = nl[j]
-                indexj = vap.inplace_map_index(atomj, True, True)
-                symbolj = symbols[indexj]
-                for k in range(j + 1, num):
-                    atomk = nl[k]
-                    indexk = vap.inplace_map_index(atomk, True, True)
-                    symbolk = symbols[indexk]
-                    suffix = ''.join(sorted([symbolj, symbolk]))
-                    kbody_term = '{}{}'.format(prefix, suffix)
-                    ilist[count] = atomi
-                    jlist[count] = atomj
-                    klist[count] = atomk
-                    n1[count] = vectors[atomi][j]
-                    n2[count] = vectors[atomi][k]
-                    n3[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self.kbody_index[kbody_term]
-                    v2g_map[count, 0] = atomi
-                    v2g_map[count, 1] = self.offsets[index]
-                    count += 1
-        return G4IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               klist=klist, n1=n1, n2=n2, n3=n3)
+        return get_g4_map(
+            atoms=atoms,
+            g2=g2,
+            interactions=self.kbody_index,
+            offsets=self.offsets,
+            vap=vap,
+            nijk_max=None,
+            mode=tf_estimator.ModeKeys.PREDICT)
 
     def _get_np_features(self, atoms: Atoms):
         """
@@ -239,20 +300,12 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict["composition"] = composition
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["row_splits"] = np.int32(splits)
-        feed_dict["g2.v2g_map"] = g2.v2g_map
-        feed_dict["g2.ilist"] = g2.ilist
-        feed_dict["g2.jlist"] = g2.jlist
-        feed_dict["g2.n1"] = g2.n1
+
+        feed_dict.update(g2.as_dict())
 
         if self._angular:
             g4 = self._get_g4_indexed_slices(atoms, g2, vap)
-            feed_dict["g4.v2g_map"] = g4.v2g_map
-            feed_dict["g4.ilist"] = g4.ilist
-            feed_dict["g4.jlist"] = g4.jlist
-            feed_dict["g4.klist"] = g4.klist
-            feed_dict["g4.n1"] = g4.n1
-            feed_dict["g4.n2"] = g4.n2
-            feed_dict["g4.n3"] = g4.n3
+            feed_dict.update(g4.as_dict())
 
         return feed_dict
 
@@ -359,92 +412,28 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Return the indexed slices for the radial function G2.
         """
-        v2g_map = np.zeros((self._nij_max, 3), dtype=np.int32)
-        tlist = np.zeros(self._nij_max, dtype=np.int32)
-        float_dtype = get_float_dtype()
-
-        symbols = atoms.get_chemical_symbols()
-        vap = self.get_vap_transformer(atoms)
-
-        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        nij = len(ilist)
-
-        tlist.fill(0)
-        for i in range(nij):
-            symboli = symbols[ilist[i]]
-            symbolj = symbols[jlist[i]]
-            tlist[i] = self.kbody_index['{}{}'.format(symboli, symbolj)]
-
-        ilist = self._resize_to_nij_max(ilist, True)
-        jlist = self._resize_to_nij_max(jlist, True)
-        Slist = self._resize_to_nij_max(Slist, False)
-        ilist = vap.inplace_map_index(ilist)
-        jlist = vap.inplace_map_index(jlist)
-        n1 = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
-        v2g_map[:self._nij_max, 1] = ilist
-        v2g_map[:self._nij_max, 2] = self.offsets[tlist]
-
-        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               n1=n1)
+        return get_g2_map(
+            atoms=atoms,
+            rc=self._rc,
+            nij_max=self.nij_max,
+            interactions=self.kbody_index,
+            vap=self.get_vap_transformer(atoms),
+            offsets=self.offsets,
+            mode=tf_estimator.ModeKeys.TRAIN,
+            dtype=get_float_dtype().as_numpy_dtype)
 
     def get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices):
         """
         Return the indexed slices for the angular function G4.
         """
-        if not self._angular:
-            return None
-
-        numpy_float_dtype = get_float_dtype().as_numpy_dtype
-
-        v2g_map = np.zeros((self._nijk_max, 3), dtype=np.int32)
-        ilist = np.zeros(self._nijk_max, dtype=np.int32)
-        jlist = np.zeros(self._nijk_max, dtype=np.int32)
-        klist = np.zeros(self._nijk_max, dtype=np.int32)
-        n1 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
-        n2 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
-        n3 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
-
-        symbols = atoms.get_chemical_symbols()
-        vap = self.get_vap_transformer(atoms)
-        indices = {}
-        vectors = {}
-        for i, atomi in enumerate(g2.ilist):
-            if atomi == 0:
-                break
-            if atomi not in indices:
-                indices[atomi] = []
-                vectors[atomi] = []
-            indices[atomi].append(g2.jlist[i])
-            vectors[atomi].append(g2.n1[i])
-
-        count = 0
-        for atomi, nl in indices.items():
-            num = len(nl)
-            indexi = vap.inplace_map_index(atomi, True, True)
-            symboli = symbols[indexi]
-            prefix = '{}'.format(symboli)
-            for j in range(num):
-                atomj = nl[j]
-                indexj = vap.inplace_map_index(atomj, True, True)
-                symbolj = symbols[indexj]
-                for k in range(j + 1, num):
-                    atomk = nl[k]
-                    indexk = vap.inplace_map_index(atomk, True, True)
-                    symbolk = symbols[indexk]
-                    suffix = ''.join(sorted([symbolj, symbolk]))
-                    kbody_term = '{}{}'.format(prefix, suffix)
-                    ilist[count] = atomi
-                    jlist[count] = atomj
-                    klist[count] = atomk
-                    n1[count] = vectors[atomi][j]
-                    n2[count] = vectors[atomi][k]
-                    n3[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self.kbody_index[kbody_term]
-                    v2g_map[count, 1] = atomi
-                    v2g_map[count, 2] = self.offsets[index]
-                    count += 1
-        return G4IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               klist=klist, n1=n1, n2=n2, n3=n3)
+        return get_g4_map(
+            atoms=atoms,
+            g2=g2,
+            interactions=self.kbody_index,
+            offsets=self.offsets,
+            vap=self.get_vap_transformer(atoms),
+            mode=tf_estimator.ModeKeys.TRAIN,
+            nijk_max=self.nijk_max)
 
     def get_indexed_slices(self, atoms: Atoms):
         """
@@ -544,22 +533,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             n_elements=self.n_elements,
             use_forces=self._use_forces,
             use_stress=self._use_stress)
+
         g2 = self._decode_g2_indexed_slices(example)
-        g4 = self._decode_g4_indexed_slices(example)
+        decoded.update(g2.as_dict())
 
-        decoded["g2.v2g_map"] = g2.v2g_map
-        decoded["g2.ilist"] = g2.ilist
-        decoded["g2.jlist"] = g2.jlist
-        decoded["g2.n1"] = g2.n1
-
-        if g4 is not None:
-            decoded["g4.v2g_map"] = g4.v2g_map
-            decoded["g4.ilist"] = g4.ilist
-            decoded["g4.jlist"] = g4.jlist
-            decoded["g4.klist"] = g4.klist
-            decoded["g4.n1"] = g4.n1
-            decoded["g4.n2"] = g4.n2
-            decoded["g4.n3"] = g4.n3
+        if self.angular:
+            g4 = self._decode_g4_indexed_slices(example)
+            decoded.update(g4.as_dict())
 
         return decoded
 
