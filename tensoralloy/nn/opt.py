@@ -10,7 +10,7 @@ from typing import List
 from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.utils import AttributeDict, Defaults, GraphKeys
+from tensoralloy.utils import Defaults, GraphKeys
 from tensoralloy.nn.utils import get_optimizer, get_learning_rate
 from tensoralloy.nn.utils import get_tensors_dict_for_hook
 from tensoralloy.nn.dataclasses import OptParameters, TrainParameters
@@ -99,21 +99,19 @@ def add_grads_and_vars_summary(grads_and_vars, name):
         return None
 
 
-def get_train_op(losses: AttributeDict, opt_parameters: OptParameters,
-                 minimize_properties: List[str], mode: tf_estimator.ModeKeys):
+def get_train_op(losses: dict, opt_parameters: OptParameters,
+                 minimize_properties: List[str]):
     """
     Return the Op for a training step.
 
     Parameters
     ----------
-    losses : AttributeDict
+    losses : dict
         A dict of loss tensors.
     opt_parameters : OptParameters
         The hyper parameters for minimizing the total loss.
     minimize_properties : List[str]
         A list of str as the structural properties to minimize.
-    mode : tf_estimator.ModeKeys
-        Specifies if this is training, evaluation or prediction.
 
     Returns
     -------

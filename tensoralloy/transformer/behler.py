@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 
 from collections import Counter
-from typing import Dict, Tuple
+from typing import Dict
 from ase import Atoms
 from ase.neighborlist import neighbor_list
 
@@ -21,7 +21,7 @@ from tensoralloy.transformer.base import bytes_feature
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.utils import AttributeDict, Defaults, get_pulay_stress
+from tensoralloy.utils import Defaults, get_pulay_stress
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -37,15 +37,13 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
     def __init__(self, rc, elements, eta=Defaults.eta, omega=Defaults.omega,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 angular=False, periodic=True, trainable=False,
-                 cutoff_function='cosine'):
+                 angular=False, periodic=True):
         """
         Initialization method.
         """
         SymmetryFunction.__init__(
             self, rc=rc, elements=elements, eta=eta, omega=omega, beta=beta,
-            gamma=gamma, zeta=zeta, angular=angular, periodic=periodic,
-            trainable=trainable, cutoff_function=cutoff_function)
+            gamma=gamma, zeta=zeta, angular=angular, periodic=periodic)
         DescriptorTransformer.__init__(self)
 
     def as_dict(self):
@@ -54,11 +52,12 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         d = {'class': self.__class__.__name__, 'rc': self._rc,
              'elements': self._elements, 'angular': self._angular,
-             'periodic': self._periodic, 'eta': self._eta.tolist(),
-             'omega': self._omega.tolist(), 'gamma': self._gamma.tolist(),
-             'zeta': self._zeta.tolist(), 'beta': self._beta.tolist(),
-             'trainable': self._trainable,
-             'cutoff_function': self._cutoff_function}
+             'periodic': self.periodic,
+             'eta': self.initial_values["eta"].tolist(),
+             'omega': self.initial_values["omega"].tolist(),
+             'gamma': self.initial_values["gamma"].tolist(),
+             'zeta': self.initial_values["zeta"].tolist(),
+             'beta': self.initial_values["beta"].tolist()}
         return d
 
     def _initialize_placeholders(self):
@@ -100,35 +99,32 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             def _int_2d(d1, name, d0=None):
                 return _get_or_create(tf.int32, (d0, d1), name)
 
-            self._placeholders.positions = _float_2d(3, 'positions')
-            self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
-            self._placeholders.n_atoms_plus_virt = _int('n_atoms_plus_virt')
-            self._placeholders.volume = _float('volume')
-            self._placeholders.atom_masks = _float_1d('mask')
-            self._placeholders.pulay_stress = _float('pulay_stress')
-            self._placeholders.composition = _float_1d('composition')
-            self._placeholders.row_splits = _int_1d(
-                'row_splits', d0=self._n_elements + 1)
-            self._placeholders.g2 = AttributeDict(
-                ilist=_int_1d('g2.ilist'),
-                jlist=_int_1d('g2.jlist'),
-                shift=_float_2d(3, 'g2.shift'),
-                v2g_map=_int_2d(2, 'g2.v2g_map')
-            )
+            self._placeholders["positions"] = _float_2d(3, 'positions')
+            self._placeholders["cells"] = _float_2d(d0=3, d1=3, name='cells')
+            self._placeholders["n_atoms_vap"] = _int('n_atoms_vap')
+            self._placeholders["volume"] = _float('volume')
+            self._placeholders["atom_masks"] = _float_1d('atom_masks')
+            self._placeholders["pulay_stress"] = _float('pulay_stress')
+            self._placeholders["composition"] = _float_1d('composition')
+            self._placeholders["row_splits"] = _int_1d(
+                'row_splits', d0=self.n_elements + 1)
+            self._placeholders["g2.ilist"] = _int_1d('g2.ilist')
+            self._placeholders["g2.jlist"] = _int_1d('g2.jlist')
+            self._placeholders["g2.shift"] = _float_2d(3, 'g2.shift')
+            self._placeholders["g2.v2g_map"] = _int_2d(2, 'g2.v2g_map')
 
-            if self._k_max == 3:
-                self._placeholders.g4 = AttributeDict(
-                    v2g_map=_int_2d(2, 'g4.v2g_map'),
-                    ij=AttributeDict(ilist=_int_1d('g4.ij.ilist'),
-                                     jlist=_int_1d('g4.ij.jlist')),
-                    ik=AttributeDict(ilist=_int_1d('g4.ik.ilist'),
-                                     klist=_int_1d('g4.ik.klist')),
-                    jk=AttributeDict(jlist=_int_1d('g4.jk.jlist'),
-                                     klist=_int_1d('g4.jk.klist')),
-                    shift=AttributeDict(ij=_float_2d(3, 'g4.shift.ij'),
-                                        ik=_float_2d(3, 'g4.shift.ik'),
-                                        jk=_float_2d(3, 'g4.shift.jk'))
-                )
+            if self._angular:
+                self._placeholders["g4.v2g_map"] = _int_2d(2, 'g4.v2g_map')
+                self._placeholders["g4.ij.ilist"] = _int_1d('g4.ij.ilist')
+                self._placeholders["g4.ij.jlist"] = _int_1d('g4.ij.jlist')
+                self._placeholders["g4.ik.ilist"] = _int_1d('g4.ik.ilist')
+                self._placeholders["g4.ik.klist"] = _int_1d('g4.ik.klist')
+                self._placeholders["g4.jk.jlist"] = _int_1d('g4.jk.jlist')
+                self._placeholders["g4.jk.klist"] = _int_1d('g4.jk.klist')
+                self._placeholders["g4.shift.ij"] = _float_2d(3, 'g4.shift.ij')
+                self._placeholders["g4.shift.ik"] = _float_2d(3, 'g4.shift.ik')
+                self._placeholders["g4.shift.jk"] = _float_2d(3, 'g4.shift.jk')
+
         return self._placeholders
 
     def _get_g2_indexed_slices(self,
@@ -147,13 +143,13 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         for i in range(nij):
             symboli = symbols[ilist[i]]
             symbolj = symbols[jlist[i]]
-            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+            tlist[i] = self.kbody_index['{}{}'.format(symboli, symbolj)]
 
         ilist = vap.inplace_map_index(ilist + 1)
         jlist = vap.inplace_map_index(jlist + 1)
         shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:, 0] = ilist
-        v2g_map[:, 1] = self._offsets[tlist]
+        v2g_map[:, 1] = self.offsets[tlist]
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
 
@@ -210,9 +206,9 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                     ij_shift[count] = vectors[atomi][j]
                     ik_shift[count] = vectors[atomi][k]
                     jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self._kbody_index[kbody_term]
+                    index = self.kbody_index[kbody_term]
                     v2g_map[count, 0] = atomi
-                    v2g_map[count, 1] = self._offsets[index]
+                    v2g_map[count, 1] = self.offsets[index]
                     count += 1
         return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
                                ij_shift=ij_shift, ik_shift=ik_shift,
@@ -222,7 +218,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         Return a dict of features (Numpy or Python objects).
         """
-        feed_dict = AttributeDict()
+        feed_dict = dict()
 
         vap = self.get_vap_transformer(atoms)
         g2 = self._get_g2_indexed_slices(atoms, vap)
@@ -240,29 +236,31 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         composition = self._get_composition(atoms)
         pulay_stress = get_pulay_stress(atoms)
 
-        feed_dict.positions = positions.astype(np_dtype)
-        feed_dict.n_atoms_plus_virt = np.int32(vap_natoms)
-        feed_dict.mask = atom_masks.astype(np_dtype)
-        feed_dict.cells = cells.array.astype(np_dtype)
-        feed_dict.volume = np_dtype(volume)
-        feed_dict.composition = composition
-        feed_dict.pulay_stress = np_dtype(pulay_stress)
-        feed_dict.row_splits = np.int32(splits)
-        feed_dict.g2 = AttributeDict(
-            v2g_map=g2.v2g_map, ilist=g2.ilist, jlist=g2.jlist, shift=g2.shift,
-        )
+        feed_dict["positions"] = positions.astype(np_dtype)
+        feed_dict["n_atoms_vap"] = np.int32(vap_natoms)
+        feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
+        feed_dict["cells"] = cells.array.astype(np_dtype)
+        feed_dict["volume"] = np_dtype(volume)
+        feed_dict["composition"] = composition
+        feed_dict["pulay_stress"] = np_dtype(pulay_stress)
+        feed_dict["row_splits"] = np.int32(splits)
+        feed_dict["g2.v2g_map"] = g2.v2g_map
+        feed_dict["g2.ilist"] = g2.ilist
+        feed_dict["g2.jlist"] = g2.jlist
+        feed_dict["g2.shift"] = g2.shift
 
-        if self._k_max == 3:
+        if self._angular:
             g4 = self._get_g4_indexed_slices(atoms, g2, vap)
-            feed_dict.g4 = AttributeDict(
-                v2g_map=g4.v2g_map,
-                ij=AttributeDict(ilist=g4.ij[:, 0], jlist=g4.ij[:, 1]),
-                ik=AttributeDict(ilist=g4.ik[:, 0], klist=g4.ik[:, 1]),
-                jk=AttributeDict(jlist=g4.jk[:, 0], klist=g4.jk[:, 1]),
-                shift=AttributeDict(ij=g4.ij_shift,
-                                    ik=g4.ik_shift,
-                                    jk=g4.jk_shift)
-            )
+            feed_dict["g4.v2g_map"] = g4.v2g_map
+            feed_dict["g4.ij.ilist"] = g4.ij[..., 0]
+            feed_dict["g4.ij.jlist"] = g4.ij[..., 1]
+            feed_dict["g4.ik.ilist"] = g4.ik[..., 0]
+            feed_dict["g4.ik.klist"] = g4.ik[..., 1]
+            feed_dict["g4.jk.jlist"] = g4.jk[..., 0]
+            feed_dict["g4.jk.klist"] = g4.jk[..., 1]
+            feed_dict["g4.shift.ij"] = g4.ij_shift
+            feed_dict["g4.shift.ik"] = g4.ik_shift
+            feed_dict["g4.shift.jk"] = g4.jk_shift
 
         return feed_dict
 
@@ -271,77 +269,21 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         Return the feed dict.
         """
         feed_dict = {}
-
         if not self._placeholders:
             self._initialize_placeholders()
         placeholders = self._placeholders
-
-        np_dict = self._get_np_features(atoms)
-
-        for key, val in np_dict.items():
-            if key == 'g2':
-                for _key, _val in val.items():
-                    feed_dict[placeholders['g2'][_key]] = _val
-            elif key == 'g4':
-                feed_dict[placeholders.g4.ij.ilist] = val['ij']['ilist']
-                feed_dict[placeholders.g4.ij.jlist] = val['ij']['jlist']
-                feed_dict[placeholders.g4.ik.ilist] = val['ik']['ilist']
-                feed_dict[placeholders.g4.ik.klist] = val['ik']['klist']
-                feed_dict[placeholders.g4.jk.jlist] = val['jk']['jlist']
-                feed_dict[placeholders.g4.jk.klist] = val['jk']['klist']
-                feed_dict[placeholders.g4.shift.ij] = val['shift']['ij']
-                feed_dict[placeholders.g4.shift.ik] = val['shift']['ik']
-                feed_dict[placeholders.g4.shift.jk] = val['shift']['jk']
-                feed_dict[placeholders.g4.v2g_map] = val['v2g_map']
-            else:
-                feed_dict[placeholders[key]] = val
-
+        for key, value in self._get_np_features(atoms).items():
+            feed_dict[placeholders[key]] = value
         return feed_dict
 
     def get_constant_features(self, atoms: Atoms):
         """
         Return a dict of constant feature tensors for the given `Atoms`.
         """
-        feed_dict = AttributeDict()
-        np_dict = self._get_np_features(atoms)
-
+        feed_dict = {}
         with tf.name_scope("Constants"):
-            for key, val in np_dict.items():
-                if key == 'g2':
-                    feed_dict['g2'] = AttributeDict()
-                    for _key, _val in val.items():
-                        feed_dict['g2'][_key] = tf.convert_to_tensor(
-                            _val, name=f'g2.{_key}')
-                elif key == 'g4':
-                    feed_dict['g4'] = AttributeDict(
-                        v2g_map=tf.convert_to_tensor(
-                            val['v2g_map'], name='g4.v2g_map'))
-                    feed_dict['g4']['ij'] = AttributeDict(
-                        ilist=tf.convert_to_tensor(
-                            val['ij']['ilist'], name='g4.ij.ilist'),
-                        jlist=tf.convert_to_tensor(
-                            val['ij']['jlist'], name='g4.ij.jlist'))
-                    feed_dict['g4']['ik'] = AttributeDict(
-                        ilist=tf.convert_to_tensor(
-                            val['ik']['ilist'], name='g4.ik.ilist'),
-                        klist=tf.convert_to_tensor(
-                            val['ik']['klist'], name='g4.ik.klist'))
-                    feed_dict['g4']['jk'] = AttributeDict(
-                        jlist=tf.convert_to_tensor(
-                            val['jk']['jlist'], name='g4.jk.jlist'),
-                        klist=tf.convert_to_tensor(
-                            val['jk']['klist'], name='g4.jk.klist'))
-                    feed_dict['g4']['shift'] = AttributeDict(
-                        ij=tf.convert_to_tensor(
-                            val['shift']['ij'], name='g4.shift.ij'),
-                        ik=tf.convert_to_tensor(
-                            val['shift']['ik'], name='g4.shift.ik'),
-                        jk=tf.convert_to_tensor(
-                            val['shift']['jk'], name='g4.shift.jk'),
-                    )
-                else:
-                    feed_dict[key] = tf.convert_to_tensor(val, name=key)
-
+            for key, value in self._get_np_features(atoms).items():
+                feed_dict[key] = tf.convert_to_tensor(value, name=key)
             return feed_dict
 
 
@@ -354,8 +296,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
     def __init__(self, rc, max_occurs: Counter, nij_max: int, nijk_max: int,
                  batch_size=None, eta=Defaults.eta, omega=Defaults.omega,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 angular=False, periodic=True, trainable=False,
-                 cutoff_function='cosine', use_forces=True, use_stress=False):
+                 angular=False, periodic=True, use_forces=True,
+                 use_stress=False):
         """
         Initialization method.
 
@@ -369,14 +311,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             raise ValueError(
                 'The stress tensor is not applicable to molecules.')
 
-        elements = sorted(max_occurs.keys())
-
         BatchSymmetryFunction.__init__(
-            self, rc=rc, max_occurs=max_occurs, elements=elements,
+            self, rc=rc, max_occurs=max_occurs,
             nij_max=nij_max, nijk_max=nijk_max, batch_size=batch_size, eta=eta,
             omega=omega, beta=beta, gamma=gamma, zeta=zeta, angular=angular,
-            trainable=trainable, periodic=periodic,
-            cutoff_function=cutoff_function)
+            periodic=periodic)
 
         BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
                                             use_stress=use_stress)
@@ -388,11 +327,12 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         d = {'class': self.__class__.__name__, 'rc': self._rc,
              'max_occurs': self._max_occurs, 'nij_max': self._nij_max,
              'nijk_max': self._nijk_max, 'batch_size': self._batch_size,
-             'angular': self._angular, 'periodic': self._periodic,
-             'eta': self._eta.tolist(), 'omega': self._omega.tolist(),
-             'gamma': self._gamma.tolist(), 'zeta': self._zeta.tolist(),
-             'beta': self._beta.tolist(), 'trainable': self._trainable,
-             'cutoff_function': self._cutoff_function,
+             'angular': self._angular, 'periodic': self.periodic,
+             'eta': self.initial_values["eta"].tolist(),
+             'omega': self.initial_values["omega"].tolist(),
+             'gamma': self.initial_values["gamma"].tolist(),
+             'zeta': self.initial_values["zeta"].tolist(),
+             'beta': self.initial_values["beta"].tolist(),
              'use_forces': self._use_forces, 'use_stress': self._use_stress}
         return d
 
@@ -415,10 +355,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Return the corresponding `SymmetryFunctionTransformer`.
         """
         return SymmetryFunctionTransformer(
-            rc=self._rc, elements=self._elements, eta=self._eta,
-            omega=self._omega, beta=self._beta, gamma=self._gamma,
-            zeta=self._zeta, angular=self._angular, trainable=self._trainable,
-            periodic=self._periodic, cutoff_function=self._cutoff_function)
+            rc=self._rc, elements=self._elements,
+            eta=self.initial_values['eta'],
+            omega=self.initial_values['omega'],
+            beta=self.initial_values['beta'],
+            gamma=self.initial_values['gamma'],
+            zeta=self.initial_values['zeta'], angular=self._angular,
+            periodic=self.periodic)
 
     def get_g2_indexed_slices(self, atoms: Atoms):
         """
@@ -438,7 +381,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         for i in range(nij):
             symboli = symbols[ilist[i]]
             symbolj = symbols[jlist[i]]
-            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
+            tlist[i] = self.kbody_index['{}{}'.format(symboli, symbolj)]
 
         ilist = self._resize_to_nij_max(ilist, True)
         jlist = self._resize_to_nij_max(jlist, True)
@@ -447,7 +390,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         jlist = vap.inplace_map_index(jlist)
         shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:self._nij_max, 1] = ilist
-        v2g_map[:self._nij_max, 2] = self._offsets[tlist]
+        v2g_map[:self._nij_max, 2] = self.offsets[tlist]
 
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
                                shift=shift)
@@ -456,7 +399,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         """
         Return the indexed slices for the angular function G4.
         """
-        if self._k_max < 3:
+        if not self._angular:
             return None
 
         numpy_float_dtype = get_float_dtype().as_numpy_dtype
@@ -504,9 +447,9 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     ij_shift[count] = vectors[atomi][j]
                     ik_shift[count] = vectors[atomi][k]
                     jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
-                    index = self._kbody_index[kbody_term]
+                    index = self.kbody_index[kbody_term]
                     v2g_map[count, 1] = atomi
-                    v2g_map[count, 2] = self._offsets[index]
+                    v2g_map[count, 2] = self.offsets[index]
                     count += 1
         return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
                                ij_shift=ij_shift, ik_shift=ik_shift,
@@ -545,7 +488,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         g2, g4 = self.get_indexed_slices(atoms)
         feature_list.update(self._encode_g2_indexed_slices(g2))
 
-        if self.k_max == 3:
+        if self._angular:
             feature_list.update(self._encode_g4_indexed_slices(g4))
 
         return tf.train.Example(
@@ -576,9 +519,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
         functions.
         """
-        if self.k_max < 3:
-            return None
-
         with tf.name_scope("G4"):
             with tf.name_scope("indices"):
                 indices = tf.decode_raw(example['g4.indices'], tf.int32)
@@ -599,36 +539,36 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         return G4IndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
                                jk_shift)
 
-    def _decode_example(self, example: Dict[str, tf.Tensor]):
+    def _decode_example(self, example: Dict[str, tf.Tensor]) -> dict:
         """
         Decode the parsed single example.
         """
         decoded = self._decode_atoms(
             example,
             max_n_atoms=self._max_n_atoms,
-            n_elements=self._n_elements,
+            n_elements=self.n_elements,
             use_forces=self._use_forces,
             use_stress=self._use_stress)
         g2 = self._decode_g2_indexed_slices(example)
         g4 = self._decode_g4_indexed_slices(example)
 
-        decoded.rv2g = g2.v2g_map
-        decoded.ilist = g2.ilist
-        decoded.jlist = g2.jlist
-        decoded.shift = g2.shift
+        decoded["g2.v2g_map"] = g2.v2g_map
+        decoded["g2.ilist"] = g2.ilist
+        decoded["g2.jlist"] = g2.jlist
+        decoded["g2.shift"] = g2.shift
 
         if g4 is not None:
-            decoded.av2g = g4.v2g_map
-            decoded.ij = g4.ij
-            decoded.ik = g4.ik
-            decoded.jk = g4.jk
-            decoded.ij_shift = g4.ij_shift
-            decoded.ik_shift = g4.ik_shift
-            decoded.jk_shift = g4.jk_shift
+            decoded["g4.v2g_map"] = g4.v2g_map
+            decoded["g4.ij"] = g4.ij
+            decoded["g4.ik"] = g4.ik
+            decoded["g4.jk"] = g4.jk
+            decoded["g4.shift.ij"] = g4.ij_shift
+            decoded["g4.shift.ik"] = g4.ik_shift
+            decoded["g4.shift.jk"] = g4.jk_shift
 
         return decoded
 
-    def decode_protobuf(self, example_proto: tf.Tensor) -> AttributeDict:
+    def decode_protobuf(self, example_proto: tf.Tensor) -> dict:
         """
         Decode the scalar string Tensor, which is a single serialized Example.
         See `_parse_single_example_raw` documentation for more details.
@@ -654,99 +594,24 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
 
-            if self._k_max == 3:
+            if self._angular:
                 feature_list.update({
                     'g4.indices': tf.FixedLenFeature([], tf.string),
-                    'g4.shifts': tf.FixedLenFeature([], tf.string),
-                })
+                    'g4.shifts': tf.FixedLenFeature([], tf.string)})
 
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptors(self, batch_features: AttributeDict):
+    def get_descriptors(self, next_batch: dict):
         """
         Return the Op to compute symmetry function descriptors.
-
-        This function is necessary because nested dicts are not supported by
-        `tf.data.Dataset.batch`.
-
-        Parameters
-        ----------
-        batch_features : AttributeDict
-            A batch of raw properties provided by `tf.data.Dataset`. Each batch
-            is produced by the function `decode_protobuf`.
-
-            Here are default keys:
-
-            * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
-            * 'cells': float64 or float32, [batch_size, 3, 3]
-            * 'volume': float64 or float32, [batch_size, ]
-            * 'n_atoms': int64, [batch_size, ]
-            * 'y_true': float64 or float32, [batch_size, ]
-            * 'y_conf': float64 or float32, [batch_size, ]
-            * 'f_true': float64 or float32, [batch_size, max_n_atoms + 1, 3]
-            * 'f_true': float64 or float32, [batch_size, ]
-            * 'composition': float64 or float32, [batch_size, n_elements]
-            * 'mask': float64 or float32, [batch_size, max_n_atoms + 1]
-            * 'ilist': int32, [batch_size, nij_max]
-            * 'jlist': int32, [batch_size, nij_max]
-            * 'shift': float64 or float32, [batch_size, nij_max, 3]
-            * 'rv2g': int32, [batch_size, nij_max, 3]
-
-            If `self.stress` is `True`, these following keys will be provided:
-
-            * 'stress': float64 or float32, [batch_size, 6]
-            * 'total_pressure': float64 or float32, [batch_size, ]
-            * 's_true': float64 or float32, [batch_size, ]
-
-            If `self.angular` is `True`, these following keys will be provided:
-
-            * 'ij': int32, [batch_size, nijk_max, 2]
-            * 'ik': int32, [batch_size, nijk_max, 2]
-            * 'jk': int32, [batch_size, nijk_max, 2]
-            * 'ij_shift': float64 or float32, [batch_size, nijk_max, 3]
-            * 'ik_shift': float64 or float32, [batch_size, nijk_max, 3]
-            * 'jk_shift': float64 or float32, [batch_size, nijk_max, 3]
-            * 'av2g': int32, [batch_size, nijk_max, 3]
-
-        Returns
-        -------
-        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict of (element, (value, mask)) where `element` is a symbol,
-            `value` is the Op to compute its atomic descriptors and `mask` is a
-            `tf.no_op`.
-
         """
-        self._infer_batch_size(batch_features)
-
-        inputs = AttributeDict()
-        inputs.g2 = AttributeDict(
-            ilist=batch_features.ilist,
-            jlist=batch_features.jlist,
-            shift=batch_features.shift,
-            v2g_map=batch_features.rv2g
-        )
-        inputs.positions = batch_features.positions
-        inputs.cells = batch_features.cells
-        inputs.volume = batch_features.volume
-        inputs.mask = batch_features.mask
-
-        if self._k_max == 3:
-            inputs.g4 = AttributeDict(
-                ij=AttributeDict(
-                    ilist=batch_features.ij[..., 0],
-                    jlist=batch_features.ij[..., 1]),
-                ik=AttributeDict(
-                    ilist=batch_features.ik[..., 0],
-                    klist=batch_features.ik[..., 1]),
-                jk=AttributeDict(
-                    jlist=batch_features.jk[..., 0],
-                    klist=batch_features.jk[..., 1]),
-                shift=AttributeDict(
-                    ij=batch_features.ij_shift,
-                    ik=batch_features.ik_shift,
-                    jk=batch_features.jk_shift,),
-                v2g_map=batch_features.av2g,
-            )
-
-        return self.build_graph(inputs)
+        self._infer_batch_size(next_batch)
+        if self.angular:
+            next_batch["g4.ij.ilist"] = next_batch["g4.ij"][..., 0]
+            next_batch["g4.ij.jlist"] = next_batch["g4.ij"][..., 1]
+            next_batch["g4.ik.ilist"] = next_batch["g4.ik"][..., 0]
+            next_batch["g4.ik.klist"] = next_batch["g4.ik"][..., 1]
+            next_batch["g4.jk.jlist"] = next_batch["g4.jk"][..., 0]
+            next_batch["g4.jk.klist"] = next_batch["g4.jk"][..., 1]
+        return self.build_graph(next_batch)

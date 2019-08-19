@@ -87,13 +87,13 @@ class SymmetryFunction:
         gamma = np.asarray(gamma)
         zeta = np.asarray(zeta)
 
-        self.rc = rc
+        self._rc = rc
+        self._elements = elements
+        self._angular = angular
         self.all_kbody_terms = all_kbody_terms
         self.kbody_terms = kbody_terms
-        self.elements = elements
         self.n_elements = len(elements)
         self.periodic = periodic
-        self.angular = angular
         self.kbody_sizes = kbody_sizes
         self.ndim = ndim
         self.kbody_index = {kbody_term: self.all_kbody_terms.index(kbody_term)
@@ -108,6 +108,27 @@ class SymmetryFunction:
             'zeta': np.arange(len(zeta), dtype=int)})
         self.initial_values = {'eta': eta, 'omega': omega, 'gamma': gamma,
                                'beta': beta, 'zeta': zeta}
+
+    @property
+    def rc(self):
+        """
+        Return the cutoff radius.
+        """
+        return self._rc
+
+    @property
+    def elements(self):
+        """
+        Return the ordered chemical symbols.
+        """
+        return self._elements
+
+    @property
+    def angular(self):
+        """
+        Return True if angular symmetry functions are enabled.
+        """
+        return self._angular
 
     @staticmethod
     def get_pbc_displacements(shift, cells, dtype=tf.float32):
@@ -181,8 +202,8 @@ class SymmetryFunction:
                              features['g2.jlist'],
                              features['g2.shift'],
                              name='rij')[0]
-            rc2 = tf.constant(self.rc**2, dtype=r.dtype, name='rc2')
-            fc_r = cosine_cutoff(r, rc=self.rc, name='fc_r')
+            rc2 = tf.constant(self._rc ** 2, dtype=r.dtype, name='rc2')
+            fc_r = cosine_cutoff(r, rc=self._rc, name='fc_r')
             base_v2g_map = self.get_v2g_map(features, prefix='g2')
             shape = self.get_g_shape(features)
             values = []
@@ -245,7 +266,7 @@ class SymmetryFunction:
             rij2 = tf.square(rij, name='rij2')
             rik2 = tf.square(rik, name='rik2')
             rjk2 = tf.square(rjk, name='rjk2')
-            rc2 = tf.constant(self.rc**2, dtype=rij.dtype, name='rc2')
+            rc2 = tf.constant(self._rc ** 2, dtype=rij.dtype, name='rc2')
             r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
             r2c = tf.math.truediv(r2, rc2, name='r2_rc2')
             with tf.name_scope("CosTheta"):
@@ -253,9 +274,9 @@ class SymmetryFunction:
                 lower = tf.multiply(2.0 * rij, rik, name='lower')
                 cos_theta = tf.math.truediv(upper, lower, name='theta')
             with tf.name_scope("Cutoff"):
-                fc_rij = cosine_cutoff(rij, rc=self.rc, name='fc_rij')
-                fc_rik = cosine_cutoff(rik, rc=self.rc, name='fc_rik')
-                fc_rjk = cosine_cutoff(rjk, rc=self.rc, name='fc_rjk')
+                fc_rij = cosine_cutoff(rij, rc=self._rc, name='fc_rij')
+                fc_rik = cosine_cutoff(rik, rc=self._rc, name='fc_rik')
+                fc_rjk = cosine_cutoff(rjk, rc=self._rc, name='fc_rjk')
                 fc_r = tf.multiply(fc_rij, fc_rik * fc_rjk, 'fc_r')
             base_v2g_map = self.get_v2g_map(features, prefix='g4')
             shape = self.get_g_shape(features)
@@ -284,8 +305,8 @@ class SymmetryFunction:
         Return the sizes of the column-wise splitted subsets of `descriptors`.
         """
         column_splits = {}
-        for i, element in enumerate(self.elements):
-            column_splits[element] = [len(self.elements), i]
+        for i, element in enumerate(self._elements):
+            column_splits[element] = [len(self._elements), i]
         return column_splits
 
     @staticmethod
@@ -310,11 +331,11 @@ class SymmetryFunction:
             atom_masks = tf.split(
                 features['atom_masks'], row_split_sizes, axis=row_split_axis,
                 name='atom_masks')[1:]
-            if len(self.elements) > 1:
+            if len(self._elements) > 1:
                 # Further split the element arrays to remove redundant zeros
                 blocks = []
                 for i in range(len(splits)):
-                    element = self.elements[i]
+                    element = self._elements[i]
                     size_splits, idx = column_split_sizes[element]
                     block = tf.split(splits[i],
                                      size_splits,
@@ -323,7 +344,7 @@ class SymmetryFunction:
                     blocks.append(block)
             else:
                 blocks = splits
-            return dict(zip(self.elements, zip(blocks, atom_masks)))
+            return dict(zip(self._elements, zip(blocks, atom_masks)))
 
     def build_graph(self, features: dict):
         """
@@ -362,6 +383,18 @@ class BatchSymmetryFunction(SymmetryFunction):
         self._nij_max = nij_max
         self._nijk_max = nijk_max
         self._batch_size = batch_size
+
+    @property
+    def nij_max(self):
+        return self._nij_max
+
+    @property
+    def nijk_max(self):
+        return self._nijk_max
+
+    @property
+    def max_occurs(self):
+        return self._max_occurs
 
     @staticmethod
     def get_pbc_displacements(shift, cells, dtype=tf.float32):
@@ -409,7 +442,7 @@ class BatchSymmetryFunction(SymmetryFunction):
 
     def get_row_split_sizes(self, _):
         row_splits = [1, ]
-        for i, element in enumerate(self.elements):
+        for i, element in enumerate(self._elements):
             row_splits.append(self._max_occurs[element])
         return row_splits
 

@@ -10,7 +10,7 @@ from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.utils import GraphKeys, AttributeDict
+from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
 
@@ -67,8 +67,8 @@ class AtomicNN(BasicNN):
                 "export_properties": self._export_properties}
 
     def _get_model_outputs(self,
-                           features: AttributeDict,
-                           descriptors: AttributeDict,
+                           features: dict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
@@ -76,15 +76,15 @@ class AtomicNN(BasicNN):
 
         Parameters
         ----------
-        features : AttributeDict
-            A dict of input raw property tensors and the descriptors:
-                * 'descriptors',
+        features : dict
+            A dict of input tensors and the descriptors:
+                * 'descriptors'
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
+                * 'atom_masks' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
-        descriptors : AttributeDict
+        descriptors : dict
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is None.
@@ -167,7 +167,7 @@ class AtomicNN(BasicNN):
         ----------
         outputs : List[tf.Tensor]
             A list of `tf.Tensor` as the outputs of the ANNs.
-        features : AttributeDict
+        features : dict
             A dict of input tensors.
         name : str
             The name of the output tensor.
@@ -181,13 +181,13 @@ class AtomicNN(BasicNN):
 
         """
         y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-        ndims = features.mask.shape.ndims
+        ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
         with tf.name_scope("mask"):
             if ndims == 1:
                 y_atomic = tf.squeeze(y_atomic, axis=0)
             mask = tf.split(
-                features.mask, [1, -1], axis=axis, name='split')[1]
+                features["atom_masks"], [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)

@@ -72,11 +72,11 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
     with tf.name_scope("Metrics"):
 
         metrics = {}
-        n_atoms = tf.cast(n_atoms, labels.energy.dtype, name='n_atoms')
+        n_atoms = tf.cast(n_atoms, labels["energy"].dtype, name='n_atoms')
 
         with tf.name_scope("Energy"):
-            x = labels.energy
-            y = predictions.energy
+            x = labels["energy"]
+            y = predictions["energy"]
             xn = x / n_atoms
             yn = y / n_atoms
             ops_dict = {
@@ -89,10 +89,11 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
         if 'forces' in eval_properties:
             with tf.name_scope("Forces"):
                 with tf.name_scope("Split"):
-                    x = tf.split(labels.forces, [1, -1], axis=1)[1]
+                    x = tf.split(labels["forces"], [1, -1], axis=1)[1]
                     mask = tf.cast(tf.split(mask, [1, -1], axis=1)[1], tf.bool)
                 x = tf.boolean_mask(x, mask, axis=0, name='x')
-                y = tf.boolean_mask(predictions.forces, mask, axis=0, name='y')
+                y = tf.boolean_mask(
+                    predictions["forces"], mask, axis=0, name='y')
                 with tf.name_scope("Flatten"):
                     x = tf.reshape(x, (-1, ), name='x')
                     y = tf.reshape(y, (-1, ), name='y')
@@ -104,8 +105,8 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
 
         if 'stress' in eval_properties:
             with tf.name_scope("Stress"):
-                x = labels.stress
-                y = predictions.stress
+                x = labels["stress"]
+                y = predictions["stress"]
                 ops_dict = {
                     'Stress/mae': tf.metrics.mean_absolute_error(x, y),
                     'Stress/mse': tf.metrics.mean_squared_error(x, y)}
