@@ -200,7 +200,7 @@ class SymmetryFunction:
                              features['cells'],
                              features['g2.ilist'],
                              features['g2.jlist'],
-                             features['g2.shift'],
+                             features['g2.n1'],
                              name='rij')[0]
             rc2 = tf.constant(self._rc ** 2, dtype=r.dtype, name='rc2')
             fc_r = cosine_cutoff(r, rc=self._rc, name='fc_r')
@@ -247,21 +247,21 @@ class SymmetryFunction:
         with tf.variable_scope("G4"):
             rij = self.get_rij(features['positions'],
                                features['cells'],
-                               features['g4.ij.ilist'],
-                               features['g4.ij.jlist'],
-                               features['g4.shift.ij'],
+                               features['g4.ilist'],
+                               features['g4.jlist'],
+                               features['g4.n1'],
                                name='rij')[0]
             rik = self.get_rij(features['positions'],
                                features['cells'],
-                               features['g4.ik.ilist'],
-                               features['g4.ik.klist'],
-                               features['g4.shift.ik'],
+                               features['g4.ilist'],
+                               features['g4.klist'],
+                               features['g4.n2'],
                                name='rik')[0]
             rjk = self.get_rij(features['positions'],
                                features['cells'],
-                               features['g4.jk.jlist'],
-                               features['g4.jk.klist'],
-                               features['g4.shift.jk'],
+                               features['g4.jlist'],
+                               features['g4.klist'],
+                               features['g4.n3'],
                                name='rjk')[0]
             rij2 = tf.square(rij, name='rij2')
             rik2 = tf.square(rik, name='rik2')

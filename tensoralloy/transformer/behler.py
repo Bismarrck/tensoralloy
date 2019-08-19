@@ -110,20 +110,17 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 'row_splits', d0=self.n_elements + 1)
             self._placeholders["g2.ilist"] = _int_1d('g2.ilist')
             self._placeholders["g2.jlist"] = _int_1d('g2.jlist')
-            self._placeholders["g2.shift"] = _float_2d(3, 'g2.shift')
+            self._placeholders["g2.n1"] = _float_2d(3, 'g2.n1')
             self._placeholders["g2.v2g_map"] = _int_2d(2, 'g2.v2g_map')
 
             if self._angular:
                 self._placeholders["g4.v2g_map"] = _int_2d(2, 'g4.v2g_map')
-                self._placeholders["g4.ij.ilist"] = _int_1d('g4.ij.ilist')
-                self._placeholders["g4.ij.jlist"] = _int_1d('g4.ij.jlist')
-                self._placeholders["g4.ik.ilist"] = _int_1d('g4.ik.ilist')
-                self._placeholders["g4.ik.klist"] = _int_1d('g4.ik.klist')
-                self._placeholders["g4.jk.jlist"] = _int_1d('g4.jk.jlist')
-                self._placeholders["g4.jk.klist"] = _int_1d('g4.jk.klist')
-                self._placeholders["g4.shift.ij"] = _float_2d(3, 'g4.shift.ij')
-                self._placeholders["g4.shift.ik"] = _float_2d(3, 'g4.shift.ik')
-                self._placeholders["g4.shift.jk"] = _float_2d(3, 'g4.shift.jk')
+                self._placeholders["g4.ilist"] = _int_1d('g4.ilist')
+                self._placeholders["g4.jlist"] = _int_1d('g4.jlist')
+                self._placeholders["g4.klist"] = _int_1d('g4.klist')
+                self._placeholders["g4.n1"] = _float_2d(3, 'g4.n1')
+                self._placeholders["g4.n2"] = _float_2d(3, 'g4.n2')
+                self._placeholders["g4.n3"] = _float_2d(3, 'g4.n3')
 
         return self._placeholders
 
@@ -147,11 +144,10 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
         ilist = vap.inplace_map_index(ilist + 1)
         jlist = vap.inplace_map_index(jlist + 1)
-        shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
+        n1 = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:, 0] = ilist
         v2g_map[:, 1] = self.offsets[tlist]
-        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               shift=shift)
+        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist, n1=n1)
 
     def _get_g4_indexed_slices(self,
                                atoms: Atoms,
@@ -169,7 +165,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 indices[atomi] = []
                 vectors[atomi] = []
             indices[atomi].append(g2.jlist[i])
-            vectors[atomi].append(g2.shift[i])
+            vectors[atomi].append(g2.n1[i])
 
         nijk = 0
         for atomi, nl in indices.items():
@@ -177,12 +173,12 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             nijk += (n - 1) * n // 2
 
         v2g_map = np.zeros((nijk, 2), dtype=np.int32)
-        ij = np.zeros((nijk, 2), dtype=np.int32)
-        ik = np.zeros((nijk, 2), dtype=np.int32)
-        jk = np.zeros((nijk, 2), dtype=np.int32)
-        ij_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
-        ik_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
-        jk_shift = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
+        ilist = np.zeros(nijk, dtype=np.int32)
+        jlist = np.zeros(nijk, dtype=np.int32)
+        klist = np.zeros(nijk, dtype=np.int32)
+        n1 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
+        n2 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
+        n3 = np.zeros((nijk, 3), dtype=float_dtype.as_numpy_dtype)
 
         count = 0
         for atomi, nl in indices.items():
@@ -200,19 +196,18 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     kbody_term = '{}{}'.format(prefix, suffix)
-                    ij[count] = atomi, atomj
-                    ik[count] = atomi, atomk
-                    jk[count] = atomj, atomk
-                    ij_shift[count] = vectors[atomi][j]
-                    ik_shift[count] = vectors[atomi][k]
-                    jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
+                    ilist[count] = atomi
+                    jlist[count] = atomj
+                    klist[count] = atomk
+                    n1[count] = vectors[atomi][j]
+                    n2[count] = vectors[atomi][k]
+                    n3[count] = vectors[atomi][k] - vectors[atomi][j]
                     index = self.kbody_index[kbody_term]
                     v2g_map[count, 0] = atomi
                     v2g_map[count, 1] = self.offsets[index]
                     count += 1
-        return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
-                               ij_shift=ij_shift, ik_shift=ik_shift,
-                               jk_shift=jk_shift)
+        return G4IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                               klist=klist, n1=n1, n2=n2, n3=n3)
 
     def _get_np_features(self, atoms: Atoms):
         """
@@ -247,20 +242,17 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict["g2.v2g_map"] = g2.v2g_map
         feed_dict["g2.ilist"] = g2.ilist
         feed_dict["g2.jlist"] = g2.jlist
-        feed_dict["g2.shift"] = g2.shift
+        feed_dict["g2.n1"] = g2.n1
 
         if self._angular:
             g4 = self._get_g4_indexed_slices(atoms, g2, vap)
             feed_dict["g4.v2g_map"] = g4.v2g_map
-            feed_dict["g4.ij.ilist"] = g4.ij[..., 0]
-            feed_dict["g4.ij.jlist"] = g4.ij[..., 1]
-            feed_dict["g4.ik.ilist"] = g4.ik[..., 0]
-            feed_dict["g4.ik.klist"] = g4.ik[..., 1]
-            feed_dict["g4.jk.jlist"] = g4.jk[..., 0]
-            feed_dict["g4.jk.klist"] = g4.jk[..., 1]
-            feed_dict["g4.shift.ij"] = g4.ij_shift
-            feed_dict["g4.shift.ik"] = g4.ik_shift
-            feed_dict["g4.shift.jk"] = g4.jk_shift
+            feed_dict["g4.ilist"] = g4.ilist
+            feed_dict["g4.jlist"] = g4.jlist
+            feed_dict["g4.klist"] = g4.klist
+            feed_dict["g4.n1"] = g4.n1
+            feed_dict["g4.n2"] = g4.n2
+            feed_dict["g4.n3"] = g4.n3
 
         return feed_dict
 
@@ -388,12 +380,12 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Slist = self._resize_to_nij_max(Slist, False)
         ilist = vap.inplace_map_index(ilist)
         jlist = vap.inplace_map_index(jlist)
-        shift = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
+        n1 = np.asarray(Slist, dtype=float_dtype.as_numpy_dtype)
         v2g_map[:self._nij_max, 1] = ilist
         v2g_map[:self._nij_max, 2] = self.offsets[tlist]
 
         return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               shift=shift)
+                               n1=n1)
 
     def get_g4_indexed_slices(self, atoms: Atoms, g2: G2IndexedSlices):
         """
@@ -405,12 +397,12 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         numpy_float_dtype = get_float_dtype().as_numpy_dtype
 
         v2g_map = np.zeros((self._nijk_max, 3), dtype=np.int32)
-        ij = np.zeros((self._nijk_max, 2), dtype=np.int32)
-        ik = np.zeros((self._nijk_max, 2), dtype=np.int32)
-        jk = np.zeros((self._nijk_max, 2), dtype=np.int32)
-        ij_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
-        ik_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
-        jk_shift = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
+        ilist = np.zeros(self._nijk_max, dtype=np.int32)
+        jlist = np.zeros(self._nijk_max, dtype=np.int32)
+        klist = np.zeros(self._nijk_max, dtype=np.int32)
+        n1 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
+        n2 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
+        n3 = np.zeros((self._nijk_max, 3), dtype=numpy_float_dtype)
 
         symbols = atoms.get_chemical_symbols()
         vap = self.get_vap_transformer(atoms)
@@ -423,7 +415,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 indices[atomi] = []
                 vectors[atomi] = []
             indices[atomi].append(g2.jlist[i])
-            vectors[atomi].append(g2.shift[i])
+            vectors[atomi].append(g2.n1[i])
 
         count = 0
         for atomi, nl in indices.items():
@@ -441,19 +433,18 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                     symbolk = symbols[indexk]
                     suffix = ''.join(sorted([symbolj, symbolk]))
                     kbody_term = '{}{}'.format(prefix, suffix)
-                    ij[count] = atomi, atomj
-                    ik[count] = atomi, atomk
-                    jk[count] = atomj, atomk
-                    ij_shift[count] = vectors[atomi][j]
-                    ik_shift[count] = vectors[atomi][k]
-                    jk_shift[count] = vectors[atomi][k] - vectors[atomi][j]
+                    ilist[count] = atomi
+                    jlist[count] = atomj
+                    klist[count] = atomk
+                    n1[count] = vectors[atomi][j]
+                    n2[count] = vectors[atomi][k]
+                    n3[count] = vectors[atomi][k] - vectors[atomi][j]
                     index = self.kbody_index[kbody_term]
                     v2g_map[count, 1] = atomi
                     v2g_map[count, 2] = self.offsets[index]
                     count += 1
-        return G4IndexedSlices(v2g_map=v2g_map, ij=ij, ik=ik, jk=jk,
-                               ij_shift=ij_shift, ik_shift=ik_shift,
-                               jk_shift=jk_shift)
+        return G4IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
+                               klist=klist, n1=n1, n2=n2, n3=n3)
 
     def get_indexed_slices(self, atoms: Atoms):
         """
@@ -474,9 +465,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
         """
         indices = np.concatenate(
-            (g4.v2g_map, g4.ij, g4.ik, g4.jk), axis=1).tostring()
-        shifts = np.concatenate(
-            (g4.ij_shift, g4.ik_shift, g4.jk_shift), axis=1).tostring()
+            (g4.v2g_map,
+             g4.ilist[..., np.newaxis],
+             g4.jlist[..., np.newaxis],
+             g4.klist[..., np.newaxis]), axis=1).tostring()
+        shifts = np.concatenate((g4.n1, g4.n2, g4.n3), axis=1).tostring()
         return {'g4.indices': bytes_feature(indices),
                 'g4.shifts': bytes_feature(shifts)}
 
@@ -508,11 +501,11 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
-            shift = tf.decode_raw(example['g2.shifts'], get_float_dtype())
-            shift.set_shape([self._nij_max * 3])
-            shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
+            n1 = tf.decode_raw(example['g2.shifts'], get_float_dtype())
+            n1.set_shape([self._nij_max * 3])
+            n1 = tf.reshape(n1, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, shift)
+            return G2IndexedSlices(v2g_map, ilist, jlist, n1)
 
     def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
@@ -522,22 +515,24 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         with tf.name_scope("G4"):
             with tf.name_scope("indices"):
                 indices = tf.decode_raw(example['g4.indices'], tf.int32)
-                indices.set_shape([self._nijk_max * 9])
+                indices.set_shape([self._nijk_max * 6])
                 indices = tf.reshape(
-                    indices, [self._nijk_max, 9], name='g4.indices')
-                v2g_map, ij, ik, jk = \
-                    tf.split(indices, [3, 2, 2, 2], axis=1, name='splits')
+                    indices, [self._nijk_max, 6], name='g4.indices')
+                v2g_map, ilist, jlist, klist = \
+                    tf.split(indices, [3, 1, 1, 1], axis=1, name='splits')
+                ilist = tf.squeeze(ilist, axis=1, name='ilist')
+                jlist = tf.squeeze(jlist, axis=1, name='jlist')
+                klist = tf.squeeze(klist, axis=1, name='klist')
 
             with tf.name_scope("shifts"):
                 shifts = tf.decode_raw(example['g4.shifts'], get_float_dtype())
                 shifts.set_shape([self._nijk_max * 9])
                 shifts = tf.reshape(
                     shifts, [self._nijk_max, 9], name='g4.shifts')
-                ij_shift, ik_shift, jk_shift = \
+                n1, n2, n3 = \
                     tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
-        return G4IndexedSlices(v2g_map, ij, ik, jk, ij_shift, ik_shift,
-                               jk_shift)
+        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]) -> dict:
         """
@@ -555,16 +550,16 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         decoded["g2.v2g_map"] = g2.v2g_map
         decoded["g2.ilist"] = g2.ilist
         decoded["g2.jlist"] = g2.jlist
-        decoded["g2.shift"] = g2.shift
+        decoded["g2.n1"] = g2.n1
 
         if g4 is not None:
             decoded["g4.v2g_map"] = g4.v2g_map
-            decoded["g4.ij"] = g4.ij
-            decoded["g4.ik"] = g4.ik
-            decoded["g4.jk"] = g4.jk
-            decoded["g4.shift.ij"] = g4.ij_shift
-            decoded["g4.shift.ik"] = g4.ik_shift
-            decoded["g4.shift.jk"] = g4.jk_shift
+            decoded["g4.ilist"] = g4.ilist
+            decoded["g4.jlist"] = g4.jlist
+            decoded["g4.klist"] = g4.klist
+            decoded["g4.n1"] = g4.n1
+            decoded["g4.n2"] = g4.n2
+            decoded["g4.n3"] = g4.n3
 
         return decoded
 
@@ -607,11 +602,4 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         Return the Op to compute symmetry function descriptors.
         """
         self._infer_batch_size(next_batch)
-        if self.angular:
-            next_batch["g4.ij.ilist"] = next_batch["g4.ij"][..., 0]
-            next_batch["g4.ij.jlist"] = next_batch["g4.ij"][..., 1]
-            next_batch["g4.ik.ilist"] = next_batch["g4.ik"][..., 0]
-            next_batch["g4.ik.klist"] = next_batch["g4.ik"][..., 1]
-            next_batch["g4.jk.jlist"] = next_batch["g4.jk"][..., 0]
-            next_batch["g4.jk.klist"] = next_batch["g4.jk"][..., 1]
         return self.build_graph(next_batch)

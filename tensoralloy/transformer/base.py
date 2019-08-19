@@ -368,7 +368,7 @@ class BatchDescriptorTransformer(BaseTransformer):
             g2.v2g_map, g2.ilist[..., np.newaxis], g2.jlist[..., np.newaxis],
         ), axis=1).tostring()
         return {'g2.indices': bytes_feature(indices),
-                'g2.shifts': bytes_feature(g2.shift.tostring())}
+                'g2.shifts': bytes_feature(g2.n1.tostring())}
 
     def _encode_atoms(self, atoms: Atoms) -> dict:
         """
