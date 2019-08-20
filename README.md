@@ -2,10 +2,8 @@
 
 **TensorAlloy** is a TensorFlow based machine learning framework for metal 
 alloys. **TensorAlloy** builds direct computation graph from atomic positions 
-to total energy. Thus, atomic forces, virial stress tensor and the second-order 
-**Hessian** matrix can be derived by the **AutoGrad** module of TensorFlow 
-directly.
-
+to total energy. Thus, atomic forces and the virial stress tensor can be derived 
+by the **AutoGrad** module of TensorFlow directly.
 
 ## 1. Requirements
 
@@ -24,6 +22,9 @@ of conda-provided tensorflow is not that good.
 
 Natively compiled TensorFlow, with all CPU features (SSE, AVX, etc.) enabled, 
 is strongly recommended. 
+
+**Note:** `[prefix]` indicates the top-level directory where the program is 
+unzipped.
 
 ## 2. Training
 
@@ -48,17 +49,24 @@ keys and values can be found in
 ### 2.2 Usage
 
 A command-line program [tensoralloy](tools/tensoralloy) is provided. Add the 
-directory [tools](tools) to `PATH` to use this program.
+directory [tools](tools) to `PATH` to use this program:
+
+```bash
+export PATH=[prefix]/tensoralloy/tools:$PATH
+chmod +x [prefix]/tensoralloy/tools/tensoralloy
+```
 
 Here are some key commands:
 
-* `tensoralloy build database`: build a database from an `extxyz` file. 
-* `tensoralloy run`: run a training experiment from a `toml` input file. 
+* `tensoralloy build database [extxyz]`: build a database from an `extxyz` file. 
+* `tensoralloy run [input.toml]`: run an experiment from a `toml` input file. 
 * `tensoralloy --help`: print the help messages.
 
 ### 2.3 Model
 
-After the training, a binary `pb` file (the trained model) will be exported. 
+After the training, a binary `pb` file (the trained model) will be exported to 
+the `model_dir` specified in the input toml file. This exported `pb` file can be
+used by the ASE-style [`TensorAlloyCalculator`](tensoralloy/calculator.py). 
 
 We also provide three pre-trained models:
 
@@ -67,6 +75,13 @@ We also provide three pre-trained models:
 * Ni-Mo: energy, force, stress
 
 ## 3. Prediction
+
+To use the [`TensorAlloyCalculator`](tensoralloy/calculator.py) calculator, 
+`PYTHONPATH` should be configured first:
+
+```bash
+export PYTHONPATH=[prefix]:$PYTHONPATH
+```
 
 To calculate properties of an arbitrary Ni-Mo structure, simply do:
 
