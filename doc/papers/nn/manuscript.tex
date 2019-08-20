@@ -1,38 +1,139 @@
-\documentclass[preprint]{revtex4-2}
+%% This template can be used to write a paper for
+%% Computer Physics Communications using LaTeX.
+%% For authors who want to write a computer program description,
+%% an example Program Summary is included that only has to be
+%% completed and which will give the correct layout in the
+%% preprint and the journal.
+%% The `elsarticle' style is used and more information on this style
+%% can be found at 
+%% http://www.elsevier.com/wps/find/authorsview.authors/elsarticle.
+%%
+%%
+%% \documentclass[preprint,12pt]{elsarticle}
 
+%% Use the option review to obtain double line spacing
+%% \documentclass[preprint,review,12pt]{elsarticle}
+
+%% Use the options 1p,twocolumn; 3p; 3p,twocolumn; 5p; or 5p,twocolumn
+%% for a journal layout:
+\documentclass[final,1p,times]{elsarticle}
+%% \documentclass[final,1p,times,twocolumn]{elsarticle}
+%% \documentclass[final,3p,times]{elsarticle}
+%% \documentclass[final,3p,times,twocolumn]{elsarticle}
+%% \documentclass[final,5p,times]{elsarticle}
+%% \documentclass[final,5p,times,twocolumn]{elsarticle}
+
+%% if you use PostScript figures in your article
+%% use the graphics package for simple commands
+%% \usepackage{graphics}
+%% or use the graphicx package for more complicated commands
+%% \usepackage{graphicx}
+%% or use the epsfig package if you prefer to use the old commands
+%% \usepackage{epsfig}
+
+%% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
 \usepackage{amsmath}    % need for subequations
 \usepackage{graphicx}   % need for figures
 \usepackage{verbatim}   % useful for program listings
 \usepackage{color}      % use if color is used in text
 \usepackage{subfigure}  % use for side-by-side figures
 \usepackage{hyperref}   % use for hypertext links, including those to external
-\raggedbottom           % don't add extra vertical space
-\begin{comment}
-\pagestyle{empty}       % use if page numbers not wanted
-\end{comment}
 
-\bibliographystyle{apsrev4-2}
+%% The amsthm package provides extended theorem environments
+%% \usepackage{amsthm}
+
+%% The lineno packages adds line numbers. Start line numbering with
+%% \begin{linenumbers}, end it with \end{linenumbers}. Or switch it on
+%% for the whole article with \linenumbers after \end{frontmatter}.
+%% \usepackage{lineno}
+
+%% natbib.sty is loaded by default. However, natbib options can be
+%% provided with \biboptions{...} command. Following options are
+%% valid:
+
+%%   round  -  round parentheses are used (default)
+%%   square -  square brackets are used   [option]
+%%   curly  -  curly braces are used      {option}
+%%   angle  -  angle brackets are used    <option>
+%%   semicolon  -  multiple citations separated by semi-colon
+%%   colon  - same as semicolon, an earlier confusion
+%%   comma  -  separated by comma
+%%   numbers-  selects numerical citations
+%%   super  -  numerical citations as superscripts
+%%   sort   -  sorts multiple citations according to order in ref. list
+%%   sort&compress   -  like sort, but also compresses numerical citations
+%%   compress - compresses without sorting
+%%
+%% \biboptions{comma,round}
+
+% \biboptions{}
+
+%% This list environment is used for the references in the
+%% Program Summary
+%%
+\newcounter{bla}
+\newenvironment{refnummer}{%
+\list{[\arabic{bla}]}%
+{\usecounter{bla}%
+ \setlength{\itemindent}{0pt}%
+ \setlength{\topsep}{0pt}%
+ \setlength{\itemsep}{0pt}%
+ \setlength{\labelsep}{2pt}%
+ \setlength{\listparindent}{0pt}%
+ \settowidth{\labelwidth}{[9]}%
+ \setlength{\leftmargin}{\labelwidth}%
+ \addtolength{\leftmargin}{\labelsep}%
+ \setlength{\rightmargin}{0pt}}}
+ {\endlist}
+
+\journal{Computer Physics Communications}
 
 \begin{document}
 
-\title{
-    TensorAlloy: an automatic atomistic neural network program for alloys
-}
-\author{Xin Chen}
-\author{Xing-Yu Gao}
-\author{Ya-Fan Zhao}
-\author{De-Ye Lin}
-\email{lindeye0716@163.com}
-\author{Wei-Dong Chu}
-\author{Hai-Feng Song}
-\email{song\_haifeng@iapcm.ac.cn}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-\affiliation{
-    CAEP Software Center for High Performance Numerical Simulation, 
-    Beijing 100088, China}
+\begin{frontmatter}
 
+%% Title, authors and addresses
+
+%% use the tnoteref command within \title for footnotes;
+%% use the tnotetext command for the associated footnote;
+%% use the fnref command within \author or \address for footnotes;
+%% use the fntext command for the associated footnote;
+%% use the corref command within \author for corresponding author footnotes;
+%% use the cortext command for the associated footnote;
+%% use the ead command for the email address,
+%% and the form \ead[url] for the home page:
+%%
+%% \title{Title\tnoteref{label1}}
+%% \tnotetext[label1]{}
+%% \author{Name\corref{cor1}\fnref{label2}}
+%% \ead{email address}
+%% \ead[url]{home page}
+%% \fntext[label2]{}
+%% \cortext[cor1]{}
+%% \address{Address\fnref{label3}}
+%% \fntext[label3]{}
+
+\title{TensorAlloy: an automatic atomistic neural network program for alloys}
+
+%% use optional labels to link authors explicitly to addresses:
+%% \author[label1,label2]{<author name>}
+%% \address[label1]{<address>}
+%% \address[label2]{<address>}
+
+\author[a]{Xin Chen}
+\author[a]{Xing-Yu Gao}
+\author[b]{Ya-Fan Zhao}
+\author[b]{De-Ye Lin\corref{author}}
+\author[a]{Wei-Dong Chu}
+\author[a,b]{Hai-Feng Song\corref{author}}
+
+\cortext[author] {Corresponding author.
+\\\textit{E-mail address:} lindeye0716@163.com}
+\address[a]{Institute of Applied Physics and Computational Mathematics, 
+Beijing 100088, China}
+\address[b]{CAEP Software Center for High Performance Numerical Simulation, 
+Beijing 100088, China}
 
 \begin{abstract}
 Atomistic modeling is important for studying physical and chemical properties of
@@ -52,15 +153,52 @@ supports constructing machine learning interaction potentials for both
 to demostrate the performances of our program.
 \end{abstract}
 
-\maketitle
+\begin{keyword}
+%% keywords here, in the form: keyword \sep keyword
+Machine Learning; Alloy; Materials Modeling; Computational Physics; 
+Neural Network
+
+\end{keyword}
+
+\end{frontmatter}
+
+%%
+%% Start line numbering here if you want
+%%
+% \linenumbers
+
+% Computer program descriptions should contain the following
+% PROGRAM SUMMARY.
+
+{\bf PROGRAM SUMMARY} \\
+\begin{small}
+\noindent
+{\em Program Title: TensorAlloy} \\
+{\em Licensing provisions(please choose one): Apache-2.0}     \\
+{\em Programming language: Python 3.7}                        \\
+{\em Supplementary material:}                                 \\
+{\em Journal reference of previous version:}                  \\
+{\em Does the new version supersede the previous version?:}   \\
+{\em Reasons for the new version:} \\
+{\em Summary of revisions:}*\\
+{\em Nature of problem:} \\
+  Modeling interatomic interactions with the symmetry function descriptor based
+  atomistic neural networks.
+{\em Solution method:} \\
+  The TensorAlloy program is built upon TensorFlow and the virtual-atom 
+  approach. TensorAlloy can build direct computation graph from atomic positions 
+  to total energy. Atomic forces and virial stress tensors are handled by 
+  TensorFlow automatically and efficiently.
+{\em Additional comments including Restrictions and Unusual features}\\
+  This program needs TensorFlow 1.13.*. Neither newer or older TensorFlow is 
+  supported. \\
+\end{small}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
 % Section 1. Introduction
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\newpage
-
 \section{Introduction}
 
 Atomistic simulations (\textit{ab initio} calculation, classic molecular 
@@ -138,8 +276,7 @@ theory of the symmetry function descriptor and the ANN framework. Section
 model used by TensorAlloy. Section \ref{section:discussions} demostrates 
 the performances of TensorAlloy on two public datasets. The appendix 
 \ref{section:appendix} gives derivation and implementation details of key 
-routines of VAP. The full implementation and demo codes can be obtained from 
-GitHub (https://github.com/Bismarrck/vap) freely.
+routines of VAP. 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -375,8 +512,7 @@ algorithms. The original dataset (SNAP) is published by Shyue Ping
 Ong\cite{SNAP_2018}. 
 For simplicity, only radial symmetry function related algorithms are 
 visualized in the figures. Python3.7 implementations of key algorithms and 
-functions are given in the appendix. A full demo (including the alloy datasets) 
-can be obtained from GitHub freely (https://github.com/Bismarrck/vap).
+functions are given in the appendix. 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -441,7 +577,7 @@ approach.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=0.68]{figures/Fig1.pdf}
+\includegraphics[scale=0.55]{figures/Fig1.pdf}
 \caption{\label{fig:program_design} The general design of TensorAlloy. 
 \textbf{(1)} demonstrates the training phase while \textbf{(2)} represents the 
 prediction phase.
@@ -718,7 +854,7 @@ $\mathbf{G}^{(2)}$.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=0.95]{figures/Fig5.pdf}
+\includegraphics[scale=0.75]{figures/Fig5.pdf}
 \caption{\label{fig:Fig5} The calculation of 
 $\mathbf{G}^{(2)}((\eta, \omega)_{\tau})$ from $\mathbf{r}^{\mathrm{GSL}}$. 
 }
@@ -742,7 +878,7 @@ $\tau$, there will be three major steps:
     \item[1.]
     The first step is applying Equation \ref{eq:g2} on 
     $\mathbf{r}^{\mathrm{GSL}}$ with the given $\tau$-th $(\eta, \omega)$ pair 
-    to obtain raw descriptors $g^{\mathrm{GSL}}_{2}((\eta, \omega)_{\tau})$. 
+    to obtain $g^{\mathrm{GSL}}_{2}((\eta, \omega)_{\tau})$. 
     $g^{\mathrm{GSL}}_{2}((\eta, \omega)_{\tau})$ is a vector of length 
     $\nijmax$ and its last ($\nijmax - N_{ij}$) components are dummy values.
     
@@ -975,7 +1111,7 @@ results are obtained on the same workstation with two Intel Xeon E5-2687v4 CPUs
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=0.54]{figures/qm7_speed.pdf}
+\includegraphics[scale=0.44]{figures/qm7_speed.pdf}
 \caption{\label{fig:benchmark_qm7} 
 \textbf{a)} The curves of training speed (structures per second) vs batch sizes. 
 \textbf{b)} The curves of test MAE (meV/atom) vs training time (GPU hour) using 
@@ -1066,33 +1202,48 @@ The learning rate starts from 0.01 and it will decay exponentially with rate
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{table}[h]
 \centering
-\begin{tabular}{cccc|ccc|cc}
+\begin{tabular}{cccc}
 \hline
- & \multicolumn{3}{c|}{Energy (meV/atom)} & \multicolumn{3}{c|}{Force (eV/\AA)}
- & \multicolumn{2}{c}{Stress (GPa)} \\
+Subset & Energy (meV/atom) & Force (eV/\AA) & Stress (GPa) \\
 \hline
-NN Model & Mo & Ni & Ni-Mo & Mo & Ni & Ni-Mo & Mo & Ni-Mo \\
-\hline
-Mo & 4.9 (13.2) & & 16.5 (16.2) & 0.19 (0.25) & & 0.28 (0.29) & 0.24 (0.87) 
-   & 0.75 \\
-Ni & & 1.2 (1.2) & 4.5 (7.9) & & 0.04 (0.05) & 0.07 (0.11) & & 0.83 \\
-Ni$_4$Mo & & & 4.1 (4.0) & & & 0.09 (0.14) & & 0.98 \\ 
-Ni$_3$Mo & & & 4.5 (5.2) & & & 0.11 (0.16) & & 1.19 \\
-Ni$_{\mathrm{Mo}}$ & & & 12.9 (22.7) & & & 0.09 (0.13) & & 0.34 \\
-Mo$_{\mathrm{Ni}}$ & & & 12.9 (33.9) & & & 0.12 (0.55) & & 0.45 \\
-Overall & & & 10.8 (22.5) & & & 0.11 (0.23) & & 0.59 \\
+Mo & 16.5 (16.2) & 0.28 (0.29) & 0.75 \\
+Ni & 4.5 (7.9)   & 0.07 (0.11) & 0.83 \\
+Ni$_4$Mo & 4.1 (4.0) & 0.09 (0.14) & 0.98 \\ 
+Ni$_3$Mo & 4.5 (5.2) & 0.11 (0.16) & 1.19 \\
+Ni$_{\mathrm{Mo}}$ & 12.9 (22.7) & 0.09 (0.13)& 0.34 \\
+Mo$_{\mathrm{Ni}}$ & 12.9 (33.9) & 0.12 (0.55)& 0.45 \\
+Overall & 10.8 (22.5)& 0.11 (0.23) & 0.59 \\
 \hline
 \end{tabular}
-
 \caption{\label{table:MAE}
 Comparion of the MAEs in predicted energies (mev/atom), forces (eV/\AA) and 
-stress (GPa) relative to DFT for TensorAlloy-trained models and their
+stress (GPa) relative to DFT of each subset for the binary Mo-Ni model and the
 corresponding SNAP benchmarks (bracket)}
 \end{table}
 
-Table \ref{table:MAE} summarizes the energy, force and stress prediction 
-performances of TensorAlloy-trained models compared with their corresponding 
-SNAP benchmarks. The original SNAP formalism contains both radial and angular 
+\begin{table}[h]
+\centering
+\begin{tabular}{ccc|cc|c}
+\hline
+  & \multicolumn{2}{c|}{Energy (meV/atom)} & \multicolumn{2}{c|}{Force (eV/\AA)}
+  & Stress (GPa) \\
+\hline
+Elementary Model & Mo & Ni & Mo & Ni & Mo \\
+\hline
+Mo & 4.9 (13.2) & & 0.19 (0.25) & & 0.24 (0.87) \\
+Ni & & 1.2 (1.2) & & 0.04 (0.05) & \\
+\hline
+\end{tabular}
+\caption{\label{table:MAE1}
+Comparion of the MAEs in predicted energies (mev/atom), forces (eV/\AA) and 
+stress (GPa) relative to DFT for the two elementary models (Ni, Mo) and their
+corresponding SNAP benchmarks (bracket)}
+\end{table}
+
+Table \ref{table:MAE} and \ref{table:MAE1} summarizes the energy, force and 
+stress prediction performances of our trained models compared with their 
+corresponding SNAP benchmarks. 
+The original SNAP formalism contains both radial and angular 
 interactions. However, in most cases, the radial-only TensorAlloy-trained 
 models can significantly outperform corresponding SNAP models. The trainings of 
 these models are also very fast. All these models are trained within 2 GPU hours
@@ -1105,7 +1256,7 @@ on our workstation.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
     \centering
-    \includegraphics[scale=0.64]{figures/Prediction-speed.pdf}
+    \includegraphics[scale=0.5]{figures/Prediction-speed.pdf}
 \caption{\label{fig:prediction_speed} Benchmarks of the \textbf{NN}(Mo-Ni) model 
 in the prediction phase. The test structures are (MoNi)$_{x}$ where 
 $x$ = $10^3, 15^3, 20^3, 25^3, 30^3, 35^3, 40^3$. The left figure \textbf{a)} 
@@ -1150,7 +1301,7 @@ large alloy systems.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
     \centering
-    \includegraphics[scale=0.8]{figures/Ni_EoS.pdf}
+    \includegraphics[scale=0.65]{figures/Ni_EoS.pdf}
 \caption{\label{fig:energy_volume_Ni} The energy vs volume curves of fcc Ni for
 the DFT, Ni and Ni-Mo models.}
 \end{figure}
@@ -1170,13 +1321,10 @@ PyMatGen\cite{pymatgen,pymatgen-1} is used to generate these surface slabs.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}[h!]
     \centering
-    \includegraphics[scale=0.8]{figures/Ni_surface_energy.pdf}
+    \includegraphics[scale=0.65]{figures/Ni_surface_energy.pdf}
 \caption{\label{fig:surface_energy_Ni} Surface formation energies ($J/m^2$) of 
 different Ni surfaces calculated by DFT, Ni and Ni-Mo models}
 \end{figure}
-
-The benchmark function and the trained models can be accessed from the VAP 
-GitHub repo (https://github.com/Bismarrck/vap) freely.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -1211,9 +1359,9 @@ No. U1630250.
 % References
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\bibliography{manuscript.bib}
 
-\newpage
+\bibliographystyle{elsarticle-num}
+\bibliography{manuscript.bib}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -1662,7 +1810,7 @@ def get_g4_map(atoms: Atoms,
                 ijk[count] = atom_gsl_i, atom_vap_j, atom_vap_k
                 n1[count] = vectors[atom_gsl_i][j]
                 n2[count] = vectors[atom_gsl_i][k]
-                n3[count] = vectors[atom_gsl_i][k] - vectors[atom_gsl_i][j]
+                n3[count] = n2[count] - n1[count]
                 index = interactions.index(interaction)
                 g4_map[count, iaxis + 0] = atom_gsl_i
                 g4_map[count, iaxis + 1] = offsets[index]
@@ -1701,13 +1849,11 @@ where $\mathbf{G}^{\mathrm{Mo}}$ is a float tensor of shape
 \textmd{[10, 108, 40]} and $\delta^{\mathrm{Ni}}$ is a float tensor of shape  
 \textmd{[10, 108]} during the training phase. 
 
-The demo script can be found on GitHub: https://github.com/Bismarrck/vap.
-
 \begin{verbatim}
 class SymmetryFunction:
     gather_fn = staticmethod(tf.gather)
 
-    def __init__(self, rc, elements, eta=np.array([0.05, 4.0, 20.0, 80.0]),
+    def __init__(self, rc, elements, eta=np.array([0.05, 4, 20, 80]),
                  omega=np.array([0.0]), beta=np.array([0.005, ]),
                  gamma=np.array([1.0, -1.0]), zeta=np.array([1.0, 4.0]),
                  angular=True, periodic=True):
@@ -1736,7 +1882,8 @@ class SymmetryFunction:
             'beta': np.arange(len(beta), dtype=int),
             'gamma': np.arange(len(gamma), dtype=int),
             'zeta': np.arange(len(zeta), dtype=int)})
-        self.initial_values = {'eta': eta, 'omega': omega, 'gamma': gamma,
+        self.initial_values = {'eta': eta, 'omega': omega, 
+                               'gamma': gamma,
                                'beta': beta, 'zeta': zeta}
 
     @staticmethod
@@ -1750,7 +1897,7 @@ class SymmetryFunction:
             Rj = self.gather_fn(positions, jlist, 'Rj')
             Dij = tf.subtract(Rj, Ri, name='Dij')
             if self.periodic:
-                pbc = self.get_pbc_displacements(shift, cells, dtype=dtype)
+                pbc = self.get_pbc_displacements(shift, cells, dtype)
                 Dij = tf.add(Dij, pbc, name='pbc')
             with tf.name_scope("safe_norm"):
                 eps = tf.constant(1e-8, dtype=dtype, name='eps')
@@ -1910,7 +2057,7 @@ class SymmetryFunction:
                     block = tf.split(splits[i],
                                      size_splits,
                                      axis=column_split_axis,
-                                     name='{}_block'.format(element))[idx]
+                                     name=f'{element}_block')[idx]
                     blocks.append(block)
             else:
                 blocks = splits
@@ -1947,8 +2094,8 @@ class BatchSymmetryFunction(SymmetryFunction):
     @staticmethod
     def get_pbc_displacements(shift, cells, dtype=tf.float32):
         with tf.name_scope("Einsum"):
-            shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
-            cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
+            shift = tf.convert_to_tensor(shift, dtype, name='shift')
+            cells = tf.convert_to_tensor(cells, dtype, name='cells')
             return tf.einsum(
                 'ijk,ikl->ijl', shift, cells, name='displacements')
 
@@ -1992,3 +2139,6 @@ class BatchSymmetryFunction(SymmetryFunction):
 \end{verbatim}
 
 \end{document}
+
+%%
+%% End of file 
