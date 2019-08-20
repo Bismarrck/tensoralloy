@@ -39,14 +39,12 @@ There are two training examples:
     * The binary alloy dataset.
     * Only radial symmetry functions are used by default.
 
-### 2.1 Input
+### 2.1 Usage
 
 [TOML](https://github.com/toml-lang/toml) is the configuration file format used
 by TensorAlloy. All the necessary keys are included in the two examples. Default
 keys and values can be found in 
 [default.toml](tensoralloy/io/input/defaults.toml).
-
-### 2.2 Usage
 
 A command-line program [tensoralloy](tools/tensoralloy) is provided. Add the 
 directory [tools](tools) to `PATH` to use this program:
@@ -60,9 +58,13 @@ Here are some key commands:
 
 * `tensoralloy build database [extxyz]`: build a database from an `extxyz` file. 
 * `tensoralloy run [input.toml]`: run an experiment from a `toml` input file. 
+* `tensoralloy print [logfile]`: print the evaluation results from a logfile.
 * `tensoralloy --help`: print the help messages.
 
-### 2.3 Model
+The `run.sh` in [qm7](examples/qm7/run.sh) and [snap](examples/snap/run.sh) give
+more details about these commands.  
+
+### 2.2 Output
 
 After the training, a binary `pb` file (the trained model) will be exported to 
 the `model_dir` specified in the input toml file. This exported `pb` file can be
@@ -80,12 +82,14 @@ To use the [`TensorAlloyCalculator`](tensoralloy/calculator.py) calculator,
 `PYTHONPATH` should be configured first:
 
 ```bash
-export PYTHONPATH=[prefix]:$PYTHONPATH
+export PYTHONPATH=[prefix]:${PYTHONPATH}
 ```
 
 To calculate properties of an arbitrary Ni-Mo structure, simply do:
 
 ```python
+#!coding=utf-8
+""" Simple usage. """
 from tensoralloy.calculator import TensorAlloyCalculator
 from ase.build import bulk
 from ase.units import GPa
@@ -98,7 +102,88 @@ print(atoms.get_forces())
 print(atoms.get_stress() / GPa)
 ```
 
-## 4. License
+## 4. Input
+
+In this section we will introduce the options and values of the input toml file.
+
+### 4.1 Root
+
+* `precision`: `medium` (float32) or `high` (float64). Default is `medium`.
+* `seed`: the global seed. Default is 611.
+
+### 4.2 Dataset
+
+* `dataset.sqlite3`
+* `dataset.name`
+* `dataset.rc`
+* `dataset.tfrecords_dir`
+* `dataset.test_size`
+* `dataset.serial`
+
+### 4.3 NN
+
+* `nn.activation`
+* `nn.minimize`
+* `nn.export`
+
+* `nn.loss.energy.weight`
+* `nn.loss.energy.per_atom_loss`
+* `nn.loss.energy.method`
+
+* `nn.loss.forces.weight`
+* `nn.loss.forces.method`
+
+* `nn.loss.stress.weight`
+* `nn.loss.stress.method`
+
+* `nn.loss.l2.weight`
+* `nn.loss.l2.decayed`
+* `nn.loss.l2.decay_rate`
+* `nn.loss.l2.decay_steps`
+
+* `nn.atomic.arch`
+* `nn.atomic.kernel_initializer`
+* `nn.atomic.minmax_scale`
+
+* `nn.atomic.resnet.fixed_static_energy`
+
+* `nn.atomic.behler.eta`
+* `nn.atomic.behler.omega`
+* `nn.atomic.behler.beta`
+* `nn.atomic.behler.gamma`
+* `nn.atomic.behler.zeta`
+* `nn.atomic.behler.angular`
+
+#### 4.3.1 Layers
+
+
+
+### 4.4 Opt
+
+* `opt.method`
+* `opt.learning_rate`
+* `opt.decay_function`
+* `opt.decay_rate`
+* `opt.decay_steps`
+* `opt.staircase`
+
+### 4.5 Train
+
+* `train.reset_global_step`
+* `train.batch_size`
+* `train.shuffle`
+* `train.model_dir`
+* `train.train_steps`
+* `train.eval_steps`
+* `train.summary_steps`
+* `train.log_steps`
+* `train.profile_steps`
+
+* `train.ckpt.checkpoint_filename`
+* `train.ckpt.use_ema_variables`
+* `train.ckpt.restore_all_variables`
+
+## 5. License
 
 This TensorAlloy program is licensed under the Apache License, Version 2.0 
 (the "License"); you may not use this file except in compliance with the 
