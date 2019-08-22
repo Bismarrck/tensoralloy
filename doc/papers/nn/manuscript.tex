@@ -147,10 +147,10 @@ In this work, we propose a virtual-atom approach to model the total energy of
 symmetry function descriptors based atomistic neural network. Our approach 
 creates the computation graph directly from atomic positions. Thus, the 
 derivations of forces and virial can be handled by TensorFlow automatically and 
-efficiently. This new approach is implemented in our program TensorAlloy, which 
-supports constructing machine learning interaction potentials for both 
-\textit{molecules} and \textit{solids}. The QM7 and SNAP/Ni-Mo datasets are used 
-to demostrate the performances of our program.
+efficiently. This new approach is implemented in our open-source program 
+TensorAlloy, which supports constructing machine learning interaction potentials 
+for both \textit{molecules} and \textit{solids}. The QM7 and SNAP/Ni-Mo datasets 
+are used to demostrate the performances of our program.
 \end{abstract}
 
 \begin{keyword}
@@ -174,7 +174,7 @@ Neural Network
 \begin{small}
 \noindent
 {\em Program Title: TensorAlloy} \\
-{\em Licensing provisions(please choose one): Apache-2.0}     \\
+{\em Licensing provisions(please choose one): LGPL}           \\
 {\em Programming language: Python 3.7}                        \\
 {\em Supplementary material:}                                 \\
 {\em Journal reference of previous version:}                  \\
@@ -188,7 +188,7 @@ Neural Network
   The TensorAlloy program is built upon TensorFlow and the virtual-atom 
   approach. TensorAlloy can build direct computation graph from atomic positions 
   to total energy. Atomic forces and virial stress tensors are handled by 
-  TensorFlow automatically and efficiently.
+  TensorFlow automatically and efficiently. \\
 {\em Additional comments including Restrictions and Unusual features}\\
   This program needs TensorFlow 1.13.*. Neither newer or older TensorFlow is 
   supported. \\
@@ -1204,6 +1204,8 @@ The learning rate starts from 0.01 and it will decay exponentially with rate
 \centering
 \begin{tabular}{cccc}
 \hline
+\multicolumn{4}{c}{Binary Mo-Ni model} \\
+\hline
 Subset & Energy (meV/atom) & Force (eV/\AA) & Stress (GPa) \\
 \hline
 Mo & 16.5 (16.2) & 0.28 (0.29) & 0.75 \\
@@ -1350,7 +1352,7 @@ This new algorithm is implemented in our Python program, TensorAlloy.
 \section*{Acknowledgments}
 
 This work was supported by the National Key Research and Development Program of 
-China under Grant No. 2016YFB0201203, the Science Challenge Project under Grant 
+China under Grant No. 2016YFB0201204, the Science Challenge Project under Grant 
 No. TZ2018002 and the National Natural Science Foundation of China under Grant 
 No. U1630250.
 
