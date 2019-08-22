@@ -113,86 +113,127 @@ In this section we will introduce the options and values of the input toml file.
 
 ### 4.2 Dataset
 
-* `dataset.sqlite3`
-* `dataset.name`
-* `dataset.rc`
-* `dataset.tfrecords_dir`
-* `dataset.test_size`
-* `dataset.serial`
+* `dataset.sqlite3`: a string, the 
+[ASE Sqlite3 Database](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#module-ase.db) 
+to use.
+* `dataset.name`: a string, the name of this experiment.
+* `dataset.rc`: a float, the cutoff radius.
+* `dataset.tfrecords_dir`: a string, the directory to save/load tfrecords files.
+* `dataset.test_size`: an integer, the number of examples for evaluation.
+* `dataset.serial`: a boolean. Default is `false`. Typically this should be 
+false so that structures in the sqlite3 database can be written to tfrecords in 
+parallel. For some old Linux systems or debugging, this can be set to `true`. 
 
 ### 4.3 NN
 
-* `nn.activation`
-* `nn.minimize`
-* `nn.export`
+#### 4.3.1 General options
 
-* `nn.loss.energy.weight`
-* `nn.loss.energy.per_atom_loss`
-* `nn.loss.energy.method`
+* `nn.activation`: a string, the activation function to use. Options are:
+`elu`, `leaky_relu`, `softplus`, `softsign`, `tanh`, `sigmoid`.
+* `nn.minimize`: a list of string, the properties to minimize. Some examples: 
+`["energy", "forces"]`, `["energy", "stress"]`
+* `nn.export`: a list of string, the properties that the exported model should 
+predict. This option has the same format with `nn.minimize`.
 
-* `nn.loss.forces.weight`
-* `nn.loss.forces.method`
+#### 4.3.2 Loss options
 
-* `nn.loss.stress.weight`
-* `nn.loss.stress.method`
+* `nn.loss.energy.weight`: a float, the weight of the energy loss. Default is 1.
+* `nn.loss.energy.per_atom_loss`: a boolean. If true, per-atom energy loss will 
+be used. Default is false.
+* `nn.loss.energy.method`: a string, `"rmse"` or `"logcosh"`.
 
-* `nn.loss.l2.weight`
-* `nn.loss.l2.decayed`
-* `nn.loss.l2.decay_rate`
-* `nn.loss.l2.decay_steps`
+* `nn.loss.forces.weight`: a float, the weight of the force loss. Default is 1.
+* `nn.loss.forces.method`: a string, `"rmse"` or `"logcosh"`.
 
-* `nn.atomic.arch`
-* `nn.atomic.kernel_initializer`
-* `nn.atomic.minmax_scale`
+* `nn.loss.stress.weight`: a float, the weight of the force loss. Default is 1.
+* `nn.loss.stress.method`: a string, `"rmse"` or `"logcosh"`.
 
-* `nn.atomic.resnet.fixed_static_energy`
+* `nn.loss.l2.weight`: a float, the weight of the L2 regularization. Default is 
+0. **Note: adaptive optimizers (adam, nadam, etc) are not compatible with L2. 
+If you use any adaptive optimizer, please set this to 0.**
+* `nn.loss.l2.decayed`: a boolean. If True, the L2 weight will decay exponentially.
+* `nn.loss.l2.decay_rate`: a float controls the decay rate.
+* `nn.loss.l2.decay_steps`: an integer.
 
-* `nn.atomic.behler.eta`
-* `nn.atomic.behler.omega`
-* `nn.atomic.behler.beta`
-* `nn.atomic.behler.gamma`
-* `nn.atomic.behler.zeta`
-* `nn.atomic.behler.angular`
+#### 4.3.3 Neural network options
 
-#### 4.3.1 Layers
+* `nn.atomic.arch`: a string, the architecture of the atomistic neural networks.
+There two options in this package: `"AtomicNN"` or `"AtomicResNN"`. The former 
+is the traditional type and later is the modified version proposed by the 
+TensorAlloy paper.
+* `nn.atomic.kernel_initializer`: a string, the initialization method.
+* `nn.atomic.minmax_scale`: a boolean. If True, the min-max normalization of the 
+input features will be enabled. Default is true.
 
+* `nn.atomic.resnet.fixed_static_energy`: a boolean. If `nn.atomic.arch` is 
+`AtomicResNet` and this is true, the static energy parameters will be fixed. 
 
+* `nn.atomic.behler.eta`: a list of float, the eta values for radial symmetry 
+functions.
+* `nn.atomic.behler.omega`: a list of float, the omega values for radial symmetry 
+functions.
+* `nn.atomic.behler.beta`: a list of float, the beta values for angular symmetry 
+functions.
+* `nn.atomic.behler.gamma`: a list of float, the gamma values for angular 
+symmetry functions.
+* `nn.atomic.behler.zeta`: a list of float, the zeta values for angular symmetry 
+functions.
+* `nn.atomic.behler.angular`: a boolean. If true, angular symmetry functions 
+will be used. Otherwise `gamma`, `zeta` and `beta` will be ignored.
+
+#### 4.3.4 Layers
+
+The following section demonstrates how to setup the hidden layers of the 
+atomistic neural network for element **C**. This block is optional. The default
+setting is `[64, 32]`.
+
+```toml
+[nn.atomic.layers]
+C = [128, 64, 32]
+``` 
 
 ### 4.4 Opt
 
-* `opt.method`
-* `opt.learning_rate`
-* `opt.decay_function`
-* `opt.decay_rate`
-* `opt.decay_steps`
-* `opt.staircase`
+* `opt.method`: a string, the optimizer to used. Options are: `adam`, `nadam`, 
+`sgd`, `adadelta`, `rmsprop`. Default is `adam`.
+* `opt.learning_rate`: a float, the initial learning rate. Default is 0.01.
+* `opt.decay_function`: a string, the decay function to use. Options are: 
+`exponential`, `inverse_time`, `natural_exp`. Default is `false` which means 
+learning rate decay is disabled.
+* `opt.decay_rate`: a float, the decay rate.
+* `opt.decay_steps`: an integer.
+* `opt.staircase`: a boolean.
 
 ### 4.5 Train
 
-* `train.reset_global_step`
-* `train.batch_size`
-* `train.shuffle`
-* `train.model_dir`
-* `train.train_steps`
-* `train.eval_steps`
-* `train.summary_steps`
-* `train.log_steps`
-* `train.profile_steps`
+* `train.reset_global_step`: a boolean. If True, the global step will be set to 
+0 by force. If you want to continue a previous training, this should be changed 
+to `false`.
+* `train.batch_size`: an integer, the batch size. Default is 50.
+* `train.shuffle`: a boolean. If True, the input dataset will be shuffled. In 
+most cases this should be true.
+* `train.model_dir`: a string, the working directory for this experiment.
+* `train.train_steps`: an integer, the maximum training steps.
+* `train.eval_steps`: an integer, the intervals between two evaluations.
+* `train.summary_steps`: an integer, the intervals between two writing summary 
+operations.
+* `train.log_steps`: an integer, the intervals between two logging operations.
+* `train.profile_steps`: an integer, the intervals between two performance 
+profiling operations. Set this to 0 to disable profiling.
 
-* `train.ckpt.checkpoint_filename`
-* `train.ckpt.use_ema_variables`
-* `train.ckpt.restore_all_variables`
+* `train.ckpt.checkpoint_filename`: a string, the previous checkpoint file to 
+read. Default is `false`.
+* `train.ckpt.use_ema_variables`: a boolean. If `train.ckpt.checkpoint_filename` 
+is provided, the moving average variables will be loaded if this is true.
+* `train.ckpt.restore_all_variables`: a boolean. It only works when 
+`train.ckpt.checkpoint_filename` is provided. If this is true, all variables 
+(including the optimizer-specific variables) will be loaded. If false, only 
+model variables will be used. Typically, if you want to continue a previous 
+training with exactly the same settings but more training steps, set 
+`train.reset_global_step` to false and this option to true. If you want to use
+the checkpoint values as initial guesses, this option shall be false.
 
 ## 5. License
 
-This TensorAlloy program is licensed under the Apache License, Version 2.0 
-(the "License"); you may not use this file except in compliance with the 
-License. You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+This TensorAlloy program is licensed under GNU Lesser General Public License 
+v3.0. For more information please read [LICENSE](LICENSE).
