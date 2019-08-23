@@ -5,23 +5,35 @@ A script to merge all Python files and TOML files into a single txt file.
 from __future__ import print_function, absolute_import
 
 from os import walk
-from os.path import join
+from os.path import join, splitext
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-content = ""
+out = ""
 
 for root, sub_folders, files in walk("."):
-    if root in ("datasets", "examples", "experiments", "models"):
+    if root.startswith("./"):
+        root = root[2:]
+    tops = root.split("/")
+    if tops[0] in ("datasets", "experiments", "models", ".git", ".idea"):
+        continue
+    if tops[-1] == "__pycache__":
         continue
     for afile in files:
         if afile == "test.py" or afile == "make_one_file.py":
             continue
-        if afile.endswith("py") or afile.endswith("toml"):
+        if afile.startswith("."):
+            continue
+        ext = splitext(afile)[1]
+        if ext in (".py", ".toml", ".md", ".txt"):
             filename = join(root, afile)
             with open(filename) as fp:
-                content += f"tensoralloy/{afile}\n" + fp.read() + "\n"
+                if root == ".":
+                    header = f"tensoralloy/{afile}"
+                else:
+                    header = f"tensoralloy/{root}/{afile}"
+                out += f"Path={header}\n{fp.read()}\n"
 
 with open("all_codes", "w") as fp:
-    fp.write(content)
+    fp.write(out)
