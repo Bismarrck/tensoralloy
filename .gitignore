@@ -108,5 +108,8 @@ venv.bak/
 # Ignore PyCharm settings
 .idea
 
+# Ignore VSCode settings
+.vscode
+
 # Ignore all experiments
 experiments/*
