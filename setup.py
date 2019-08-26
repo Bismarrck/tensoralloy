@@ -37,7 +37,7 @@ if __name__ == "__main__":
         packages=packages,
         include_package_data=True,
         entry_points={
-            'console_scripts': ['tensoralloy=tensoralloy.cli:main']
+            'console_scripts': ['tensoralloy=tensoralloy.cli.entry:main']
         },
         python_requires=">=3.7.0",
     )
