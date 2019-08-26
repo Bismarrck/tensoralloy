@@ -112,6 +112,9 @@ test.npz
 # Ignore PyCharm settings
 .idea
 
+# Ignore VSCode settings
+.vscode
+
 # Ignore sqlite database files
 test_files/*.db
 test_files/qm7m/*.tfrecords
