@@ -13,8 +13,9 @@ by the **AutoGrad** module of TensorFlow directly.
 * scipy
 * numpy
 * ase>=3.18.0
-* matplotlib>=2.1.0
+* matplotlib>=3.0.0
 * toml==0.10.0
+* joblib
 * wheel
 
 Anaconda3 can install above packages without pain. However, the performance
