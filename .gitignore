@@ -105,19 +105,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# Local tests
-test.py
-test.npz
-
 # Ignore PyCharm settings
 .idea
-
-# Ignore sqlite database files
-test_files/*.db
-test_files/qm7m/*.tfrecords
-test_files/ethanol/*.tfrecords
-test_files/Ni/*.tfrecords
-datasets/*.xyz
 
 # Ignore all experiments
 experiments/*
