@@ -97,7 +97,7 @@ class BasicNN:
                  hidden_sizes=None,
                  activation=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'atomic', 'hessian')):
+                 export_properties=('energy', 'forces')):
         """
         Initialization method.
 
@@ -216,7 +216,7 @@ class BasicNN:
 
     def _get_internal_energy_op(self,
                                 outputs,
-                                features: AttributeDict,
+                                features: dict,
                                 name='energy',
                                 verbose=True) -> tf.Tensor:
         """
@@ -226,11 +226,11 @@ class BasicNN:
         ----------
         outputs : Any
             The model outputs from the method `_get_model_outputs`.
-        features : AttributeDict
+        features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
@@ -244,7 +244,7 @@ class BasicNN:
         raise NotImplementedError("This method must be overridden!")
 
     @staticmethod
-    def _get_pv_energy_op(features: AttributeDict,
+    def _get_pv_energy_op(features: dict,
                           name='pv',
                           verbose=True) -> tf.Tensor:
         """
@@ -253,8 +253,8 @@ class BasicNN:
             E(pv) = pulay_stress * volume
 
         """
-        v = tf.linalg.det(features.cells, name='V')
-        p = tf.convert_to_tensor(features.pulay_stress, name='P')
+        v = tf.linalg.det(features["cells"], name='V')
+        p = tf.convert_to_tensor(features["pulay_stress"], name='P')
         pv = tf.multiply(v, p, name=name)
         if verbose:
             log_tensor(pv)
@@ -262,7 +262,7 @@ class BasicNN:
 
     def _get_total_energy_op(self,
                              outputs,
-                             features: AttributeDict,
+                             features: dict,
                              name='energy',
                              verbose=True):
         """
@@ -392,8 +392,8 @@ class BasicNN:
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
-                       forces, pulay_stress, name='stress', return_pressure=False,
-                       verbose=True):
+                       forces, pulay_stress, name='stress',
+                       return_pressure=False, verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
@@ -452,7 +452,7 @@ class BasicNN:
             log_tensor(hessian)
         return hessian
 
-    def get_total_loss(self, predictions, labels, n_atoms, mask,
+    def get_total_loss(self, predictions, labels, n_atoms, atom_masks,
                        loss_parameters: LossParameters,
                        mode=tf_estimator.ModeKeys.TRAIN):
         """
@@ -460,7 +460,7 @@ class BasicNN:
 
         Parameters
         ----------
-        predictions : AttributeDict
+        predictions : dict
             A dict of tensors as the predictions.
                 * 'energy' of shape `[batch_size, ]` is required.
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
@@ -473,29 +473,24 @@ class BasicNN:
             The following prediction is included and required for computing
             elastic loss:
                 * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
-        labels : AttributeDict
+        labels : dict
             A dict of reference tensors.
 
             Always required:
                 * 'energy' of shape `[batch_size, ]`.
-                * 'energy_confidence' of shape `[batch_size, ]`
 
             Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'forces_confidence' of shape `[batch_size, ]` is required if
-                  'forces' should be minimized.
 
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'pulay_stress' of shape `[batch_size, ]`
-                * 'total_pressure' of shape `[batch_size, ]`
-                * 'stress_confidence' of shape `[batch_size, ]`
 
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
-        mask : tf.Tensor
+        atom_masks : tf.Tensor
             A float tensor of shape `[batch_size, n_atoms_max + 1]`.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
@@ -506,63 +501,51 @@ class BasicNN:
         -------
         total_loss : tf.Tensor
             A `float64` tensor as the total loss.
-        losses : AttributeDict
+        losses : dict
             A dict. The loss tensor for energy, forces and stress or total
             pressure.
 
         """
-
-        def _get_per_structure_weights(key):
-            if mode == tf_estimator.ModeKeys.TRAIN and \
-                    (not loss_parameters.equivalently_trusted):
-                return labels[f"{key}_confidence"]
-            else:
-                return None
-
         with tf.name_scope("Loss"):
 
             collections = [GraphKeys.TRAIN_METRICS]
 
-            losses = AttributeDict()
-            losses.energy = loss_ops.get_energy_loss(
-                labels=labels.energy,
-                predictions=predictions.energy,
+            losses = dict()
+            losses["energy"] = loss_ops.get_energy_loss(
+                labels=labels["energy"],
+                predictions=predictions["energy"],
                 n_atoms=n_atoms,
-                weights=_get_per_structure_weights('energy'),
                 loss_weight=loss_parameters.energy.weight,
                 per_atom_loss=loss_parameters.energy.per_atom_loss,
                 method=LossMethod[loss_parameters.energy.method],
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
-                losses.forces = loss_ops.get_forces_loss(
-                    labels=labels.forces,
-                    predictions=predictions.forces,
-                    mask=mask,
-                    weights=_get_per_structure_weights('forces'),
+                losses["forces"] = loss_ops.get_forces_loss(
+                    labels=labels["forces"],
+                    predictions=predictions["forces"],
+                    mask=atom_masks,
                     loss_weight=loss_parameters.forces.weight,
                     method=LossMethod[loss_parameters.forces.method],
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses.total_pressure = loss_ops.get_total_pressure_loss(
-                    labels=labels.total_pressure,
-                    predictions=predictions.total_pressure,
-                    weights=_get_per_structure_weights('stress'),
+                losses["total_pressure"] = loss_ops.get_total_pressure_loss(
+                    labels=labels["total_pressure"],
+                    predictions=predictions["total_pressure"],
                     loss_weight=loss_parameters.total_pressure.weight,
                     method=LossMethod[loss_parameters.total_pressure.method],
                     collections=collections)
 
             if 'stress' in self._minimize_properties:
-                losses.stress = loss_ops.get_stress_loss(
-                    labels=labels.stress,
-                    predictions=predictions.stress,
-                    weights=_get_per_structure_weights("stress"),
+                losses["stress"] = loss_ops.get_stress_loss(
+                    labels=labels["stress"],
+                    predictions=predictions["stress"],
                     loss_weight=loss_parameters.stress.weight,
                     method=LossMethod[loss_parameters.stress.method],
                     collections=collections)
 
-            losses.l2 = loss_ops.get_l2_regularization_loss(
+            losses["l2"] = loss_ops.get_l2_regularization_loss(
                 options=loss_parameters.l2,
                 collections=collections)
 
@@ -593,8 +576,8 @@ class BasicNN:
         return total_loss, losses
 
     def _get_model_outputs(self,
-                           features: AttributeDict,
-                           descriptors: AttributeDict,
+                           features: dict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
@@ -602,16 +585,16 @@ class BasicNN:
 
         Parameters
         ----------
-        features : AttributeDict
+        features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
-        descriptors : AttributeDict
+        descriptors : dict
             A dict of Ops to get atomic descriptors. This should be produced by
             an overrided `BaseTransformer.get_descriptors()`.
         mode : tf_estimator.ModeKeys
@@ -622,13 +605,13 @@ class BasicNN:
         """
         raise NotImplementedError("This method must be overridden!")
 
-    def _check_keys(self, features: AttributeDict, labels: AttributeDict):
+    def _check_keys(self, features: dict, labels: dict):
         """
         Check the keys of `features` and `labels`.
         """
         assert 'positions' in features
         assert 'cells' in features
-        assert 'mask' in features
+        assert 'atom_masks' in features
         assert 'n_atoms' in features
         assert 'volume' in features
         assert isinstance(self._transformer, BaseTransformer)
@@ -639,7 +622,7 @@ class BasicNN:
             assert prop in labels
 
     def build(self,
-              features: AttributeDict,
+              features: dict,
               mode=tf_estimator.ModeKeys.TRAIN,
               verbose=True):
         """
@@ -647,11 +630,11 @@ class BasicNN:
 
         Parameters
         ----------
-        features : AttributeDict
+        features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
@@ -663,7 +646,7 @@ class BasicNN:
 
         Returns
         -------
-        predictions : AttributeDict
+        predictions : dict
             A dict of tensors as the predictions. If `mode` is PREDICT, the
             first axes (batch size) are ignored.
 
@@ -702,60 +685,61 @@ class BasicNN:
 
         with tf.name_scope("Output"):
 
-            predictions = AttributeDict()
+            predictions = dict()
 
             with tf.name_scope("Energy"):
                 energy, enthalpy = self._get_total_energy_op(
                     outputs, features, name='energy', verbose=verbose)
-                predictions.energy = energy
-                predictions.enthalpy = enthalpy
+                predictions["energy"] = energy
+                predictions["enthalpy"] = enthalpy
 
             if 'forces' in properties or \
                     'stress' in properties or \
                     'total_pressure' in properties:
                 with tf.name_scope("Forces"):
-                    predictions.forces = self._get_forces_op(
-                        predictions.energy, features.positions, name='forces',
+                    predictions["forces"] = self._get_forces_op(
+                        predictions["energy"],
+                        features["positions"],
+                        name='forces',
                         verbose=verbose)
 
-            if 'stress' in properties or 'total_pressure' in properties:
+            if 'stress' in properties:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
-                            energy=predictions.energy,
-                            cells=features.cells,
-                            volume=features.volume,
-                            positions=features.positions,
-                            forces=predictions.forces,
-                            pulay_stress=features.pulay_stress,
-                            return_pressure=True,
+                            energy=predictions["energy"],
+                            cells=features["cells"],
+                            volume=features["volume"],
+                            positions=features["positions"],
+                            forces=predictions["forces"],
+                            pulay_stress=features["pulay_stress"],
                             name='stress',
                             verbose=verbose)
-                    predictions.stress = voigt_stress
-                    predictions.total_stress = total_stress
-                    predictions.total_pressure = total_pressure
+                    predictions["stress"] = voigt_stress
+                    predictions["total_stress"] = total_stress
+                    predictions["total_pressure"] = total_pressure
 
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
-                    predictions.hessian = self._get_hessian_op(
-                        predictions.energy, features.positions, name='hessian',
-                        verbose=verbose)
+                    predictions["hessian"] = self._get_hessian_op(
+                        predictions["energy"], features["positions"],
+                        name='hessian', verbose=verbose)
 
             if mode == tf_estimator.ModeKeys.PREDICT and \
                     'elastic' in properties:
                 with tf.name_scope("Elastic"):
-                    predictions.elastic = \
+                    predictions["elastic"] = \
                         elastic_ops.get_elastic_constat_tensor_op(
-                            predictions.total_stress,
-                            features.cells,
-                            features.volume,
+                            predictions["total_stress"],
+                            features["cells"],
+                            features["volume"],
                             name='elastic', verbose=verbose)
 
             return predictions
 
     def model_fn(self,
-                 features: AttributeDict,
-                 labels: AttributeDict,
+                 features: dict,
+                 labels: dict,
                  mode: tf_estimator.ModeKeys,
                  params: AttributeDict):
         """
@@ -767,34 +751,29 @@ class BasicNN:
 
         Parameters
         ----------
-        features : AttributeDict
+        features : dict
             A dict of raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cells' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, n_atoms_max + 1]`.
+                * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
-        labels : AttributeDict
+        labels : dict
             A dict of reference tensors.
 
             Always required:
                 * 'energy' of shape `[batch_size, ]`.
-                * 'energy_confidence' of shape `[batch_size, ]`
 
             Required if 'forces' should be minimized:
                 * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
                   required if 'forces' should be minimized.
-                * 'forces_confidence' of shape `[batch_size, ]` is required if
-                  'forces' should be minimized.
 
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
                 * 'pulay_stress' of shape `[batch_size, ]`
-                * 'total_pressure' of shape `[batch_size, ]`
-                * 'stress_confidence' of shape `[batch_size, ]`
 
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
@@ -820,18 +799,18 @@ class BasicNN:
             return tf_estimator.EstimatorSpec(mode=mode,
                                               predictions=predictions)
 
-        total_loss, losses = self.get_total_loss(predictions=predictions,
-                                                 labels=labels,
-                                                 n_atoms=features.n_atoms,
-                                                 mask=features.mask,
-                                                 loss_parameters=params.loss,
-                                                 mode=mode)
+        total_loss, losses = self.get_total_loss(
+            predictions=predictions,
+            labels=labels,
+            n_atoms=features["n_atoms"],
+            atom_masks=features["atom_masks"],
+            loss_parameters=params.loss,
+            mode=mode)
 
         ema, train_op = get_train_op(
             losses=losses,
             opt_parameters=params.opt,
-            minimize_properties=self._minimize_properties,
-            mode=mode)
+            minimize_properties=self._minimize_properties)
 
         if mode == tf_estimator.ModeKeys.TRAIN:
             training_hooks = get_training_hooks(
@@ -845,8 +824,8 @@ class BasicNN:
             eval_properties=self._minimize_properties,
             predictions=predictions,
             labels=labels,
-            n_atoms=features.n_atoms,
-            mask=features.mask,
+            n_atoms=features["n_atoms"],
+            atom_masks=features["atom_masks"],
         )
         evaluation_hooks = get_evaluation_hooks(
             ema=ema,
