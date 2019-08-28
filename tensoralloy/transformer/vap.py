@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines `IndexTransformer` which is used to map arrays from local
+This module defines `VirtualAtomMap` which is used to map arrays from local
 to global reference or vice versa.
 """
 from __future__ import print_function, absolute_import
