@@ -5,9 +5,9 @@ various descriptors directly from atomic positions.
 """
 from __future__ import print_function, absolute_import
 
-from .behler import *
-from .cutoff import *
-from .eam import *
+from tensoralloy.descriptor.behler import *
+from tensoralloy.descriptor.cutoff import *
+from tensoralloy.descriptor.eam import *
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
