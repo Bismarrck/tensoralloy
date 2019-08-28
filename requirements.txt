@@ -1,6 +1,6 @@
-tensorflow==1.13.*
+tensorflow==1.13.1
 scipy>=1.0
-numpy>=1.12
+numpy>=1.14
 ase==3.18
 nose
 joblib>=0.11

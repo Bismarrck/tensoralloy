@@ -4,8 +4,6 @@ The setup module.
 """
 from __future__ import print_function, absolute_import
 
-import sys
-
 from setuptools import setup, find_packages
 from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
@@ -15,10 +13,6 @@ from tensoralloy.extension.interp import build_ext as interp_build_ext
 __version__ = "1.0"
 __author__ = "Xin Chen"
 __email__ = "Bismarrck@me.com"
-
-
-if sys.version_info < (3, 7, 0):
-    sys.exit('Python < 3.7.0 is not supported')
 
 
 extensions = [
@@ -55,7 +49,7 @@ if __name__ == "__main__":
         packages=packages,
         include_package_data=True,
         entry_points={
-            'console_scripts': ['tensoralloy=tensoralloy.cli:main']
+            'console_scripts': ['tensoralloy=tensoralloy.cli.entry:main']
         },
         python_requires=">=3.7.0",
     )
