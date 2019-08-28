@@ -76,7 +76,6 @@ class _LossOptions:
     """
     The basic options for a loss.
     """
-
     weight: float = 1.0
 
 
@@ -86,7 +85,6 @@ class EnergyLossOptions(_LossOptions):
     """
     Special options for the loss of energies.
     """
-
     per_atom_loss: bool = False
     method: str = 'rmse'
 
@@ -97,7 +95,6 @@ class ForcesLossOptions(_LossOptions):
     """
     Special options for the loss of atomic forces.
     """
-
     method: str = 'rmse'
 
 
@@ -107,7 +104,6 @@ class StressLossOptions(_LossOptions):
     """
     Special options for the loss of stress tensors.
     """
-
     method: str = 'rmse'
 
 
@@ -117,7 +113,6 @@ class PressureLossOptions(_LossOptions):
     """
     Special options for the loss of total pressures.
     """
-
     method: str = 'rmse'
 
 
@@ -128,7 +123,6 @@ class L2LossOptions(_LossOptions):
     Special options for the L2 regularization.
     The default weight is changed to 0.01.
     """
-
     weight: float = 0.01
     decayed: bool = True
     decay_rate: float = 0.99
@@ -141,7 +135,6 @@ class ElasticConstraintOptions:
     """
     Options for computing loss of the elastic contraints.
     """
-
     use_kbar: bool = True
     forces_weight: float = 1.0
     stress_weight: float = 0.1
@@ -155,7 +148,6 @@ class ElasticLossOptions(_LossOptions):
     """
     Special options for the loss of elastic constants.
     """
-
     crystals: List[str] = None
     constraint: ElasticConstraintOptions = ElasticConstraintOptions()
 
@@ -187,8 +179,6 @@ class LossParameters(_HyperParameters):
     """
     Hyper parameters for constructing the total loss.
     """
-
-    equivalently_trusted: bool = True
     energy: EnergyLossOptions = EnergyLossOptions()
     forces: ForcesLossOptions = ForcesLossOptions()
     stress: StressLossOptions = StressLossOptions()
@@ -204,7 +194,6 @@ class OptParameters(_HyperParameters):
     """
     Hyper parameters for optimizing the total loss.
     """
-
     method: str = 'adam'
     learning_rate: float = 0.01
     decay_function: Union[str, None] = None
@@ -232,7 +221,6 @@ class TrainParameters(_HyperParameters):
     """
     Hyper parameters for handling the training.
     """
-
     model_dir: str = "train"
     reset_global_step: bool = True
     batch_size: int = 50
@@ -261,7 +249,6 @@ class StructuralProperty:
         A boolean indicating whether this property can be exported or not.
 
     """
-
     name: str
     minimizable: bool = True
     exportable: bool = True
