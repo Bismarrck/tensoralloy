@@ -18,7 +18,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.transformer.base import BatchDescriptorTransformer
-from tensoralloy.utils import AttributeDict, Defaults, check_path
+from tensoralloy.utils import Defaults, check_path
 from tensoralloy.dataset.utils import should_be_serial
 from tensoralloy.dataset.utils import brange
 from tensoralloy.io.sqlite import CoreDatabase
@@ -260,7 +260,10 @@ class Dataset:
         """
         Return a str as the signature of this dataset.
         """
-        k_max = self._transformer.k_max
+        if self._transformer.angular:
+            k_max = 3
+        else:
+            k_max = 2
         rc = self._transformer.rc
         sig = "k{:d}-rc{:.2f}".format(k_max, rc)
         dtype = get_float_dtype()
@@ -384,15 +387,15 @@ class Dataset:
         if mode == tf_estimator.ModeKeys.PREDICT:
             raise ValueError("The PREDICT does not need an `input_fn`.")
 
-        def _input_fn() -> Tuple[AttributeDict, AttributeDict]:
+        def _input_fn() -> Tuple[dict, dict]:
             """
             The input function for `tf_estimator.Estimator`.
 
             Returns
             -------
-            features : AttributeDict
+            features : dict
                 A dict of input features.
-            labels : AttributeDict
+            labels : dict
                 A dict of labels.
 
             """
@@ -404,15 +407,11 @@ class Dataset:
                     shape = batch_of_tensors.shape.as_list()
                     if shape[0] is None:
                         batch_of_tensors.set_shape([batch_size] + shape[1:])
-            labels = AttributeDict(energy=batch.pop('y_true'),
-                                   energy_confidence=batch.pop('y_conf'))
+            labels = dict(energy=batch.pop('y_true'))
             if self._database.has_forces:
                 labels['forces'] = batch.pop('f_true')
-                labels['forces_confidence'] = batch.pop('f_conf')
             if self._database.has_stress:
                 labels['stress'] = batch.pop('stress')
-                labels['stress_confidence'] = batch.pop('s_conf')
-                labels['total_pressure'] = batch.pop('total_pressure')
             return batch, labels
 
         return _input_fn
@@ -435,7 +434,7 @@ class Dataset:
 
         Returns
         -------
-        next_batch : AttributeDict
+        next_batch : dict
             A dict of tensors.
 
         """
