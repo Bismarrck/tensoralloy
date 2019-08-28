@@ -16,8 +16,6 @@ from tensoralloy.utils import GraphKeys, AttributeDict
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-# TODO: fix the atomic energy
-
 
 class AtomicResNN(AtomicNN):
     """
@@ -87,16 +85,15 @@ class AtomicResNN(AtomicNN):
         d['fixed_static_energy'] = self._fixed_static_energy
         return d
 
-    def _get_internal_energy_op(self, outputs, features, name='energy', verbose=True):
+    def _get_internal_energy_op(self, outputs, features: dict, name='energy',
+                                verbose=True):
         """
         Return the Op to compute internal energy E.
         """
-
-        ndims = features.composition.shape.ndims
-        axis = ndims - 1
+        ndims = features["composition"].shape.ndims
 
         with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-            x = tf.identity(features.composition, name='input')
+            x = tf.identity(features["composition"], name='input')
             if ndims == 1:
                 x = tf.expand_dims(x, axis=0, name='1to2')
             if x.shape[1].value is None:
@@ -132,18 +129,8 @@ class AtomicResNN(AtomicNN):
                 log_tensor(y_static)
 
         with tf.name_scope("Residual"):
-            y_atomic = tf.concat(outputs, axis=1, name='atomic')
-            with tf.name_scope("mask"):
-                if ndims == 1:
-                    y_atomic = tf.squeeze(y_atomic, axis=0)
-                mask = tf.split(
-                    features.mask, [1, -1], axis=axis, name='split')[1]
-                y_mask = tf.multiply(y_atomic, mask, name='mask')
-                self._y_atomic_op_name = y_mask.name
-            y_res = tf.reduce_sum(y_mask, axis=axis, keepdims=False,
-                                  name='residual')
-            if verbose:
-                log_tensor(y_res)
+            y_res = super(AtomicResNN, self)._get_internal_energy_op(
+                outputs, features, name="residual", verbose=verbose)
 
         energy = tf.add(y_static, y_res, name=name)
 
