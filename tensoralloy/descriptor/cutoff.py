@@ -37,8 +37,6 @@ def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
 
     """
     with ops.name_scope(name, "CosCutoff", [r, rc]) as name:
-        # TODO: 'TypeError: must be real number, not Tensor' will occur here if
-        #  this module was cythonized.
         r = ops.convert_to_tensor(r, name='r')
         rc = ops.convert_to_tensor(rc, dtype=r.dtype, name="rc")
         ratio = math_ops.truediv(r, rc, name='ratio')
