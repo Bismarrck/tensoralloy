@@ -24,7 +24,7 @@ class AtomicDescriptor:
 
     gather_fn = staticmethod(tf.gather)
 
-    def __init__(self, rc, elements: List[str], k_max, periodic=True):
+    def __init__(self, rc, elements: List[str], angular=False, periodic=True):
         """
         Initialization method.
         """
@@ -33,10 +33,10 @@ class AtomicDescriptor:
                 raise ValueError(f"{element} is not a valid chemical symbol!")
 
         all_kbody_terms, kbody_terms, elements = \
-            get_kbody_terms(elements, k_max)
+            get_kbody_terms(elements, angular=angular)
 
         self._rc = rc
-        self._k_max = k_max
+        self._angular = angular
         self._all_kbody_terms = all_kbody_terms
         self._kbody_terms = kbody_terms
         self._elements = elements
@@ -58,6 +58,13 @@ class AtomicDescriptor:
         return self._elements
 
     @property
+    def n_elements(self) -> int:
+        """
+        Return the total number of unique elements.
+        """
+        return self._n_elements
+
+    @property
     def periodic(self):
         """
         Return True if this can be applied to periodic structures. For
@@ -73,11 +80,11 @@ class AtomicDescriptor:
         return {el: np.inf for el in self._elements}
 
     @property
-    def k_max(self):
+    def angular(self):
         """
-        Return the maximum k for the many-body expansion scheme.
+        Return True if angular interactions are included.
         """
-        return self._k_max
+        return self._angular
 
     @property
     def all_kbody_terms(self):
