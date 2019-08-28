@@ -51,7 +51,7 @@ class MEAM(AtomicDescriptor):
             The scaling factor of `rc` for angular interactions.
 
         """
-        super(MEAM, self).__init__(rc, elements, k_max=3, periodic=True)
+        super(MEAM, self).__init__(rc, elements, angular=True, periodic=True)
 
         self._angular_rc_scale = angular_rc_scale
         self._angular_rc = rc * angular_rc_scale

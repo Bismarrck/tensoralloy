@@ -38,7 +38,7 @@ class EAM(AtomicDescriptor):
             A list of str as the ordered elements.
 
         """
-        super(EAM, self).__init__(rc, elements, k_max=2, periodic=True)
+        super(EAM, self).__init__(rc, elements, angular=False, periodic=True)
 
         kbody_index = {}
         for kbody_term in self._all_kbody_terms:
