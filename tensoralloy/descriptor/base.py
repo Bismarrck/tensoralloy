@@ -102,7 +102,7 @@ class AtomicDescriptor:
         return self._kbody_terms
 
     @staticmethod
-    def _get_pbc_displacements(shift, cells, dtype=tf.float64):
+    def get_pbc_displacements(shift, cell, dtype=tf.float64):
         """
         Return the periodic boundary shift displacements.
 
@@ -111,7 +111,7 @@ class AtomicDescriptor:
         shift : tf.Tensor or array_like
             A `float64` or `float32` tensor of shape `[-1, 3]` as the cell shift
             vector.
-        cells : tf.Tensor or array_like
+        cell : tf.Tensor or array_like
             A `float64` or `float32` tensor of shape `[3, 3]` as the cell.
         dtype : DType
             The corresponding data type of `shift` and `cells`.
@@ -123,9 +123,9 @@ class AtomicDescriptor:
             vector.
 
         """
-        return tf.matmul(shift, cells, name='displacements')
+        return tf.matmul(shift, cell, name='displacements')
 
-    def _get_rij(self, R, cells, ilist, jlist, shift, name):
+    def get_rij(self, R, cell, ilist, jlist, shift, name):
         """
         Return the interatomic distances array, `rij`, and the corresponding
         differences.
@@ -144,7 +144,7 @@ class AtomicDescriptor:
             Rj = self.gather_fn(R, jlist, 'Rj')
             Dij = tf.subtract(Rj, Ri, name='Dij')
             if self._periodic:
-                pbc = self._get_pbc_displacements(shift, cells, dtype=dtype)
+                pbc = self.get_pbc_displacements(shift, cell, dtype=dtype)
                 Dij = tf.add(Dij, pbc, name='pbc')
             # By adding `eps` to the reduced sum NaN can be eliminated.
             with tf.name_scope("safe_norm"):
@@ -153,21 +153,21 @@ class AtomicDescriptor:
                     tf.square(Dij, name='Dij2'), axis=-1) + eps)
                 return rij, Dij
 
-    def _get_g_shape(self, placeholders):
+    def get_g_shape(self, features: dict):
         """
         Return the shape of the descriptor matrix.
         """
         raise NotImplementedError(
             "This method must be overridden by a subclass!")
 
-    def _get_v2g_map(self, placeholders, **kwargs):
+    def get_v2g_map(self, features: dict, prefix: str):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
         raise NotImplementedError(
             "This method must be overridden by a subclass!")
 
-    def _get_row_split_sizes(self, placeholders):
+    def get_row_split_sizes(self, placeholders):
         """
         Return the sizes of the rowwise splitted subsets of `g`.
         """
@@ -175,7 +175,7 @@ class AtomicDescriptor:
             "This method must be overridden by a subclass!")
 
     @staticmethod
-    def _get_row_split_axis():
+    def get_row_split_axis():
         """
         Return the axis to rowwise split `g`.
         """
