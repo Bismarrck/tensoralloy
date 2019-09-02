@@ -197,7 +197,7 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.variable_scope("G2"):
             r = self.get_rij(features['positions'],
-                             features['cells'],
+                             features['cell'],
                              features['g2.ilist'],
                              features['g2.jlist'],
                              features['g2.n1'],
@@ -253,19 +253,19 @@ class SymmetryFunction(AtomicDescriptor):
         """
         with tf.variable_scope("G4"):
             rij = self.get_rij(features['positions'],
-                               features['cells'],
+                               features['cell'],
                                features['g4.ilist'],
                                features['g4.jlist'],
                                features['g4.n1'],
                                name='rij')[0]
             rik = self.get_rij(features['positions'],
-                               features['cells'],
+                               features['cell'],
                                features['g4.ilist'],
                                features['g4.klist'],
                                features['g4.n2'],
                                name='rik')[0]
             rjk = self.get_rij(features['positions'],
-                               features['cells'],
+                               features['cell'],
                                features['g4.jlist'],
                                features['g4.klist'],
                                features['g4.n3'],
@@ -378,7 +378,8 @@ class BatchSymmetryFunction(SymmetryFunction):
                  batch_size: int, eta=np.array([0.05, 4.0, 20.0, 80.0]),
                  omega=np.array([0.0]), beta=np.array([0.005, ]),
                  gamma=np.array([1.0, -1.0]), zeta=np.array([1.0, 4.0]),
-                 angular=True, periodic=True, trainable=False):
+                 angular=True, periodic=True, trainable=False,
+                 cutoff_function="cosine"):
         """
         Initialization method.
         """
@@ -387,7 +388,7 @@ class BatchSymmetryFunction(SymmetryFunction):
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
             zeta=zeta, omega=omega, angular=angular, periodic=periodic,
-            trainable=trainable)
+            trainable=trainable, cutoff_function=cutoff_function)
         self._max_occurs = max_occurs
         self._max_n_atoms = sum(max_occurs.values())
         self._nij_max = nij_max

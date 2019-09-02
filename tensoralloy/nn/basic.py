@@ -229,7 +229,7 @@ class BasicNN:
         features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
                 * 'composition' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
@@ -253,7 +253,7 @@ class BasicNN:
             E(pv) = pulay_stress * volume
 
         """
-        v = tf.linalg.det(features["cells"], name='V')
+        v = tf.linalg.det(features["cell"], name='V')
         p = tf.convert_to_tensor(features["pulay_stress"], name='P')
         pv = tf.multiply(v, p, name=name)
         if verbose:
@@ -312,7 +312,7 @@ class BasicNN:
         return forces
 
     @staticmethod
-    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cells, volume,
+    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cell, volume,
                                         positions, forces, pulay_stress):
         """
         Return the Op to compute the virial stress tensor.
@@ -325,11 +325,11 @@ class BasicNN:
         with tf.name_scope("Full"):
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
-            dEdh = tf.identity(tf.gradients(energy, cells)[0], name='dEdh')
+            dEdh = tf.identity(tf.gradients(energy, cell)[0], name='dEdh')
             dtype = dEdh.dtype
-            if cells.shape.ndims == 2:
+            if cell.shape.ndims == 2:
                 with tf.name_scope("Right"):
-                    right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cells,
+                    right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cell,
                                       name='right')
                 with tf.name_scope("Left"):
                     positions = tf.split(
@@ -345,7 +345,7 @@ class BasicNN:
                 stress = tf.math.truediv(total_stress, volume, name='ase')
             else:
                 with tf.name_scope("Right"):
-                    right = tf.einsum('ikj,ikl->ijl', dEdh, cells, name='right')
+                    right = tf.einsum('ikj,ikl->ijl', dEdh, cell, name='right')
                 with tf.name_scope("Left"):
                     positions = tf.split(
                         positions, [1, -1], axis=1, name='split')[1]
@@ -391,7 +391,7 @@ class BasicNN:
                 log_tensor(stress)
             return stress
 
-    def _get_stress_op(self, energy: tf.Tensor, cells, volume, positions,
+    def _get_stress_op(self, energy: tf.Tensor, cell, volume, positions,
                        forces, pulay_stress, name='stress',
                        return_pressure=False, verbose=True):
         """
@@ -401,13 +401,13 @@ class BasicNN:
         # Get the 3x3 full stress tensor
         stress_per_volume, total_stress = \
             self._get_reduced_full_stress_tensor(
-                energy, cells, volume, positions, forces, pulay_stress)
+                energy, cell, volume, positions, forces, pulay_stress)
         if verbose:
             log_tensor(total_stress)
 
         # Get the Voigt stress tensor
         ndims = stress_per_volume.shape.ndims
-        batch_size = cells.shape[0].value or energy.shape[0].value
+        batch_size = cell.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
         voigt = self._convert_to_voigt_stress(
@@ -524,7 +524,7 @@ class BasicNN:
                 losses["forces"] = loss_ops.get_forces_loss(
                     labels=labels["forces"],
                     predictions=predictions["forces"],
-                    mask=atom_masks,
+                    atom_masks=atom_masks,
                     loss_weight=loss_parameters.forces.weight,
                     method=LossMethod[loss_parameters.forces.method],
                     collections=collections)
@@ -588,9 +588,9 @@ class BasicNN:
         features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
@@ -610,7 +610,7 @@ class BasicNN:
         Check the keys of `features` and `labels`.
         """
         assert 'positions' in features
-        assert 'cells' in features
+        assert 'cell' in features
         assert 'atom_masks' in features
         assert 'n_atoms' in features
         assert 'volume' in features
@@ -633,9 +633,9 @@ class BasicNN:
         features : dict
             A dict of input raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
@@ -708,7 +708,7 @@ class BasicNN:
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
                             energy=predictions["energy"],
-                            cells=features["cells"],
+                            cell=features["cell"],
                             volume=features["volume"],
                             positions=features["positions"],
                             forces=predictions["forces"],
@@ -731,7 +731,7 @@ class BasicNN:
                     predictions["elastic"] = \
                         elastic_ops.get_elastic_constat_tensor_op(
                             predictions["total_stress"],
-                            features["cells"],
+                            features["cell"],
                             features["volume"],
                             name='elastic', verbose=verbose)
 
@@ -745,7 +745,7 @@ class BasicNN:
         """
         Initialize a model function for `tf_estimator.Estimator`.
 
-        In this method `features` are raw property (positions, cells, etc)
+        In this method `features` are raw property (positions, cell, etc)
         tensors. Because `tf_estimator.Estimator` requires a `features` as the
         first arg of `model_fn`, we cannot change its name here.
 
@@ -754,9 +754,9 @@ class BasicNN:
         features : dict
             A dict of raw property tensors:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.

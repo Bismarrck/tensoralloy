@@ -55,7 +55,7 @@ class EAM(AtomicDescriptor):
         Return the shape of the descriptor matrix.
         """
         return [self._max_n_terms,
-                features["n_atoms_plus_virt"],
+                features["n_atoms_vap"],
                 features["nnl_max"]]
 
     def get_v2g_map(self, features: dict, prefix: str):
@@ -101,15 +101,15 @@ class EAM(AtomicDescriptor):
         Make sure `placeholders` contains enough keys.
         """
         assert 'positions' in features
-        assert 'cells' in features
+        assert 'cell' in features
         assert 'volume' in features
-        assert 'n_atoms_plus_virt' in features
+        assert 'n_atoms_vap' in features
         assert 'nnl_max' in features
         assert 'row_splits' in features
-        assert 'ilist' in features
-        assert 'jlist' in features
-        assert 'shift' in features
-        assert 'v2g_map' in features
+        assert 'g2.ilist' in features
+        assert 'g2.jlist' in features
+        assert 'g2.n1' in features
+        assert 'g2.v2g_map' in features
 
     def build_graph(self, features: dict):
         """
@@ -129,9 +129,9 @@ class EAM(AtomicDescriptor):
         with tf.name_scope(f"{self._graph_scope_name}"):
             rr, dij = self.get_rij(features["positions"],
                                    features["cells"],
-                                   features["ilist"],
-                                   features["jlist"],
-                                   features["shift"],
+                                   features["g2.ilist"],
+                                   features["g2.jlist"],
+                                   features["g2.n1"],
                                    name='rij')
             shape = self.get_g_shape(features)
             v2g_map, v2g_mask = self.get_v2g_map(features, "eam")
@@ -266,9 +266,9 @@ class BatchEAM(EAM):
         Make sure `placeholders` contains enough keys.
         """
         assert 'positions' in features
-        assert 'cells' in features
+        assert 'cell' in features
         assert 'volume' in features
-        assert 'ilist' in features
-        assert 'jlist' in features
-        assert 'shift' in features
-        assert 'v2g_map' in features
+        assert 'g2.ilist' in features
+        assert 'g2.jlist' in features
+        assert 'g2.n1' in features
+        assert 'g2.v2g_map' in features

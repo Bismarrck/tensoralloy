@@ -160,7 +160,7 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
 
 def _absolute_forces_loss(labels: tf.Tensor,
                           predictions: tf.Tensor,
-                          mask: tf.Tensor,
+                          atom_masks: tf.Tensor,
                           method=LossMethod.rmse):
     """
     Return the absolute loss of atomic forces. The `mask` tensor of shape
@@ -172,7 +172,8 @@ def _absolute_forces_loss(labels: tf.Tensor,
     with tf.name_scope("Absolute"):
         dtype = get_float_dtype()
         diff = tf.math.subtract(labels, predictions, name='diff')
-        mask = tf.cast(tf.split(mask, [1, -1], axis=1)[1], tf.bool, name='mask')
+        mask = tf.cast(tf.split(atom_masks, [1, -1], axis=1)[1], tf.bool,
+                       name='mask')
         diff = tf.boolean_mask(diff, mask, axis=0, name='diff/mask')
         eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
 
@@ -192,7 +193,7 @@ def _absolute_forces_loss(labels: tf.Tensor,
     return loss, mae
 
 
-def get_forces_loss(labels, predictions, mask, loss_weight=1.0,
+def get_forces_loss(labels, predictions, atom_masks, loss_weight=1.0,
                     collections=None, method=LossMethod.rmse):
     """
     Return the loss tensor of the atomic forces.
@@ -205,7 +206,7 @@ def get_forces_loss(labels, predictions, mask, loss_weight=1.0,
     predictions : tf.Tensor
         A float tensor of shape `[batch_size, n_atoms_max, 3]` as the predicted
         forces.
-    mask : tf.Tensor
+    atom_masks : tf.Tensor
         A float tensor of shape `[batch_size, ]` as the atom masks of each
         structure.
     loss_weight : float or tf.Tensor
@@ -227,7 +228,8 @@ def get_forces_loss(labels, predictions, mask, loss_weight=1.0,
         with tf.name_scope("Split"):
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
-        raw_loss, mae = _absolute_forces_loss(labels, predictions, mask=mask,
+        raw_loss, mae = _absolute_forces_loss(labels, predictions,
+                                              atom_masks=atom_masks,
                                               method=method)
         return _get_weighted_loss(loss_weight, raw_loss, mae, collections)
 

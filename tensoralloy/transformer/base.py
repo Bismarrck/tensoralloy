@@ -412,12 +412,12 @@ class BatchDescriptorTransformer(BaseTransformer):
 
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
-            'cells': bytes_feature(cells.tostring()),
+            'cell': bytes_feature(cells.tostring()),
             'n_atoms': int64_feature(len(atoms)),
             'volume': bytes_feature(volume.tostring()),
             'y_true': bytes_feature(y_true.tostring()),
-            'mask': bytes_feature(mask.tostring()),
-            'composition': bytes_feature(composition.tostring()),
+            'atom_masks': bytes_feature(mask.tostring()),
+            'compositions': bytes_feature(composition.tostring()),
             'pulay': bytes_feature(pulay.tostring()),
         }
         if self.use_forces:
@@ -475,21 +475,21 @@ class BatchDescriptorTransformer(BaseTransformer):
         y_true.set_shape([1])
         decoded["y_true"] = tf.squeeze(y_true, name='y_true')
 
-        cells = tf.decode_raw(example['cells'], float_dtype)
-        cells.set_shape([9])
-        decoded["cells"] = tf.reshape(cells, (3, 3), name='cells')
+        cell = tf.decode_raw(example['cell'], float_dtype)
+        cell.set_shape([9])
+        decoded["cell"] = tf.reshape(cell, (3, 3), name='cells')
 
         volume = tf.decode_raw(example['volume'], float_dtype)
         volume.set_shape([1])
         decoded["volume"] = tf.squeeze(volume, name='volume')
 
-        mask = tf.decode_raw(example['mask'], float_dtype)
-        mask.set_shape([max_n_atoms + 1, ])
-        decoded["atom_masks"] = mask
+        atom_masks = tf.decode_raw(example['atom_masks'], float_dtype)
+        atom_masks.set_shape([max_n_atoms + 1, ])
+        decoded["atom_masks"] = atom_masks
 
-        composition = tf.decode_raw(example['composition'], float_dtype)
-        composition.set_shape([n_elements, ])
-        decoded["composition"] = composition
+        compositions = tf.decode_raw(example['compositions'], float_dtype)
+        compositions.set_shape([n_elements, ])
+        decoded["compositions"] = compositions
 
         pulay = tf.decode_raw(example['pulay'], float_dtype)
         pulay.set_shape([1])
