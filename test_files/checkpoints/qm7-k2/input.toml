@@ -8,27 +8,29 @@ rc = 6.5
 test_size = 1000
 
 [nn]
-activation = "leaky_relu"
+activation = "softplus"
 minimize = ['energy']
-positive_energy_mode = false
 
 [nn.loss.energy]
 weight = 1.0
 per_atom_loss = false
 
 [nn.loss.l2]
-weight = 0.01
+weight = 0.00
 
 [nn.atomic.behler]
 angular = false
-trainable = true
-cutoff = "cosine"
+trainable = false
 eta = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0]
-omega = [0.0, 3.2]
+omega = [0.0]
+beta = [0.1, 1.0]
+gamma = [1.0, -1.0]
+zeta = [1.0, 4.0]
 
 [nn.atomic]
-input_normalizer = false
 arch = "AtomicResNN"
+minmax_scale = true
+kernel_initializer = "he_normal"
 
 [nn.atomic.layers]
 C = [64, 32]
@@ -40,18 +42,18 @@ S = [64, 32]
 [opt]
 learning_rate = 0.01
 decay_function = "exponential"
-decay_rate = 0.99
-decay_steps = 2000
+decay_rate = 0.96
+decay_steps = 2500
 staircase = false
 
 [train]
-restart = true
+reset_global_step = true
 batch_size = 50
 shuffle = true
-model_dir = "train"
+model_dir = "g2.50.res"
 train_steps = 10000
-max_checkpoints_to_keep = 10
-eval_steps = 5000
-summary_steps = 100
-log_steps = 100
-profile_steps = 10000
+max_checkpoints_to_keep = 100
+eval_steps = 200
+summary_steps = 1000
+log_steps = 200
+profile_steps = 0
