@@ -24,7 +24,6 @@ from tensoralloy.nn.eam import EamFsNN
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
 from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
-from tensoralloy.utils import AttributeDict
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 
 __author__ = 'Xin Chen'
@@ -65,7 +64,7 @@ class AlFeFakeData:
         self.m_fe = np.random.randint(0, 2, shape_fe[1:]).astype(np.float64)
 
         with tf.name_scope("Inputs"):
-            self.descriptors = AttributeDict(
+            self.descriptors = dict(
                 Al=(tf.convert_to_tensor(self.g_al, tf.float64, 'g_al'),
                     tf.convert_to_tensor(self.m_al, tf.float64, 'm_al')),
                 Fe=(tf.convert_to_tensor(self.g_fe, tf.float64, 'g_fe'),
@@ -75,7 +74,7 @@ class AlFeFakeData:
                 dtype=tf.float64,
                 name='positions')
             self.mask = np.ones((self.batch_size, self.max_n_atoms), np.float64)
-            self.features = AttributeDict(
+            self.features = dict(
                 descriptors=self.descriptors, positions=self.positions,
                 mask=self.mask)
 
@@ -105,7 +104,7 @@ def test_inference():
 
         with tf.name_scope("Inference"):
             partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features.descriptors,
+                descriptors=data.features["descriptors"],
                 mode=mode,
                 merge_symmetric=False)
             rho, rho_values = nn._build_rho_nn(
@@ -121,7 +120,7 @@ def test_inference():
                 verbose=False)
 
             partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features.descriptors,
+                descriptors=data.features["descriptors"],
                 mode=mode,
                 merge_symmetric=True)
             phi, phi_values = nn._build_phi_nn(

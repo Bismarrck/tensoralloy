@@ -19,7 +19,7 @@ from nose.tools import assert_equal, assert_false
 
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.nn.eam.potentials.zjw04 import Zjw04, Zjw04xc, Zjw04uxc
-from tensoralloy.utils import GraphKeys, AttributeDict
+from tensoralloy.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -166,10 +166,10 @@ def atsim_make_functions():
 
     pair_AlCu = atsim_make_pairpot_ab(dens_Cu, pair_CuCu, dens_Al, pair_AlAl)
 
-    functions = AttributeDict(
-        rho=AttributeDict(Cu=dens_Cu, Al=dens_Al),
-        embed=AttributeDict(Cu=embed_Cu, Al=embed_Al),
-        phi=AttributeDict(AlAl=pair_AlAl, AlCu=pair_AlCu, CuCu=pair_CuCu)
+    functions = dict(
+        rho=dict(Cu=dens_Cu, Al=dens_Al),
+        embed=dict(Cu=embed_Cu, Al=embed_Al),
+        phi=dict(AlAl=pair_AlAl, AlCu=pair_AlCu, CuCu=pair_CuCu)
     )
     return functions
 
@@ -183,10 +183,10 @@ def test_rho_phi_aa():
     Test the functions `AlCuZJW04.rho` and `AlCuZJW04.phi` for r_{AA}.
     """
     r = np.linspace(0.0, 5.0, num=51, endpoint=True)
-    rho_al = np.asarray([ATSIM.rho.Al(r[i]) for i in range(len(r))])
-    rho_cu = np.asarray([ATSIM.rho.Cu(r[i]) for i in range(len(r))])
-    phi_al = np.asarray([ATSIM.phi.AlAl(r[i]) for i in range(len(r))])
-    phi_cu = np.asarray([ATSIM.phi.CuCu(r[i]) for i in range(len(r))])
+    rho_al = np.asarray([ATSIM["rho"]["Al"](r[i]) for i in range(len(r))])
+    rho_cu = np.asarray([ATSIM["rho"]["Cu"](r[i]) for i in range(len(r))])
+    phi_al = np.asarray([ATSIM["phi"]["AlAl"](r[i]) for i in range(len(r))])
+    phi_cu = np.asarray([ATSIM["phi"]["CuCu"](r[i]) for i in range(len(r))])
 
     with tf.Graph().as_default():
 
@@ -224,7 +224,7 @@ def test_phi_ab():
     Test the function `AlCuZJW04.phi` for r_{AB}.
     """
     r = np.linspace(0.0, 5.0, num=51, endpoint=True)
-    ref = np.asarray([ATSIM.phi.AlCu(r[i]) for i in range(len(r))])
+    ref = np.asarray([ATSIM["phi"]["AlCu"](r[i]) for i in range(len(r))])
 
     with tf.Graph().as_default():
 
@@ -248,8 +248,8 @@ def test_embed():
     Test the embedding function `AlCuZJW04.embed`.
     """
     rho = np.linspace(0.0, 20.0, num=201, endpoint=True)
-    ref_al = np.asarray([ATSIM.embed.Al(rho[i]) for i in range(len(rho))])
-    ref_cu = np.asarray([ATSIM.embed.Cu(rho[i]) for i in range(len(rho))])
+    ref_al = np.asarray([ATSIM["embed"]["Al"](rho[i]) for i in range(len(rho))])
+    ref_cu = np.asarray([ATSIM["embed"]["Cu"](rho[i]) for i in range(len(rho))])
 
     with tf.Graph().as_default():
 

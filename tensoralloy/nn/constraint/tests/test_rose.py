@@ -26,7 +26,7 @@ from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.utils import AttributeDict
+from tensoralloy.train.dataclasses import EstimatorHyperParams
 
 
 __author__ = 'Xin Chen'
@@ -96,7 +96,7 @@ def test_rose_eos_constraint():
 
             train_params = TrainParameters()
             train_params.profile_steps = 0
-            hparams = AttributeDict(
+            hparams = EstimatorHyperParams(
                 train=train_params, loss=LossParameters(), opt=OptParameters()
             )
             tf.train.get_or_create_global_step()

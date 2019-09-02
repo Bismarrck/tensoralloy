@@ -12,8 +12,6 @@ from ase import Atoms
 from ase.io import read
 from nose.tools import assert_less, assert_equal
 
-from tensoralloy.utils import AttributeDict
-
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
@@ -78,7 +76,7 @@ def test_dir(absolute=False):
     return path
 
 
-qm7m = AttributeDict(
+qm7m = dict(
     max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
     nij_max=198,
     nijk_max=1217,
@@ -86,7 +84,7 @@ qm7m = AttributeDict(
                     index=':', format='xyz'),
 )
 
-for _atoms in qm7m.trajectory:
+for _atoms in qm7m["trajectory"]:
     # Setting the boundary cell is important because `neighbor_list` may give
     # totally different results.
     _atoms.set_cell(np.eye(3) * 20.0)

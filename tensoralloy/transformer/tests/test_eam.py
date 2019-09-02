@@ -15,7 +15,7 @@ from os.path import join
 
 from tensoralloy.io.db import connect
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.utils import get_kbody_terms, AttributeDict
+from tensoralloy.utils import get_kbody_terms
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
@@ -111,7 +111,7 @@ def test_batch_eam_transformer():
                 clf.encode(atoms).SerializeToString())
             example = clf.decode_protobuf(protobuf)
 
-            batch = AttributeDict()
+            batch = dict()
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')

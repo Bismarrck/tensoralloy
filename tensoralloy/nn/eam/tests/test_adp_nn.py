@@ -19,7 +19,6 @@ from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
 from tensoralloy.test_utils import test_dir
-from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,12 +75,12 @@ def test_dynamic_partition():
         protobuf = tf.convert_to_tensor(adp.encode(atoms).SerializeToString())
         example = adp.decode_protobuf(protobuf)
 
-        batch = AttributeDict()
+        batch = dict()
         for key, tensor in example.items():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
-        descriptors = AttributeDict(adp.get_descriptors(batch))
+        descriptors = adp.get_descriptors(batch)
         op, max_occurs = nn._dynamic_partition(descriptors,
                                                mode=tf_estimator.ModeKeys.TRAIN,
                                                merge_symmetric=False)

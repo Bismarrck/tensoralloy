@@ -10,7 +10,6 @@ from nose.tools import assert_equal, assert_raises, assert_is_none
 
 from tensoralloy.nn.dataclasses import OptParameters, LossParameters
 from tensoralloy.nn.dataclasses import TrainParameters
-from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -20,7 +19,7 @@ def test_dataclasses():
     """
     Test some data classes.
     """
-    hparams = AttributeDict(
+    hparams = dict(
         opt=dict(decay_steps=100, method='rmsprop'),
         loss=dict(
             energy=dict(per_atom_loss=True),
@@ -32,12 +31,12 @@ def test_dataclasses():
                              use_ema_variables=False))
     )
 
-    opt_parameters = OptParameters(**hparams.opt)
+    opt_parameters = OptParameters(**hparams["opt"])
 
     assert_equal(opt_parameters.decay_steps, 100)
     assert_equal(opt_parameters.method, 'rmsprop')
 
-    loss_parameters = LossParameters(**hparams.loss)
+    loss_parameters = LossParameters(**hparams["loss"])
 
     assert_equal(loss_parameters.energy.per_atom_loss, True)
     assert_equal(loss_parameters.forces.method, 'logcosh')
@@ -51,7 +50,7 @@ def test_dataclasses():
     assert_equal(train_parameters.ckpt.use_ema_variables, False)
 
     with assert_raises(Exception):
-        _ = OptParameters(**AttributeDict(decay_method='adam'))
+        _ = OptParameters(**dict(decay_method='adam'))
 
 
 if __name__ == "__main__":

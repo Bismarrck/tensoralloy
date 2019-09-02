@@ -22,7 +22,7 @@ from typing import Dict
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.eam import plot_potential
-from tensoralloy.utils import AttributeDict, get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.utils import get_kbody_terms, Defaults, safe_select
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.io.lammps import write_adp_setfl
@@ -184,7 +184,7 @@ class AdpNN(EamAlloyNN):
                            verbose=verbose)
 
     def _build_rho_nn(self,
-                      partitions: AttributeDict,
+                      partitions: dict,
                       mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
@@ -193,7 +193,7 @@ class AdpNN(EamAlloyNN):
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
@@ -247,14 +247,14 @@ class AdpNN(EamAlloyNN):
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
-    def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
+    def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
                       mode: tf_estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
@@ -307,14 +307,14 @@ class AdpNN(EamAlloyNN):
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
-    def _build_dipole_nn(self, partitions: AttributeDict, max_occurs: Counter,
+    def _build_dipole_nn(self, partitions: dict, max_occurs: Counter,
                          mode: tf_estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the dipole interactions.
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
@@ -388,7 +388,7 @@ class AdpNN(EamAlloyNN):
             return atomic, values
 
     def _build_quadrupole_nn(self,
-                             partitions: AttributeDict,
+                             partitions: dict,
                              max_occurs: Counter,
                              mode: tf_estimator.ModeKeys,
                              verbose=False):
@@ -397,7 +397,7 @@ class AdpNN(EamAlloyNN):
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask.
@@ -496,7 +496,7 @@ class AdpNN(EamAlloyNN):
             return atomic, values
 
     def _dynamic_partition(self,
-                           descriptors: AttributeDict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            merge_symmetric=True):
         """
@@ -510,7 +510,7 @@ class AdpNN(EamAlloyNN):
 
         Parameters
         ----------
-        descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are elements and values are tuples of (value, mask)
             where where `value` represents the descriptors and `mask` is
             the value mask. `value` and `mask` have the same shape.
@@ -532,7 +532,7 @@ class AdpNN(EamAlloyNN):
 
         Returns
         -------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
@@ -543,7 +543,7 @@ class AdpNN(EamAlloyNN):
             The maximum occurance of each type of element.
 
         """
-        partitions = AttributeDict()
+        partitions = dict()
         max_occurs = {}
         if merge_symmetric:
             name_scope = "Partition/Symmetric"
@@ -592,8 +592,8 @@ class AdpNN(EamAlloyNN):
             return partitions, Counter(max_occurs)
 
     def _get_model_outputs(self,
-                           features: AttributeDict,
-                           descriptors: AttributeDict,
+                           features: dict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
@@ -601,14 +601,14 @@ class AdpNN(EamAlloyNN):
 
         Parameters
         ----------
-        features : AttributeDict
+        features : Dict
             A dict of tensors, includeing raw properties and the descriptors:
                 * 'positions' of shape `[batch_size, N, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
-        descriptors : AttributeDict
+        descriptors : Dict
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
@@ -726,14 +726,14 @@ class AdpNN(EamAlloyNN):
             with tf.name_scope("Inputs"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
-                descriptors = AttributeDict()
+                descriptors = dict()
                 for element in self._elements:
                     value = tf.convert_to_tensor(r, name=f'r{element}')
                     mask = tf.ones_like(value, name=f'm{element}')
                     descriptors[element] = (value, mask)
 
-                partitions = AttributeDict()
-                symmetric_partitions = AttributeDict()
+                partitions = dict()
+                symmetric_partitions = dict()
                 for kbody_term in all_kbody_terms:
                     value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
                     mask = tf.ones_like(value, name=f'm{kbody_term}')
@@ -787,9 +787,9 @@ class AdpNN(EamAlloyNN):
                         saver = tf.train.Saver(tf.trainable_variables())
                     saver.restore(sess, checkpoint)
 
-                results = AttributeDict(sess.run(
+                results = sess.run(
                     {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals,
-                     'dipole': dipole_vals, 'quadrupole': quadrupole_vals}))
+                     'dipole': dipole_vals, 'quadrupole': quadrupole_vals})
 
                 def make_density(_element):
                     """
@@ -800,7 +800,7 @@ class AdpNN(EamAlloyNN):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
                         _kbody_term = f'{_element}{_element}'
-                        return results.rho[_kbody_term][0, 0, 0, idx, 0]
+                        return results["rho"][_kbody_term][0, 0, 0, idx, 0]
 
                     return _func
 
@@ -813,7 +813,7 @@ class AdpNN(EamAlloyNN):
                     def _func(_rho):
                         """ Return `F(rho)` for the given `rho`. """
                         idx = int(round(_rho / drho, 6))
-                        return results.embed[0, base + idx]
+                        return results["embed"][0, base + idx]
 
                     return _func
 

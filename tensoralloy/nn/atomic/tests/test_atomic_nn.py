@@ -19,7 +19,7 @@ from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
 from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.utils import GraphKeys, AttributeDict
+from tensoralloy.utils import GraphKeys
 from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
@@ -112,7 +112,7 @@ def test_inference():
 
         with tf.name_scope("Inputs"):
 
-            descriptors = AttributeDict(
+            descriptors = dict(
                 Al=(tf.convert_to_tensor(g_al, tf.float64, 'g_al'),
                     tf.no_op('Al')),
                 Cu=(tf.convert_to_tensor(g_cu, tf.float64, 'g_cu'),
@@ -126,8 +126,8 @@ def test_inference():
             atom_masks = tf.convert_to_tensor(
                 np.ones((batch_size, max_n_atoms), np.float64))
             pulay_stress = tf.zeros(batch_size, dtype=tf.float64, name='pulay')
-            features = AttributeDict(positions=positions, atom_masks=atom_masks,
-                                     cell=cell, pulay_stress=pulay_stress)
+            features = dict(positions=positions, atom_masks=atom_masks,
+                            cell=cell, pulay_stress=pulay_stress)
 
         outputs = nn._get_model_outputs(
             features=features,

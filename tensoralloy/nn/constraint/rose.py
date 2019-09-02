@@ -18,7 +18,7 @@ from tensoralloy.nn.constraint.data import get_crystal
 from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
 from tensoralloy.transformer.base import BatchDescriptorTransformer
-from tensoralloy.utils import AttributeDict, GraphKeys
+from tensoralloy.utils import GraphKeys
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -195,7 +195,7 @@ def get_rose_constraint_loss(base_nn,
 
                     # Initialize the fixed batch input pipeline
                     with tf.name_scope("Pipeline"):
-                        fixed_batch = AttributeDict()
+                        fixed_batch = dict()
                         decoded_list = []
                         for i, atoms in enumerate(trajectory):
                             with tf.name_scope(f"{i}"):

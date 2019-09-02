@@ -150,12 +150,12 @@ class DescriptorTransformer(BaseTransformer):
 
         Parameters
         ----------
-        features : AttributeDict
-            A dict of raw property tensors.
+        features : Dict
+            A dict of tensors.
 
         Returns
         -------
-        descriptors : AttributeDict
+        descriptors : Dict
             A dict of Ops to get atomic descriptors.
 
         """

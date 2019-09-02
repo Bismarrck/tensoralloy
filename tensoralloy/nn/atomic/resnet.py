@@ -11,7 +11,7 @@ from typing import List, Dict
 
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.utils import GraphKeys, AttributeDict
+from tensoralloy.utils import GraphKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -69,7 +69,7 @@ class AtomicResNN(AtomicNN):
         """
         return self._fixed_static_energy
 
-    def _check_keys(self, features: AttributeDict, labels: AttributeDict):
+    def _check_keys(self, features: dict, labels: dict):
         """
         Check the keys of `features` and `labels`.
         """

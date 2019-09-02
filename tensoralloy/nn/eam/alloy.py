@@ -16,7 +16,7 @@ from typing import List, Dict, Tuple
 from atsim.potentials import Potential, EAMPotential, writeSetFL
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
+from tensoralloy.utils import GraphKeys, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.precision import get_float_dtype
@@ -127,7 +127,7 @@ class EamAlloyNN(EamNN):
         return potentials
 
     def _build_rho_nn(self,
-                      partitions: AttributeDict,
+                      partitions: dict,
                       mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
@@ -136,7 +136,7 @@ class EamAlloyNN(EamNN):
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
@@ -250,14 +250,14 @@ class EamAlloyNN(EamNN):
             with tf.name_scope("Inputs"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
-                descriptors = AttributeDict()
+                descriptors = dict()
                 for element in self._elements:
                     value = tf.convert_to_tensor(r, name=f'r{element}')
                     mask = tf.ones_like(value, name=f'm{element}')
                     descriptors[element] = (value, mask)
 
-                partitions = AttributeDict()
-                symmetric_partitions = AttributeDict()
+                partitions = dict()
+                symmetric_partitions = dict()
                 for kbody_term in all_kbody_terms:
                     value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
                     mask = tf.ones_like(value, name=f'm{kbody_term}')
@@ -301,8 +301,8 @@ class EamAlloyNN(EamNN):
                         saver = tf.train.Saver(tf.trainable_variables())
                     saver.restore(sess, checkpoint)
 
-                results = AttributeDict(sess.run(
-                    {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals}))
+                results = sess.run(
+                    {'embed': embed_vals, 'rho': rho_vals, 'phi': phi_vals})
 
                 def make_density(_element):
                     """
@@ -312,7 +312,7 @@ class EamAlloyNN(EamNN):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
                         _kbody_term = f'{_element}{_element}'
-                        return results.rho[_kbody_term][0, 0, 0, idx, 0]
+                        return results["rho"][_kbody_term][0, 0, 0, idx, 0]
                     return _func
 
                 def make_embed(_element):
@@ -324,7 +324,7 @@ class EamAlloyNN(EamNN):
                     def _func(_rho):
                         """ Return `F(rho)` for the given `rho`. """
                         idx = int(round(_rho / drho, 6))
-                        return results.embed[0, base + idx]
+                        return results["embed"][0, base + idx]
                     return _func
 
                 def make_pairwise(_kbody_term):
@@ -334,7 +334,7 @@ class EamAlloyNN(EamNN):
                     def _func(_r):
                         """ Return `phi(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results.phi[_kbody_term][0, 0, 0, idx, 0]
+                        return results["phi"][_kbody_term][0, 0, 0, idx, 0]
                     return _func
 
             eam_potentials = []
