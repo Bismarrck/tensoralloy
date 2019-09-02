@@ -14,9 +14,9 @@ from nose.tools import assert_less, assert_true
 from os.path import join
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer import IndexTransformer
+from tensoralloy.transformer import VirtualAtomMap
 from tensoralloy.dataset.dataset import Dataset
-from tensoralloy.utils import AttributeDict, Defaults
+from tensoralloy.utils import Defaults
 from tensoralloy.test_utils import qm7m, test_dir
 from tensoralloy.precision import precision_scope, get_float_dtype
 from tensoralloy.io.read import read_file
@@ -39,11 +39,11 @@ def qm7m_compute():
     g2 = []
     positions = np.zeros((batch_size, max_n_atoms, 3))
     for i, atoms in enumerate(qm7m.trajectory):
-        positions[i] = sf.get_index_transformer(atoms).map_positions(
+        positions[i] = sf.get_vap_transformer(atoms).map_positions(
             atoms.positions)
         g2.append(sf.get_g2_indexed_slices(atoms))
 
-    return AttributeDict(positions=positions, g2=g2)
+    return dict(positions=positions, g2=g2)
 
 
 def test_qm7m():
@@ -91,13 +91,17 @@ def test_qm7m():
                 res = sess.run(next_batch)
                 eps = 1e-8
 
-                assert_equal(len(res.keys()), 15)
+                assert_equal(len(res.keys()), 13)
                 assert_less(
-                    np.abs(res.positions[0] - ref.positions[0]).max(), eps)
-                assert_less(np.abs(res.ilist[0] - ref.g2[0].ilist).max(), eps)
-                assert_less(np.abs(res.shift[0] - ref.g2[0].shift).max(), eps)
-                assert_less(np.abs(res.rv2g[0] - ref.g2[0].v2g_map).max(), eps)
-                assert_equal(res.y_conf[0], 1.0)
+                    np.abs(res["positions"][0] - ref["positions"][0]).max(),
+                    eps)
+                assert_less(
+                    np.abs(res["g2.ilist"][0] - ref["g2"][0].ilist).max(), eps)
+                assert_less(
+                    np.abs(res["g2.n1"][0] - ref["g2"][0].n1).max(), eps)
+                assert_less(
+                    np.abs(res["g2.v2g_map"][0] - ref["g2"][0].v2g_map).max(),
+                    eps)
 
 
 def test_ethanol():
@@ -138,8 +142,8 @@ def test_ethanol():
             dtype = get_float_dtype()
             np_dtype = dtype.as_numpy_dtype
 
-            clf = IndexTransformer(dataset.transformer.max_occurs,
-                                   atoms.get_chemical_symbols())
+            clf = VirtualAtomMap(dataset.transformer.max_occurs,
+                                 atoms.get_chemical_symbols())
             positions = clf.map_positions(atoms.positions).astype(np_dtype)
             energy = np_dtype(atoms.get_total_energy())
             forces = clf.map_forces(atoms.get_forces()).astype(np_dtype)
@@ -149,9 +153,10 @@ def test_ethanol():
                 result = sess.run(next_batch)
                 eps = 1e-8
 
-                assert_less(np.abs(result.positions[1] - positions).max(), eps)
-                assert_less(np.abs(result.f_true[1] - forces).max(), eps)
-                assert_less(float(result.y_true[1] - energy), eps)
+                assert_less(np.abs(result["positions"][1] - positions).max(),
+                            eps)
+                assert_less(np.abs(result["f_true"][1] - forces).max(), eps)
+                assert_less(float(result["y_true"][1] - energy), eps)
 
 
 def test_nickel():
@@ -193,16 +198,12 @@ def test_nickel():
                 # These are raw VASP output in '-eV' (-stress * volume).
                 xx, yy, zz, xy, yz, xz = \
                     -0.35196, -0.24978, -0.24978, 0.13262, -0.00305, 0.13262,
-                volume = result.volume
+                volume = result["volume"]
                 stress = np.asarray([-xx, -yy, -zz, -yz, -xz, -xy]) / volume
                 total_pressure = -(xx + yy + zz) / 3.0 / volume
 
-                assert_less(np.abs(result.stress[0] - stress).max(), eps)
-                assert_less(result.total_pressure[0] - total_pressure, eps)
-
-                assert_equal(result.y_conf[0], 0.0)
-                assert_equal(result.f_conf[0], 1.0)
-                assert_equal(result.s_conf[0], 0.5)
+                assert_less(np.abs(result["stress"][0] - stress).max(), eps)
+                assert_less(result["total_pressure"][0] - total_pressure, eps)
 
 
 if __name__ == "__main__":
