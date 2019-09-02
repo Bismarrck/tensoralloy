@@ -152,6 +152,7 @@ class InputReader:
         _safe_update("nn")
         _safe_update("train")
         _safe_update("debug")
+        _safe_update("gpu")
 
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
