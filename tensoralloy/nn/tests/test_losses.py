@@ -40,8 +40,7 @@ def test_energy_loss():
             y = tf.convert_to_tensor(y)
             n = tf.convert_to_tensor(n)
 
-            rmse = get_energy_loss(x, y, weights=None,
-                                   n_atoms=n, collections=['UnitTest'])
+            rmse = get_energy_loss(x, y, n_atoms=n, collections=['UnitTest'])
             assert_equal(len(tf.get_collection('UnitTest')), 3)
 
             mae = tf.get_default_graph().get_tensor_by_name('Energy/mae:0')
@@ -65,7 +64,6 @@ def test_forces_loss():
             mask[i, 1: n_atoms[i] + 1] = 1.0
         x[5] = 0.0
         y[5] = 0.0
-        weights = np.ones(6) * 0.75
 
         mae_values = []
         rmse_values = []
@@ -82,18 +80,16 @@ def test_forces_loss():
 
             x = tf.convert_to_tensor(np.insert(x, 0, 0, axis=1))
             y = tf.convert_to_tensor(y)
-            c = tf.convert_to_tensor(weights)
             mask = tf.convert_to_tensor(mask)
 
             rmse = get_forces_loss(x, y, mask=mask, loss_weight=10.0,
-                                   collections=['UnitTest'],
-                                   weights=c)
+                                   collections=['UnitTest'])
             mae = tf.get_default_graph().get_tensor_by_name(
                 'Forces/Absolute/mae:0')
 
             with tf.Session() as sess:
                 assert_less(y_mae - sess.run(mae), 1e-8)
-                assert_less(y_rmse * 10.0 * 0.75 - sess.run(rmse), 1e-8)
+                assert_less(y_rmse * 10.0 - sess.run(rmse), 1e-8)
 
 
 def test_stress_loss():
@@ -104,20 +100,17 @@ def test_stress_loss():
 
         x = np.random.uniform(0.1, 3.0, size=(8, 6))
         y = np.random.uniform(0.1, 3.0, size=(8, 6))
-        confidences = np.ones(8) * 0.5
-
         y_rmse = np.mean(
             np.linalg.norm(x - y, axis=1) / np.linalg.norm(x, axis=1))
 
         with tf.Graph().as_default():
             x = tf.convert_to_tensor(x)
             y = tf.convert_to_tensor(y)
-            c = tf.convert_to_tensor(confidences)
 
-            rmse = get_stress_loss(x, y, weights=c)
+            rmse = get_stress_loss(x, y)
 
             with tf.Session() as sess:
-                assert_less(y_rmse * 0.5 - sess.run(rmse), 1e-8)
+                assert_less(y_rmse - sess.run(rmse), 1e-8)
 
 
 if __name__ == "__main__":

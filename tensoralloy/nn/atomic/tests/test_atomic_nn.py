@@ -80,8 +80,10 @@ def test_as_dict_advanced():
 
     assert_list_equal(nn.elements, gen.elements)
     assert_equal(bsf.rc, sf.rc)
-    assert_list_equal(bsf._omega.tolist(), sf._omega.tolist())
-    assert_list_equal(bsf._eta.tolist(), sf._eta.tolist())
+    assert_list_equal(bsf.initial_values["omega"].tolist(),
+                      sf.initial_values["omega"].tolist())
+    assert_list_equal(bsf.initial_values["eta"].tolist(),
+                      sf.initial_values["eta"].tolist())
 
 
 def test_inference():
@@ -124,7 +126,7 @@ def test_inference():
             mask = tf.convert_to_tensor(
                 np.ones((batch_size, max_n_atoms), np.float64))
             pulay_stress = tf.zeros(batch_size, dtype=tf.float64, name='pulay')
-            features = AttributeDict(positions=positions, mask=mask,
+            features = AttributeDict(positions=positions, atom_masks=mask,
                                      cells=cells, pulay_stress=pulay_stress)
 
         outputs = nn._get_model_outputs(
@@ -159,7 +161,7 @@ def test_inference_from_transformer():
         nn.attach_transformer(clf)
         prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
-        assert_list_equal(prediction.energy.shape.as_list(), [])
+        assert_list_equal(prediction["energy"].shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
         assert_equal(len(collection), 16)
