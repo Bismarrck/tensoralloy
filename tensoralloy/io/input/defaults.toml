@@ -18,7 +18,6 @@ minimize = ['energy', 'forces']
 export = ['energy', 'forces', 'hessian']
 
 [nn.loss]
-equivalently_trusted = true
 
 [nn.loss.energy]
 weight = 1.0
