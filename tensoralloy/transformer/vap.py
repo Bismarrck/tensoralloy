@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from collections import Counter
+from itertools import repeat
 from typing import List
 
 __author__ = 'Xin Chen'
@@ -26,8 +27,8 @@ class VirtualAtomMap:
         """
         Initialization method.
         """
-        self._max_occurs = max_occurs
         self._symbols = symbols
+        self._max_occurs = max_occurs
         self._max_vap_natoms = sum(max_occurs.values()) + 1
 
         istart = VirtualAtomMap.REAL_ATOM_START
@@ -49,6 +50,24 @@ class VirtualAtomMap:
         self._mask = mask
         self.local_to_gsl_map = index_map
         self.gsl_to_local_map = reverse_map
+
+        self._vap_symbols = ["X"]
+        for element in elements:
+            self._vap_symbols.extend(repeat(element, self._max_occurs[element]))
+
+    @property
+    def vap_symbols(self):
+        """
+        Return the corresponding VAP symbols.
+        """
+        return self._vap_symbols
+
+    @property
+    def symbols(self):
+        """
+        Return the local symbols.
+        """
+        return self._symbols
 
     @property
     def max_vap_natoms(self):
