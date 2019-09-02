@@ -836,7 +836,7 @@ class BasicNN:
                                           evaluation_hooks=evaluation_hooks)
 
     def export(self, output_graph_path: str, checkpoint=None,
-               keep_tmp_files=True, use_ema_variables=True):
+               keep_tmp_files=False, use_ema_variables=True):
         """
         Freeze the graph and export the model to a pb file.
 
