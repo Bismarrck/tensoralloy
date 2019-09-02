@@ -32,7 +32,7 @@ from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer import EAMTransformer, BatchEAMTransformer
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
-from tensoralloy.utils import GraphKeys, AttributeDict, Defaults
+from tensoralloy.utils import GraphKeys, Defaults
 from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 
@@ -82,7 +82,7 @@ class AlCuFakeData:
         self.y_cual = np.random.randn(self.batch_size, self.max_n_cu)
 
         with tf.name_scope("Inputs"):
-            self.descriptors = AttributeDict(
+            self.descriptors = dict(
                 Al=(tf.convert_to_tensor(self.g_al, tf.float64, 'g_al'),
                     tf.convert_to_tensor(self.m_al, tf.float64, 'm_al')),
                 Cu=(tf.convert_to_tensor(self.g_cu, tf.float64, 'g_cu'),
@@ -93,15 +93,15 @@ class AlCuFakeData:
                 name='positions')
             self.mask = tf.convert_to_tensor(
                 np.ones((self.batch_size, self.max_n_atoms + 1), np.float64))
-            self.features = AttributeDict(
+            self.features = dict(
                 descriptors=self.descriptors, positions=self.positions,
                 mask=self.mask)
-            self.atomic_splits = AttributeDict(
+            self.atomic_splits = dict(
                 AlAl=tf.convert_to_tensor(self.y_alal, tf.float64, 'y_alal'),
                 AlCu=tf.convert_to_tensor(self.y_alcu, tf.float64, 'y_alcu'),
                 CuCu=tf.convert_to_tensor(self.y_cucu, tf.float64, 'y_cucu'),
                 CuAl=tf.convert_to_tensor(self.y_cual, tf.float64, 'y_cual'))
-            self.symmetric_atomic_splits = AttributeDict(
+            self.symmetric_atomic_splits = dict(
                 AlAl=tf.convert_to_tensor(self.y_alal, tf.float64, 'ys_alal'),
                 CuCu=tf.convert_to_tensor(self.y_cucu, tf.float64, 'ys_cucu'),
                 AlCu=tf.convert_to_tensor(
@@ -159,7 +159,7 @@ def test_dynamic_stitch_3el():
         y_mgcu = np.random.randn(batch_size, max_n_mg)
         y_mgmg = np.random.randn(batch_size, max_n_mg)
 
-        symmetric_partitions = AttributeDict(
+        symmetric_partitions = dict(
             AlAl=tf.convert_to_tensor(y_alal, tf.float64, 'y_alal'),
             MgMg=tf.convert_to_tensor(y_mgmg, tf.float64, 'y_mgmg'),
             CuCu=tf.convert_to_tensor(y_cucu, tf.float64, 'y_cucu'),
@@ -199,7 +199,7 @@ def test_dynamic_partition():
 
         with tf.Session() as sess:
             partitions_op, max_occurs = nn._dynamic_partition(
-                data.features.descriptors, mode=mode, merge_symmetric=False)
+                data.features["descriptors"], mode=mode, merge_symmetric=False)
             results = sess.run(partitions_op)
 
             assert_equal(len(max_occurs), 2)
@@ -217,7 +217,7 @@ def test_dynamic_partition():
             assert_array_equal(results['CuAl'][1], data.m_cu[:, [1]])
 
             partitions_op, _ = nn._dynamic_partition(
-                data.features.descriptors, mode=mode, merge_symmetric=True)
+                data.features["descriptors"], mode=mode, merge_symmetric=True)
             results = sess.run(partitions_op)
 
             assert_equal(len(results), 3)
@@ -349,7 +349,7 @@ def test_inference_mixed():
 
         with tf.variable_scope("nnEAM"):
             partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features.descriptors,
+                descriptors=data.features["descriptors"],
                 mode=mode,
                 merge_symmetric=False)
 
@@ -366,7 +366,7 @@ def test_inference_mixed():
                 verbose=True)
 
             partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features.descriptors,
+                descriptors=data.features["descriptors"],
                 mode=mode,
                 merge_symmetric=True)
 
@@ -636,7 +636,7 @@ def test_batch_stress():
                                verbose=False)
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            s_true = sess.run(predictions.stress,
+            s_true = sess.run(predictions["stress"],
                               feed_dict=clf.get_feed_dict(atoms)) * volume
 
     with tf.Graph().as_default():
@@ -650,39 +650,36 @@ def test_batch_stress():
         protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
         example = clf.decode_protobuf(protobuf)
 
-        batch = AttributeDict()
+        batch = dict()
         for key, tensor in example.items():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
         descriptors = clf.get_descriptors(batch)
-        features = AttributeDict(positions=batch.positions,
-                                 n_atoms=batch.n_atoms,
-                                 cells=batch.cells,
-                                 composition=batch.composition,
-                                 mask=batch.mask,
-                                 volume=batch.volume,
-                                 pulay_stress=batch.pulay_stress)
+        features = dict(positions=batch["positions"],
+                        n_atoms=batch["n_atoms"],
+                        cell=batch["cell"],
+                        compositions=batch["compositions"],
+                        atom_masks=batch["atom_masks"],
+                        volume=batch["volume"],
+                        pulay_stress=batch["pulay_stress"])
 
         outputs = nn._get_model_outputs(
             features=features,
-            descriptors=AttributeDict(descriptors),
+            descriptors=descriptors,
             mode=tf_estimator.ModeKeys.EVAL,
             verbose=False)
         energy, enthalpy = \
             nn._get_total_energy_op(outputs, features, verbose=False)
-        forces = nn._get_forces_op(energy, batch.positions, verbose=False)
+        forces = nn._get_forces_op(energy, batch["positions"], verbose=False)
         stress, total_stress, _ = nn._get_stress_op(
             energy=energy,
-            cells=batch.cells,
-            volume=batch.volume,
-            positions=batch.positions,
-            pulay_stress=batch.pulay_stress,
+            cell=batch["cell"],
+            volume=batch["volume"],
+            positions=batch["positions"],
+            pulay_stress=batch["pulay_stress"],
             forces=forces,
             verbose=False)
-
-        print(stress.shape)
-        print(total_stress.shape)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()

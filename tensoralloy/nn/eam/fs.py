@@ -19,7 +19,6 @@ from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
 from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
-from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -61,7 +60,7 @@ class EamFsNN(EamNN):
 
         """
         all_kbody_terms, kbody_terms = \
-            get_kbody_terms(self._elements, k_max=2)[:2]
+            get_kbody_terms(self._elements, angular=False)[:2]
         hidden_sizes = safe_select(hidden_sizes, Defaults.hidden_sizes)
 
         unique_kbody_terms = []

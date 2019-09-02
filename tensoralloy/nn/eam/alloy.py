@@ -52,7 +52,7 @@ class EamAlloyNN(EamNN):
             A nested dict.
 
         """
-        kbody_terms = get_kbody_terms(self._elements, k_max=2)[1]
+        kbody_terms = get_kbody_terms(self._elements, angular=False)[1]
         hidden_sizes = safe_select(hidden_sizes, Defaults.hidden_sizes)
 
         unique_kbody_terms = []
@@ -243,7 +243,7 @@ class EamAlloyNN(EamNN):
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
-        all_kbody_terms = get_kbody_terms(self._elements, k_max=2)[0]
+        all_kbody_terms = get_kbody_terms(self._elements, angular=False)[0]
 
         with tf.Graph().as_default():
 

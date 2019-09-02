@@ -14,7 +14,7 @@ from functools import partial
 from typing import List, Dict, Callable
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
+from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
@@ -274,7 +274,7 @@ class EamNN(BasicNN):
                            variable_scope=variable_scope,
                            verbose=verbose)
 
-    def _get_internal_energy_op(self, outputs: tf.Tensor, features: AttributeDict,
+    def _get_internal_energy_op(self, outputs: tf.Tensor, features: dict,
                                 name='energy', verbose=True):
         """
         Return the Op to compute internal energy E.
@@ -284,7 +284,7 @@ class EamNN(BasicNN):
         outputs : tf.Tensor
             A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
             atomic energies.
-        features : AttributeDict
+        features : Dict
             A dict of input features.
         name : str
             The name of the output tensor.
@@ -298,11 +298,11 @@ class EamNN(BasicNN):
 
         """
         y_atomic = tf.identity(outputs, name='y_atomic')
-        ndims = features.mask.shape.ndims
+        ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
         with tf.name_scope("Mask"):
             mask = tf.split(
-                features.mask, [1, -1], axis=axis, name='split')[1]
+                features["atom_masks"], [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
             self._y_atomic_op_name = y_mask.name
         energy = tf.reduce_sum(
@@ -311,14 +311,14 @@ class EamNN(BasicNN):
             log_tensor(energy)
         return energy
 
-    def _build_phi_nn(self, partitions: AttributeDict, max_occurs: Counter,
+    def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
                       mode: tf_estimator.ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
@@ -379,7 +379,7 @@ class EamNN(BasicNN):
             return atomic, values
 
     def _build_rho_nn(self,
-                      partitions: AttributeDict,
+                      partitions: dict,
                       mode: tf_estimator.ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
@@ -388,7 +388,7 @@ class EamNN(BasicNN):
 
         Parameters
         ----------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
@@ -466,7 +466,7 @@ class EamNN(BasicNN):
             return tf.concat(values, axis=split_axis)
 
     def _dynamic_partition(self,
-                           descriptors: AttributeDict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            merge_symmetric=True):
         """
@@ -480,7 +480,7 @@ class EamNN(BasicNN):
 
         Parameters
         ----------
-        descriptors : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are elements and values are tuples of (value, mask)
             where where `value` represents the descriptors and `mask` is
             the value mask. `value` and `mask` have the same shape.
@@ -501,7 +501,7 @@ class EamNN(BasicNN):
 
         Returns
         -------
-        partitions : AttributeDict[str, Tuple[tf.Tensor, tf.Tensor]]
+        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are unique kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
             the value mask. Both `value` and `mask` are 4D tensors of shape
@@ -512,7 +512,7 @@ class EamNN(BasicNN):
             The maximum occurance of each type of element.
 
         """
-        partitions = AttributeDict()
+        partitions = dict()
         max_occurs = {}
         if merge_symmetric:
             name_scope = "Partition/Symmetric"
@@ -604,8 +604,8 @@ class EamNN(BasicNN):
                 axis=1, name='sum')
 
     def _get_model_outputs(self,
-                           features: AttributeDict,
-                           descriptors: AttributeDict,
+                           features: dict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
@@ -613,14 +613,14 @@ class EamNN(BasicNN):
 
         Parameters
         ----------
-        features : AttributeDict
+        features : Dict
             A dict of tensors, includeing raw properties and the descriptors:
                 * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
-        descriptors : AttributeDict
+        descriptors : Dict
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
