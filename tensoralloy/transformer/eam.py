@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
+from tensorflow_estimator import estimator as tf_estimator
 from collections import Counter
 from typing import Dict, Tuple, List
 from ase import Atoms
@@ -16,7 +17,7 @@ from tensoralloy.descriptor.eam import EAM, BatchEAM
 from tensoralloy.utils import AttributeDict, get_pulay_stress
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
-from tensoralloy.transformer.index_transformer import IndexTransformer
+from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
 
@@ -24,6 +25,66 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["BatchEAMTransformer", "EAMTransformer"]
+
+
+def get_g2_map(atoms: Atoms,
+               rc: float,
+               interactions: dict,
+               vap: VirtualAtomMap,
+               mode: tf_estimator.ModeKeys,
+               nij_max: int = None,
+               dtype=np.float32):
+    """
+    Build the base `v2g_map`.
+    """
+    if mode == tf_estimator.ModeKeys.PREDICT:
+        iaxis = 0
+    else:
+        iaxis = 1
+
+    ilist, jlist, n1 = neighbor_list('ijS', atoms, rc)
+    nij = len(ilist)
+    if nij_max is None:
+        nij_max = nij
+
+    g2_map = np.zeros((nij_max, iaxis + 4), dtype=np.int32)
+    g2_map.fill(0)
+    tlist = np.zeros(nij_max, dtype=np.int32)
+    symbols = atoms.get_chemical_symbols()
+    tlist.fill(0)
+    for i in range(nij):
+        symboli = symbols[ilist[i]]
+        symbolj = symbols[jlist[i]]
+        tlist[i] = interactions['{}{}'.format(symboli, symbolj)]
+    ilist = np.pad(ilist + 1, (0, nij_max - nij), 'constant')
+    jlist = np.pad(jlist + 1, (0, nij_max - nij), 'constant')
+    n1 = np.pad(n1, ((0, nij_max - nij), (0, 0)), 'constant')
+    n1 = n1.astype(dtype)
+    for count in range(len(ilist)):
+        if ilist[count] == 0:
+            break
+        ilist[count] = vap.local_to_gsl_map[ilist[count]]
+        jlist[count] = vap.local_to_gsl_map[jlist[count]]
+    ilist = ilist.astype(np.int32)
+    jlist = jlist.astype(np.int32)
+    g2_map[:, iaxis + 0] = tlist
+    g2_map[:, iaxis + 1] = ilist
+
+    # The indices of center atoms
+    counters = {}
+    for index in range(nij):
+        atomi = ilist[index]
+        if atomi not in counters:
+            counters[atomi] = Counter()
+
+        # The indices of the pair atoms
+        g2_map[index, iaxis + 2] = counters[atomi][tlist[index]]
+        counters[atomi][tlist[index]] += 1
+
+    # The mask
+    g2_map[:, iaxis + 3] = ilist > 0
+
+    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
 
 
 class EAMTransformer(EAM, DescriptorTransformer):
@@ -51,60 +112,40 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         Initialize the placeholders.
         """
-        graph = tf.get_default_graph()
-
         # Make sure the all placeholder ops are placed under the absolute path
         # of 'Placeholders/'. Placeholder ops can be recovered from graph
         # directly.
         with tf.name_scope("Placeholders/"):
 
-            def _get_or_create(dtype, shape, name):
-                try:
-                    return graph.get_tensor_by_name(f'Placeholders/{name}:0')
-                except KeyError:
-                    return tf.placeholder(dtype, shape, name)
-                except Exception as excp:
-                    raise excp
+            dtype = get_float_dtype()
 
-            float_dtype = get_float_dtype()
-
-            def _float(name):
-                return _get_or_create(float_dtype, (), name)
-
-            def _float_1d(name):
-                return _get_or_create(float_dtype, (None, ), name)
-
-            def _float_2d(d1, name, d0=None):
-                return _get_or_create(float_dtype, (d0, d1), name)
-
-            def _int(name):
-                return _get_or_create(tf.int32, (), name)
-
-            def _int_1d(name, d0=None):
-                return _get_or_create(tf.int32, (d0, ), name)
-
-            def _int_2d(d1, name, d0=None):
-                return _get_or_create(tf.int32, (d0, d1), name)
-
-            self._placeholders.positions = _float_2d(3, 'positions')
-            self._placeholders.cells = _float_2d(d0=3, d1=3, name='cells')
-            self._placeholders.n_atoms_plus_virt = _int('n_atoms_plus_virt')
-            self._placeholders.volume = _float('volume')
-            self._placeholders.mask = _float_1d('mask')
-            self._placeholders.composition = _float_1d('composition')
-            self._placeholders.nnl_max = _int('nnl_max')
-            self._placeholders.pulay_stress = _float('pulay_stress')
-            self._placeholders.row_splits = _int_1d(
+            self._placeholders.positions = self._create_float_2d(
+                dtype=dtype, d0=None, d1=3, name='positions')
+            self._placeholders.cells = self._create_float_2d(
+                dtype=dtype, d0=3, d1=3, name='cells')
+            self._placeholders.n_atoms_plus_virt = self._create_int('n_atoms_plus_virt')
+            self._placeholders.volume = self._create_float(
+                dtype=dtype, name='volume')
+            self._placeholders.mask = self._create_float_1d(
+                dtype=dtype, name='mask')
+            self._placeholders.composition = self._create_float_1d(
+                dtype=dtype, name='composition')
+            self._placeholders.nnl_max = self._create_int('nnl_max')
+            self._placeholders.pulay_stress = self._create_float(
+                dtype=dtype, name='pulay_stress')
+            self._placeholders.row_splits = self._create_int_1d(
                 'row_splits', d0=self._n_elements + 1)
-            self._placeholders.ilist = _int_1d('ilist')
-            self._placeholders.jlist = _int_1d('jlist')
-            self._placeholders.shift = _float_2d(3, 'shift')
-            self._placeholders.v2g_map = _int_2d(4, 'v2g_map')
+            self._placeholders.ilist = self._create_int_1d('ilist')
+            self._placeholders.jlist = self._create_int_1d('jlist')
+            self._placeholders.shift = self._create_float_2d(
+                dtype=dtype, d0=None, d1=3, name='shift')
+            self._placeholders.v2g_map = self._create_int_2d(
+                d0=None, d1=4, name='v2g_map')
             self._placeholders.is_constant = False
 
         return self._placeholders
 
-    def _get_indexed_slices(self, atoms, index_transformer: IndexTransformer):
+    def _get_indexed_slices(self, atoms, vap: VirtualAtomMap):
         """
         Return the corresponding indexed slices.
 
@@ -112,8 +153,8 @@ class EAMTransformer(EAM, DescriptorTransformer):
         ----------
         atoms : Atoms
             The target `ase.Atoms` object.
-        index_transformer : IndexTransformer
-            The corresponding index transformer.
+        vap : VirtualAtomMap
+            The corresponding virtual-atom map.
 
         Returns
         -------
@@ -121,42 +162,13 @@ class EAMTransformer(EAM, DescriptorTransformer):
             The indexed slices for the target `Atoms` object.
 
         """
-        symbols = atoms.get_chemical_symbols()
-        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        nij = len(ilist)
-
-        v2g_map = np.zeros((nij, 4), dtype=np.int32)
-
-        tlist = np.zeros(nij, dtype=np.int32)
-        for i in range(nij):
-            symboli = symbols[ilist[i]]
-            symbolj = symbols[jlist[i]]
-            tlist[i] = self._kbody_index['{}{}'.format(symboli, symbolj)]
-
-        ilist = index_transformer.inplace_map_index(ilist + 1)
-        jlist = index_transformer.inplace_map_index(jlist + 1)
-        shift = np.asarray(Slist, dtype=get_float_dtype().as_numpy_dtype)
-
-        # The type of the (atomi, atomj) interaction.
-        v2g_map[:, 0] = tlist
-
-        # The indices of center atoms
-        v2g_map[:, 1] = ilist
-        counters = {}
-        for index in range(nij):
-            atomi = ilist[index]
-            if atomi not in counters:
-                counters[atomi] = Counter()
-
-            # The indices of the pair atoms
-            v2g_map[index, 2] = counters[atomi][tlist[index]]
-            counters[atomi][tlist[index]] += 1
-
-        # The mask
-        v2g_map[:, 3] = ilist > 0
-
-        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               shift=shift)
+        return get_g2_map(atoms=atoms,
+                          rc=self._rc,
+                          interactions=self._kbody_index,
+                          vap=vap,
+                          mode=tf_estimator.ModeKeys.PREDICT,
+                          nij_max=None,
+                          dtype=get_float_dtype().as_numpy_dtype)
 
     def _get_np_features(self, atoms: Atoms):
         """
@@ -164,37 +176,36 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         np_dtype = get_float_dtype().as_numpy_dtype
 
-        index_transformer = self.get_index_transformer(atoms)
-        g2 = self._get_indexed_slices(atoms, index_transformer)
+        vap = self.get_vap_transformer(atoms)
+        g2 = self._get_indexed_slices(atoms, vap)
         nnl_max = g2.v2g_map[:, 2].max() + 1
 
-        positions = index_transformer.map_positions(atoms.positions)
+        positions = vap.map_positions(atoms.positions)
 
         # `max_n_atoms` must be used because every element shall have at least
         # one feature row (though it could be all zeros, a dummy or virtual row)
-        n_atoms = index_transformer.max_n_atoms
         cells = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
-        mask = index_transformer.mask
+        mask = vap.atom_masks.astype(np_dtype)
         pulay_stress = get_pulay_stress(atoms)
-        splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
+        splits = [1] + [vap.max_occurs[e] for e in self._elements]
         composition = self._get_composition(atoms)
 
-        feed_dict = AttributeDict()
+        feed_dict = dict()
 
-        feed_dict.positions = positions.astype(np_dtype)
-        feed_dict.n_atoms_plus_virt = np.int32(n_atoms + 1)
-        feed_dict.nnl_max = np.int32(nnl_max)
-        feed_dict.mask = mask.astype(np_dtype)
-        feed_dict.cells = cells.array.astype(np_dtype)
-        feed_dict.volume = np_dtype(volume)
-        feed_dict.pulay_stress = np_dtype(pulay_stress)
-        feed_dict.composition = composition.astype(np_dtype)
-        feed_dict.row_splits = np.int32(splits)
-        feed_dict.v2g_map = g2.v2g_map
-        feed_dict.ilist = g2.ilist
-        feed_dict.jlist = g2.jlist
-        feed_dict.shift = g2.shift
+        feed_dict["positions"] = positions.astype(np_dtype)
+        feed_dict["n_atoms_plus_virt"] = np.int32(vap.max_vap_natoms)
+        feed_dict["nnl_max"] = np.int32(nnl_max)
+        feed_dict["mask"] = mask.astype(np_dtype)
+        feed_dict["cells"] = cells.array.astype(np_dtype)
+        feed_dict["volume"] = np_dtype(volume)
+        feed_dict["pulay_stress"] = np_dtype(pulay_stress)
+        feed_dict["composition"] = composition.astype(np_dtype)
+        feed_dict["row_splits"] = np.int32(splits)
+        feed_dict["v2g_map"] = g2.v2g_map
+        feed_dict["ilist"] = g2.ilist
+        feed_dict["jlist"] = g2.jlist
+        feed_dict["shift"] = g2.n1
 
         return feed_dict
 
@@ -290,41 +301,13 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         """
         Return the indexed slices.
         """
-        v2g_map = np.zeros((self._nij_max, 5), dtype=np.int32)
-        tlist = np.zeros(self._nij_max, dtype=np.int32)
-
-        symbols = atoms.get_chemical_symbols()
-        clf = self.get_index_transformer(atoms)
-
-        ilist, jlist, Slist = neighbor_list('ijS', atoms, self._rc)
-        nij = len(ilist)
-
-        tlist.fill(0)
-        for index in range(nij):
-            symboli = symbols[ilist[index]]
-            symbolj = symbols[jlist[index]]
-            tlist[index] = self._kbody_index['{}{}'.format(symboli, symbolj)]
-
-        ilist = self._resize_to_nij_max(ilist, True)
-        jlist = self._resize_to_nij_max(jlist, True)
-        Slist = self._resize_to_nij_max(Slist, False)
-        ilist = clf.inplace_map_index(ilist)
-        jlist = clf.inplace_map_index(jlist)
-        shift = np.asarray(Slist, dtype=get_float_dtype().as_numpy_dtype)
-
-        v2g_map[:, 1] = tlist
-        v2g_map[:, 2] = ilist
-        counters = {}
-        for index in range(nij):
-            atomi = ilist[index]
-            if atomi not in counters:
-                counters[atomi] = Counter()
-            v2g_map[index, 3] = counters[atomi][tlist[index]]
-            counters[atomi][tlist[index]] += 1
-        v2g_map[:, 4] = ilist > 0
-
-        return G2IndexedSlices(v2g_map=v2g_map, ilist=ilist, jlist=jlist,
-                               shift=shift)
+        return get_g2_map(atoms=atoms,
+                          rc=self._rc,
+                          interactions=self._kbody_index,
+                          vap=self.get_vap_transformer(atoms),
+                          mode=tf_estimator.ModeKeys.TRAIN,
+                          nij_max=self._nij_max,
+                          dtype=get_float_dtype().as_numpy_dtype)
 
     def encode(self, atoms: Atoms):
         """
@@ -368,15 +351,10 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             use_stress=self._use_stress
         )
         g2 = self._decode_g2_indexed_slices(example)
-
-        decoded.rv2g = g2.v2g_map
-        decoded.ilist = g2.ilist
-        decoded.jlist = g2.jlist
-        decoded.shift = g2.shift
-
+        decoded.update(g2.as_dict())
         return decoded
 
-    def decode_protobuf(self, example_proto: tf.Tensor) -> AttributeDict:
+    def decode_protobuf(self, example_proto: tf.Tensor):
         """
         Decode the scalar string Tensor, which is a single serialized Example.
         See `_parse_single_example_raw` documentation for more details.
@@ -389,7 +367,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 'cells': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
-                'y_conf': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'mask': tf.FixedLenFeature([], tf.string),
@@ -398,19 +375,17 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
-                feature_list['f_conf'] = tf.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
                     tf.FixedLenFeature([], tf.string)
                 feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
-                feature_list['s_conf'] = tf.FixedLenFeature([], tf.string)
 
             example = tf.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
-    def get_descriptors(self, batch_features: AttributeDict):
+    def get_descriptors(self, batch_features: dict):
         """
         Return the graph for calculating symmetry function descriptors for the
         given batch of examples.
@@ -420,7 +395,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         Parameters
         ----------
-        batch_features : AttributeDict
+        batch_features : dict
             A batch of raw properties provided by `tf.data.Dataset`. Each batch
             is produced by the function `decode_protobuf`.
 
@@ -431,9 +406,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64, [batch_size, ]
-            * 'y_conf': float64, [batch_size, ]
             * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
-            * 'f_conf': float64, [batch_size, ]
             * 'composition': float64, [batch_size, n_elements]
             * 'mask': float64, [batch_size, max_n_atoms + 1]
             * 'ilist': int32, [batch_size, nij_max]
@@ -445,7 +418,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
             * 'stress': float64, [batch_size, 6]
             * 'total_pressure': float64, [batch_size, ]
-            * 's_conf': float64, [batch_size, ]
 
         Returns
         -------
@@ -456,15 +428,4 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
         """
         self._infer_batch_size(batch_features)
-
-        inputs = AttributeDict(
-            ilist=batch_features.ilist,
-            jlist=batch_features.jlist,
-            shift=batch_features.shift,
-            v2g_map=batch_features.rv2g
-        )
-        inputs.positions = batch_features.positions
-        inputs.cells = batch_features.cells
-        inputs.volume = batch_features.volume
-
-        return self.build_graph(inputs)
+        return self.build_graph(batch_features)
