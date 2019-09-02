@@ -12,9 +12,6 @@ tfrecords_dir = 'temp'
 minimize = ['energy', 'forces', 'rose']
 export = ['energy', 'forces', 'stress', 'hessian']
 
-[nn.loss]
-equivalently_trusted = false
-
 [nn.loss.l2]
 weight = 0.01
 

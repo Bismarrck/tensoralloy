@@ -43,7 +43,7 @@ def test_elastic_constant_tensor_op():
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             atoms = bulk('Ni', cubic=True)
-            elastic_tensor = sess.run(predictions.elastic,
+            elastic_tensor = sess.run(predictions["elastic"],
                                       feed_dict=clf.get_feed_dict(atoms))
 
         assert_almost_equal(elastic_tensor[0, 0], 247, delta=1)
