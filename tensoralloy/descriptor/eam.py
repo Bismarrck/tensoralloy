@@ -11,7 +11,7 @@ from collections import Counter
 from typing import List
 
 from tensoralloy.descriptor.base import AtomicDescriptor
-from tensoralloy.utils import get_elements_from_kbody_term, AttributeDict
+from tensoralloy.utils import get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -50,43 +50,43 @@ class EAM(AtomicDescriptor):
         self._kbody_index = kbody_index
         self._graph_scope_name = "EAM"
 
-    def _get_g_shape(self, placeholders):
+    def get_g_shape(self, features: dict):
         """
         Return the shape of the descriptor matrix.
         """
         return [self._max_n_terms,
-                placeholders.n_atoms_plus_virt,
-                placeholders.nnl_max]
+                features["n_atoms_plus_virt"],
+                features["nnl_max"]]
 
-    def _get_v2g_map(self, placeholders, **kwargs):
+    def get_v2g_map(self, features: dict, prefix: str):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
-        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=1)
+        splits = tf.split(features["v2g_map"], [-1, 1], axis=1)
         v2g_map = tf.identity(splits[0], name='v2g_map')
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         return v2g_map, v2g_mask
 
-    def _get_row_split_sizes(self, placeholders):
+    def get_row_split_sizes(self, features):
         """
         Return the sizes of the rowwise splitted subsets of `g`.
         """
-        return placeholders.row_splits
+        return features["row_splits"]
 
     @staticmethod
-    def _get_row_split_axis():
+    def get_row_split_axis():
         """
         Return the axis to rowwise split `g`.
         """
         return 1
 
-    def _split_descriptors(self, placeholders, g, mask):
+    def _split_descriptors(self, features, g, mask):
         """
         Split the descriptors into `N_element` subsets.
         """
         with tf.name_scope("Split"):
-            split_sizes = self._get_row_split_sizes(placeholders)
-            axis = self._get_row_split_axis()
+            split_sizes = self.get_row_split_sizes(features)
+            axis = self.get_row_split_axis()
 
             # `axis` should increase by one for `g` because `g` is created by
             # `tf.concat((gr, gx, gy, gz), axis=0, name='g')`
@@ -96,22 +96,22 @@ class EAM(AtomicDescriptor):
             masks = tf.split(mask, split_sizes, axis=axis, name='masks')[1:]
             return dict(zip(self._elements, zip(rows, masks)))
 
-    def _check_keys(self, placeholders: AttributeDict):
+    def _check_keys(self, features: dict):
         """
         Make sure `placeholders` contains enough keys.
         """
-        assert 'positions' in placeholders
-        assert 'cells' in placeholders
-        assert 'volume' in placeholders
-        assert 'n_atoms_plus_virt' in placeholders
-        assert 'nnl_max' in placeholders
-        assert 'row_splits' in placeholders
-        assert 'ilist' in placeholders
-        assert 'jlist' in placeholders
-        assert 'shift' in placeholders
-        assert 'v2g_map' in placeholders
+        assert 'positions' in features
+        assert 'cells' in features
+        assert 'volume' in features
+        assert 'n_atoms_plus_virt' in features
+        assert 'nnl_max' in features
+        assert 'row_splits' in features
+        assert 'ilist' in features
+        assert 'jlist' in features
+        assert 'shift' in features
+        assert 'v2g_map' in features
 
-    def build_graph(self, placeholders: AttributeDict):
+    def build_graph(self, features: dict):
         """
         Get the tensorflow based computation graph of the EAM model.
 
@@ -124,17 +124,17 @@ class EAM(AtomicDescriptor):
                 Represents th
         
         """
-        self._check_keys(placeholders)
+        self._check_keys(features)
 
         with tf.name_scope(f"{self._graph_scope_name}"):
-            rr, dij = self._get_rij(placeholders.positions,
-                                    placeholders.cells,
-                                    placeholders.ilist,
-                                    placeholders.jlist,
-                                    placeholders.shift,
-                                    name='rij')
-            shape = self._get_g_shape(placeholders)
-            v2g_map, v2g_mask = self._get_v2g_map(placeholders)
+            rr, dij = self.get_rij(features["positions"],
+                                   features["cells"],
+                                   features["ilist"],
+                                   features["jlist"],
+                                   features["shift"],
+                                   name='rij')
+            shape = self.get_g_shape(features)
+            v2g_map, v2g_mask = self.get_v2g_map(features, "eam")
 
             dx = tf.identity(dij[..., 0], name='dijx')
             dy = tf.identity(dij[..., 1], name='dijy')
@@ -147,11 +147,11 @@ class EAM(AtomicDescriptor):
 
             g = tf.concat((gr, gx, gy, gz), axis=0, name='g')
 
-            v2g_mask = tf.squeeze(v2g_mask, axis=self._get_row_split_axis())
+            v2g_mask = tf.squeeze(v2g_mask, axis=self.get_row_split_axis())
             mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
             mask = tf.cast(mask, dtype=rr.dtype, name='mask')
 
-            return self._split_descriptors(placeholders, g, mask)
+            return self._split_descriptors(features, g, mask)
 
 
 class BatchEAM(EAM):
@@ -190,7 +190,7 @@ class BatchEAM(EAM):
         return self._nnl_max
 
     @staticmethod
-    def _get_pbc_displacements(shift, cells, dtype=tf.float64):
+    def get_pbc_displacements(shift, cells, dtype=tf.float64):
         """
         Return the periodic boundary shift displacements.
 
@@ -202,6 +202,8 @@ class BatchEAM(EAM):
         cells : tf.Tensor
             A `float64` or `float32` tensor of shape `[batch_size, 3, 3]` as the
             cell tensors.
+        dtype : DType
+            The corresponding data type of `shift` and `cells`.
 
         Returns
         -------
@@ -215,7 +217,7 @@ class BatchEAM(EAM):
             cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
             return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
 
-    def _get_g_shape(self, _):
+    def get_g_shape(self, _):
         """
         Return the shape of the descriptor matrix.
         """
@@ -233,7 +235,7 @@ class BatchEAM(EAM):
             indexing_matrix[i] += [i, 0, 0, 0]
         return indexing_matrix
 
-    def _get_row_split_sizes(self, placeholders):
+    def get_row_split_sizes(self, placeholders):
         """
         Return the sizes of the rowwise splitted subsets of `g`.
         """
@@ -243,30 +245,30 @@ class BatchEAM(EAM):
         return row_splits
 
     @staticmethod
-    def _get_row_split_axis():
+    def get_row_split_axis():
         """
         Return the axis to rowwise split `g`.
         """
         return 2
 
-    def _get_v2g_map(self, placeholders, **kwargs):
+    def get_v2g_map(self, features, **kwargs):
         """
         Return the re-indexed `v2g_map` for batch training and evaluation.
         """
-        splits = tf.split(placeholders.v2g_map, [-1, 1], axis=2)
+        splits = tf.split(features["v2g_map"], [-1, 1], axis=2)
         v2g_map = tf.identity(splits[0])
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         indexing = self._get_v2g_map_batch_indexing_matrix()
         return tf.add(v2g_map, indexing, name='v2g_map'), v2g_mask
 
-    def _check_keys(self, placeholders: AttributeDict):
+    def _check_keys(self, features: dict):
         """
         Make sure `placeholders` contains enough keys.
         """
-        assert 'positions' in placeholders
-        assert 'cells' in placeholders
-        assert 'volume' in placeholders
-        assert 'ilist' in placeholders
-        assert 'jlist' in placeholders
-        assert 'shift' in placeholders
-        assert 'v2g_map' in placeholders
+        assert 'positions' in features
+        assert 'cells' in features
+        assert 'volume' in features
+        assert 'ilist' in features
+        assert 'jlist' in features
+        assert 'shift' in features
+        assert 'v2g_map' in features
