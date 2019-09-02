@@ -234,7 +234,7 @@ class TensorAlloyCalculator(Calculator):
         """
         values = self.get_property('atomic', atoms=atoms)
         values = np.insert(values, 0, 0, 0)
-        clf = self.transformer.get_index_transformer(atoms)
+        clf = self.transformer.get_vap_transformer(atoms)
         return clf.map_array(values.reshape((-1, 1)), reverse=True).flatten()
 
     def get_hessian(self, atoms=None):
@@ -249,7 +249,7 @@ class TensorAlloyCalculator(Calculator):
 
         """
         hessian = self.get_property('hessian', atoms)
-        clf = self.transformer.get_index_transformer(atoms)
+        clf = self.transformer.get_vap_transformer(atoms)
         return clf.reverse_map_hessian(hessian)
 
     def get_forces(self, atoms=None):
@@ -257,7 +257,7 @@ class TensorAlloyCalculator(Calculator):
         Return the atomic forces.
         """
         forces = np.insert(self.get_property('forces', atoms), 0, 0, 0)
-        clf = self.transformer.get_index_transformer(atoms)
+        clf = self.transformer.get_vap_transformer(atoms)
         return clf.map_forces(forces, reverse=True)
 
     def get_stress(self, atoms=None, voigt=True):
@@ -581,7 +581,7 @@ class TensorAlloyCalculator(Calculator):
 
         if not numeric_hessian:
             hessian = calc.get_property('hessian', super_atoms)
-            clf = calc.transformer.get_index_transformer(super_atoms)
+            clf = calc.transformer.get_vap_transformer(super_atoms)
             fc = clf.reverse_map_hessian(hessian, phonopy_format=True)
 
             # Convert the matrix to `double` and save it if required.
