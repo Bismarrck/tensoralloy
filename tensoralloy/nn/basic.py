@@ -19,7 +19,7 @@ from tensorflow.python.framework.tensor_util import is_tensor
 from tensorflow_estimator import estimator as tf_estimator
 from ase.units import GPa
 
-from tensoralloy.utils import GraphKeys, AttributeDict, Defaults, safe_select
+from tensoralloy.utils import GraphKeys, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
@@ -31,6 +31,7 @@ from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.train.dataclasses import EstimatorHyperParams
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -741,7 +742,7 @@ class BasicNN:
                  features: dict,
                  labels: dict,
                  mode: tf_estimator.ModeKeys,
-                 params: AttributeDict):
+                 params: EstimatorHyperParams):
         """
         Initialize a model function for `tf_estimator.Estimator`.
 
@@ -778,7 +779,7 @@ class BasicNN:
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
-        params : AttributeDict
+        params : EstimatorHyperParams
             Hyperparameters for building and training a `BasicNN`.
 
         Returns

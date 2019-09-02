@@ -21,13 +21,12 @@ from tensoralloy.io.db import connect
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn import EamFsNN, EamAlloyNN, AdpNN, AtomicNN, AtomicResNN
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
-from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
-from tensoralloy.utils import set_logging_configs, AttributeDict, nested_set
+from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
+from tensoralloy.train.dataclasses import EstimatorHyperParams
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -84,7 +83,7 @@ class TrainingManager:
         return self._dataset
 
     @property
-    def hparams(self) -> AttributeDict:
+    def hparams(self) -> EstimatorHyperParams:
         """
         Return a dict of hyper parameters.
         """
@@ -108,20 +107,7 @@ class TrainingManager:
         """
         Initialize the hyper parameters.
         """
-        opt_dict = self._reader['opt']
-        method = opt_dict['method']
-        minimizer_kwargs = opt_dict.pop(method)
-        opt_parameters = OptParameters(additional_kwargs=minimizer_kwargs,
-                                       **opt_dict)
-
-        hparams = AttributeDict(
-            seed=self._reader['seed'],
-            precision=self._reader['precision'],
-            train=TrainParameters(**self._reader['train']),
-            opt=opt_parameters,
-            loss=LossParameters(**self._reader['nn.loss']),
-            debug=AttributeDict(self._reader['debug'])
-        )
+        hparams = EstimatorHyperParams.from_input_reader(self._reader)
 
         if not hparams.opt.decay_function:
             hparams.opt.decay_function = None
@@ -277,7 +263,7 @@ class TrainingManager:
         return dataset
 
     @staticmethod
-    def _check_before_training(hparams: AttributeDict):
+    def _check_before_training(hparams: EstimatorHyperParams):
         """
         Check the `model_dir` and `previous_checkpoint` before training.
         """
@@ -300,7 +286,7 @@ class TrainingManager:
                 hparams.train.ckpt.checkpoint_filename = None
 
     @staticmethod
-    def _get_logging_level(hparams: AttributeDict):
+    def _get_logging_level(hparams: EstimatorHyperParams):
         """
         Return the logging level controlled by `hparams.debug.logging_level`.
         """
@@ -341,7 +327,7 @@ class TrainingManager:
                 tf.logging.info(f'input= \n{str(self._reader)}')
 
                 gpu_options = tf.GPUOptions(
-                    allow_growth=hparams.debug.allow_gpu_growth)
+                    allow_growth=hparams.gpu.allow_gpu_growth)
                 session_config = tf.ConfigProto(allow_soft_placement=True,
                                                 gpu_options=gpu_options)
                 max_ckpts_to_keep = hparams.train.max_checkpoints_to_keep
