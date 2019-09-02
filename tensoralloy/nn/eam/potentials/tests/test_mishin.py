@@ -102,10 +102,10 @@ class AlCuAdpTest(unittest.TestCase):
                             export.get_potential_energy(atoms), delta=1e-5)
         assert_array_almost_equal(mishin.get_stress(atoms),
                                   export.get_stress(atoms), delta=1e-5)
-        assert_almost_equal(results.energy,
+        assert_almost_equal(results["energy"],
                             mishin.get_potential_energy(atoms),
                             delta=1e-5)
-        assert_array_almost_equal(results.stress,
+        assert_array_almost_equal(results["stress"],
                                   mishin.get_stress(atoms),
                                   delta=1e-5)
 

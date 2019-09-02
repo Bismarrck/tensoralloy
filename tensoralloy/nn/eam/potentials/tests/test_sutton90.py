@@ -21,7 +21,6 @@ from nose.tools import assert_almost_equal
 from tensoralloy.transformer import BatchEAMTransformer, EAMTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.utils import AttributeDict
 from tensoralloy.test_utils import test_dir
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 
@@ -88,33 +87,33 @@ class EamSutton90Test(unittest.TestCase):
                 clf.encode(atoms).SerializeToString())
             example = clf.decode_protobuf(protobuf)
 
-            batch = AttributeDict()
+            batch = dict()
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
 
             descriptors = clf.get_descriptors(batch)
-            features = AttributeDict(positions=batch.positions,
-                                     n_atoms=batch.n_atoms,
-                                     cells=batch.cells,
-                                     composition=batch.composition,
-                                     mask=batch.mask,
-                                     volume=batch.volume)
+            features = dict(positions=batch["positions"],
+                            n_atoms=batch["n_atoms"],
+                            cell=batch["cell"],
+                            compositions=batch["compositions"],
+                            atom_masks=batch["atom_masks"],
+                            volume=batch["volume"])
 
             nn = EamAlloyNN(elements=['Ag'], custom_potentials={
                 "Ag": {"rho": "sutton90", "embed": "sutton90"},
                 "AgAg": {"phi": "sutton90"}})
             outputs = nn._get_model_outputs(
                 features=features,
-                descriptors=AttributeDict(descriptors),
+                descriptors=descriptors,
                 mode=tf_estimator.ModeKeys.EVAL,
                 verbose=False)
-            prediction = AttributeDict(
+            prediction = dict(
                 energy=nn._get_internal_energy_op(outputs, features))
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                energy = float(sess.run(prediction.energy))
+                energy = float(sess.run(prediction["energy"]))
 
             assert_almost_equal(energy,
                                 lammps.get_potential_energy(atoms), delta=1e-6)
@@ -145,7 +144,7 @@ class EamSutton90Test(unittest.TestCase):
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                energy = float(sess.run(prediction.energy,
+                energy = float(sess.run(prediction["energy"],
                                         feed_dict=clf.get_feed_dict(atoms)))
 
         atoms.calc = lammps
