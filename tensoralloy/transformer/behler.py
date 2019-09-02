@@ -155,14 +155,15 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
     def __init__(self, rc, elements, eta=Defaults.eta, omega=Defaults.omega,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
-                 angular=False, periodic=True, trainable=False):
+                 angular=False, periodic=True, trainable=False,
+                 cutoff_function="cosine"):
         """
         Initialization method.
         """
         SymmetryFunction.__init__(
             self, rc=rc, elements=elements, eta=eta, omega=omega, beta=beta,
             gamma=gamma, zeta=zeta, angular=angular, periodic=periodic,
-            trainable=trainable)
+            trainable=trainable, cutoff_function=cutoff_function)
         DescriptorTransformer.__init__(self)
 
     def as_dict(self):
@@ -176,7 +177,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
              'omega': self.initial_values["omega"].tolist(),
              'gamma': self.initial_values["gamma"].tolist(),
              'zeta': self.initial_values["zeta"].tolist(),
-             'beta': self.initial_values["beta"].tolist()}
+             'beta': self.initial_values["beta"].tolist(),
+             'cutoff_function': self._cutoff_function}
         return d
 
     def _initialize_placeholders(self):
@@ -192,8 +194,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
 
             self._placeholders["positions"] = self._create_float_2d(
                 dtype=dtype, d0=None, d1=3, name='positions')
-            self._placeholders["cells"] = self._create_float_2d(
-                dtype=dtype, d0=3, d1=3, name='cells')
+            self._placeholders["cell"] = self._create_float_2d(
+                dtype=dtype, d0=3, d1=3, name='cell')
             self._placeholders["n_atoms_vap"] = self._create_int('n_atoms_vap')
             self._placeholders["volume"] = self._create_float(
                 dtype=dtype, name='volume')
@@ -201,8 +203,8 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 dtype=dtype, name='atom_masks')
             self._placeholders["pulay_stress"] = self._create_float(
                 dtype=dtype, name='pulay_stress')
-            self._placeholders["composition"] = self._create_float_1d(
-                dtype=dtype, name='composition')
+            self._placeholders["compositions"] = self._create_float_1d(
+                dtype=dtype, name='compositions')
             self._placeholders["row_splits"] = self._create_int_1d(
                 name='row_splits', d0=self.n_elements + 1)
             self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
@@ -274,22 +276,21 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         # `max_n_atoms` must be used because every element shall have at least
         # one feature row (though it could be all zeros, a dummy or virtual row)
         vap_natoms = vap.max_vap_natoms
-        cells = atoms.get_cell(complete=True)
+        cell = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         atom_masks = vap.atom_masks
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
-        composition = self._get_composition(atoms)
+        compositions = self._get_compositions(atoms)
         pulay_stress = get_pulay_stress(atoms)
 
         feed_dict["positions"] = positions.astype(np_dtype)
         feed_dict["n_atoms_vap"] = np.int32(vap_natoms)
         feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
-        feed_dict["cells"] = cells.array.astype(np_dtype)
+        feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
-        feed_dict["composition"] = composition
+        feed_dict["compositions"] = compositions
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["row_splits"] = np.int32(splits)
-
         feed_dict.update(g2.as_dict())
 
         if self._angular:
@@ -331,7 +332,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                  batch_size=None, eta=Defaults.eta, omega=Defaults.omega,
                  beta=Defaults.beta, gamma=Defaults.gamma, zeta=Defaults.zeta,
                  angular=False, periodic=True, trainable=False, use_forces=True,
-                 use_stress=False):
+                 use_stress=False, cutoff_function="cosine"):
         """
         Initialization method.
 
@@ -349,7 +350,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             self, rc=rc, max_occurs=max_occurs,
             nij_max=nij_max, nijk_max=nijk_max, batch_size=batch_size, eta=eta,
             omega=omega, beta=beta, gamma=gamma, zeta=zeta, angular=angular,
-            periodic=periodic, trainable=trainable)
+            periodic=periodic, trainable=trainable,
+            cutoff_function=cutoff_function)
 
         BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
                                             use_stress=use_stress)
@@ -368,7 +370,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
              'gamma': self.initial_values["gamma"].tolist(),
              'zeta': self.initial_values["zeta"].tolist(),
              'beta': self.initial_values["beta"].tolist(),
-             'use_forces': self._use_forces, 'use_stress': self._use_stress}
+             'use_forces': self._use_forces, 'use_stress': self._use_stress,
+             'cutoff_function': self._cutoff_function}
         return d
 
     @property
@@ -533,13 +536,13 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
                 'n_atoms': tf.FixedLenFeature([], tf.int64),
-                'cells': tf.FixedLenFeature([], tf.string),
+                'cell': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
-                'mask': tf.FixedLenFeature([], tf.string),
-                'composition': tf.FixedLenFeature([], tf.string),
+                'atom_masks': tf.FixedLenFeature([], tf.string),
+                'compositions': tf.FixedLenFeature([], tf.string),
                 'pulay': tf.FixedLenFeature([], tf.string),
             }
             if self._use_forces:
@@ -547,6 +550,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             if self._use_stress:
                 feature_list['stress'] = \
+                    tf.FixedLenFeature([], tf.string)
+                feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
 
             if self._angular:

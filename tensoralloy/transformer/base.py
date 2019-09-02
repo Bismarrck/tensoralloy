@@ -61,16 +61,16 @@ class BaseTransformer:
         """
         pass
 
-    def _get_composition(self, atoms) -> np.ndarray:
+    def _get_compositions(self, atoms) -> np.ndarray:
         """
-        Return a vector as the composition of the `Atoms`.
+        Return a vector as the compositions of the `Atoms`.
         """
         n_elements = len(self.elements)
         dtype = get_float_dtype().as_numpy_dtype
-        composition = np.zeros(n_elements, dtype=dtype)
+        compositions = np.zeros(n_elements, dtype=dtype)
         for element, count in Counter(atoms.get_chemical_symbols()).items():
-            composition[self.elements.index(element)] = float(count)
-        return composition
+            compositions[self.elements.index(element)] = float(count)
+        return compositions
 
     @abc.abstractmethod
     def as_dict(self) -> Dict:
@@ -403,21 +403,21 @@ class BatchDescriptorTransformer(BaseTransformer):
         vap = self.get_vap_transformer(atoms)
         np_dtype = get_float_dtype().as_numpy_dtype
         positions = vap.map_positions(atoms.positions).astype(np_dtype)
-        cells = atoms.get_cell(complete=True).array.astype(np_dtype)
+        cell = atoms.get_cell(complete=True).array.astype(np_dtype)
         volume = np.atleast_1d(atoms.get_volume()).astype(np_dtype)
         y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
-        composition = self._get_composition(atoms)
+        compositions = self._get_compositions(atoms)
         mask = vap.atom_masks.astype(np_dtype)
         pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
 
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
-            'cell': bytes_feature(cells.tostring()),
+            'cell': bytes_feature(cell.tostring()),
             'n_atoms': int64_feature(len(atoms)),
             'volume': bytes_feature(volume.tostring()),
             'y_true': bytes_feature(y_true.tostring()),
             'atom_masks': bytes_feature(mask.tostring()),
-            'compositions': bytes_feature(composition.tostring()),
+            'compositions': bytes_feature(compositions.tostring()),
             'pulay': bytes_feature(pulay.tostring()),
         }
         if self.use_forces:
@@ -477,7 +477,7 @@ class BatchDescriptorTransformer(BaseTransformer):
 
         cell = tf.decode_raw(example['cell'], float_dtype)
         cell.set_shape([9])
-        decoded["cell"] = tf.reshape(cell, (3, 3), name='cells')
+        decoded["cell"] = tf.reshape(cell, (3, 3), name='cell')
 
         volume = tf.decode_raw(example['volume'], float_dtype)
         volume.set_shape([1])

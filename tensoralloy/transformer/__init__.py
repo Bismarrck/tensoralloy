@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer.behler import SymmetryFunctionTransformer
 from tensoralloy.transformer.eam import EAMTransformer, BatchEAMTransformer
+from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
 from tensoralloy.transformer.vap import VirtualAtomMap
 
 __author__ = 'Xin Chen'

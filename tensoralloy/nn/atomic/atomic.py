@@ -80,7 +80,7 @@ class AtomicNN(BasicNN):
             A dict of input tensors and the descriptors:
                 * 'descriptors'
                 * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cells' of shape `[batch_size, 3, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'

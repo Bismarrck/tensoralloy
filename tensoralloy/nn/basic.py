@@ -231,7 +231,7 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'composition' of shape `[batch_size, n_elements]`.
+                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
@@ -553,7 +553,7 @@ class BasicNN:
 
             if 'elastic' in self._minimize_properties:
                 if loss_parameters.elastic.crystals is not None:
-                    losses.elastic = elastic_ops.get_elastic_constant_loss(
+                    losses["elastic"] = elastic_ops.get_elastic_constant_loss(
                         base_nn=self,
                         list_of_crystal=loss_parameters.elastic.crystals,
                         weight=loss_parameters.elastic.weight,
@@ -562,7 +562,7 @@ class BasicNN:
 
             if 'rose' in self._minimize_properties:
                 if loss_parameters.rose.crystals is not None:
-                    losses.rose = rose_ops.get_rose_constraint_loss(
+                    losses["rose"] = rose_ops.get_rose_constraint_loss(
                         base_nn=self,
                         options=loss_parameters.rose,
                         verbose=verbose)

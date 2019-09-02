@@ -74,7 +74,7 @@ class AtomicResNN(AtomicNN):
         Check the keys of `features` and `labels`.
         """
         super(AtomicResNN, self)._check_keys(features, labels)
-        assert 'composition' in features
+        assert 'compositions' in features
 
     def as_dict(self):
         """
@@ -90,10 +90,10 @@ class AtomicResNN(AtomicNN):
         """
         Return the Op to compute internal energy E.
         """
-        ndims = features["composition"].shape.ndims
+        ndims = features["compositions"].shape.ndims
 
         with tf.variable_scope("Static", reuse=tf.AUTO_REUSE):
-            x = tf.identity(features["composition"], name='input')
+            x = tf.identity(features["compositions"], name='input')
             if ndims == 1:
                 x = tf.expand_dims(x, axis=0, name='1to2')
             if x.shape[1].value is None:

@@ -119,29 +119,30 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
             dtype = get_float_dtype()
 
-            self._placeholders.positions = self._create_float_2d(
+            self._placeholders["positions"] = self._create_float_2d(
                 dtype=dtype, d0=None, d1=3, name='positions')
-            self._placeholders.cells = self._create_float_2d(
-                dtype=dtype, d0=3, d1=3, name='cells')
-            self._placeholders.n_atoms_plus_virt = self._create_int('n_atoms_plus_virt')
-            self._placeholders.volume = self._create_float(
+            self._placeholders["cell"] = self._create_float_2d(
+                dtype=dtype, d0=3, d1=3, name='cell')
+            self._placeholders["n_atoms_vap"] = self._create_int(
+                name='n_atoms_plus_virt')
+            self._placeholders["volume"] = self._create_float(
                 dtype=dtype, name='volume')
-            self._placeholders.mask = self._create_float_1d(
-                dtype=dtype, name='mask')
-            self._placeholders.composition = self._create_float_1d(
-                dtype=dtype, name='composition')
-            self._placeholders.nnl_max = self._create_int('nnl_max')
-            self._placeholders.pulay_stress = self._create_float(
+            self._placeholders["atom_masks"] = self._create_float_1d(
+                dtype=dtype, name='atom_masks')
+            self._placeholders["compositions"] = self._create_float_1d(
+                dtype=dtype, name='compositions')
+            self._placeholders["nnl_max"] = self._create_int('nnl_max')
+            self._placeholders["pulay_stress"] = self._create_float(
                 dtype=dtype, name='pulay_stress')
-            self._placeholders.row_splits = self._create_int_1d(
+            self._placeholders["row_splits"] = self._create_int_1d(
                 'row_splits', d0=self._n_elements + 1)
-            self._placeholders.ilist = self._create_int_1d('ilist')
-            self._placeholders.jlist = self._create_int_1d('jlist')
-            self._placeholders.shift = self._create_float_2d(
-                dtype=dtype, d0=None, d1=3, name='shift')
-            self._placeholders.v2g_map = self._create_int_2d(
-                d0=None, d1=4, name='v2g_map')
-            self._placeholders.is_constant = False
+            self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
+            self._placeholders["g2.jlist"] = self._create_int_1d('g2.jlist')
+            self._placeholders["g2.n1"] = self._create_float_2d(
+                dtype=dtype, d0=None, d1=3, name='g2.n1')
+            self._placeholders["g2.v2g_map"] = self._create_int_2d(
+                d0=None, d1=4, name='g2.v2g_map')
+            self._placeholders["is_constant"] = False
 
         return self._placeholders
 
@@ -184,28 +185,25 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
         # `max_n_atoms` must be used because every element shall have at least
         # one feature row (though it could be all zeros, a dummy or virtual row)
-        cells = atoms.get_cell(complete=True)
+        cell = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
-        mask = vap.atom_masks.astype(np_dtype)
+        atom_masks = vap.atom_masks.astype(np_dtype)
         pulay_stress = get_pulay_stress(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
-        composition = self._get_composition(atoms)
+        compositions = self._get_compositions(atoms)
 
         feed_dict = dict()
 
         feed_dict["positions"] = positions.astype(np_dtype)
-        feed_dict["n_atoms_plus_virt"] = np.int32(vap.max_vap_natoms)
+        feed_dict["n_atoms_vap"] = np.int32(vap.max_vap_natoms)
         feed_dict["nnl_max"] = np.int32(nnl_max)
-        feed_dict["mask"] = mask.astype(np_dtype)
-        feed_dict["cells"] = cells.array.astype(np_dtype)
+        feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
+        feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
-        feed_dict["composition"] = composition.astype(np_dtype)
+        feed_dict["compositions"] = compositions.astype(np_dtype)
         feed_dict["row_splits"] = np.int32(splits)
-        feed_dict["v2g_map"] = g2.v2g_map
-        feed_dict["ilist"] = g2.ilist
-        feed_dict["jlist"] = g2.jlist
-        feed_dict["shift"] = g2.n1
+        feed_dict.update(g2.as_dict())
 
         return feed_dict
 
@@ -364,13 +362,13 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
                 'n_atoms': tf.FixedLenFeature([], tf.int64),
-                'cells': tf.FixedLenFeature([], tf.string),
+                'cell': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
                 'y_true': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
-                'mask': tf.FixedLenFeature([], tf.string),
-                'composition': tf.FixedLenFeature([], tf.string),
+                'atom_masks': tf.FixedLenFeature([], tf.string),
+                'compositions': tf.FixedLenFeature([], tf.string),
                 'pulay': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
@@ -402,17 +400,17 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             Here are default keys:
 
             * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
-            * 'cells': float64 or float32, [batch_size, 3, 3]
+            * 'cell': float64 or float32, [batch_size, 3, 3]
             * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
             * 'y_true': float64, [batch_size, ]
             * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
-            * 'composition': float64, [batch_size, n_elements]
-            * 'mask': float64, [batch_size, max_n_atoms + 1]
-            * 'ilist': int32, [batch_size, nij_max]
-            * 'jlist': int32, [batch_size, nij_max]
-            * 'shift': float64, [batch_size, nij_max, 3]
-            * 'rv2g': int32, [batch_size, nij_max, 5]
+            * 'compositions': float64, [batch_size, n_elements]
+            * 'atom_masks': float64, [batch_size, max_n_atoms + 1]
+            * 'g2.ilist': int32, [batch_size, nij_max]
+            * 'g2.jlist': int32, [batch_size, nij_max]
+            * 'g2.n1': float64, [batch_size, nij_max, 3]
+            * 'g2.v2g_map': int32, [batch_size, nij_max, 5]
 
             If `self.stress` is `True`, these following keys will be provided:
 

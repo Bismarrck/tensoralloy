@@ -344,7 +344,7 @@ class MeamTransformer(MEAM, DescriptorTransformer):
         volume = atoms.get_volume()
         mask = index_transformer.mask
         splits = [1] + [index_transformer.max_occurs[e] for e in self._elements]
-        composition = self._get_composition(atoms)
+        compositions = self._get_compositions(atoms)
 
         feed_dict = AttributeDict()
 
