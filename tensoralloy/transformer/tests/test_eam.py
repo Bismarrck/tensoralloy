@@ -17,7 +17,7 @@ from tensoralloy.io.db import connect
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.utils import get_kbody_terms, AttributeDict
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
-from tensoralloy.transformer.index_transformer import IndexTransformer
+from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.eam import BatchEAMTransformer, EAMTransformer
 from tensoralloy.precision import precision_scope
 
@@ -31,9 +31,9 @@ def eam(atoms: Atoms, max_occurs: Counter, nnl: int, rc=6.5):
     """
     symbols = atoms.get_chemical_symbols()
     ilist, jlist, dlist = neighbor_list('ijd', atoms, cutoff=rc)
-    clf = IndexTransformer(max_occurs, symbols)
+    clf = VirtualAtomMap(max_occurs, symbols)
 
-    kbody_terms = get_kbody_terms(sorted(max_occurs.keys()), k_max=2)[1]
+    kbody_terms = get_kbody_terms(sorted(max_occurs.keys()), angular=False)[1]
     max_n_atoms = sum(max_occurs.values()) + 1
     max_n_terms = max(map(len, kbody_terms.values()))
 
@@ -49,7 +49,7 @@ def eam(atoms: Atoms, max_occurs: Counter, nnl: int, rc=6.5):
         kbody_term = f'{center}{other}'
 
         idx1 = kbody_terms[center].index(kbody_term)
-        idx2 = clf.inplace_map_index(atomi + 1)
+        idx2 = clf.local_to_gsl_map[atomi + 1]
         idx3 = counters[atomi][idx1]
         counters[atomi][idx1] += 1
 

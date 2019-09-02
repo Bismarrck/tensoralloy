@@ -73,18 +73,18 @@ def test_energy_pv():
                 tf.global_variables_initializer().run()
                 zero, ten, hundred = sess.run([zero_ops, ten_ops, hundred_ops])
 
-            assert_almost_equal(zero.energy, hundred.energy, delta=1e-8)
-            assert_almost_equal(zero.enthalpy - hundred.enthalpy,
+            assert_almost_equal(zero["energy"], hundred["energy"], delta=1e-8)
+            assert_almost_equal(zero["enthalpy"] - hundred["enthalpy"],
                                 -100 * GPa * volume, delta=1e-8)
 
             # Only diag elements are affected by pulay stress.
             assert_array_almost_equal(
-                ten.stress[:3] / GPa - hundred.stress[:3] / GPa,
+                ten["stress"][:3] / GPa - hundred["stress"][:3] / GPa,
                 np.ones(3) * 90.0,
                 delta=1e-8)
 
             assert_array_almost_equal(
-                ten.stress[3:] / GPa - hundred.stress[3:] / GPa,
+                ten["stress"][3:] / GPa - hundred["stress"][3:] / GPa,
                 np.zeros(3),
                 delta=1e-8)
 
@@ -221,16 +221,13 @@ def test_build_nn_with_properties():
             protobuf = tf.convert_to_tensor(
                 clf.encode(atoms).SerializeToString())
             example = clf.decode_protobuf(protobuf)
-            batch = AttributeDict()
+            batch = dict()
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = AttributeDict(energy=batch.pop('y_true'),
-                                   energy_confidence=batch.pop('y_conf'))
+            labels = dict(energy=batch.pop('y_true'))
             labels['forces'] = batch.pop('f_true')
-            labels['forces_confidence'] = batch.pop('f_conf')
             labels['stress'] = batch.pop('stress')
-            labels['stress_confidence'] = batch.pop('s_conf')
             labels['total_pressure'] = batch.pop('total_pressure')
 
             loss_parameters = LossParameters()
@@ -246,13 +243,14 @@ def test_build_nn_with_properties():
 
             try:
                 predictions = nn.build(batch, mode=mode, verbose=True)
-            except Exception:
+            except Exception as excp:
+                print(excp)
                 return False
             try:
                 nn.get_total_loss(predictions=predictions,
                                   labels=labels,
-                                  n_atoms=batch.n_atoms,
-                                  mask=batch.mask,
+                                  n_atoms=batch["n_atoms"],
+                                  atom_masks=batch["atom_masks"],
                                   loss_parameters=loss_parameters,
                                   mode=mode)
             except Exception as excp:

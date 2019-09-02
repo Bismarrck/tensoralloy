@@ -25,7 +25,7 @@ from tensoralloy.precision import precision_scope, Precision, get_float_dtype
 from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
-from tensoralloy.utils import get_kbody_terms, AttributeDict, Defaults
+from tensoralloy.utils import get_kbody_terms, Defaults
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
@@ -772,9 +772,9 @@ def test_batch_multi_elements():
                                                   angular=True)
             indexed_slices = []
             positions = []
-            cells = []
-            volumes = []
-            masks = []
+            cell = []
+            volume = []
+            atom_masks = []
             for i, atoms in enumerate(qm7m.trajectory):
                 clf = sf.get_vap_transformer(atoms)
                 g2 = sf.get_g2_indexed_slices(atoms)
@@ -782,16 +782,16 @@ def test_batch_multi_elements():
                 indexed_slices.append((g2, g4))
                 positions.append(
                     clf.map_positions(atoms.positions).astype(np_dtype))
-                cells.append(
+                cell.append(
                     atoms.get_cell(complete=True).array.astype(np_dtype))
-                volumes.append(np_dtype(atoms.get_volume()))
-                masks.append(np.asarray(clf.atom_masks, dtype=np_dtype))
+                volume.append(np_dtype(atoms.get_volume()))
+                atom_masks.append(np.asarray(clf.atom_masks, dtype=np_dtype))
 
             batch = _merge_indexed_slices(indexed_slices)
             batch["positions"] = np.asarray(positions)
-            batch["cells"] = np.asarray(cells)
-            batch["volume"] = volumes
-            batch["atom_masks"] = np.asarray(masks)
+            batch["cell"] = np.asarray(cell)
+            batch["volume"] = volume
+            batch["atom_masks"] = np.asarray(atom_masks)
 
             # Use a large delta because we use float32 in this test.
             delta = 1e-5

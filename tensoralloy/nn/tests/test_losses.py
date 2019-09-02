@@ -82,7 +82,7 @@ def test_forces_loss():
             y = tf.convert_to_tensor(y)
             mask = tf.convert_to_tensor(mask)
 
-            rmse = get_forces_loss(x, y, mask=mask, loss_weight=10.0,
+            rmse = get_forces_loss(x, y, atom_masks=mask, loss_weight=10.0,
                                    collections=['UnitTest'])
             mae = tf.get_default_graph().get_tensor_by_name(
                 'Forces/Absolute/mae:0')

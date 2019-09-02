@@ -121,13 +121,13 @@ def test_inference():
                 np.random.rand(1, max_n_atoms, 3),
                 dtype=tf.float64,
                 name='positions')
-            cells = tf.convert_to_tensor(
+            cell = tf.convert_to_tensor(
                 np.random.rand(batch_size, 3, 3).astype(np.float64))
-            mask = tf.convert_to_tensor(
+            atom_masks = tf.convert_to_tensor(
                 np.ones((batch_size, max_n_atoms), np.float64))
             pulay_stress = tf.zeros(batch_size, dtype=tf.float64, name='pulay')
-            features = AttributeDict(positions=positions, atom_masks=mask,
-                                     cells=cells, pulay_stress=pulay_stress)
+            features = AttributeDict(positions=positions, atom_masks=atom_masks,
+                                     cell=cell, pulay_stress=pulay_stress)
 
         outputs = nn._get_model_outputs(
             features=features,

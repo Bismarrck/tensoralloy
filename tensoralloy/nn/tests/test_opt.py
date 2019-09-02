@@ -66,12 +66,11 @@ def _get_train_op(trainable=False):
     total_loss, losses = nn.get_total_loss(
         predictions=predictions,
         labels=labels,
-        n_atoms=features.n_atoms,
-        mask=features.mask,
+        n_atoms=features["n_atoms"],
+        atom_masks=features["atom_masks"],
         loss_parameters=loss_parameters)
 
-    return get_train_op(losses, opt_parameters, nn.minimize_properties,
-                        tf_estimator.ModeKeys.TRAIN)
+    return get_train_op(losses, opt_parameters, nn.minimize_properties)
 
 
 def test_get_train_op():
