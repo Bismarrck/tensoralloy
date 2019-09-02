@@ -10,7 +10,7 @@ import numpy as np
 from ase.data import chemical_symbols
 from typing import List, Dict, Tuple
 
-from tensoralloy.utils import get_kbody_terms, AttributeDict
+from tensoralloy.utils import get_kbody_terms
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -182,7 +182,7 @@ class AtomicDescriptor:
         raise NotImplementedError(
             "This method must be overridden by a subclass!")
 
-    def build_graph(self, placeholders: AttributeDict):
+    def build_graph(self, features: dict):
         """
         Build the tensorflow graph for computing atomic descriptors.
 
