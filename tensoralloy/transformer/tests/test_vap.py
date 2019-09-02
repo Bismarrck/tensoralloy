@@ -66,7 +66,7 @@ class IndexTransformerTest(TestCase):
 
 def test_reverse_map_hessian():
     """
-    Test the method `IndexTransformer.reverse_map_hessian()`.
+    Test the method `VirtualAtomMap.reverse_map_hessian()`.
     """
     graph_model_path = join(test_dir(), 'Ni', 'Ni.zjw04xc.pb')
     calc = TensorAlloyCalculator(graph_model_path)
