@@ -159,27 +159,27 @@ def get_elastic_constant_loss(base_nn,
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=verbose)
-                total_stress = output.total_stress
-                cell = features.cells
-                volume = features.volume
+                total_stress = output["total_stress"]
+                cell = features["cell"]
+                volume = features["volume"]
 
                 with tf.name_scope("Constraints"):
                     constraints['forces'].append(
-                        tf.linalg.norm(output.forces, name='forces'))
+                        tf.linalg.norm(output["forces"], name='forces'))
 
                     if options.use_kbar:
                         unit = tf.constant(10.0 / GPa, dtype=total_stress.dtype,
                                            name='unit')
                         value = tf.identity(
                             tf.linalg.norm(
-                                tf.math.multiply(output.stress, unit)),
+                                tf.math.multiply(output["stress"], unit)),
                             name='kbar')
                     else:
                         unit = tf.constant(1e4 / GPa, dtype=total_stress.dtype,
                                            name='unit')
                         value = tf.identity(
                             tf.linalg.norm(
-                                tf.math.multiply(output.stress, unit)),
+                                tf.math.multiply(output["stress"], unit)),
                             name='bar')
                     constraints['stress'].append(value)
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, value)
