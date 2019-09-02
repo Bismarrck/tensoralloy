@@ -58,11 +58,11 @@ class EAM(AtomicDescriptor):
                 features["n_atoms_vap"],
                 features["nnl_max"]]
 
-    def get_v2g_map(self, features: dict, prefix: str):
+    def get_v2g_map(self, features: dict, prefix: str = None):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
-        splits = tf.split(features["v2g_map"], [-1, 1], axis=1)
+        splits = tf.split(features["g2.v2g_map"], [-1, 1], axis=1)
         v2g_map = tf.identity(splits[0], name='v2g_map')
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         return v2g_map, v2g_mask
@@ -128,13 +128,13 @@ class EAM(AtomicDescriptor):
 
         with tf.name_scope(f"{self._graph_scope_name}"):
             rr, dij = self.get_rij(features["positions"],
-                                   features["cells"],
+                                   features["cell"],
                                    features["g2.ilist"],
                                    features["g2.jlist"],
                                    features["g2.n1"],
                                    name='rij')
             shape = self.get_g_shape(features)
-            v2g_map, v2g_mask = self.get_v2g_map(features, "eam")
+            v2g_map, v2g_mask = self.get_v2g_map(features)
 
             dx = tf.identity(dij[..., 0], name='dijx')
             dy = tf.identity(dij[..., 1], name='dijy')
@@ -190,7 +190,7 @@ class BatchEAM(EAM):
         return self._nnl_max
 
     @staticmethod
-    def get_pbc_displacements(shift, cells, dtype=tf.float64):
+    def get_pbc_displacements(shift, cell, dtype=tf.float64):
         """
         Return the periodic boundary shift displacements.
 
@@ -199,11 +199,11 @@ class BatchEAM(EAM):
         shift : tf.Tensor
             A `float64` or `float32` tensor of shape `[batch_size, ndim, 3]` as
             the cell shift vectors and `ndim == nij_max` or `ndim == nijk_max`.
-        cells : tf.Tensor
+        cell : tf.Tensor
             A `float64` or `float32` tensor of shape `[batch_size, 3, 3]` as the
             cell tensors.
         dtype : DType
-            The corresponding data type of `shift` and `cells`.
+            The corresponding data type of `shift` and `cell`.
 
         Returns
         -------
@@ -214,8 +214,8 @@ class BatchEAM(EAM):
         """
         with tf.name_scope("Einsum"):
             shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
-            cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
-            return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
+            cell = tf.convert_to_tensor(cell, dtype=dtype, name='cell')
+            return tf.einsum('ijk,ikl->ijl', shift, cell, name='displacements')
 
     def get_g_shape(self, _):
         """
@@ -251,11 +251,11 @@ class BatchEAM(EAM):
         """
         return 2
 
-    def get_v2g_map(self, features, **kwargs):
+    def get_v2g_map(self, features, prefix=None):
         """
         Return the re-indexed `v2g_map` for batch training and evaluation.
         """
-        splits = tf.split(features["v2g_map"], [-1, 1], axis=2)
+        splits = tf.split(features["g2.v2g_map"], [-1, 1], axis=2)
         v2g_map = tf.identity(splits[0])
         v2g_mask = tf.identity(splits[1], name='v2g_mask')
         indexing = self._get_v2g_map_batch_indexing_matrix()

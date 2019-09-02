@@ -148,10 +148,12 @@ class SymmetryFunction(AtomicDescriptor):
             tf.summary.scalar(f'{index}/summary', variable)
             return variable
 
-    def get_v2g_map(self, features: dict, prefix: str):
+    def get_v2g_map(self, features: dict, prefix: str = None):
         """
         Return the base v2g map.
         """
+        if prefix is None:
+            raise ValueError("`prefix` should be set!")
         return tf.identity(features[f"{prefix}.v2g_map"], name='v2g_map')
 
     @staticmethod
@@ -418,14 +420,14 @@ class BatchSymmetryFunction(SymmetryFunction):
         return self._max_occurs
 
     @staticmethod
-    def get_pbc_displacements(shift, cells, dtype=tf.float32):
+    def get_pbc_displacements(shift, cell, dtype=tf.float32):
         """
         Compute r^{GSL} and D^{GSL} in the training phase.
         """
         with tf.name_scope("Einsum"):
             shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
-            cells = tf.convert_to_tensor(cells, dtype=dtype, name='cells')
-            return tf.einsum('ijk,ikl->ijl', shift, cells, name='displacements')
+            cell = tf.convert_to_tensor(cell, dtype=dtype, name='cell')
+            return tf.einsum('ijk,ikl->ijl', shift, cell, name='displacements')
 
     def get_g_shape(self, _):
         """

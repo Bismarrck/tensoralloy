@@ -114,7 +114,7 @@ class AtomicDescriptor:
         cell : tf.Tensor or array_like
             A `float64` or `float32` tensor of shape `[3, 3]` as the cell.
         dtype : DType
-            The corresponding data type of `shift` and `cells`.
+            The corresponding data type of `shift` and `cell`.
 
         Returns
         -------
@@ -160,7 +160,7 @@ class AtomicDescriptor:
         raise NotImplementedError(
             "This method must be overridden by a subclass!")
 
-    def get_v2g_map(self, features: dict, prefix: str):
+    def get_v2g_map(self, features: dict, prefix: str = None):
         """
         A wrapper function to get `v2g_map` or re-indexed `v2g_map`.
         """
