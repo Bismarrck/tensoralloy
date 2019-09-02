@@ -340,6 +340,9 @@ class TensorAlloyCalculator(Calculator):
                 analyzer.get_conventional_standard_structure())
 
         elastic = self.get_property('elastic', atoms, allow_calculation=True)
+        for i in range(6):
+            for j in range(i + 1, 6):
+                elastic[j, i] = elastic[i, j]
         return ElasticTensor.from_voigt(elastic)
 
     def get_frequencies_and_normal_modes(self, atoms=None):

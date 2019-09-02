@@ -103,7 +103,7 @@ def test_elastic_constant_tensor():
     """
     Test elastic properties calculation of `TensorAlloyCalculator`.
     """
-    graph_path = join(test_dir(), 'Ni', "Ni.zhou04.elastic.pb")
+    graph_path = join(test_dir(), 'models', "Ni.zhou04.elastic.pb")
     calc = TensorAlloyCalculator(graph_path)
 
     cubic = bulk("Ni", cubic=True)
