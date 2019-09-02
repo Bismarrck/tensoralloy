@@ -1,6 +1,6 @@
 # coding=utf-8
 """
-This module defines `IndexTransformer` which is used to map arrays from local
+This module defines `VirtualAtomMap` which is used to map arrays from local
 to global reference or vice versa.
 """
 from __future__ import print_function, absolute_import
@@ -14,13 +14,13 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class IndexTransformer:
+class VirtualAtomMap:
     """
     If a dataset has different stoichiometries, a global ordered symbols list
     should be kept. This class is used to transform the local indices of the
     symbols of arbitrary `Atoms` to the global indexing system.
     """
-    _ISTART = 1
+    REAL_ATOM_START = 1
 
     def __init__(self, max_occurs: Counter, symbols: List[str]):
         """
@@ -28,43 +28,35 @@ class IndexTransformer:
         """
         self._max_occurs = max_occurs
         self._symbols = symbols
-        self._max_n_atoms = sum(max_occurs.values())
+        self._max_vap_natoms = sum(max_occurs.values()) + 1
 
-        istart = IndexTransformer._ISTART
+        istart = VirtualAtomMap.REAL_ATOM_START
         elements = sorted(max_occurs.keys())
         offsets = np.cumsum([max_occurs[e] for e in elements])[:-1]
         offsets = np.insert(offsets, 0, 0)
         delta = Counter()
         index_map = {}
-        mask = np.zeros(self._max_n_atoms + 1, dtype=bool)
+        mask = np.zeros(self._max_vap_natoms, dtype=bool)
         for i, symbol in enumerate(symbols):
             idx_old = i + istart
             idx_new = offsets[elements.index(symbol)] + delta[symbol] + istart
             index_map[idx_old] = idx_new
             delta[symbol] += 1
             mask[idx_new] = True
-        reverse_map = {v: k for k, v in index_map.items()}
+        reverse_map = {v: k - 1 for k, v in index_map.items()}
         index_map[0] = 0
-        reverse_map[0] = 0
+        reverse_map[0] = -1
         self._mask = mask
-        self._index_map = index_map
-        self._reverse_map = reverse_map
+        self.local_to_gsl_map = index_map
+        self.gsl_to_local_map = reverse_map
 
     @property
-    def n_atoms(self):
+    def max_vap_natoms(self):
         """
-        Return the number of atoms, excluding the 'virtual atom', that the
-        target `Atoms` of this transformer should have.
-        """
-        return len(self._symbols)
-
-    @property
-    def max_n_atoms(self):
-        """
-        Return the number of atoms, excluding the 'virtual atom', in the
+        Return the number of atoms (including the 'virtual atom') in the global
         reference system.
         """
-        return self._max_n_atoms
+        return self._max_vap_natoms
 
     @property
     def max_occurs(self) -> Counter:
@@ -74,57 +66,11 @@ class IndexTransformer:
         return self._max_occurs
 
     @property
-    def chemical_symbols(self) -> List[str]:
-        """
-        Return a list of str as the ordered chemical symbols of the target
-        stoichiometry.
-        """
-        return self._symbols
-
-    @property
-    def reference_chemical_symbols(self) -> List[str]:
-        """
-        Return a list of str as the ordered chemical symbols of the reference
-        (global) stoichiometry.
-        """
-        return sorted(self._max_occurs.elements())
-
-    @property
-    def mask(self) -> np.ndarray:
+    def atom_masks(self) -> np.ndarray:
         """
         Return a `bool` array.
         """
         return self._mask
-
-    # FIXME: the index here should start from one. This may be confusing.
-    def inplace_map_index(self, index_or_indices, reverse=False,
-                          exclude_extra=False):
-        """
-        Do the in-place index transformation.
-
-        Parameters
-        ----------
-        index_or_indices : int or List[int] or array_like
-            An atom index or a list of indices. One must be aware that indices
-            here start from one!
-        reverse : bool, optional
-            If True, the indices will be mapped to the local reference from the
-            global reference.
-        exclude_extra : bool
-            Exclude the virtual atom when calculating the index.
-
-        """
-        if reverse:
-            index_map = self._reverse_map
-        else:
-            index_map = self._index_map
-        delta = int(exclude_extra)
-        if not hasattr(index_or_indices, "__len__"):
-            return index_map[index_or_indices] - delta
-        else:
-            for i in range(len(index_or_indices)):
-                index_or_indices[i] = index_map[index_or_indices[i]] - delta
-            return index_or_indices
 
     def map_array(self, array: np.ndarray, reverse=False):
         """
@@ -155,13 +101,13 @@ class IndexTransformer:
                 raise ValueError(f"The shape should be {shape}")
 
         indices = []
-        istart = IndexTransformer._ISTART
+        istart = VirtualAtomMap.REAL_ATOM_START
         if reverse:
             for i in range(istart, istart + len(self._symbols)):
-                indices.append(self._index_map[i])
+                indices.append(self.local_to_gsl_map[i])
         else:
-            for i in range(self._max_n_atoms + 1):
-                indices.append(self._reverse_map.get(i, 0))
+            for i in range(self._max_vap_natoms):
+                indices.append(self.gsl_to_local_map.get(i, -1) + istart)
         output = array[:, indices]
         if rank == 2:
             output = np.squeeze(output, axis=0)
@@ -203,9 +149,9 @@ class IndexTransformer:
                 "The input array should be a 4D matrix of shape [Np, 3, Np, 3]")
 
         indices = []
-        istart = IndexTransformer._ISTART
+        istart = self.REAL_ATOM_START
         for i in range(istart, istart + len(self._symbols)):
-            indices.append(self._index_map[i])
+            indices.append(self.local_to_gsl_map[i])
 
         n = len(self._symbols)
 
