@@ -517,7 +517,7 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
     Compute the symmetry function descriptors for unit tests.
     """
     symbols = atoms.get_chemical_symbols()
-    all_kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), k_max=3)
+    all_kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), angular=True)
     total_dim, kbody_sizes = compute_dimension(
         all_kbody_terms,
         n_etas=Defaults.n_etas,
@@ -691,18 +691,18 @@ def _merge_indexed_slices(
                          for i in range(batch_size)],
                         axis=0)
 
-    batch = AttributeDict()
-    batch.ilist = _stack(g2, 'ilist')
-    batch.jlist = _stack(g2, 'jlist')
-    batch.shift = _stack(g2, 'shift')
-    batch.rv2g = _stack(g2, 'v2g_map')
-    batch.ij = _stack(g4, 'ij')
-    batch.ik = _stack(g4, 'ik')
-    batch.jk = _stack(g4, 'jk')
-    batch.ij_shift = _stack(g4, 'ij_shift')
-    batch.ik_shift = _stack(g4, 'ik_shift')
-    batch.jk_shift = _stack(g4, 'jk_shift')
-    batch.av2g = _stack(g4, 'v2g_map')
+    batch = dict()
+    batch["g2.ilist"] = _stack(g2, 'ilist')
+    batch["g2.jlist"] = _stack(g2, 'jlist')
+    batch["g2.n1"] = _stack(g2, 'n1')
+    batch["g2.v2g_map"] = _stack(g2, 'v2g_map')
+    batch["g4.ilist"] = _stack(g4, 'ilist')
+    batch["g4.jlist"] = _stack(g4, 'jlist')
+    batch["g4.klist"] = _stack(g4, 'klist')
+    batch["g4.n1"] = _stack(g4, 'n1')
+    batch["g4.n2"] = _stack(g4, 'n2')
+    batch["g4.n3"] = _stack(g4, 'n3')
+    batch["g4.v2g_map"] = _stack(g4, 'v2g_map')
 
     return batch
 
@@ -715,7 +715,7 @@ def _compute_qm7m_descriptors_legacy(rc):
     batch_size = len(qm7m.trajectory)
     max_n_atoms = sum(qm7m.max_occurs.values())
     all_kbody_terms, kbody_terms, elements = get_kbody_terms(
-        list(qm7m.max_occurs.keys()), k_max=3
+        list(qm7m.max_occurs.keys()), angular=True
     )
     total_dim, kbody_sizes = compute_dimension(
         all_kbody_terms,
@@ -776,20 +776,22 @@ def test_batch_multi_elements():
             volumes = []
             masks = []
             for i, atoms in enumerate(qm7m.trajectory):
-                clf = sf.get_index_transformer(atoms)
-                indexed_slices.append(sf.get_indexed_slices(atoms))
+                clf = sf.get_vap_transformer(atoms)
+                g2 = sf.get_g2_indexed_slices(atoms)
+                g4 = sf.get_g4_indexed_slices(atoms, g2)
+                indexed_slices.append((g2, g4))
                 positions.append(
                     clf.map_positions(atoms.positions).astype(np_dtype))
                 cells.append(
                     atoms.get_cell(complete=True).array.astype(np_dtype))
                 volumes.append(np_dtype(atoms.get_volume()))
-                masks.append(np.asarray(clf.mask, dtype=np_dtype))
+                masks.append(np.asarray(clf.atom_masks, dtype=np_dtype))
 
             batch = _merge_indexed_slices(indexed_slices)
-            batch.positions = np.asarray(positions)
-            batch.cells = np.asarray(cells)
-            batch.volume = volumes
-            batch.mask = np.asarray(masks)
+            batch["positions"] = np.asarray(positions)
+            batch["cells"] = np.asarray(cells)
+            batch["volume"] = volumes
+            batch["atom_masks"] = np.asarray(masks)
 
             # Use a large delta because we use float32 in this test.
             delta = 1e-5

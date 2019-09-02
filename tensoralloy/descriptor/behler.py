@@ -118,6 +118,13 @@ class SymmetryFunction(AtomicDescriptor):
         else:
             raise ValueError(f"Unknown cutoff function: {cutoff_function}")
 
+    @property
+    def trainable(self):
+        """
+        Return if symmetry function parameters are trainable or not.
+        """
+        return self._trainable
+
     def _get_variable(self, name: str, index: int, dtype):
         """
         Return a shared variable.
@@ -270,9 +277,10 @@ class SymmetryFunction(AtomicDescriptor):
             r2 = tf.add_n([rij2, rik2, rjk2], name='r2')
             r2c = tf.math.truediv(r2, rc2, name='r2_rc2')
             with tf.name_scope("CosTheta"):
+                two = tf.convert_to_tensor(2.0, rij.dtype, name='two')
                 upper = tf.math.subtract(rij2 + rik2, rjk2, name='upper')
                 lower = tf.math.multiply(
-                    tf.math.multiply(2.0, rij), rik, name='lower')
+                    tf.math.multiply(two, rij), rik, name='lower')
                 cos_theta = tf.math.truediv(upper, lower, name='theta')
             with tf.name_scope("Cutoff"):
                 fc_rij = cosine_cutoff(rij, rc=self._rc, name='fc_rij')
@@ -370,7 +378,7 @@ class BatchSymmetryFunction(SymmetryFunction):
                  batch_size: int, eta=np.array([0.05, 4.0, 20.0, 80.0]),
                  omega=np.array([0.0]), beta=np.array([0.005, ]),
                  gamma=np.array([1.0, -1.0]), zeta=np.array([1.0, 4.0]),
-                 angular=True, periodic=True):
+                 angular=True, periodic=True, trainable=False):
         """
         Initialization method.
         """
@@ -378,7 +386,8 @@ class BatchSymmetryFunction(SymmetryFunction):
 
         super(BatchSymmetryFunction, self).__init__(
             rc=rc, elements=elements, eta=eta, beta=beta, gamma=gamma,
-            zeta=zeta, omega=omega, angular=angular, periodic=periodic)
+            zeta=zeta, omega=omega, angular=angular, periodic=periodic,
+            trainable=trainable)
         self._max_occurs = max_occurs
         self._max_n_atoms = sum(max_occurs.values())
         self._nij_max = nij_max
