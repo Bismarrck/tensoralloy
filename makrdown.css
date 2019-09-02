@@ -128,7 +128,7 @@ h4 {
 }
 
 pre {
-    padding: 16px;
+    padding: 10.5px;
     overflow: auto;
     font-size: 85%;
     line-height: 1.45;
@@ -148,4 +148,3 @@ pre code {
     background-color: transparent;
     border: 0;
 }
-
