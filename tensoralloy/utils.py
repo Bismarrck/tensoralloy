@@ -13,7 +13,7 @@ from os import makedirs
 from os.path import dirname
 from itertools import chain
 from logging.config import dictConfig
-from typing import List, Dict, Tuple, Union, Any
+from typing import List, Union, Any
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -86,45 +86,23 @@ def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     return atoms
 
 
-def get_kbody_terms(elements: List[str], k_max=3) -> Tuple[List[str],
-                                                           Dict[str, List[str]],
-                                                           List[str]]:
+def get_kbody_terms(elements: List[str], angular=False):
     """
-    Given a list of unique elements, construct all possible k-body terms and the
-    dict mapping terms to each type of element.
-
-    Parameters
-    ----------
-    elements : List[str]
-        A list of str as the ordered unique elements.
-    k_max : int
-        The maximum k for the many-body expansion.
-
-    Returns
-    -------
-    all_terms : List[str]
-        A list of str as all k-body terms.
-    kbody_terms : Dict[str, List[str]]
-        A dict of (element, terms) mapping k-body terms to each type of element.
-    elements : List[str]
-        A list of str as the ordered unique elements.
-
+    Return ordered k-body terms (k=2 or k=2,3 if angular is True).
     """
     elements = sorted(list(set(elements)))
     n = len(elements)
-    k_max = max(k_max, 1)
     kbody_terms = {}
     for i in range(n):
         kbody_term = "{}{}".format(elements[i], elements[i])
         kbody_terms[elements[i]] = [kbody_term]
-    if k_max >= 2:
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    continue
-                kbody_term = "{}{}".format(elements[i], elements[j])
-                kbody_terms[elements[i]].append(kbody_term)
-    if k_max >= 3:
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            kbody_term = "{}{}".format(elements[i], elements[j])
+            kbody_terms[elements[i]].append(kbody_term)
+    if angular:
         for i in range(n):
             center = elements[i]
             for j in range(n):
@@ -132,8 +110,6 @@ def get_kbody_terms(elements: List[str], k_max=3) -> Tuple[List[str],
                     suffix = "".join(sorted([elements[j], elements[k]]))
                     kbody_term = "{}{}".format(center, suffix)
                     kbody_terms[elements[i]].append(kbody_term)
-    if k_max >= 4:
-        raise ValueError("`k_max>=4` is not supported yet!")
     all_terms = [
         x for x in chain(*[kbody_terms[element] for element in elements])]
     return all_terms, kbody_terms, elements
@@ -240,7 +216,7 @@ class Defaults:
 
     variable_moving_average_decay = 0.999
 
-    activation = 'leaky_relu'
+    activation = 'softplus'
     hidden_sizes = [64, 32]
     learning_rate = 0.01
 
