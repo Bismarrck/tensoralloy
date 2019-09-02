@@ -88,12 +88,11 @@ def test_rose_eos_constraint():
                 clf.encode(atoms).SerializeToString())
             example = clf.decode_protobuf(protobuf)
 
-            batch = AttributeDict()
+            batch = dict()
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = AttributeDict(energy=batch.pop('y_true'),
-                                   energy_confidence=batch.pop('y_conf'))
+            labels = dict(energy=batch.pop('y_true'))
 
             train_params = TrainParameters()
             train_params.profile_steps = 0

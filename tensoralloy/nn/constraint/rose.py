@@ -139,7 +139,7 @@ def get_rose_constraint_loss(base_nn,
                 with tf.name_scope("Eq"):
                     base_clf = base_nn.transformer
                     rc = base_clf.rc
-                    angular = base_clf.k_max == 3
+                    angular = base_clf.angular
 
                     if isinstance(base_clf, BatchDescriptorTransformer):
                         clf = base_clf.as_descriptor_transformer()
@@ -153,8 +153,8 @@ def get_rose_constraint_loss(base_nn,
                         features=features,
                         mode=tf_estimator.ModeKeys.PREDICT,
                         verbose=verbose)
-                    e0 = tf.identity(output.energy, name='E0')
-                    v0 = tf.identity(features.volume, name='V0')
+                    e0 = tf.identity(output["energy"], name='E0')
+                    v0 = tf.identity(features["volume"], name='V0')
 
                 dx = options.dx
                 delta = options.delta
@@ -215,7 +215,7 @@ def get_rose_constraint_loss(base_nn,
                         verbose=verbose)
 
                     predictions = tf.identity(
-                        outputs.energy, name='predictions')
+                        outputs["energy"], name='predictions')
 
                     with tf.name_scope("Ei"):
                         c12 = tf.math.add(one, ax, name='c12')
