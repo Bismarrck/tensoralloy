@@ -149,3 +149,4 @@ throttle_secs = 60
 [gpu]
 allow_gpu_growth = true
 num_gpus = 0
+use_gpu_as_ps = true
