@@ -7,11 +7,14 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+import unittest
+import shutil
 
 from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_equal, assert_dict_equal
-from nose.tools import assert_less, assert_true
-from os.path import join
+from nose.tools import assert_less, assert_true, assert_almost_equal
+from os.path import join, exists
+from sklearn.model_selection import train_test_split
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import VirtualAtomMap
@@ -20,7 +23,7 @@ from tensoralloy.utils import Defaults
 from tensoralloy.test_utils import qm7m, test_dir
 from tensoralloy.precision import precision_scope, get_float_dtype
 from tensoralloy.io.read import read_file
-from tensoralloy.io.db import connect
+from tensoralloy.io.db import connect, snap
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -50,7 +53,6 @@ def test_qm7m():
     """
     Test the qm7m dataset for energy only and k_max = 2.
     """
-
     with precision_scope("high"):
 
         ref = qm7m_compute()
@@ -58,8 +60,6 @@ def test_qm7m():
         with tf.Graph().as_default():
 
             savedir = join(test_dir(), 'qm7m')
-
-
             database = connect(join(savedir, 'qm7m.db'))
 
             rc = Defaults.rc
@@ -204,6 +204,63 @@ def test_nickel():
 
                 assert_less(np.abs(result["stress"][0] - stress).max(), eps)
                 assert_less(result["total_pressure"][0] - total_pressure, eps)
+
+
+class ParallelInputFnTest(unittest.TestCase):
+
+    def setUp(self):
+        """
+        The setup function.
+        """
+        self.tfrecords_dir = join(test_dir(), 'dataset')
+
+    def test_parallel_input_fn(self):
+        """
+        Test the method `Dataset.input_fn` with `num_shards > 1`.
+        """
+        with precision_scope("medium"):
+            with tf.Graph().as_default():
+                db = snap(name='Ni')
+                rc = 6.5
+                clf = BatchSymmetryFunctionTransformer(
+                    rc=rc,
+                    max_occurs=db.max_occurs,
+                    nij_max=db.get_nij_max(rc),
+                    nijk_max=0,
+                    batch_size=10,
+                    angular=False)
+                dataset = Dataset(db, 'Ni', clf, serial=True)
+                dataset.to_records(self.tfrecords_dir, test_size=10, seed=0,
+                                   write='eval')
+                parallel_input_fn = dataset.input_fn(
+                    mode=tf_estimator.ModeKeys.EVAL,
+                    batch_size=10,
+                    num_epochs=1,
+                    shuffle=False,
+                    num_shards=2)
+                features, labels = parallel_input_fn()
+                with tf.Session() as sess:
+                    tf.global_variables_initializer().run()
+                    label_vals = sess.run(labels)
+
+                indices = train_test_split(
+                    list(range(1, 1 + len(db))),
+                    random_state=0,
+                    test_size=10)[1]
+                for idx, atoms_id in enumerate(indices):
+                    atoms = db.get_atoms(id=atoms_id)
+                    yi = atoms.get_potential_energy()
+                    i = idx // 2
+                    j = idx % 2
+                    zi = label_vals['energy'][j][i]
+                    assert_almost_equal(yi, zi, delta=1e-4)
+
+    def tearDown(self):
+        """
+        The cleanup function.
+        """
+        if exists(self.tfrecords_dir):
+            shutil.rmtree(self.tfrecords_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

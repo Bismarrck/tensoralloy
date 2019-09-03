@@ -273,7 +273,8 @@ class Dataset:
             sig += "-fp64"
         return sig
 
-    def to_records(self, savedir, test_size=0.2, verbose=False):
+    def to_records(self, savedir, test_size=0.2, seed=None, write='all',
+                   verbose=False):
         """
         Split the dataset into a training set and a testing set and write these
         subsets to tfrecords files.
@@ -285,42 +286,54 @@ class Dataset:
         test_size : float or int or List[int] or Tuple[int]
             The proportion (float) or size (int) or indices (List[int]) of the
             dataset to include in the test split.
+        seed : int
+            The random seed.
+        write : str
+            Specify the subsets to write, options: 'all', 'train' or 'eval'.
         verbose : bool
             If True, the progress shall be logged.
 
         """
         signature = self._get_signature()
 
+        if seed is None:
+            seed = Defaults.seed
+
+        assert write in ('all', 'eval', 'train')
+
         if isinstance(test_size, (list, tuple)):
             test = list(test_size)
             train = [x for x in range(1, 1 + len(self)) if x not in test]
         else:
             train, test = train_test_split(range(1, 1 + len(self)),
-                                           random_state=Defaults.seed,
+                                           random_state=seed,
                                            test_size=test_size)
         assert min(test) >= 1
         assert min(train) >= 1
 
-        self._write_subset(
-            tf_estimator.ModeKeys.EVAL,
-            check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
-                self._name,
-                signature,
-                len(test),
-                self._transformer.descriptor,))),
-            test,
-            verbose=verbose,
-        )
-        self._write_subset(
-            tf_estimator.ModeKeys.TRAIN,
-            check_path(join(savedir, '{}-train-{}-{}.{}.tfrecords'.format(
-                self._name,
-                signature,
-                len(train),
-                self._transformer.descriptor,))),
-            train,
-            verbose=verbose,
-        )
+        if write == 'all' or write == 'eval':
+            self._write_subset(
+                tf_estimator.ModeKeys.EVAL,
+                check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
+                    self._name,
+                    signature,
+                    len(test),
+                    self._transformer.descriptor,))),
+                test,
+                verbose=verbose,
+            )
+
+        if write == 'all' or write == 'train':
+            self._write_subset(
+                tf_estimator.ModeKeys.TRAIN,
+                check_path(join(savedir, '{}-train-{}-{}.{}.tfrecords'.format(
+                    self._name,
+                    signature,
+                    len(train),
+                    self._transformer.descriptor,))),
+                train,
+                verbose=verbose,
+            )
 
         self.load_tfrecords(savedir)
 
@@ -380,9 +393,24 @@ class Dataset:
         return success
 
     def input_fn(self, mode: tf_estimator.ModeKeys, batch_size=25,
-                 num_epochs=None, shuffle=False):
+                 num_epochs=None, shuffle=False, num_shards=1):
         """
         Return a Callable input function for `tf_estimator.Estimator`.
+
+        Parameters
+        ----------
+        mode : ModeKeys
+            A `ModeKeys` selecting between the training and validation data.
+        batch_size : int
+            The total batch size for training to be divided by the number of
+            shards.
+        num_epochs : Union[int, None]
+            The maximum number of epochs to run.
+        shuffle : bool
+            Shuffle the input data if True.
+        num_shards : int
+            The number of towers participating in data-parallel training.
+
         """
         if mode == tf_estimator.ModeKeys.PREDICT:
             raise ValueError("The PREDICT does not need an `input_fn`.")
@@ -400,19 +428,50 @@ class Dataset:
 
             """
             with tf.name_scope("Dataset"):
-                batch = self.next_batch(
+                features = self.next_batch(
                     mode, batch_size=batch_size, num_epochs=num_epochs,
                     shuffle=shuffle)
-                for batch_of_tensors in batch.values():
-                    shape = batch_of_tensors.shape.as_list()
+                for tensor in features.values():
+                    shape = tensor.shape.as_list()
                     if shape[0] is None:
-                        batch_of_tensors.set_shape([batch_size] + shape[1:])
-            labels = dict(energy=batch.pop('y_true'))
-            if self._database.has_forces:
-                labels['forces'] = batch.pop('f_true')
-            if self._database.has_stress:
-                labels['stress'] = batch.pop('stress')
-            return batch, labels
+                        tensor.set_shape([batch_size] + shape[1:])
+                labels = dict(energy=features.pop('y_true'))
+
+                if self._database.has_forces:
+                    labels['forces'] = features.pop('f_true')
+                if self._database.has_stress:
+                    labels['stress'] = features.pop('stress')
+
+                if num_shards > 1:
+                    assert batch_size % num_shards == 0
+                    feature_stacks = {}
+                    label_stacks = {}
+                    for key, tensor in features.items():
+                        feature_stacks[key] = tf.unstack(
+                            tensor, num=batch_size, axis=0)
+                    for key, tensor in labels.items():
+                        label_stacks[key] = tf.unstack(
+                            tensor, num=batch_size, axis=0)
+
+                    feature_shards = {key: [[] for _ in range(num_shards)]
+                                      for key in features}
+                    label_shards = {key: [[] for _ in range(num_shards)]
+                                    for key in labels}
+
+                    for i in range(batch_size):
+                        idx = i % num_shards
+                        for key in features:
+                            feature_shards[key][idx].append(
+                                feature_stacks[key][i])
+                        for key in labels:
+                            label_shards[key][idx].append(label_stacks[key][i])
+
+                    for key, stack in feature_shards.items():
+                        features[key] = [tf.parallel_stack(x) for x in stack]
+                    for key, stack in label_shards.items():
+                        labels[key] = [tf.parallel_stack(x) for x in stack]
+
+                return features, labels
 
         return _input_fn
 
