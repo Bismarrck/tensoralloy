@@ -31,7 +31,6 @@ from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
-from tensoralloy.train.dataclasses import EstimatorHyperParams
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -742,7 +741,7 @@ class BasicNN:
                  features: dict,
                  labels: dict,
                  mode: tf_estimator.ModeKeys,
-                 params: EstimatorHyperParams):
+                 params):
         """
         Initialize a model function for `tf_estimator.Estimator`.
 
