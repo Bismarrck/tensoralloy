@@ -25,7 +25,7 @@ __all__ = ["RestoreEmaVariablesHook", "LoggingTensorHook", "ProfilerHook",
            "NanTensorHook"]
 
 
-class WarmStartFromVariablesHook(tf.train.SessionRunHook):
+class WarmStartFromVariablesHook(tf.estimator.SessionRunHook):
     """
     This hook can be used to replace `tf_estimator.WarmStartSettings`.
     """
@@ -88,7 +88,7 @@ class WarmStartFromVariablesHook(tf.train.SessionRunHook):
                                       assignment_map=assignment_map)
 
 
-class RestoreEmaVariablesHook(tf.train.SessionRunHook):
+class RestoreEmaVariablesHook(tf.estimator.SessionRunHook):
     """
     Replace parameters with their moving averages.
     This operation should be executed only once, and before any inference.

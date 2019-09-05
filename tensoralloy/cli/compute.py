@@ -18,7 +18,9 @@ from ase.io import read
 from ase.units import GPa
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy import TensorAlloyCalculator, InputReader, TrainingManager
+from tensoralloy.calculator import TensorAlloyCalculator
+from tensoralloy.io.input.reader import InputReader
+from tensoralloy.train.training import TrainingManager
 from tensoralloy.analysis.elastic import get_lattice_type
 from tensoralloy.analysis.elastic import get_elementary_deformations
 from tensoralloy.analysis.elastic import get_elastic_tensor

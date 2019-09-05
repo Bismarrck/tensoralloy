@@ -712,10 +712,10 @@ def _compute_qm7m_descriptors_legacy(rc):
     The legacy approach to compute symmetry function descriptors of the qm7m
     trajectory.
     """
-    batch_size = len(qm7m.trajectory)
-    max_n_atoms = sum(qm7m.max_occurs.values())
+    batch_size = len(qm7m["trajectory"])
+    max_n_atoms = sum(qm7m["max_occurs"].values())
     all_kbody_terms, kbody_terms, elements = get_kbody_terms(
-        list(qm7m.max_occurs.keys()), angular=True
+        list(qm7m["max_occurs"].keys()), angular=True
     )
     total_dim, kbody_sizes = compute_dimension(
         all_kbody_terms,
@@ -725,11 +725,11 @@ def _compute_qm7m_descriptors_legacy(rc):
         n_gammas=Defaults.n_gammas,
         n_zetas=Defaults.n_zetas)
     element_offsets = np.insert(
-        np.cumsum([qm7m.max_occurs[e] for e in elements]), 0, 0)
+        np.cumsum([qm7m["max_occurs"][e] for e in elements]), 0, 0)
 
     offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
     targets = np.zeros((batch_size, max_n_atoms + 1, total_dim))
-    for i, atoms in enumerate(qm7m.trajectory):
+    for i, atoms in enumerate(qm7m["trajectory"]):
         g, local_all_body_terms, local_sizes = \
             legacy_symmetry_function(atoms, rc)
         local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
@@ -758,7 +758,7 @@ def test_batch_multi_elements():
     Test computing descriptors of a batch of multi-elements molecules.
     """
     rc = 6.0
-    batch_size = len(qm7m.trajectory)
+    batch_size = len(qm7m["trajectory"])
     targets = _compute_qm7m_descriptors_legacy(rc)
 
     with tf.Graph().as_default():
@@ -766,16 +766,16 @@ def test_batch_multi_elements():
             float_dtype = get_float_dtype()
             np_dtype = float_dtype.as_numpy_dtype
 
-            nij_max, nijk_max = get_ij_ijk_max(qm7m.trajectory, rc)
-            sf = BatchSymmetryFunctionTransformer(rc, qm7m.max_occurs, nij_max,
-                                                  nijk_max, batch_size,
+            nij_max, nijk_max = get_ij_ijk_max(qm7m["trajectory"], rc)
+            sf = BatchSymmetryFunctionTransformer(rc, qm7m["max_occurs"],
+                                                  nij_max, nijk_max, batch_size,
                                                   angular=True)
             indexed_slices = []
             positions = []
             cell = []
             volume = []
             atom_masks = []
-            for i, atoms in enumerate(qm7m.trajectory):
+            for i, atoms in enumerate(qm7m["trajectory"]):
                 clf = sf.get_vap_transformer(atoms)
                 g2 = sf.get_g2_indexed_slices(atoms)
                 g4 = sf.get_g4_indexed_slices(atoms, g2)
