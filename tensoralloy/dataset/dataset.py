@@ -393,7 +393,7 @@ class Dataset:
         return success
 
     def input_fn(self, mode: tf_estimator.ModeKeys, batch_size=25,
-                 num_epochs=None, shuffle=False, num_shards=1):
+                 num_epochs=None, shuffle=False):
         """
         Return a Callable input function for `tf_estimator.Estimator`.
 
@@ -408,8 +408,6 @@ class Dataset:
             The maximum number of epochs to run.
         shuffle : bool
             Shuffle the input data if True.
-        num_shards : int
-            The number of towers participating in data-parallel training.
 
         """
         if mode == tf_estimator.ModeKeys.PREDICT:
@@ -441,35 +439,6 @@ class Dataset:
                     labels['forces'] = features.pop('f_true')
                 if self._database.has_stress:
                     labels['stress'] = features.pop('stress')
-
-                if num_shards > 1:
-                    assert batch_size % num_shards == 0
-                    feature_stacks = {}
-                    label_stacks = {}
-                    for key, tensor in features.items():
-                        feature_stacks[key] = tf.unstack(
-                            tensor, num=batch_size, axis=0)
-                    for key, tensor in labels.items():
-                        label_stacks[key] = tf.unstack(
-                            tensor, num=batch_size, axis=0)
-
-                    feature_shards = {key: [[] for _ in range(num_shards)]
-                                      for key in features}
-                    label_shards = {key: [[] for _ in range(num_shards)]
-                                    for key in labels}
-
-                    for i in range(batch_size):
-                        idx = i % num_shards
-                        for key in features:
-                            feature_shards[key][idx].append(
-                                feature_stacks[key][i])
-                        for key in labels:
-                            label_shards[key][idx].append(label_stacks[key][i])
-
-                    for key, stack in feature_shards.items():
-                        features[key] = [tf.parallel_stack(x) for x in stack]
-                    for key, stack in label_shards.items():
-                        labels[key] = [tf.parallel_stack(x) for x in stack]
 
                 return features, labels
 
