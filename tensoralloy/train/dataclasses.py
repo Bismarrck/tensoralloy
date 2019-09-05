@@ -31,7 +31,6 @@ class GpuParameters:
     """
     allow_gpu_growth: bool = True
     num_gpus: int = 0
-    use_gpu_as_ps: bool = False
 
 
 class EstimatorHyperParams(dict):
