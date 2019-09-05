@@ -13,6 +13,9 @@ import copy
 import subprocess
 import setuptools
 
+from tensorflow.python.framework.versions import MONOLITHIC_BUILD
+import platform as _platform
+
 from os.path import join, dirname
 from setuptools.command.build_ext import build_ext
 
@@ -221,6 +224,21 @@ def CUDAExtension(name, sources, *args, **kwargs):
     return setuptools.Extension(name, sources, *args, **kwargs)
 
 
+def get_tf_link_flags():
+    """
+    Get the link flags for custom operators.
+
+    '-ltensorflow_framework' is used.
+    The original '-l:libtensorflow_framework.{ver}.{so|dylib}' may cause a
+    failed link.
+    """
+    flags = []
+    if not MONOLITHIC_BUILD:
+        flags.append('-L%s' % tf.sysconfig.get_lib())
+        flags.append('-ltensorflow_framework')
+    return flags
+
+
 def add_tf_flags(kwargs):
     flags = copy.deepcopy(kwargs.get('extra_compile_args', []))
     if isinstance(flags, dict):
@@ -233,9 +251,9 @@ def add_tf_flags(kwargs):
     flags = copy.deepcopy(kwargs.get('extra_link_args', []))
     if isinstance(flags, dict):
         for k in flags:
-            flags[k] += tf.sysconfig.get_link_flags()
+            flags[k] += get_tf_link_flags()
     else:
-        flags += tf.sysconfig.get_link_flags()
+        flags += get_tf_link_flags()
     kwargs['extra_link_args'] = flags
 
     return kwargs
