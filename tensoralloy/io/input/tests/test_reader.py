@@ -79,7 +79,6 @@ def test_read_eam_alloy_toml():
     assert_equal(reader['nn.loss.energy.weight'], 1.0)
     assert_list_equal(reader['nn.loss.rose.crystals'], ['Ni'])
     assert_equal(reader['nn.loss.rose.beta'][0], 0.5e-2)
-    assert_equal(reader['nn.loss.equivalently_trusted'], False)
 
     assert_equal(reader['opt.method'], 'sgd')
     assert_equal(reader['opt.sgd.momentum'], 0.9)
