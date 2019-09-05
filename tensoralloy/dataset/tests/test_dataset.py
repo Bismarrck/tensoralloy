@@ -35,8 +35,9 @@ def qm7m_compute():
     """
     batch_size = len(qm7m.trajectory)
     sf = BatchSymmetryFunctionTransformer(rc=Defaults.rc,
-                                          max_occurs=qm7m.max_occurs,
-                                          nij_max=qm7m.nij_max, nijk_max=0,
+                                          max_occurs=qm7m["max_occurs"],
+                                          nij_max=qm7m["nij_max"],
+                                          nijk_max=0,
                                           angular=False)
     max_n_atoms = sum(qm7m.max_occurs.values()) + 1
     g2 = []
