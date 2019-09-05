@@ -18,8 +18,11 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
-from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn import EamFsNN, EamAlloyNN, AdpNN, AtomicNN, AtomicResNN
+from tensoralloy.nn.atomic.resnet import AtomicResNN
+from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.eam.alloy import EamAlloyNN
+from tensoralloy.nn.eam.fs import EamFsNN
+from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
@@ -27,6 +30,7 @@ from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
 from tensoralloy.train.dataclasses import EstimatorHyperParams
+from tensoralloy.train import distribute_utils
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -69,7 +73,7 @@ class TrainingManager:
             self._input_file = input_file
 
     @property
-    def nn(self) -> BasicNN:
+    def nn(self):
         """
         Return a `BasicNN`.
         """
@@ -326,22 +330,30 @@ class TrainingManager:
                 tf.logging.info(f'seed={self._hparams.seed}')
                 tf.logging.info(f'input= \n{str(self._reader)}')
 
-                gpu_options = tf.GPUOptions(
-                    allow_growth=hparams.gpu.allow_gpu_growth)
-                session_config = tf.ConfigProto(allow_soft_placement=True,
-                                                gpu_options=gpu_options)
-                max_ckpts_to_keep = hparams.train.max_checkpoints_to_keep
+                strategy = distribute_utils.get_distribution_strategy(
+                    distribution_strategy="default",
+                    num_gpus=hparams.gpu.num_gpus,
+                    all_reduce_alg=True,
+                )
+
+                session_config = tf.ConfigProto(
+                    allow_soft_placement=True,
+                    gpu_options=tf.GPUOptions(
+                        allow_growth=hparams.gpu.allow_gpu_growth))
+
+                run_config = tf_estimator.RunConfig(
+                    save_checkpoints_steps=hparams.train.eval_steps,
+                    tf_random_seed=hparams.seed,
+                    log_step_count_steps=None,
+                    keep_checkpoint_max=hparams.train.max_checkpoints_to_keep,
+                    train_distribute=strategy,
+                    session_config=session_config)
 
                 estimator = tf_estimator.Estimator(
                     model_fn=nn.model_fn,
                     warm_start_from=None,
                     model_dir=hparams.train.model_dir,
-                    config=tf_estimator.RunConfig(
-                        save_checkpoints_steps=hparams.train.eval_steps,
-                        tf_random_seed=hparams.seed,
-                        log_step_count_steps=None,
-                        keep_checkpoint_max=max_ckpts_to_keep,
-                        session_config=session_config),
+                    config=run_config,
                     params=hparams)
 
                 if debug:
@@ -355,9 +367,11 @@ class TrainingManager:
                     hooks = None
 
                 train_spec = tf_estimator.TrainSpec(
-                    input_fn=dataset.input_fn(
+                    # The lambda wrap of `input_fn` is necessary for distributed
+                    # training.
+                    input_fn=lambda: dataset.input_fn(
                         mode=tf_estimator.ModeKeys.TRAIN,
-                        batch_size=hparams.train.batch_size,
+                        batch_size=hparams.train.batch_size * max(hparams.gpu.num_gpus, 1),
                         shuffle=hparams.train.shuffle),
                     max_steps=hparams.train.train_steps,
                     hooks=hooks)
