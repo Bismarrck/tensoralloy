@@ -124,7 +124,7 @@ def get_elastic_constant_loss(base_nn,
     configs.pop('class')
     configs['export_properties'] = ['energy', 'forces', 'stress']
 
-    with tf.name_scope("Elastic/"):
+    with tf.name_scope("Elastic"):
 
         losses = []
         dtype = get_float_dtype()

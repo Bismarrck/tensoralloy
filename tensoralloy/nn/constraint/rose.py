@@ -117,7 +117,7 @@ def get_rose_constraint_loss(base_nn,
     if options is None:
         options = RoseLossOptions()
 
-    with tf.name_scope("Rose/"):
+    with tf.name_scope("Rose"):
 
         losses = []
 
