@@ -182,7 +182,8 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
 
 
 def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
-                       train_parameters: TrainParameters):
+                       train_parameters: TrainParameters,
+                       num_replicas: int):
     """
     Return a list of `tf.train.SessionRunHook` objects for training.
 
@@ -192,6 +193,8 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
         A function to obtain moving averaged variables.
     train_parameters : TrainParameters
         Hyper parameters for this function.
+    num_replicas : int
+        The total 
 
     """
     with tf.name_scope("Hooks"):
@@ -204,7 +207,8 @@ def get_training_hooks(ema: tf.train.ExponentialMovingAverage,
 
         with tf.name_scope("Speed"):
             examples_per_sec_hook = ExamplesPerSecondHook(
-                batch_size=train_parameters.batch_size,
+                batch_size_per_replica=train_parameters.batch_size,
+                num_replicas=num_replicas,
                 every_n_steps=train_parameters.log_steps)
 
         hooks = [summary_saver_hook, examples_per_sec_hook]

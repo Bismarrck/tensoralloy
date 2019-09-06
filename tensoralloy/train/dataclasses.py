@@ -36,6 +36,13 @@ class DistributeParameters:
     num_packs: int = 1
     num_gpus: int = 0
 
+    @property
+    def num_replicas(self):
+        """
+        Return the number of replicas.
+        """
+        return max(self.num_gpus, 1)
+
     def as_dict(self):
         """
         Return the dict representation.

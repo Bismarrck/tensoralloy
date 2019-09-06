@@ -815,7 +815,8 @@ class BasicNN:
         if mode == tf_estimator.ModeKeys.TRAIN:
             training_hooks = get_training_hooks(
                 ema=ema,
-                train_parameters=params.train)
+                train_parameters=params.train,
+                num_replicas=params.distribute.num_replicas)
             return tf_estimator.EstimatorSpec(mode=mode, loss=total_loss,
                                               train_op=train_op,
                                               training_hooks=training_hooks)

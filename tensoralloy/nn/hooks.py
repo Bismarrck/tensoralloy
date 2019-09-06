@@ -252,14 +252,17 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
 
     """
 
-    def __init__(self, batch_size, every_n_steps=100, every_n_secs=None):
+    def __init__(self, batch_size_per_replica, num_replicas, every_n_steps=100,
+                 every_n_secs=None):
         """
         Initializer for ExamplesPerSecondHook.
 
         Parameters
         ----------
-        batch_size : int
-            Total batch size used to calculate examples/second from global time.
+        batch_size_per_replica : int
+            The batch size for each replica.
+        num_replicas : int
+            The number of parallel replicas.
         every_n_steps : int
             Log stats every n steps.
         every_n_secs : int
@@ -273,7 +276,9 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
             every_steps=every_n_steps, every_secs=every_n_secs)
         self._step_train_time = 0
         self._total_steps = 0
-        self._batch_size = batch_size
+        self._batch_size_per_replica = batch_size_per_replica
+        self._num_replicas = num_replicas
+        self._global_batch_size = batch_size_per_replica * num_replicas
         self._global_step_tensor = None
 
     def begin(self):
@@ -314,15 +319,14 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
                 self._step_train_time += elapsed_time
                 self._total_steps += elapsed_steps
 
-                average_examples_per_sec = self._batch_size * (
+                average_examples_per_sec = self._global_batch_size * (
                         self._total_steps / self._step_train_time)
-                current_examples_per_sec = steps_per_sec * self._batch_size
+                examples_per_sec = steps_per_sec * self._global_batch_size
                 # Average examples/sec followed by current examples/sec
                 tf.logging.info(
-                    '%s: %6.1f (%6.1f), step = %7d, %s: %8.1f',
-                    'Average examples/sec', average_examples_per_sec,
-                    current_examples_per_sec, self._total_steps,
-                    'steps/minute', steps_per_min)
+                    f'Average examples/sec: {average_examples_per_sec:6.1f} '
+                    f'({examples_per_sec:6.1f}), step = {self._total_steps:7d},'
+                    f' steps/minute: {steps_per_min:8.1f}')
 
 
 class NanTensorHook(session_run_hook.SessionRunHook):
