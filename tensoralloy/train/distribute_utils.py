@@ -24,6 +24,8 @@ import random
 import string
 import tensorflow as tf
 
+from tensoralloy.train.mirrored_strategy import MirroredStrategy
+
 
 def _collective_communication(all_reduce_alg):
     """Return a CollectiveCommunication based on all_reduce_alg.
@@ -146,7 +148,7 @@ def get_distribution_strategy(distribution_strategy="default",
             devices = ["device:CPU:0"]
         else:
             devices = ["device:GPU:%d" % i for i in range(num_gpus)]
-        return tf.distribute.MirroredStrategy(
+        return MirroredStrategy(
             devices=devices,
             cross_device_ops=_mirrored_cross_device_ops(all_reduce_alg, num_packs))
 
@@ -282,6 +284,7 @@ def _undo_monkey_patch_dataset_method(strategy):
 def set_up_synthetic_data():
     _monkey_patch_dataset_method(tf.distribute.OneDeviceStrategy)
     _monkey_patch_dataset_method(tf.distribute.MirroredStrategy)
+    _monkey_patch_dataset_method(MirroredStrategy)
     _monkey_patch_dataset_method(
         tf.distribute.experimental.MultiWorkerMirroredStrategy)
     # TODO(tobyboyd): Remove when contrib.distribute is all in core.
@@ -297,6 +300,7 @@ def set_up_synthetic_data():
 def undo_set_up_synthetic_data():
     _undo_monkey_patch_dataset_method(tf.distribute.OneDeviceStrategy)
     _undo_monkey_patch_dataset_method(tf.distribute.MirroredStrategy)
+    _undo_monkey_patch_dataset_method(MirroredStrategy)
     _undo_monkey_patch_dataset_method(
         tf.distribute.experimental.MultiWorkerMirroredStrategy)
     # TODO(tobyboyd): Remove when contrib.distribute is all in core.

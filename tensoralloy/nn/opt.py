@@ -153,7 +153,9 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                 continue
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
-                g = optimizer.compute_gradients(losses[prop])
+                g = optimizer.compute_gradients(
+                    losses[prop],
+                    aggregation_method=tf.AggregationMethod.ADD_N)
                 add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
 
@@ -170,7 +172,8 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                 gradients, global_step=global_step)
 
         with tf.control_dependencies([apply_gradients_op]):
-            with tf.name_scope("Average"):
+            with tf.variable_scope(tf.get_variable_scope(),
+                                   reuse=tf.AUTO_REUSE):
                 decay = Defaults.variable_moving_average_decay
                 ema = tf.train.ExponentialMovingAverage(decay=decay)
                 variable_averages_op = ema.apply(tf.trainable_variables())
