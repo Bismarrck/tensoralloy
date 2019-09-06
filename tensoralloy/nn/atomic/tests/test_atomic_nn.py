@@ -8,10 +8,11 @@ import tensorflow as tf
 import numpy as np
 import nose
 import os
+import unittest
 
 from ase.db import connect
 from os.path import exists, join, dirname
-from nose.tools import assert_equal, assert_list_equal, with_setup
+from nose.tools import assert_equal, assert_list_equal
 from nose.tools import assert_true, assert_false
 from tensorflow_estimator import estimator as tf_estimator
 
@@ -175,48 +176,52 @@ def test_inference_from_transformer():
         assert_equal(len(collection), 10)
 
 
-output_graph_path = join(
-    test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
+class ExportToPbTest(unittest.TestCase):
 
-checkpoint_path = join(
-    test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-10000')
+    def setUp(self):
+        """
+        The setup function.
+        """
+        self.output_graph_path = join(
+            test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
+        self.checkpoint_path = join(
+            test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-10000')
 
+    def tearDown(self) -> None:
+        """
+        The cleanup function.
+        """
+        if exists(self.output_graph_path):
+            os.remove(self.output_graph_path)
 
-def _delete():
-    if exists(output_graph_path):
-        os.remove(output_graph_path)
+    def test_export_to_pb(self):
+        """
+        Test exporting an `AtomicResNN` to a pb file.
+        """
+        db = connect(join(datasets_dir(), 'qm7.db'))
+        max_occurs = db.metadata['max_occurs']
+        elements = list(sorted(max_occurs.keys()))
 
-
-@with_setup(teardown=_delete)
-def test_export_to_pb():
-    """
-    Test exporting an `AtomicResNN` to a pb file.
-    """
-    db = connect(join(datasets_dir(), 'qm7.db'))
-    max_occurs = db.metadata['max_occurs']
-    elements = list(sorted(max_occurs.keys()))
-
-    with precision_scope('medium'):
-        clf = SymmetryFunctionTransformer(
-            rc=6.5, elements=elements, angular=False, trainable=True,
-            eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
-            omega=[0.0, 3.2])
-        atomic_static_energy = db.metadata['atomic_static_energy']
-
-        nn = AtomicResNN(elements=elements,
-                         hidden_sizes=[64, 32],
-                         minmax_scale=False,
-                         activation='leaky_relu',
-                         export_properties=['energy', 'forces', 'stress'],
-                         atomic_static_energy=atomic_static_energy)
-        nn.attach_transformer(clf)
-        nn.export(output_graph_path=output_graph_path,
-                  checkpoint=checkpoint_path,
-                  keep_tmp_files=False)
-
-        assert_true(exists(output_graph_path))
-        assert_false(exists(join(dirname(output_graph_path), 'export')))
+        with precision_scope('medium'):
+            clf = SymmetryFunctionTransformer(
+                rc=6.5, elements=elements, angular=False, trainable=True,
+                eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
+                omega=[0.0, 3.2])
+            atomic_static_energy = db.metadata['atomic_static_energy']
+            nn = AtomicResNN(elements=elements,
+                             hidden_sizes=[64, 32],
+                             minmax_scale=False,
+                             activation='softplus',
+                             export_properties=['energy', 'forces', 'stress'],
+                             atomic_static_energy=atomic_static_energy)
+            nn.attach_transformer(clf)
+            nn.export(output_graph_path=self.output_graph_path,
+                      checkpoint=self.checkpoint_path,
+                      keep_tmp_files=False)
+            assert_true(exists(self.output_graph_path))
+            assert_false(
+                exists(join(dirname(self.output_graph_path), 'export')))
 
 
 if __name__ == "__main__":
-    nose.run()
+    nose.main()

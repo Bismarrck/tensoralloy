@@ -144,7 +144,8 @@ class SymmetryFunction(AtomicDescriptor):
                 dtype=dtype,
                 initializer=initializer,
                 trainable=self._trainable,
-                collections=collections)
+                collections=collections,
+                aggregation=tf.VariableAggregation.MEAN)
             tf.summary.scalar(f'{index}/summary', variable)
             return variable
 

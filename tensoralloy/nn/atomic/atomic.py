@@ -120,11 +120,13 @@ class AtomicNN(BasicNN):
                             xlo = tf.get_variable(
                                 name="xlo", shape=_shape, dtype=_dtype,
                                 trainable=False, collections=_collections,
-                                initializer=_get_initializer(1000.0))
+                                initializer=_get_initializer(1000.0),
+                                aggregation=tf.VariableAggregation.MEAN)
                             xhi = tf.get_variable(
                                 name="xhi", shape=_shape, dtype=_dtype,
                                 trainable=False, collections=_collections,
-                                initializer=_get_initializer(0.0))
+                                initializer=_get_initializer(0.0),
+                                aggregation=tf.VariableAggregation.MEAN)
 
                             if mode == tf_estimator.ModeKeys.TRAIN:
                                 xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
