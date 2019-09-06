@@ -22,15 +22,30 @@ class DebugParameters:
     logging_level: str = 'info'
     start_delay_secs: int = 300
     throttle_secs: int = 60
+    allow_gpu_growth: bool = True
 
 
 @dataclass(frozen=True)
-class GpuParameters:
+class DistributeParameters:
     """
-    GPU parameters.
+    Parameters for distributed training.
     """
-    allow_gpu_growth: bool = True
+    strategy: str = "default"
+    num_workers: int = 1
+    all_reduce_alg: str = "auto"
+    num_packs: int = 1
     num_gpus: int = 0
+
+    def as_dict(self):
+        """
+        Return the dict representation.
+        """
+        alg = self.all_reduce_alg if self.all_reduce_alg != "auto" else None
+        return {"distribution_strategy": self.strategy,
+                "num_gpus": self.num_gpus,
+                "num_packs": self.num_packs,
+                "num_workers": self.num_workers,
+                "all_reduce_alg": alg}
 
 
 class EstimatorHyperParams(dict):
@@ -67,11 +82,11 @@ class EstimatorHyperParams(dict):
         return self["loss"]
 
     @property
-    def gpu(self) -> GpuParameters:
+    def distribute(self) -> DistributeParameters:
         """
-        Return GPU parameters.
+        Return parameters for distributed training.
         """
-        return self["gpu"]
+        return self["distribute"]
 
     @property
     def seed(self) -> int:
@@ -105,5 +120,5 @@ class EstimatorHyperParams(dict):
             opt=opt_parameters,
             loss=LossParameters(**reader['nn.loss']),
             debug=DebugParameters(**reader['debug']),
-            gpu=GpuParameters(**reader["gpu"])
+            distribute=DistributeParameters(**reader["distribute"])
         )

@@ -331,15 +331,15 @@ class TrainingManager:
                 tf.logging.info(f'input= \n{str(self._reader)}')
 
                 strategy = distribute_utils.get_distribution_strategy(
-                    distribution_strategy="default",
-                    num_gpus=hparams.gpu.num_gpus,
-                    all_reduce_alg=True,
+                    **hparams.distribute.as_dict()
                 )
 
                 session_config = tf.ConfigProto(
                     allow_soft_placement=True,
                     gpu_options=tf.GPUOptions(
-                        allow_growth=hparams.gpu.allow_gpu_growth))
+                        allow_growth=hparams.debug.allow_gpu_growth))
+
+                # TODO: set the evaluation strategy
 
                 run_config = tf_estimator.RunConfig(
                     save_checkpoints_steps=hparams.train.eval_steps,
@@ -371,7 +371,7 @@ class TrainingManager:
                     # training.
                     input_fn=lambda: dataset.input_fn(
                         mode=tf_estimator.ModeKeys.TRAIN,
-                        batch_size=hparams.train.batch_size * max(hparams.gpu.num_gpus, 1),
+                        batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle),
                     max_steps=hparams.train.train_steps,
                     hooks=hooks)
