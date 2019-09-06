@@ -568,7 +568,7 @@ class BasicNN:
                         verbose=verbose)
 
             for tensor in losses.values():
-                tf.summary.scalar(tensor.op.name + '/summary', tensor)
+                tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
 
         total_loss = tf.add_n(list(losses.values()), name='total_loss')
         tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_loss)

@@ -534,32 +534,32 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         with tf.name_scope("decoding"):
 
             feature_list = {
-                'positions': tf.FixedLenFeature([], tf.string),
-                'n_atoms': tf.FixedLenFeature([], tf.int64),
-                'cell': tf.FixedLenFeature([], tf.string),
-                'volume': tf.FixedLenFeature([], tf.string),
-                'y_true': tf.FixedLenFeature([], tf.string),
-                'g2.indices': tf.FixedLenFeature([], tf.string),
-                'g2.shifts': tf.FixedLenFeature([], tf.string),
-                'atom_masks': tf.FixedLenFeature([], tf.string),
-                'compositions': tf.FixedLenFeature([], tf.string),
-                'pulay': tf.FixedLenFeature([], tf.string),
+                'positions': tf.io.FixedLenFeature([], tf.string),
+                'n_atoms': tf.io.FixedLenFeature([], tf.int64),
+                'cell': tf.io.FixedLenFeature([], tf.string),
+                'volume': tf.io.FixedLenFeature([], tf.string),
+                'y_true': tf.io.FixedLenFeature([], tf.string),
+                'g2.indices': tf.io.FixedLenFeature([], tf.string),
+                'g2.shifts': tf.io.FixedLenFeature([], tf.string),
+                'atom_masks': tf.io.FixedLenFeature([], tf.string),
+                'compositions': tf.io.FixedLenFeature([], tf.string),
+                'pulay': tf.io.FixedLenFeature([], tf.string),
             }
             if self._use_forces:
-                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+                feature_list['f_true'] = tf.io.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
-                    tf.FixedLenFeature([], tf.string)
+                    tf.io.FixedLenFeature([], tf.string)
                 feature_list['total_pressure'] = \
-                    tf.FixedLenFeature([], tf.string)
+                    tf.io.FixedLenFeature([], tf.string)
 
             if self._angular:
                 feature_list.update({
-                    'g4.indices': tf.FixedLenFeature([], tf.string),
-                    'g4.shifts': tf.FixedLenFeature([], tf.string)})
+                    'g4.indices': tf.io.FixedLenFeature([], tf.string),
+                    'g4.shifts': tf.io.FixedLenFeature([], tf.string)})
 
-            example = tf.parse_single_example(example_proto, feature_list)
+            example = tf.io.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
     def get_descriptors(self, next_batch: dict):

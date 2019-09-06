@@ -380,7 +380,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 feature_list['total_pressure'] = \
                     tf.FixedLenFeature([], tf.string)
 
-            example = tf.parse_single_example(example_proto, feature_list)
+            example = tf.io.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
 
     def get_descriptors(self, batch_features: dict):

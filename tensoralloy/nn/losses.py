@@ -339,7 +339,7 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
     """
     with tf.name_scope("L2"):
         name = 'total_regularization_loss'
-        losses = tf.losses.get_regularization_losses()
+        losses = tf.compat.v1.losses.get_regularization_losses()
         if losses:
             l2 = tf.add_n(losses, name=name)
         else:
@@ -347,9 +347,9 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
         loss_weight = tf.convert_to_tensor(
             options.weight, l2.dtype, name='weight')
         if options.decayed:
-            loss_weight = tf.train.exponential_decay(
+            loss_weight = tf.compat.v1.train.exponential_decay(
                 learning_rate=loss_weight,
-                global_step=tf.train.get_global_step(),
+                global_step=tf.compat.v1.train.get_global_step(),
                 decay_steps=options.decay_steps,
                 decay_rate=options.decay_rate,
                 name='weight/decayed')

@@ -63,7 +63,7 @@ def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
                                      decay_steps=decay_steps,
                                      staircase=staircase,
                                      name="learning_rate")
-        tf.summary.scalar('learning_rate_at_step', learning_rate)
+        tf.compat.v1.summary.scalar('learning_rate_at_step', learning_rate)
         return learning_rate
 
 
@@ -89,20 +89,20 @@ def get_optimizer(learning_rate, method='adam', **kwargs):
     """
     with tf.name_scope("SGD"):
         if method.lower() == 'adam':
-            return tf.train.AdamOptimizer(
+            return tf.compat.v1.train.AdamOptimizer(
                 learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
         elif method.lower() == 'nadam':
             return NadamOptimizer(
                 learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
         elif method.lower() == 'adadelta':
-            return tf.train.AdadeltaOptimizer(
+            return tf.compat.v1.train.AdadeltaOptimizer(
                 learning_rate=learning_rate, rho=kwargs.get('rho', 0.95))
         elif method.lower() == 'rmsprop':
-            return tf.train.RMSPropOptimizer(
+            return tf.compat.v1.train.RMSPropOptimizer(
                 learning_rate=learning_rate, decay=kwargs.get('decay', 0.9),
                 momentum=kwargs.get('momentum', 0.0))
         elif method.lower() == 'sgd':
-            return tf.train.MomentumOptimizer(
+            return tf.compat.v1.train.MomentumOptimizer(
                 learning_rate=learning_rate,
                 momentum=kwargs.get('momentum', 0.9),
                 use_nesterov=kwargs.get('use_nesterov', True))
