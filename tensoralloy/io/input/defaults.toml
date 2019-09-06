@@ -141,11 +141,17 @@ checkpoint_filename = false
 use_ema_variables = true
 restore_all_variables = true
 
+[train.gpu]
+allow_gpu_growth = true
+num_gpus = 0
+
+[train.distribute]
+strategy = "default"
+num_workers = 1
+all_reduce_alg = "nccl"
+num_packs = 1
+
 [debug]
 logging_level = 'info'
 start_delay_secs = 300
 throttle_secs = 60
-
-[gpu]
-allow_gpu_growth = true
-num_gpus = 0

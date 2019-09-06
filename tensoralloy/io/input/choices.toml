@@ -39,3 +39,7 @@ method = ["rmse", "logcosh"]
 [opt]
 method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']
+
+[train.distribute]
+strategy = ['off', 'default', 'one_device', 'mirrored', 'parameter_server', 'multi_worker_mirrored']
+all_reduce_alg = ["nccl", "ring", "hierarchical_copy", "auto"]

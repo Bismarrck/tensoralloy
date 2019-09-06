@@ -54,6 +54,11 @@ def test_read_behler_angular_toml():
     assert_list_equal(reader['nn.minimize'], ['energy'])
     assert_list_equal(reader['nn.export'], ['energy', 'forces', 'hessian'])
 
+    assert_equal(reader["train.gpu.num_gpus"], 4)
+    assert_equal(reader["train.distribute.num_packs"], 1)
+    assert_equal(reader["train.distribute.all_reduce_alg"], "auto")
+    assert_equal(reader["train.distribute.strategy"], "mirrored")
+
 
 def test_read_eam_alloy_toml():
     """

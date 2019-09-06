@@ -59,3 +59,10 @@ eval_steps = 1000
 summary_steps = 100
 log_steps = 100
 profile_steps = 0
+
+[train.gpu]
+num_gpus = 4
+
+[train.distribute]
+strategy = "mirrored"
+all_reduce_alg = "auto"
