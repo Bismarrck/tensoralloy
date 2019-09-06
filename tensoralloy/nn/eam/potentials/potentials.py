@@ -37,7 +37,8 @@ def get_variable(name,
     return tf.get_variable(name, shape=shape or (), dtype=dtype,
                            initializer=initializer, regularizer=regularizer,
                            trainable=trainable, collections=_collections,
-                           validate_shape=validate_shape)
+                           validate_shape=validate_shape,
+                           aggregation=tf.VariableAggregation.MEAN)
 
 
 class EamEmpiricalPotential:

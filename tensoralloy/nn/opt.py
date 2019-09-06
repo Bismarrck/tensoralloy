@@ -153,9 +153,7 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                 continue
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
-                g = optimizer.compute_gradients(
-                    losses[prop],
-                    aggregation_method=tf.AggregationMethod.ADD_N)
+                g = optimizer.compute_gradients(losses[prop])
                 add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
 
