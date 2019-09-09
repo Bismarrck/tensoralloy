@@ -155,3 +155,4 @@ throttle_secs = 60
 allow_gpu_growth = true
 allow_soft_placement = true
 log_device_placement = false
+meta_optimizer_timeout_ms = -1

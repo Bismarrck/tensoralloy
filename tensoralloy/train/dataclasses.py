@@ -25,6 +25,7 @@ class DebugParameters:
     allow_gpu_growth: bool = True
     log_device_placement: bool = False
     allow_soft_placement: bool = True
+    meta_optimizer_timeout_ms: int = -1
 
 
 @dataclass(frozen=True)

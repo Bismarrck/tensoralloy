@@ -14,6 +14,7 @@ from os.path import join, exists, dirname, basename, realpath
 from typing import Union
 from tensorflow.python import debug as tf_debug
 from tensorflow_estimator import estimator as tf_estimator
+from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
@@ -338,7 +339,12 @@ class TrainingManager:
                     allow_soft_placement=hparams.debug.allow_soft_placement,
                     log_device_placement=hparams.debug.log_device_placement,
                     gpu_options=tf.GPUOptions(
-                        allow_growth=hparams.debug.allow_gpu_growth))
+                        allow_growth=hparams.debug.allow_gpu_growth),
+                    graph_options=tf.GraphOptions(
+                        rewrite_options=RewriterConfig(
+                            meta_optimizer_timeout_ms=hparams.debug.meta_optimizer_timeout_ms,
+                        )
+                    ))
 
                 # TODO: set the evaluation strategy
 
