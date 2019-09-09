@@ -12,7 +12,7 @@ from typing import List, Union, Tuple
 
 from tensoralloy.nn.constraint.data import Crystal, get_crystal
 from tensoralloy.nn.constraint.voigt import voigt_notation, voigt_to_ij
-from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.dataclasses import ElasticConstraintOptions
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import GraphKeys
@@ -182,8 +182,10 @@ def get_elastic_constant_loss(base_nn,
                                 tf.math.multiply(output["stress"], unit)),
                             name='bar')
                     constraints['stress'].append(value)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, value)
-                    tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
+
+                    if is_first_replica():
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, value)
+                        tf.add_to_collection(GraphKeys.EVAL_METRICS, value)
 
                 with tf.name_scope("Cijkl"):
                     groups = {vi: {} for vi in range(1, 7)}
@@ -217,8 +219,11 @@ def get_elastic_constant_loss(base_nn,
                                                      dtype=total_stress.dtype,
                                                      name=f'C{vi}{vj}/weight'))
 
-                            tf.add_to_collection(GraphKeys.TRAIN_METRICS, cijkl)
-                            tf.add_to_collection(GraphKeys.EVAL_METRICS, cijkl)
+                            if is_first_replica():
+                                tf.add_to_collection(
+                                    GraphKeys.TRAIN_METRICS, cijkl)
+                                tf.add_to_collection(
+                                    GraphKeys.EVAL_METRICS, cijkl)
 
                 # Loss contribution from elastic constants
                 with tf.name_scope("Loss"):
@@ -237,7 +242,9 @@ def get_elastic_constant_loss(base_nn,
                     mse = tf.add(mse, eps, name='mse/safe')
                     rmse = tf.sqrt(mse, name='rmse')
                     losses.append(rmse)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+
+                    if is_first_replica():
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
 
         with tf.name_scope("Loss"):
 
@@ -255,7 +262,9 @@ def get_elastic_constant_loss(base_nn,
                 e_loss = tf.multiply(weight, e_loss, name='loss/weighted')
 
             total_loss = tf.add(e_loss, c_loss, name='total_loss')
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
+
+            if is_first_replica():
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, e_loss)
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, c_loss)
 
         return total_loss

@@ -16,6 +16,7 @@ from tensoralloy.nn.utils import get_tensors_dict_for_hook
 from tensoralloy.nn.dataclasses import OptParameters, TrainParameters
 from tensoralloy.nn.hooks import LoggingTensorHook, ExamplesPerSecondHook
 from tensoralloy.nn.hooks import WarmStartFromVariablesHook
+from tensoralloy.nn.utils import is_first_replica
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -123,9 +124,7 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
     """
     with tf.name_scope("Optimize"):
 
-        global_step = tf.train.get_or_create_global_step()
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, global_step)
-
+        global_step = tf.compat.v1.train.get_or_create_global_step()
         learning_rate = get_learning_rate(
             global_step,
             learning_rate=opt_parameters.learning_rate,
@@ -134,7 +133,6 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
             decay_steps=opt_parameters.decay_steps,
             staircase=opt_parameters.staircase
         )
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, learning_rate)
 
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
@@ -154,12 +152,9 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
             with tf.name_scope(
                     "".join([word.capitalize() for word in prop.split('_')])):
                 g = optimizer.compute_gradients(losses[prop])
-                add_grads_and_vars_summary(g, prop)
+                if is_first_replica():
+                    add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
-
-        with tf.name_scope("Histogram"):
-            for var in tf.trainable_variables():
-                tf.summary.histogram(var.op.name + '/hist', var)
 
         gradients = sum_of_grads_and_vars(
             list_of_grads_and_vars=[g for prop, g in grads_and_vars.items()])
@@ -175,6 +170,13 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                 decay = Defaults.variable_moving_average_decay
                 ema = tf.train.ExponentialMovingAverage(decay=decay)
                 variable_averages_op = ema.apply(tf.trainable_variables())
+
+        if is_first_replica():
+            with tf.name_scope("Histogram"):
+                for var in tf.trainable_variables():
+                    tf.summary.histogram(var.op.name + '/hist', var)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, global_step)
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, learning_rate)
 
     return ema, variable_averages_op
 

@@ -10,7 +10,7 @@ import numpy as np
 from typing import List, Dict
 
 from tensoralloy.nn.atomic.atomic import AtomicNN
-from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.utils import GraphKeys
 
 __author__ = 'Xin Chen'
@@ -108,11 +108,12 @@ class AtomicResNN(AtomicNN):
             initializer = tf.constant_initializer(values, dtype=x.dtype)
             trainable = not self._fixed_static_energy
             collections = [GraphKeys.ATOMIC_RES_NN_VARIABLES,
-                           GraphKeys.TRAIN_METRICS,
                            tf.GraphKeys.GLOBAL_VARIABLES,
                            tf.GraphKeys.MODEL_VARIABLES]
             if trainable:
                 collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
+            if is_first_replica():
+                collections.append(GraphKeys.TRAIN_METRICS)
             z = tf.get_variable("weights",
                                 shape=len(self._elements),
                                 dtype=x.dtype,
@@ -138,7 +139,9 @@ class AtomicResNN(AtomicNN):
             ratio = tf.reduce_mean(tf.math.truediv(y_static, energy,
                                                    name='ratio'),
                                    name='avg')
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
+
+            if is_first_replica():
+                tf.add_to_collection(GraphKeys.TRAIN_METRICS, ratio)
             tf.summary.scalar(ratio.op.name + '/summary', ratio)
 
         if verbose:

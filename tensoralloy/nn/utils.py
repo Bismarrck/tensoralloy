@@ -13,6 +13,17 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def is_first_replica():
+    """
+    Return True if the defined replica is the first replica.
+    """
+    replica_context = tf.distribute.get_replica_context()
+    if isinstance(replica_context, tf.distribute.ReplicaContext):
+        if replica_context.replica_id_in_sync_group != 0:
+            return False
+    return True
+
+
 def get_activation_fn(fn_name="softplus"):
     """
     Return the corresponding activation function.
@@ -49,11 +60,11 @@ def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
                 learning_rate, dtype=tf.float64, name="learning_rate")
         else:
             if decay_function == 'exponential':
-                decay_fn = tf.train.exponential_decay
+                decay_fn = tf.compat.v1.train.exponential_decay
             elif decay_function == 'inverse_time':
-                decay_fn = tf.train.inverse_time_decay
+                decay_fn = tf.compat.v1.train.inverse_time_decay
             elif decay_function == 'natural_exp':
-                decay_fn = tf.train.natural_exp_decay
+                decay_fn = tf.compat.v1.train.natural_exp_decay
             else:
                 raise ValueError(
                     "'{}' is not supported!".format(decay_function))

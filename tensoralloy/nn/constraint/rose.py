@@ -14,6 +14,7 @@ from typing import List
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.nn.utils import is_first_replica
 from tensoralloy.nn.constraint.data import get_crystal
 from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
@@ -239,8 +240,9 @@ def get_rose_constraint_loss(base_nn,
                         loss = tf.multiply(residual, weight, name='loss')
                         losses.append(loss)
 
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
-                    tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-                    tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
+                    if is_first_replica():
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+                        tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
 
         return tf.add_n(losses, name='total_loss')

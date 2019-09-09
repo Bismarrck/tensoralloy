@@ -21,7 +21,7 @@ from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
-from tensoralloy.nn.utils import log_tensor
+from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
@@ -508,7 +508,10 @@ class BasicNN:
         """
         with tf.name_scope("Loss"):
 
-            collections = [GraphKeys.TRAIN_METRICS]
+            if is_first_replica():
+                collections = [GraphKeys.TRAIN_METRICS]
+            else:
+                collections = None
 
             losses = dict()
             losses["energy"] = loss_ops.get_energy_loss(
@@ -571,7 +574,9 @@ class BasicNN:
                 tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
 
         total_loss = tf.add_n(list(losses.values()), name='total_loss')
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_loss)
+
+        if is_first_replica():
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, total_loss)
 
         return total_loss, losses
 

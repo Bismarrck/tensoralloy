@@ -11,6 +11,7 @@ from enum import Enum
 
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.dataclasses import L2LossOptions
+from tensoralloy.nn.utils import is_first_replica
 
 
 __author__ = 'Xin Chen'
@@ -98,7 +99,7 @@ def _get_weighted_loss(loss_weight: float, raw_loss: tf.Tensor,
     loss_weight = tf.convert_to_tensor(
         loss_weight, raw_loss.dtype, name='weight')
     loss = tf.multiply(raw_loss, loss_weight, name='weighted/loss')
-    if collections is not None:
+    if collections is not None and is_first_replica():
         if mae is not None:
             tf.add_to_collections(collections, mae)
         tf.add_to_collections(collections, raw_loss)
@@ -353,11 +354,11 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
                 decay_steps=options.decay_steps,
                 decay_rate=options.decay_rate,
                 name='weight/decayed')
-            if collections is not None:
+            if collections is not None and is_first_replica():
                 tf.add_to_collections(collections, loss_weight)
 
         loss = tf.multiply(l2, loss_weight, name='weighted/loss')
-        if collections is not None:
+        if collections is not None and is_first_replica():
             tf.add_to_collections(collections, l2)
             tf.add_to_collections(collections, loss)
         return loss
