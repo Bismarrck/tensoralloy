@@ -153,3 +153,5 @@ logging_level = 'info'
 start_delay_secs = 300
 throttle_secs = 60
 allow_gpu_growth = true
+allow_soft_placement = true
+log_device_placement = false

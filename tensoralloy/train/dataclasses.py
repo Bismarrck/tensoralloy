@@ -23,6 +23,8 @@ class DebugParameters:
     start_delay_secs: int = 300
     throttle_secs: int = 60
     allow_gpu_growth: bool = True
+    log_device_placement: bool = False
+    allow_soft_placement: bool = True
 
 
 @dataclass(frozen=True)

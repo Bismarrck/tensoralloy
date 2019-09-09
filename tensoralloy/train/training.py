@@ -335,7 +335,8 @@ class TrainingManager:
                 )
 
                 session_config = tf.ConfigProto(
-                    allow_soft_placement=True,
+                    allow_soft_placement=hparams.debug.allow_soft_placement,
+                    log_device_placement=hparams.debug.log_device_placement,
                     gpu_options=tf.GPUOptions(
                         allow_growth=hparams.debug.allow_gpu_growth))
 
