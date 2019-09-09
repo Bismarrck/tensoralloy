@@ -19,7 +19,14 @@ def is_first_replica():
     """
     replica_context = tf.distribute.get_replica_context()
     if isinstance(replica_context, tf.distribute.ReplicaContext):
-        if replica_context.replica_id_in_sync_group != 0:
+        graph = tf.get_default_graph()
+        # An ugly approach to obtain the replica id because
+        # `replica_context.replica_id_in_sync_group` returns a tensor.
+        tensor = replica_context.replica_id_in_sync_group
+        node = [n for n in graph.as_graph_def().node
+                if n.name == tensor.op.name][0]
+        value = node.attr.get('value').tensor.int_val[0]
+        if value != 0:
             return False
     return True
 
