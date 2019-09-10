@@ -189,7 +189,7 @@ class ComputeElasticTensorProgram(CLIProgram):
             print(f"Lattice: {brav}({lattyp})")
             print(f"SpaceGroup: {sg_name}({sg_nr})")
             print("The elastic constants tensor: ")
-            print(tensor.voigt / GPa)
+            print(tensor.voigt)
 
         return func
 
