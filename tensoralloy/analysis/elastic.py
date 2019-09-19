@@ -493,7 +493,7 @@ def _array2tensor(values: np.ndarray, lattice_type_num: int) -> ElasticTensor:
         vj_idx = int(notation[-1]) - 1
         voigt[vi_idx, vj_idx] = values[i]
 
-    return ElasticTensor.from_voigt(voigt)
+    return ElasticTensor.from_voigt(voigt) / GPa
 
 
 def get_elastic_tensor(cryst, systems):
@@ -524,7 +524,7 @@ def get_elastic_tensor(cryst, systems):
     Returns
     -------
     elastic_constants : ElasticTensor
-        The elastic constants tensor.
+        The elastic constants tensor (GPa).
     results : array_like
         Fitting results, including residuals, solution rank and singular values.
     lattice_info : dict
