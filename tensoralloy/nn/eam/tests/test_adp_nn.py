@@ -7,19 +7,26 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+import unittest
+import shutil
 
 from tensorflow_estimator import estimator as tf_estimator
-from os.path import join
+from os.path import join, exists
+from os import makedirs
 from ase.io import read
 from ase.calculators.singlepoint import SinglePointCalculator
-from nose.tools import assert_equal
+from ase.calculators.lammpsrun import LAMMPS
+from nose.tools import assert_equal, assert_almost_equal
 from collections import Counter
+from typing import List
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
+from tensoralloy.io.lammps import LAMMPS_COMMAND
+from tensoralloy.io.db import snap
+from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.test_utils import test_dir
-from tensoralloy.utils import AttributeDict
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,12 +83,12 @@ def test_dynamic_partition():
         protobuf = tf.convert_to_tensor(adp.encode(atoms).SerializeToString())
         example = adp.decode_protobuf(protobuf)
 
-        batch = AttributeDict()
+        batch = dict()
         for key, tensor in example.items():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
-        descriptors = AttributeDict(adp.get_descriptors(batch))
+        descriptors = adp.get_descriptors(batch)
         op, max_occurs = nn._dynamic_partition(descriptors,
                                                mode=tf_estimator.ModeKeys.TRAIN,
                                                merge_symmetric=False)
@@ -95,6 +102,53 @@ def test_dynamic_partition():
             for key, (descriptor, mask) in partitions.items():
                 assert_equal(descriptor.shape[0], 4)
                 assert_equal(mask.shape[0], 1)
+
+
+class AdpTestCase(unittest.TestCase):
+
+    def get_lammps_calculator(self, elements: List[str]):
+        """
+        Return a LAMMPS calculator.
+        """
+        pot_file = join(test_dir(), 'lammps', 'Mo.19sep21.adp')
+        work_dir = join(self.work_dir, ''.join(elements))
+        if not exists(work_dir):
+            makedirs(work_dir)
+
+        return LAMMPS(files=[pot_file],
+                      binary_dump=False,
+                      write_velocities=False,
+                      tmp_dir=work_dir,
+                      keep_tmp_files=False,
+                      keep_alive=False,
+                      no_data_file=False,
+                      pair_style="adp",
+                      command=LAMMPS_COMMAND,
+                      pair_coeff=[f"* * Mo.19sep21.adp {' '.join(elements)}"])
+
+    def setUp(self):
+        """
+        The setup function.
+        """
+        self.work_dir = join(test_dir(), 'lammps', 'adp')
+        if not exists(self.work_dir):
+            makedirs(self.work_dir)
+        self.calc = TensorAlloyCalculator(
+            join(test_dir(), 'models', "Mo.adp.19sep21.pb"))
+
+    def test_main(self):
+        db = snap("Mo")
+        indices = [1, 100, 200, 284]
+        lmp = self.get_lammps_calculator(["Mo"])
+        for idx, atoms_id in enumerate(indices):
+            atoms = db.get_atoms(id=atoms_id)
+            y_py = self.calc.get_potential_energy(atoms)
+            y_lmp = lmp.get_potential_energy(atoms)
+            assert_almost_equal(y_lmp, y_py, delta=1e-4)
+
+    def tearDown(self):
+        if exists(self.work_dir):
+            shutil.rmtree(self.work_dir)
 
 
 if __name__ == "__main__":
