@@ -456,9 +456,9 @@ explanation may be these constraints are generally derived properties and
 implementing them in the loss function are technically difficult.
 
 In this work, we successfully integrated two constraints into the total loss:
-the Rose equation of state constraint and the elastic tensor constraint. These 
-two losses will be discussed later. The details of their implementations will be 
-described in another paper.
+the Rose equation of state (EOS) constraint and the elastic tensor constraint. 
+These two losses will be discussed later. The details of their implementations 
+will be described in another paper.
 
 The Rose constraint incoporates the universal equation of state (Rose et al) 
 into the total loss function. The Mishin-modified equation 
@@ -480,17 +480,20 @@ where $V_0$ is the equilibrium volume and $B$ is the bulk modulus. The adoption
 of the Rose constraint guarantees the exact predictions of bulk modulus and 
 the energy-volume curve. The loss of the Rose EOS constraint 
 $\mathbf{L}^{\mathrm{Rose}}$  is measured as the 2-norm of the energy 
-differences between $E(x)^{\mathrm{Rose}}$ and their corresponding predicted 
+differences between $E(x)^{\mathrm{dft}}$ and their corresponding predicted 
 $E(x)$: 
 \begin{equation}
 \label{eq:rose_loss}
-\mathbf{L}^{\mathrm{Rose}} =
-\sum_{i}{\mathbf{RMSE}(E_{i}(x), E_{i}(x)^{\mathrm{Rose}})}
+\mathbf{L}^{\mathrm{Rose}} = \sum_{\Omega}{
+    \sqrt{\sum_{i}{\left(E(x_i) - E(x_i)^{\mathrm{dft}}\right)^2}}
+}
 \end{equation}
-In this work, for each included crystal, we use the same choices of $x$: 
-$x_{t} = x_{0} + \Delta x \cdot t, x_{0} = -0.1, N_{t}^{\mathrm{max}} = 20, 
-\Delta x=0.01$. $\beta$ is fixed to 0.005.
-
+Here $\Omega$ denotes all selected crystals. In this work, for each included 
+crystal, we use the same choices of $x$: 
+$x_{i} = x_{0} + \Delta x \cdot i, x_{0} = -0.1, N_{t}^{\mathrm{max}} = 20, 
+\Delta x=0.01$. In this work, $\beta^{\mathrm{Ni}}$ is 0.005 and 
+$\beta^{\mathrm{Mo}}$ is 0.150.
+ 
 Elastic tensor is also a popular constraint for tuning empirical potentials but 
 rarely used directly in optimizing MILPs. Shyue Ping Ong used this constraint in 
 the outer loop (the global optimization based property-matching step) to find 
@@ -521,19 +524,25 @@ $c_{ijkl}^{\mathrm{dft}}$:
 \begin{align}
 \label{eq:cijkl_loss}
 \mathbf{L}^{\mathrm{elastic}} 
-& = \sum_{i}{c_{i} \cdot \mathbf{RMSE_{i}} + {|\epsilon|} + {|\mathbf{F}|}} \\
+& = \sum_{\Omega}{\left(
+    \omega_{\Omega} \cdot \mathbf{RMSE}_{\Omega} 
+    + ||\epsilon|| + ||\mathbf{F}||
+\right)}
+ \\
 \label{eq:cijkl_loss_gate}
-c_{i} & = \mathbf{ReLU}(\mathbf{MAE_{i}} - \tau) \\
+\omega_{\Omega} & = \mathbf{ReLU}(\mathbf{MAE}_{\Omega} - \tau) \\
 \label{eq:relu}
 \mathbf{ReLU}(x) & = \begin{cases}
     x & x \ge 0 \\
     0 & x < 0
 \end{cases}
 \end{align}
-where $\sum_{i}$ loops through all included crystals, $\mathbf{MAE}$ is the mean 
-absolute error and $\tau$ is a pre-selected gate parameter. When $\mathbf{MAE}$ 
-is below $\tau$, $\mathbf{L}^{\mathrm{elastic}}$ will not contribute to the 
-total loss. In this work, $\tau$ is set to 2 GPa.
+where $\sum_{\Omega}$ loops through all included crystals, 
+$\mathbf{MAE}_{\Omega}$ and $\mathbf{RMSE}_{\Omega}$ are the mean absolute error 
+and root mean squared error between predicted elastic constants and DFT elastic 
+constants. $\tau$ is a pre-selected gate parameter. 
+When $\mathbf{MAE}$ is below $\tau$, $\mathbf{L}^{\mathrm{elastic}}$ will not 
+contribute to the total loss. In this work, $\tau$ is set to 2 GPa.
 
 % -----------
 % Section 2.E Implementation
@@ -583,11 +592,13 @@ this work:
         \right)^2
     }
 }} \nonumber \\
-& + \mathbf{L}^{\mathrm{Rose}} + \mathbf{L}^{\mathrm{elastic}}
+& + \chi_{\mathrm{rose}}\mathbf{L}^{\mathrm{Rose}} 
++ \chi_{\mathrm{elastic}}\mathbf{L}^{\mathrm{elastic}}
 \end{align} 
 where $N_{b}$ is the batch size and $N_i$ is the number of atoms in structure 
-$i$. $\chi_{\mathrm{f}}$ and $\chi_{\mathrm{s}}$ are overall weights of force 
-and virial stress contributions. The superscript 'voigt' means that virial 
+$i$. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{s}}$, $\chi_{\mathrm{rose}}$ and 
+$\chi_{\mathrm{elastic}}$ are overall weights of force, virial stress, rose EOS 
+and elastic contributions. The superscript 'voigt' means that virial 
 stress tensors should be converted to Voigt form. The Adam optimizer is used to 
 minimize Equation \ref{eq:loss}. In most cases, we use 0.01 as the initial 
 learning rate and the batch size ranges from 20 to 50. Since there are very few
@@ -600,57 +611,148 @@ potential file will be exported.
 % Section 3. Results
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\section{Results and Discussions}
+\section{Results}
 \label{sec:results}
 
-The publicly available Ni-Mo dataset is use to demonstrate our ML-EAM approach. 
-This dataset is built by Shyue Ping Ong and co-workers. It contains 3973 unique
-Ni-Mo solids, including 373 elemental Ni and 284 elemental Mo. DFT calculations 
-were done by VASP at the PBE level with projector augmented-wave approach.
+The publicly Ni-Mo dataset is used to evaluate our approach. This dataset is 
+provided by Shyue Ping Ong. It contains 3973 different Ni-Mo solids. All 
+calculations were done by VASP with the PBE functional and the projector 
+augmented-wave approach.
 
-Table \ref{table:parameters} shows the optimization results. All these 
-minimization tasks include energy, force and stress terms in their total losses.
-The $\chi_{\mathrm{f}}$ in Equation \ref{eq:loss} is set to 10 and 
-$\chi_{\mathrm{s}}$ is fixe to 80. In this paper, the superscript tag 'old' 
-denotes the original Zjw04, 'res' means restricted optimization and 'unres' 
-means unrestricted optimization. Here 'unrestricted' indicates the parameter 
-$r_e$ will be treated as a common adjustable variable.
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Section 3.A
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\subsection{Ni}
+\label{sec:elementary_Ni}
 
-Table \ref{table:MAE} demonstrates the prediction errors of the machine learned
-EAM models and reference models. 
-
-\begin{table*}[h]
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Ni - EAM - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure*}[h!]
 \centering
-\begin{tabular}{lcccccccc}
+\includegraphics[scale=0.57]{figures/Ni_eam.png}
+\caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
+Zjw04 EAM and the machine learned EAM (ML-EAM).}
+\end{figure*}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Ni - EOS
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}[h!]
+\centering
+\includegraphics[scale=0.65]{figures/Ni_all_eos.png}
+\caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
+Zjw04 EAM and the machine learned EAM (ML-EAM).}
+\end{figure}
+
+We first use the elementary fcc Ni dataset to show our approach. This dataset 
+has 461 structures in total. 400 were randomly selected to form the training 
+subset. In this experiment, $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and 
+$\chi_{\mathrm{elastic}}$ are set to 1, 3 and 0.05 respectively. In this 
+section, SNAP shall refer to the elementary SNAP Ni model. Table 
+\ref{table:elementary_Ni_mae} shows the MAEs of those models. The original EAM 
+model already has an accepetable performace on this dataset. Our machine 
+learning approach can further reduce the energy MAE to 4.1 meV/atom. All of 
+these models have similar force prediction performance.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Table: Ni - MAE
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
 \hline
-    & Ni$^{\mathrm{old}}$ & Ni & Ni$^{\mathrm{alloy}}$ 
-    & Mo$^{\mathrm{old}}$ & Mo & Mo$^{\mathrm{alloy}}$ \\
+    & SNAP & EAM & ML-EAM \\
 \hline
-$r_e$ & 2.488746 & 2.124480 & & 2.728100 & & \\
-$f_e$ & 2.007018 & 2.633256 & & 2.723710 & & \\
-$\rho_e$ & 27.562015 & 27.233315 & \\ 
-$\rho_s$ & 27.930410 & 26.392414 &\\
-$\alpha$ & 8.383453 & 8.452753 & \\
-$\beta$ & 4.471175 & 3.285651 & \\
-$A$ & 0.429046 & 0.9802988 & \\
-$B$ & 0.633531 & 0.8919016 & \\
-$\kappa$ & 0.443599 & 0.5685785 & \\
-$\lambda$ & 0.820658 & 1.1653832 & \\
-$F_{n0}$ & -2.693513 & -3.4354472 & \\
-$F_{n1}$ & -0.076445 & 0.3544341 & \\
-$F_{n2}$ & 0.241442 & -2.5563858 & \\
-$F_{n3}$ & -2.375626 & -7.1984844 & \\
-$F_{0}$ & -2.70 & -3.236908 & \\
-$F_{1}$ & 0 & 1.4576268 & \\
-$F_{2}$ & 0.265390 & 2.1785288 & \\
-$F_{3}$ & -0.152856 & -1.642411 & \\
-$\eta$ & 0.469000 & 4.305329 & \\
-$F_e$ & -2.699486 & -3.6163342 & \\
+Energy MAE (meV/atom) & 1.2 & 10.6 & 4.1 \\
+Force MAE (eV/\AA) & 0.05 & 0.06 & 0.05 \\
 \hline
 \end{tabular}
-\caption{\label{table:parameters} The original (labeled as 'old'), elemental and 
-alloy parameters.}
+\caption{\label{table:elementary_Ni_mae} Comparion of the energy and force 
+accuracy of the elementary SNAP Ni mode, the original EAM and the machine 
+learned EAM.
+}
+\end{table}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Table: Ni - Material Properties
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{table*}[h]
+\centering
+\begin{tabular}{lcccccc}
+\hline
+    & DFT & SNAP & EAM & ML-EAM & Expt. \\
+\hline
+$T_{m}$(K) & & 1785 & 1520 & 1765 & 1600 & 1728 \\
+$c_{11}$ (GPa) & 276 & 276 (0.0\%) & 248 (-10.1\%) & 260 (-5.8\%) & 274 (-0.7\%) & 261 \\
+$c_{12}$ (GPa) & 159 & 159 (0.0\%) & 147 (-7.5\%) & 151 (0.0\%) & 163 (2.5\%) & 151 \\
+$c_{44}$ (GPa) & 132 & 132 (0.0\%) & 125 (-5.3\%) & 131 (0.0\%) & 131 (-0.8\%) & 132 \\
+$E_{v}$ (eV) & 1.46 & 1.68 (15.1\%) & 1.68 (15.1\%) & 1.16 (-20.5\%) & 1.71 (17.1\%) & 1.54–1.80 \\
+$E_{m}$ (eV) & 1.12 & 1.07 (-4.5\%) & 0.90 (-19.6\%) & 1.46 (30.5\%) & 0.87 (-22.3\%) & 1.01–1.48 \\
+$E_{a} = E_{v} + E_{m} $ (eV) & 2.58 & 2.75 (6.6\%) & 2.58 (0.0\%) & 2.62 (1.6\%) & 2.58 (0.0\%) & 2.77–2.95 \\
+\hline
+\end{tabular}
+\caption{\label{table:elementary_Ni} Comparison of the calculated and 
+experimental material properties of elementary Ni. $T_{m}$ is the melting 
+point. $c_{ij}$ represents elastic constants. $E_{v}$ and $E_{m}$ are vacancy 
+formation energy and migration energy, respectively. SNAP refers to the 
+elementary Ni SNAP model.
+}
 \end{table*}
+
+% Table \ref{table:parameters} shows the optimization results. All these 
+% minimization tasks include energy, force and stress terms in their total losses.
+% The $\chi_{\mathrm{f}}$ in Equation \ref{eq:loss} is set to 10 and 
+% $\chi_{\mathrm{s}}$ is fixe to 80. In this paper, the superscript tag 'old' 
+% denotes the original Zjw04, 'res' means restricted optimization and 'unres' 
+% means unrestricted optimization. Here 'unrestricted' indicates the parameter 
+% $r_e$ will be treated as a common adjustable variable.
+
+% Table \ref{table:MAE} demonstrates the prediction errors of the machine learned
+% EAM models and reference models. 
+
+% \begin{table*}[h]
+% \centering
+% \begin{tabular}{lcccccccc}
+% \hline
+%     & Ni$^{\mathrm{old}}$ & Ni & Ni$^{\mathrm{alloy}}$ 
+%     & Mo$^{\mathrm{old}}$ & Mo & Mo$^{\mathrm{alloy}}$ \\
+% \hline
+% $r_e$ & 2.488746 & 2.124480 & & 2.728100 & & \\
+% $f_e$ & 2.007018 & 2.633256 & & 2.723710 & & \\
+% $\rho_e$ & 27.562015 & 27.233315 & \\ 
+% $\rho_s$ & 27.930410 & 26.392414 &\\
+% $\alpha$ & 8.383453 & 8.452753 & \\
+% $\beta$ & 4.471175 & 3.285651 & \\
+% $A$ & 0.429046 & 0.9802988 & \\
+% $B$ & 0.633531 & 0.8919016 & \\
+% $\kappa$ & 0.443599 & 0.5685785 & \\
+% $\lambda$ & 0.820658 & 1.1653832 & \\
+% $F_{n0}$ & -2.693513 & -3.4354472 & \\
+% $F_{n1}$ & -0.076445 & 0.3544341 & \\
+% $F_{n2}$ & 0.241442 & -2.5563858 & \\
+% $F_{n3}$ & -2.375626 & -7.1984844 & \\
+% $F_{0}$ & -2.70 & -3.236908 & \\
+% $F_{1}$ & 0 & 1.4576268 & \\
+% $F_{2}$ & 0.265390 & 2.1785288 & \\
+% $F_{3}$ & -0.152856 & -1.642411 & \\
+% $\eta$ & 0.469000 & 4.305329 & \\
+% $F_e$ & -2.699486 & -3.6163342 & \\
+% \hline
+% \end{tabular}
+% \caption{\label{table:parameters} The original (labeled as 'old'), elemental and 
+% alloy parameters.}
+% \end{table*}
 
 \begin{table*}[h]
 \centering
