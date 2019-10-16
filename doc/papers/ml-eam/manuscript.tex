@@ -617,7 +617,13 @@ potential file will be exported.
 The publicly Ni-Mo dataset is used to evaluate our approach. This dataset is 
 provided by Shyue Ping Ong. It contains 3973 different Ni-Mo solids. All 
 calculations were done by VASP with the PBE functional and the projector 
-augmented-wave approach.
+augmented-wave approach. 
+
+The melting points $T_{m}$ of bcc Mo and fcc Ni were measured with the 
+solid-liquid coexistence approach. For fcc Ni, $30 \times 10 \times 10$ 
+supercells were used and for bcc the supercells were $30 \times 15 \times 15$. 
+The time step was set to 1 fs. The simulation for each temperature was carried 
+out for 300 ps.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -629,37 +635,45 @@ augmented-wave approach.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Figure: Ni - EAM - Plot
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure*}[h!]
-\centering
-\includegraphics[scale=0.57]{figures/Ni_eam.png}
-\caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
-Zjw04 EAM and the machine learned EAM (ML-EAM).}
-\end{figure*}
-
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
 % Figure: Ni - EOS
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure}[h!]
+\begin{figure}[htp]
 \centering
 \includegraphics[scale=0.65]{figures/Ni_all_eos.png}
-\caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
-Zjw04 EAM and the machine learned EAM (ML-EAM).}
+\caption{\label{fig:Ni_eam_eos} The energy-volume curves of the original EAM, 
+SNAP, ML-EAM and DFT for the fcc Ni.}
 \end{figure}
 
 We first use the elementary fcc Ni dataset to show our approach. This dataset 
 has 461 structures in total. 400 were randomly selected to form the training 
 subset. In this experiment, $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and 
-$\chi_{\mathrm{elastic}}$ are set to 1, 3 and 0.05 respectively. In this 
-section, SNAP shall refer to the elementary SNAP Ni model. Table 
-\ref{table:elementary_Ni_mae} shows the MAEs of those models. The original EAM 
-model already has an accepetable performace on this dataset. Our machine 
-learning approach can further reduce the energy MAE to 4.1 meV/atom. All of 
-these models have similar force prediction performance.
+$\chi_{\mathrm{elastic}}$ were set to 1, 3 and 0.05 respectively. The batch size
+was 25. Only the fcc Ni was included in $\Omega$ (Equation \ref{eq:rose_loss} 
+and \ref{eq:cijkl_loss}).
+
+Table \ref{table:elementary_Ni_mae} shows the MAEs of those models. The original 
+EAM model already has an accepetable performace on this fcc dataset. Its energy 
+MAE is 10.6 meV/atom and the force MAE is 0.06 eV/\AA. The MEAM performs 
+slightly worse on this dataset with an energy MAE of 17.6 meV/atom and force MAE
+of 0.08 eV/\AA. Our machine learning approach can further reduce the energy MAE 
+to 4.1 meV/atom and the force MAE to 0.05 eV/\AA, which are much closer to the 
+elementary SNAP Ni model.
+
+Figure \ref{fig:Ni_eam_eos} plots the equation of state curves obtained with the 
+DFT, SNAP, EAM and ML-EAM models. The whole fitting region ranges from 84\% to 
+118\% of the equilibrium volume. The original EAM significantly underestimates 
+the energy at both tensile and compress strains. However, our machine learning 
+approach together with the Rose constraint can fix this problem. The 
+energy-volume curve of ML-EAM overalps with the DFT curve very well for the 
+entire fitting region. 
+
+Table \ref{table:elementary_Ni} summerizes the predicted material properties of 
+fcc Ni, including the melting point, the elastic constants, the vacancy 
+formation energy $E_{v}$, the migration energy $E_{m}$ and the activation energy 
+$E_{a}$. The original EAM already performs well on these properties. ML-EAM 
+further improves the elastic constants. The errors were significantly reduced 
+to around 1-2\%.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -668,32 +682,32 @@ these models have similar force prediction performance.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{table}[h]
 \centering
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \hline
-    & SNAP & EAM & ML-EAM \\
+ MAE & SNAP & EAM & MEAM & ML-EAM \\
 \hline
-Energy MAE (meV/atom) & 1.2 & 10.6 & 4.1 \\
-Force MAE (eV/\AA) & 0.05 & 0.06 & 0.05 \\
+Energy (meV/atom) & 1.2 & 10.6 & 17.8 & 4.1 \\
+Force (eV/\AA) & 0.05 & 0.06 & 0.08 & 0.05 \\
 \hline
 \end{tabular}
 \caption{\label{table:elementary_Ni_mae} Comparion of the energy and force 
-accuracy of the elementary SNAP Ni mode, the original EAM and the machine 
-learned EAM.
+accuracy of the elementary SNAP Ni model, the original EAM, the MEAM and our 
+ML-EAM.
 }
-\end{table}
+\end{table}    
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
 % Table: Ni - Material Properties
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{table*}[h]
+\begin{table*}[htp]
 \centering
 \begin{tabular}{lcccccc}
 \hline
-    & DFT & SNAP & EAM & ML-EAM & Expt. \\
+    & DFT & SNAP & EAM & MEAM & ML-EAM & Exp. \\
 \hline
-$T_{m}$(K) & & 1785 & 1520 & 1765 & 1600 & 1728 \\
+$T_{m}$(K) & & 1785 & 1520 & 1765 & 1520 & 1728 \\
 $c_{11}$ (GPa) & 276 & 276 (0.0\%) & 248 (-10.1\%) & 260 (-5.8\%) & 274 (-0.7\%) & 261 \\
 $c_{12}$ (GPa) & 159 & 159 (0.0\%) & 147 (-7.5\%) & 151 (0.0\%) & 163 (2.5\%) & 151 \\
 $c_{44}$ (GPa) & 132 & 132 (0.0\%) & 125 (-5.3\%) & 131 (0.0\%) & 131 (-0.8\%) & 132 \\
@@ -703,12 +717,117 @@ $E_{a} = E_{v} + E_{m} $ (eV) & 2.58 & 2.75 (6.6\%) & 2.58 (0.0\%) & 2.62 (1.6\%
 \hline
 \end{tabular}
 \caption{\label{table:elementary_Ni} Comparison of the calculated and 
-experimental material properties of elementary Ni. $T_{m}$ is the melting 
+experimental material properties of elementary fcc Ni. $T_{m}$ is the melting 
 point. $c_{ij}$ represents elastic constants. $E_{v}$ and $E_{m}$ are vacancy 
 formation energy and migration energy, respectively. SNAP refers to the 
 elementary Ni SNAP model.
 }
 \end{table*}
+
+Figure \ref{fig:Ni_eam} compares the $rho(r)$, $F(\rho)$ and $\phi(r)$ functions
+of ML-EAM with original Zjw04 EAM. The pairwise potential $\phi(r)$ almost 
+remains the same while the embedding function $F(\rho)$ and the electron density 
+function $\rho(r)$ changes significantly. Both $\rho(r)$ and $\phi(r)$ converge
+to zero at around $r=4.8$ \AA, which is rougly 2 times of the equilibrium 
+spacing between nearest neighbors.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Ni - EAM - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure*}[htp]
+\centering
+\includegraphics[scale=0.57]{figures/Ni_eam.png}
+\caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
+Zjw04 EAM and the machine learned EAM (ML-EAM).}
+\end{figure*}
+
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Section 3.B
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\subsection{Mo}
+\label{sec:elementary_Mo}
+
+The second test example is bcc Mo. This dataset has 284 structures. 34 of 
+them were used as the testing subset and the rest were used for training. 
+The training settings were the same with fcc Ni. An ADP potential was also 
+optimized for bcc Mo.
+
+Table \ref{table:elementary_Mo_mae} summerizes the energy and force MAEs on the 
+test subset. The original Zjw04 EAM performs significantly worse. The energy 
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Mo - EAM/ADP - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure*}[htp]
+\centering
+\includegraphics[scale=0.6]{figures/Mo_eam_adp.png}
+\caption{\label{fig:Mo_eam_adp} $\rho(r)$, $F(\rho)$, $\phi(r)$ of the original 
+Zjw04 EAM, ML-EAM and ML-ADP. \textbf{(d)} shows the $\mu(r)$ and $\omega(r)$ of 
+ML-ADP.}
+\end{figure*}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Table: Mo - MAE
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\hline
+ MAE   & SNAP & EAM & ML-EAM & ML-ADP \\
+\hline
+Energy (meV/atom) & 13.2 & 58.9 & 21.7 & 22.8 \\
+Force (eV/\AA) & 0.25 & 0.31 & 0.28 & 0.27 \\
+\hline
+\end{tabular}
+\caption{\label{table:elementary_Mo_mae} Comparion of the energy and force 
+accuracy of the elementary SNAP Ni model, the original EAM, the MEAM and our 
+ML-EAM.
+}
+\end{table}    
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Table: Mo - Material Properties
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{table*}[htp]
+\centering
+\begin{tabular}{lcccccc}
+\hline
+    & DFT & SNAP & EAM & ML-EAM & ML-ADP & Exp. \\
+\hline
+$T_{m}$(K) & & 3000 & 3750 & 2940 & 2880 & 2890 \\
+$c_{11}$ (GPa) & 472 & 473 (0.2\%) & 456 (-3.4\%) & 260 (-5.8\%) & 274 (-0.7\%) & 479 \\
+$c_{12}$ (GPa) & 158 & 152 (-3.8\%) & 167 (5.7\%) & 151 (0.0\%) & 163 (2.5\%) & 165 \\
+$c_{44}$ (GPa) & 106 & 107 (0.9\%) & 115 (8.5\%) & 131 (0.0\%) & 131 (-0.8\%) & 108 \\
+$E_{v}$ (eV) & 2.87 & 2.61 (-9.1\%) & 3.02 (5.2\%) & 1.16 (-20.5\%) & 1.71 (17.1\%) & \\
+$E_{m}$ (eV) & 1.12 & 1.39 (24.1\%) & 1.54 (37.5\%) & 1.46 (30.5\%) & 0.87 (-22.3\%) & \\
+$E_{a} = E_{v} + E_{m} $ (eV) & 3.99 & 4.00 (-0.1\%) & 4.56 (14.3\%) & 2.62 (1.6\%) & 2.58 (0.0\%) & 4.00 \\
+\hline
+\end{tabular}
+\caption{\label{table:elementary_Mo} Comparison of the calculated and 
+experimental material properties of elementary bcc Mo. SNAP refers to the 
+elementary Mo SNAP model.
+}
+\end{table*}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Section 3.C
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\subsection{Mo-Ni}
+\label{sec:alloy}
+
 
 % Table \ref{table:parameters} shows the optimization results. All these 
 % minimization tasks include energy, force and stress terms in their total losses.
@@ -846,6 +965,51 @@ alloys Ni$_{3}$Mo and Ni$_{4}$Mo.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \section{Discussions}
 \label{sec:discussions}
+
+The above results suggest that with machine learning and essential physical 
+constraints, for the fcc and bcc solids, the traditional empirical potentials, 
+EAM/ADP, can be improved to be as accurate as the SNAP method. However, 
+EAM/ADP are around $10^2$ to $10^3$ times faster than SNAP. 
+
+The many-body expansion (MBE) is one of the most widely used schemes for fitting 
+potential energy surfaces. In the many-body expansion scheme, the total energy 
+of a system with N atoms can be expressed as the sum of all k-body terms where 
+$k \le 1$:
+\begin{equation}
+\label{eq:many_body_expansion}
+E = 
+\sum_{i}^{\mathrm{C^N_1}}{E^{(1)}_{i}} +
+\sum_{i,j}^{\mathrm{C^N_2}}{E^{(2)}_{ij}} + 
+\sum_{i,j,k}^{\mathrm{C^N_3}}{E^{(3)}_{ijk}} + \cdots 
+\end{equation}
+where $\mathrm{C^N_k}$ is the binomial coefficient and $E^{(k)}$ represents the 
+k-body contribution. In many cases, higher-order terms like $E_{ij}$ or 
+$E_{ijk}$ are symmetric: $E_{ij}=E_{ji}$, $E_{ijk}=E_{ikj}=E_{jik}=\cdots$. 
+Thus, Equation \ref{eq:many_body_expansion} can be further transformed to:
+\begin{align}
+\label{eq:MBE_atomic}
+E & = \sum_{i}^{\mathrm{N}}{\left(
+    E^{(1)}_{i} + 
+    \frac{1}{2!}\sum_{j \ne i}^{\mathrm{N}}{E^{(2)}_{ij}} +
+    \frac{1}{3!}\sum_{j \ne i}^{\mathrm{N}}{
+        \sum_{k \ne i,j}^{\mathrm{N}}{E^{(3)}_{ijk}}
+    } +
+    \cdots
+\right)} \nonumber \\
+& = \sum_{i}^{\mathrm{N}}{E_{i}}
+\end{align}
+where $E_{i}$ is the atomic energy of atom $i$. 
+
+In fact, the EAM formalism can be considered as a variant of MBE truncated at 
+$k=2$ (Equation \ref{eq:eam_total_energy}). The embedding contribution $F(\rho)$ 
+serves as the one-body term. The pairwise contribution 
+$\frac{1}{2}\sum_{j\ne i}{\phi(r_{ij})}$ is just a plain transcription of the 
+two-body term in Equation \ref{eq:MBE_atomic}. The ADP formalism uses a much 
+more complicated two-body term by introducing the pairwise dipole and quadrupole 
+terms. 
+
+Although the SNAP method is quite complicated, the current formalism can still 
+be viewed as a variant of MBE truncated at $k=2$. The atomic energy 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
