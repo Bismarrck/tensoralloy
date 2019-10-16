@@ -111,7 +111,7 @@ def get_rose_constraint_loss(base_nn,
 
     configs = base_nn.as_dict()
     configs.pop('class')
-    configs['export_properties'] = ['energy']
+    configs['export_properties'] = ['energy', 'forces', 'stress']
     configs['minimize_properties'] = ['energy']
 
     if options is None:
@@ -153,8 +153,13 @@ def get_rose_constraint_loss(base_nn,
                         features=features,
                         mode=tf_estimator.ModeKeys.PREDICT,
                         verbose=verbose)
-                    e0 = tf.identity(output.energy, name='E0')
-                    v0 = tf.identity(features.volume, name='V0')
+                    e0 = tf.identity(output["energy"], name='E0')
+                    v0 = tf.identity(features["volume"], name='V0')
+                    fnorm = tf.linalg.norm(output["forces"], name="Fnorm")
+                    unit = tf.constant(10.0 / GPa, dtype=e0.dtype,
+                                       name='to_kbar')
+                    kbar = tf.linalg.norm(tf.math.multiply(output.stress, unit),
+                                          name='kbar')
 
                 dx = options.dx
                 delta = options.delta
@@ -215,7 +220,7 @@ def get_rose_constraint_loss(base_nn,
                         verbose=verbose)
 
                     predictions = tf.identity(
-                        outputs.energy, name='predictions')
+                        outputs["energy"], name='predictions')
 
                     with tf.name_scope("Ei"):
                         c12 = tf.math.add(one, ax, name='c12')
@@ -236,11 +241,15 @@ def get_rose_constraint_loss(base_nn,
                         weight = tf.convert_to_tensor(
                             options.weight, dtype, name='weight')
                         residual = tf.sqrt(sds + eps, name='residual')
-                        loss = tf.multiply(residual, weight, name='loss')
+                        loss = tf.add_n([
+                            tf.multiply(residual, weight), fnorm, kbar],
+                            name='loss')
                         losses.append(loss)
 
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                     tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
                     tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
+                    tf.add_to_collection(GraphKeys.EVAL_METRICS, fnorm)
+                    tf.add_to_collection(GraphKeys.EVAL_METRICS, kbar)
 
         return tf.add_n(losses, name='total_loss')

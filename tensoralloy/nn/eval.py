@@ -140,8 +140,9 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms, mask):
                 metrics[tensor.op.name] = (tensor, tf.no_op())
             elif tensor.op.name.startswith("Rose"):
                 slist = tensor.op.name.split("/")
-                istop = slist.index('EOS')
-                key = "/".join(slist[:istop])
-                metrics[key] = (tensor, tf.no_op())
+                if "EOS" in slist:
+                    istop = slist.index('EOS')
+                    key = "/".join(slist[:istop])
+                    metrics[key] = (tensor, tf.no_op())
 
         return metrics
