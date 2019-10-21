@@ -7,9 +7,9 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from tensorflow.contrib.opt import NadamOptimizer
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import math_ops
 from typing import Dict
+
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,7 +28,7 @@ def get_activation_fn(fn_name: str):
     elif fn_name.lower() == 'sigmoid':
         return tf.nn.sigmoid
     elif fn_name.lower() == 'softplus':
-        return tf.nn.softplus
+        return softplus
     elif fn_name.lower() == 'softsign':
         return tf.nn.softsign
     elif fn_name.lower() == 'softmax':
@@ -38,6 +38,23 @@ def get_activation_fn(fn_name: str):
     else:
         raise ValueError(
             f"The activation function '{fn_name}' cannot be recognized!")
+
+
+def softplus(x, limit=30):
+    """
+    A custom-implemented softplus.
+    """
+    with tf.name_scope("Softplus"):
+        dtype = get_float_dtype()
+        limit = tf.convert_to_tensor(limit, dtype=dtype, name='limit')
+        idx1 = tf.where(tf.less(x, limit), name='idx1')
+        idx2 = tf.where(tf.greater_equal(x, limit), name='idx2')
+        shape = tf.shape(x, name='shape', out_type=idx1.dtype)
+        values = [
+            tf.scatter_nd(idx1, tf.nn.softplus(tf.gather_nd(x, idx1)), shape),
+            tf.scatter_nd(idx2, tf.identity(tf.gather_nd(x, idx2)), shape),
+        ]
+        return tf.add_n(values, name='y')
 
 
 def get_learning_rate(global_step, learning_rate=0.001, decay_function=None,
