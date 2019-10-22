@@ -21,7 +21,10 @@
 
 \author{Xin Chen, 
         Li-Fang Wang, 
+        Xing-Yu Gao,
+        Ya-Fan Zhao,
         De-Ye Lin$^\mathrm{*}$, 
+        Wei-Dong Chu,
         Hai-Feng Song$^\mathrm{*}$}
 
 \affiliation{
@@ -38,6 +41,22 @@
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{abstract}
+Interatomic potential or force-field plays a vital role in simulating materials. 
+Embedded atom method (EAM) and its variant angular-dependent potential (ADP) 
+have proven successful in modeling fcc and bcc metals qualitatively. In the past 
+few years, machine learning has became the central approach for modeling 
+interatomic interactions. Powered by big data and efficient optimizers, machine 
+learning interatomic potentials can generally approximate first-principle 
+accuracy. In this works, we successfully integrated machine learning with EAM 
+and ADP. Machine learning can significantly boost their performances. 
+For energy and force predictions, machine leaned EAM and ADP can be almost 
+as accurate as the spectral neighbor analysis potential (SNAP) on the fcc Ni, 
+bcc Mo and Mo-Ni alloy systems, while the later approach is nealy 1000 times 
+slower. ML-EAM and ML-ADP can also give first-principle accuracy key material 
+properties, such as elastic constants, melting temperatures. Our results suggest 
+a new and systematic route for developing machine learning interatomic 
+potentials. 
+Our 
 \end{abstract}
 
 \maketitle
@@ -56,18 +75,21 @@ effective ways to study, understand or predict chemical and physical properties
 of materials. \textit{ab initio} approaches are generally much more precise but 
 they are rarely used on large-scale metallic systems due to their extremely-high 
 computation expenses. Physical model based empirical potential (force-field), 
-such as the embedded-atom method (EAM), modified embedded-atom method (MEAM), 
-bond-order potential (BoP), or angular-dependent potential (ADP), still plays 
-the major role in long-time simulations and these empirical methods can achieve 
-reasonable accuracy with much lower computation costs. Empirical potentials 
+such as the embedded-atom method (EAM) \cite{EAM0,EAM1,EAM2,EAM3,EAM4}, 
+modified embedded-atom method (MEAM) \cite{MEAM0,MEAM1,MEAM2,MEAM_Jelinek}, 
+bond-order potential (BoP) \cite{BOP0,BOP1,BOP2,BOP3}, or angular-dependent 
+potential (ADP) \cite{ADP0,ADP1,ADP2,ADP3,ADP_FeNi}, still plays the major role 
+in long-time simulations and these empirical methods can achieve reasonable 
+accuracy with much lower computation costs. Empirical potentials 
 generally have very few learnable parameters and both microscopic observables 
 (energy, forces, virial, etc.) and macroscopic observables (melting 
 point, surface energy, etc.) can be used to tune these parameters. Finding 
 optimal parameters of empirical potentials is always a challenging task. Global 
-optimization (GO) approaches (Basin-Hopping, genetic algorithm, etc) are 
-traditionally used to find the best possible parameters. However, the gradients 
-of the losses with respect to model parameters are difficult or even impossible 
-to calcualte. Hence, GO optimizations are generally not that effective.
+optimization (GO) approaches (Basin-Hopping \cite{BH0,BH1}, genetic algorithm 
+\cite{PCIPY,PGA}, etc) are traditionally used to find the best possible 
+parameters. However, the gradients of the losses with respect to model 
+parameters are difficult or even impossible to calcualte. Hence, 
+GO optimizations are generally not that effective.
 
 In the last decade, machine learning (ML) has become one of the hottest 
 topics in many research areas. In the materials science, researchers have made 
@@ -75,13 +97,16 @@ great efforts on developing ML models to describe atomic interactions. Such ML
 models are considered as machine learning interaction potentials (MLIPs). Until 
 now, hundreds of MLIPs have been proposed. Among them, the symmetry-function 
 based atomistic neural network (ANN) model, published by Parinello and Behler in 
-2007, is still the most popular choice in modeling metallic interactions. 
+2007 \cite{SF2007,SF1,SF2,SF3,SF4}, is still the most popular choice in modeling 
+metallic interactions \cite{SFApp0,SFApp1,SFApp2}. 
 The smooth overlap atomic positions descriptor based gaussian approximation 
-potential (SOAP-GAP), developed by Bartòk et al, can give extremely accurate 
-prediction results, although it's a bit computationally expensive. 
+potential (SOAP-GAP) \cite{soap0,soap1,soap2,soap3}, developed by Bartòk et al, 
+can give extremely accurate prediction results, although it's a bit 
+computationally expensive. 
 Recently, Thompson and co-workers proposed another quantum-accurate MLIP named 
-the spectral neighbor analysis potential (SNAP) and it has been proven working  
-on a broad range of metals and alloys. 
+the spectral neighbor analysis potential (SNAP) \cite{SNAP_Algo} and it has 
+been proven working on a broad range of metals and 
+alloys \cite{SNAP_Mo,SNAP,SNAP_New}.
 
 In many cases, MILPs can easily outperform state-of-art empirical potentials. 
 Compared with empirical potentials, MLIPs generally have orders of magnitudes 
@@ -91,7 +116,8 @@ train a MLIP and avoid overfitting, a large high-quality (versatile) training
 dataset is probably needed. However, MILPs \textbf{can really} take advantages 
 of "big data" for two reasons. First, MLIPs typically only have 
 \textit{basic} or \textit{simple} arithmetic operations. Thus, MILPs can be 
-implemented within modern deep learning frameworks (TensorFlow, PyTorch, etc) 
+implemented within modern deep learning frameworks 
+(TensorFlow \cite{tensorflow}, PyTorch \cite{pytorch}, etc) 
 so that the gradients of the total loss with respect to fitting parameters can 
 be can obtained with the backpropagation algorithm automatically and 
 efficiently. Second, MLIPs are mostly vectorizable. Hence, GPUs can be utilized
@@ -103,9 +129,10 @@ non-negligible. Besides, even "big data" can only cover a small portion of real
 physical environments (temperature, external pressure, etc). Outside the 
 training zone, the performances of MILPs may not that stable. For long-time 
 molecular dynamics (MD) simulations of large-scale ($10^5$ or more) systems, 
-computation efficiency also becomes a major concern. Recent benchmark tests 
-suggest that MILPs are still too expensive. At present, most MLIPs are used to 
-examine small to medium ($10^3$ to $10^4$) systems.
+computation efficiency also becomes a major concern. Recent benchmark 
+tests \cite{SnapBenchmark} suggest that MILPs are still too expensive. 
+At present, most MLIPs are used to examine small to medium ($10^3$ to $10^4$) 
+systems \cite{SNAP,SFApp0,SFApp1,SFApp2,soap3}.
 
 In this work, instead of designing new atomic descriptors, we chose a new route 
 to develop MLIP: combining machine learning with empirical potentials. We 
@@ -116,10 +143,9 @@ learning method.
 
 This paper is organized as follows. Section \ref{sec:method} describes the 
 theoretical background of this work, including the formalism of the embedded 
-atom method and algorithms and details of the machine learned EAM. 
-Section \ref{sec:results} summarizes the training results and the optimal 
-parameters. Applications of the new potentials are discussed in 
-Section \ref{sec:discussions}.
+atom method and algorithms of the machine learned EAM. Section \ref{sec:results} 
+summarizes the results of ML-EAM and ML-ADP. Further discussions are given in 
+section \ref{sec:discussions}.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -136,8 +162,8 @@ Section \ref{sec:discussions}.
 \subsection{Theory}
 \label{sec:theory}
 
-In the original EAM formalism, the total energy, $E^{total}$, is the sum of 
-atomic energies:
+In the original EAM formalism \cite{EAM0}, the total energy, $E^{total}$, is the 
+sum of atomic energies:
 \begin{align}
 E^{total} = & \sum_{i}^{N}{E_{i}} \nonumber \\
 \label{eq:eam_total_energy}
@@ -157,20 +183,14 @@ equation:
     \rho_{b}(r_{ij})
 }
 \end{equation}
-where $\rho_{b}$ is the electron density function of specie $b$. In the 
-Finnis-Sinclair model, the electron density has a slightly modified form:
-\begin{equation}
-\label{eq:rho_fs}
-\rho_{i}^{\mathrm{FS}} = \sum_{j}^{r_{ij} < r_{c}}{
-    \rho_{ab}(r_{ij})
-}
-\end{equation}
+where $\rho_{b}$ is the electron density function of specie $b$. 
 $F$, $\rho$ and $\phi$ can be either parameterized functions or cubic splines.
 
-The original EAM formalism does not inlcude angular-dependent interactions. To 
+The original EAM does not inlcude angular-dependent interactions. To 
 fix this problem, Baskes modified the original EAM and got MEAM (modified 
-embedded-atom method), Lenosky proposed an alternative spline-based interpretion 
-of MEAM  while Mishin developed the angular-dependent potential (ADP). The ADP 
+embedded-atom method) \cite{MEAM0}, Lenosky proposed an alternative spline-based 
+interpretion of MEAM \cite{MEAM_Lenosky} while Mishin developed the 
+angular-dependent potential (ADP) \cite{ADP0,ADP1,ADP2,ADP3,ADP4}. The ADP 
 formalism introduces three additional terms to the total energy:
 \begin{align}
 \label{eq:adp}
@@ -346,9 +366,9 @@ components of $\vec{\mathbf{r}}_i$.
 \label{sec:functions}
 
 In this work, we use the EAM potential published by Zhou, Johnson and Wadley 
-(Zjw04) as an example to validate our machine learning approach. Zjw04 is a 
-quite popular EAM potential. In the Zjw04 potential, the electron density 
-function has the following form:
+(Zjw04) \cite{ZJW0,ZJW1,ZJW2} as an example to validate our machine learning 
+approach. Zjw04 is a quite popular EAM potential. In the Zjw04 potential, the 
+electron density function has the following form:
 \begin{equation}
 \label{eq:zjw04_rho}
 \rho_{b}(r) = \frac{
@@ -418,7 +438,7 @@ $\omega_1$ and $\omega_3$ are just damping factors calculated by the sigmoid
 functions (Equations \ref{eq:frho_c1} and \ref{eq:frho_c3}).
 
 The dipole ($\mu_{ab}$) and quadrupole ($\lambda_{ab}$) functions have the same 
-form (developed by Mishin):
+form (developed by Mishin \cite{ADP0}):
 \begin{align}
 \label{eq:adp_dipole}
 \mu_{ab}(r) & = \left[
@@ -456,9 +476,9 @@ explanation may be these constraints are generally derived properties and
 implementing them in the loss function are technically difficult.
 
 In this work, we successfully integrated two constraints into the total loss:
-the Rose equation of state (EOS) constraint and the elastic tensor constraint. 
-These two losses will be discussed later. The details of their implementations 
-will be described in another paper.
+the Rose equation of state (EOS) \cite{Rose0,Rose1,Rose2} constraint and the 
+elastic tensor constraint. These two losses will be discussed later. The details 
+of their implementations will be described in another paper.
 
 The Rose constraint incoporates the universal equation of state (Rose et al) 
 into the total loss function. The Mishin-modified equation 
@@ -501,7 +521,7 @@ optimal parameters of SNAP potentials.
 
 In this work, we successfully find a way to use elastic tensor directly as a 
 constraint. Given an equilibrium crystal structure, its elastic constant 
-$c_{ijkl}$ can be derived from $E^{total}$ directly:
+$c_{ijkl}$ can be derived from $E^{total}$ directly \cite{Elastic}:
 \begin{align}
 \label{eq:virial}
 V \cdot \epsilon & = -\mathbf{F}^{T}\mathbf{R} + \left(
@@ -565,18 +585,18 @@ Zjw04 EAM and the machine learned EAM (ML-EAM).}
 \centering
 \begin{tabular}{lccccc}
 \hline
-                              & DFT  & SNAP          & EAM            & ML-EAM         & Exp.      \\
+                              & DFT  & SNAP \cite{SNAP} & EAM              & ML-EAM         & Exp.                           \\
 \hline
-$T_{m}$(K)                    &      & 1785          & 1520           & 1520           & 1728      \\
-$c_{11}$ (GPa)                & 276  & 276 (0.0\%)   & 248 (-10.1\%)  & 274 (-0.7\%)   & 261       \\
-$c_{12}$ (GPa)                & 159  & 159 (0.0\%)   & 147 (-7.5\%)   & 163 (2.5\%)    & 151       \\
-$c_{44}$ (GPa)                & 132  & 132 (0.0\%)   & 125 (-5.3\%)   & 131 (-0.8\%)   & 132       \\
-$B_{\mathrm{VRH}}$ (GPa)      & 198  & 198 (0.0\%)   & 181 (-8.6\%)   & 195 (0.0\%)    & 188       \\
-$G_{\mathrm{VRH}}$ (GPa)      & 95   & 95 (0.0\%)    & 87 (-8.4\%)    & 93 (-2.1\%)    & 93        \\
-$\mu$                         & 0.29 & 0.29 (0.0\%)  & 0.29 (0.0\%)   & 0.29 (0.0\%)   & 0.29      \\
-$E_{v}$ (eV)                  & 1.46 & 1.68 (15.1\%) & 1.68 (15.1\%)  & 1.71 (17.1\%)  & 1.54–1.80 \\
-$E_{m}$ (eV)                  & 1.12 & 1.07 (-4.5\%) & 0.90 (-19.6\%) & 0.87 (-22.3\%) & 1.01–1.48 \\
-$E_{a} = E_{v} + E_{m} $ (eV) & 2.58 & 2.75 (6.6\%)  & 2.58 (0.0\%)   & 2.58 (0.0\%)   & 2.77–2.95 \\
+$T_{m}$(K)                    &      & 1785             & 1520 \cite{ZJW2} & 1520           & 1728                           \\
+$c_{11}$ (GPa)                & 276  & 276 (0.0\%)      & 248 (-10.1\%)    & 274 (-0.7\%)   & 261 \cite{Ni_Elastic_Exp}      \\
+$c_{12}$ (GPa)                & 159  & 159 (0.0\%)      & 147 (-7.5\%)     & 163 (2.5\%)    & 151 \cite{Ni_Elastic_Exp}      \\
+$c_{44}$ (GPa)                & 132  & 132 (0.0\%)      & 125 (-5.3\%)     & 131 (-0.8\%)   & 132 \cite{Ni_Elastic_Exp}      \\
+$B_{\mathrm{VRH}}$ (GPa)      & 198  & 198 (0.0\%)      & 181 (-8.6\%)     & 195 (0.0\%)    & 188                            \\
+$G_{\mathrm{VRH}}$ (GPa)      & 95   & 95 (0.0\%)       & 87 (-8.4\%)      & 93 (-2.1\%)    & 93                             \\
+$\mu$                         & 0.29 & 0.29 (0.0\%)     & 0.29 (0.0\%)     & 0.29 (0.0\%)   & 0.29                           \\
+$E_{v}$ (eV)                  & 1.46 & 1.68 (15.1\%)    & 1.68 (15.1\%)    & 1.71 (17.1\%)  & 1.54–1.80 \cite{Ni_EvEmEa_Exp} \\
+$E_{m}$ (eV)                  & 1.12 & 1.07 (-4.5\%)    & 0.90 (-19.6\%)   & 0.87 (-22.3\%) & 1.01–1.48 \cite{Ni_EvEmEa_Exp} \\
+$E_{a} = E_{v} + E_{m} $ (eV) & 2.58 & 2.75 (6.6\%)     & 2.58 (0.0\%)     & 2.58 (0.0\%)   & 2.77–2.95 \cite{Ni_EvEmEa_Exp} \\
 \hline
 \end{tabular}
 \caption{\label{table:Ni_properties} Comparison of the calculated and 
@@ -628,26 +648,17 @@ this work:
         }
     }}
 } \nonumber \\
-& + \chi_{\mathrm{s}}\sqrt{\frac{1}{6N_b}\sum_{i}^{N_b}{
-    \sum_{j}^{6}{
-        \left(
-            \epsilon^{\mathrm{voigt}}_{j} - \epsilon^{\mathrm{voigt,dft}}_{j}
-        \right)^2
-    }
-}} \nonumber \\
 & + \chi_{\mathrm{rose}}\mathbf{L}^{\mathrm{Rose}} 
 + \chi_{\mathrm{elastic}}\mathbf{L}^{\mathrm{elastic}}
 \end{align} 
 where $N_{b}$ is the batch size and $N_i$ is the number of atoms in structure 
-$i$. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{s}}$, $\chi_{\mathrm{rose}}$ and 
-$\chi_{\mathrm{elastic}}$ are overall weights of force, virial stress, rose EOS 
-and elastic contributions. The superscript 'voigt' means that virial 
-stress tensors should be converted to Voigt form. The Adam optimizer is used to 
-minimize Equation \ref{eq:loss}. In most cases, we use 0.01 as the initial 
-learning rate and the batch size ranges from 20 to 50. Since there are very few
-adjustable parameters, the optimization typically needs very few epochs to 
-converge. When the optimization is finished, the corresponding Lammps setfl 
-potential file will be exported.
+$i$. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$ 
+are overall weights of force, rose EOS and elastic contributions. 
+The Adam optimizer \cite{adam} is used to minimize Equation \ref{eq:loss}. 
+In most cases, we use 0.01 as the initial learning rate and the batch size 
+ranges from 20 to 50. Since there are very few adjustable parameters, the 
+optimization typically needs very few epochs to converge. When the optimization 
+is finished, the corresponding Lammps setfl potential file will be exported.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -657,10 +668,10 @@ potential file will be exported.
 \section{Results}
 \label{sec:results}
 
-The publicly Ni-Mo dataset is used to evaluate our approach. This dataset is 
-provided by Shyue Ping Ong. It contains 3973 different Ni-Mo solids. All 
-calculations were done by VASP with the PBE functional and the projector 
-augmented-wave approach. 
+The publicly Ni-Mo dataset \cite{SNAP} is used to evaluate our approach. This 
+dataset is provided by Shyue Ping Ong. It contains 3973 different Ni-Mo solids. 
+All calculations were done by VASP \cite{VASP} with the PBE \cite{PBE} 
+functional and the projector augmented-wave approach \cite{PAW}. 
 
 The optimized parameters are listed in the appendix.
 
@@ -690,25 +701,13 @@ $i$, $E_i$ is the Zjw04 energy of structure $i$ while $E_i^{dft}$ represents its
 corresponding DFT energy, $E_{eq}$ and $E_{eq}^{dft}$ refers to the equilibrium 
 energy of Zjw04 and DFT, respectively.
 
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
-% Figure: r(Mo-Mo)
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure}
-\centering
-\includegraphics[scale=0.64]{figures/r_MoMo_hist.png}
-\caption{\label{fig:r_MoMo_hist} The energy-volume curves of the original EAM, 
-SNAP, ML-EAM and DFT for the fcc Ni.}
-\end{figure}
-
 Figure \ref{fig:Mo_eam_adp} compares the $\rho(r)$, $F(\rho)$, $\phi(r)$, 
 $\mu(r)$ and $\omega(r)$ functions. The differences between ML-EAM and ML-ADP 
 $\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. Both the angular-dependent 
-dipole $\mu(r)$ and quadrupole $\omega(r)$ quickly descrease to zero at 2.5 \AA. 
-However, the equilibrium spacing between two adjacent Mo atoms is 2.7 \AA. This 
-may explain why ML-ADP does not outperform ML-EAM on this dataset: most 
-$r^{\mathrm{Mo-Mo}}$ are beyond 2.5 \AA (Figure \ref{fig:r_MoMo_hist}). 
+dipole $\mu(r)$ and quadrupole $\omega(r)$ quickly descrease to zero at 2.5 \AA, 
+which is lower than the equilibrium spacing (2.7 \AA) between two adjacent Mo 
+atoms. Hence, the dipole and quadrupole terms only contribute a little to the 
+total energy for this test case.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -768,18 +767,18 @@ optimized EAM and ADP are totally accepetable.
 \centering
 \begin{tabular}{lcccccc}
 \hline
-                              & DFT  & SNAP          & EAM           & ML-EAM         & ML-ADP         & Exp. \\
+                              & DFT  & SNAP \cite{SNAP_Mo} & EAM \cite{ZJW2} & ML-EAM         & ML-ADP         & Exp.                      \\
 \hline
-$T_{m}$(K)                    &      & 3000          & 3750          & 2940           & 2880           & 2890 \\
-$c_{11}$ (GPa)                & 472  & 473 (0.2\%)   & 457 (-3.2\%)  & 472 (0.0\%)    & 473 (0.2\%)    & 479  \\
-$c_{12}$ (GPa)                & 158  & 152 (-3.8\%)  & 168 (6.3\%)   & 158 (0.0\%)    & 160 (1.2\%)    & 165  \\
-$c_{44}$ (GPa)                & 106  & 107 (0.9\%)   & 116 (9.4\%)   & 106 (0.0\%)    & 105 (-0.9\%)   & 108  \\
-$B_{\mathrm{VRH}}$ (GPa)      & 263  & 259 (-1.5\%)  & 264 (0.4\%)   & 262 (-0.4\%)   & 264 (0.4\%)    & 270  \\
-$G_{\mathrm{VRH}}$ (GPa)      & 124  & 126 (1.6\%)   & 127 (2.4\%)   & 125 (0.8\%)    & 124 (0.0\%)    & 125  \\
-$\mu$                         & 0.30 & 0.29 (-3.3\%) & 0.29 (-3.3\%) & 0.30 (0.9\%)   & 0.30 (0.0\%)   & 0.30 \\
-$E_{v}$ (eV)                  & 2.87 & 2.61 (-9.1\%) & 3.02 (5.2\%)  & 1.16 (-20.5\%) & 1.71 (17.1\%)  &      \\
-$E_{m}$ (eV)                  & 1.12 & 1.39 (24.1\%) & 1.54 (37.5\%) & 1.46 (30.5\%)  & 0.87 (-22.3\%) &      \\
-$E_{a} = E_{v} + E_{m} $ (eV) & 3.99 & 4.00 (-0.1\%) & 4.56 (14.3\%) & 2.62 (1.6\%)   & 2.58 (0.0\%)   & 4.00 \\
+$T_{m}$(K)                    &      & 3000                & 3750            & 2940           & 2880           & 2890                      \\
+$c_{11}$ (GPa)                & 472  & 473 (0.2\%)         & 457 (-3.2\%)    & 472 (0.0\%)    & 473 (0.2\%)    & 479 \cite{Mo_Elastic_Exp} \\
+$c_{12}$ (GPa)                & 158  & 152 (-3.8\%)        & 168 (6.3\%)     & 158 (0.0\%)    & 160 (1.2\%)    & 165 \cite{Mo_Elastic_Exp} \\
+$c_{44}$ (GPa)                & 106  & 107 (0.9\%)         & 116 (9.4\%)     & 106 (0.0\%)    & 105 (-0.9\%)   & 108 \cite{Mo_Elastic_Exp} \\
+$B_{\mathrm{VRH}}$ (GPa)      & 263  & 259 (-1.5\%)        & 264 (0.4\%)     & 262 (-0.4\%)   & 264 (0.4\%)    & 270 \cite{Mo_Elastic_Exp} \\
+$G_{\mathrm{VRH}}$ (GPa)      & 124  & 126 (1.6\%)         & 127 (2.4\%)     & 125 (0.8\%)    & 124 (0.0\%)    & 125 \cite{Mo_Elastic_Exp} \\
+$\mu$                         & 0.30 & 0.29 (-3.3\%)       & 0.29 (-3.3\%)   & 0.30 (0.9\%)   & 0.30 (0.0\%)   & 0.30                      \\
+$E_{v}$ (eV)                  & 2.87 & 2.61 (-9.1\%)       & 3.02 (5.2\%)    & 1.16 (-20.5\%) & 1.71 (17.1\%)  &                           \\
+$E_{m}$ (eV)                  & 1.12 & 1.39 (24.1\%)       & 1.54 (37.5\%)   & 1.46 (30.5\%)  & 0.87 (-22.3\%) &                           \\
+$E_{a} = E_{v} + E_{m} $ (eV) & 3.99 & 4.00 (-0.1\%)       & 4.56 (14.3\%)   & 2.62 (1.6\%)   & 2.58 (0.0\%)   & 4.00 \cite{Mo_Ea_Exp}     \\
 \hline
 \end{tabular}
 \caption{\label{table:Mo_properties} Comparison of the calculated and 
@@ -893,15 +892,15 @@ compress strains.
 \centering
 \begin{tabular}{lcccccccc}
 \hline
-                  & Model  & Mo   & Ni$_4$Mo & Ni$_3$Mo & Mo$_{\mathrm{Ni}}$ & Ni$_{\mathrm{Mo}}$ & Ni   & Overall \\
+                  & Model            & Mo   & Ni$_4$Mo & Ni$_3$Mo & Mo$_{\mathrm{Ni}}$ & Ni$_{\mathrm{Mo}}$ & Ni   & Overall \\
 \hline
-Energy (meV/atom) & SNAP   & 16.2 & 4.0      & 5.2      & 22.7               & 33.9               & 7.9  & 22.5    \\
-                  & ML-EAM & 30.4 & 11.1     & 8.6      & 29.8               & 33.9               & 11.6 & 26.2    \\
-                  & ML-ADP & 36.9 & 5.1      & 4.8      & 21.7               & 22.8               & 13.3 & 19.6    \\
+Energy (meV/atom) & SNAP \cite{SNAP} & 16.2 & 4.0      & 5.2      & 22.7               & 33.9               & 7.9  & 22.5    \\
+                  & ML-EAM           & 30.4 & 11.1     & 8.6      & 29.8               & 33.9               & 11.6 & 26.2    \\
+                  & ML-ADP           & 36.9 & 5.1      & 4.8      & 21.7               & 22.8               & 13.3 & 19.6    \\
 \hline
-Force (eV/\AA)    & SNAP   & 0.29 & 0.14     & 0.16     & 0.13               & 0.55               & 0.11 & 0.23    \\
-                  & ML-EAM & 0.33 & 0.24     & 0.19     & 0.25               & 0.35               & 0.08 & 0.23    \\
-                  & ML-ADP & 0.45 & 0.16     & 0.15     & 0.14               & 0.35               & 0.08 & 0.20    \\
+Force (eV/\AA)    & SNAP \cite{SNAP} & 0.29 & 0.14     & 0.16     & 0.13               & 0.55               & 0.11 & 0.23    \\
+                  & ML-EAM           & 0.33 & 0.24     & 0.19     & 0.25               & 0.35               & 0.08 & 0.23    \\
+                  & ML-ADP           & 0.45 & 0.16     & 0.15     & 0.14               & 0.35               & 0.08 & 0.20    \\
 \hline
 \end{tabular}
 \caption{\label{table:MAE}
@@ -930,29 +929,29 @@ Ni$_4$Mo crystal, the average absolute percentage error is also descreased.
 \centering
 \begin{tabular}{lccccc}
 \hline
-                   & DFT  & SNAP          & EAM           & ML-EAM        & ML-ADP        \\
+                   & DFT  & SNAP \cite{SNAP} & EAM \cite{ZJW2} & ML-EAM        & ML-ADP        \\
 \hline
 Ni$_3$Mo \\
-$c_{11}$           & 385  & 420 (9.1\%)   & 195 (-49.4\%) & 403 (4.7\%)   & 374 (-2.9\%)  \\
-$c_{12}$           & 166  & 197 (18.7\%)  & 98 (-41.0\%)  & 208 (25.3\%)  & 160 (-3.6\%)  \\
-$c_{13}$           & 145  & 162 (11.7\%)  & 98 (-32.4\%)  & 230 (58.6\%)  & 176 (21.4\%)  \\
-$c_{22}$           & 402  & 360 (10.7\%)  & 351 (-12.7\%) & 443 (10.2\%)  & 386 (-4.0\%)  \\
-$c_{23}$           & 131  & 145 (-10.4\%) & 107 (-18.3\%) & 272 (107.6\%) & 214 (63.3\%)  \\
-$c_{33}$           & 402  & 408 (1.5\%)   & 295 (-26.6\%) & 474 (17.9\%)  & 398 (-0.5\%)  \\
-$c_{44}$           & 94   & 84 (-10.4\%)  & 36 (-61.7\%)  & 25 (-73.4\%)  & 52 (-44.6\%)  \\
-$B_{\mathrm{VRH}}$ & 230  & 243 (5.7\%)   & 156 (-32.2\%) & 302 (31.3\%)  & 250 (8.7\%)   \\
-$G_{\mathrm{VRH}}$ & 89   & 100 (12.4\%)  & 61 (-31.5\%)  & 57 (36.0\%)   & 66 (25.8\%)   \\
-$\mu$              & 0.33 & 0.32 (-3.0\%) & 0.33 (0.0\%)  & 0.41 (24.2\%) & 0.38 (15.1\%) \\
+$c_{11}$           & 385  & 420 (9.1\%)      & 195 (-49.4\%)   & 403 (4.7\%)   & 374 (-2.9\%)  \\
+$c_{12}$           & 166  & 197 (18.7\%)     & 98 (-41.0\%)    & 208 (25.3\%)  & 160 (-3.6\%)  \\
+$c_{13}$           & 145  & 162 (11.7\%)     & 98 (-32.4\%)    & 230 (58.6\%)  & 176 (21.4\%)  \\
+$c_{22}$           & 402  & 360 (10.7\%)     & 351 (-12.7\%)   & 443 (10.2\%)  & 386 (-4.0\%)  \\
+$c_{23}$           & 131  & 145 (-10.4\%)    & 107 (-18.3\%)   & 272 (107.6\%) & 214 (63.3\%)  \\
+$c_{33}$           & 402  & 408 (1.5\%)      & 295 (-26.6\%)   & 474 (17.9\%)  & 398 (-0.5\%)  \\
+$c_{44}$           & 94   & 84 (-10.4\%)     & 36 (-61.7\%)    & 25 (-73.4\%)  & 52 (-44.6\%)  \\
+$B_{\mathrm{VRH}}$ & 230  & 243 (5.7\%)      & 156 (-32.2\%)   & 302 (31.3\%)  & 250 (8.7\%)   \\
+$G_{\mathrm{VRH}}$ & 89   & 100 (12.4\%)     & 61 (-31.5\%)    & 57 (36.0\%)   & 66 (25.8\%)   \\
+$\mu$              & 0.33 & 0.32 (-3.0\%)    & 0.33 (0.0\%)    & 0.41 (24.2\%) & 0.38 (15.1\%) \\
 \hline
 Ni$_4$Mo \\
-$c_{11}$           & 300  & 283 (-5.7\%)  & 172 (-42.7\%) & 282 (-6.0\%)  & 342 (14.0\%)  \\
-$c_{12}$           & 186  & 179 (-3.8\%)  & 158 (-15.1\%) & 125 (-32.8\%) & 217 (16.7\%)  \\
-$c_{22}$           & 313  & 326 (4.2\%)   & 158 (-49.5\%) & 282 (-10.0\%) & 342 (9.3\%)   \\
-$c_{23}$           & 166  & 164 (-1.2\%)  & 80 (-51.8\%)  & 156 (-6.0\%)  & 232 (39.8\%)  \\
-$c_{44}$           & 130  & 126 (-3.1\%)  & 125 (-3.8\%)  & 136 (4.6\%)   & 117 (-10.0\%) \\
-$B_{\mathrm{VRH}}$ & 223  & 220 (-1.3\%)  & 161 (-27.8\%) & 178 (-20.1\%) & 257 (15.2\%)  \\
-$G_{\mathrm{VRH}}$ & 91   & 95 (4.4\%)    & -156 (-162\%) & 80 (-12.1\%)  & 79 (-13.2\%)  \\
-$\mu$              & 0.33 & 0.31 (-6.1\%) & 0.70 (112\%)  & 0.31 (-6.1\%) & 0.36 (9.1\%)  \\
+$c_{11}$           & 300  & 283 (-5.7\%)     & 172 (-42.7\%)   & 282 (-6.0\%)  & 342 (14.0\%)  \\
+$c_{12}$           & 186  & 179 (-3.8\%)     & 158 (-15.1\%)   & 125 (-32.8\%) & 217 (16.7\%)  \\
+$c_{22}$           & 313  & 326 (4.2\%)      & 158 (-49.5\%)   & 282 (-10.0\%) & 342 (9.3\%)   \\
+$c_{23}$           & 166  & 164 (-1.2\%)     & 80 (-51.8\%)    & 156 (-6.0\%)  & 232 (39.8\%)  \\
+$c_{44}$           & 130  & 126 (-3.1\%)     & 125 (-3.8\%)    & 136 (4.6\%)   & 117 (-10.0\%) \\
+$B_{\mathrm{VRH}}$ & 223  & 220 (-1.3\%)     & 161 (-27.8\%)   & 178 (-20.1\%) & 257 (15.2\%)  \\
+$G_{\mathrm{VRH}}$ & 91   & 95 (4.4\%)       & -156 (-162\%)   & 80 (-12.1\%)  & 79 (-13.2\%)  \\
+$\mu$              & 0.33 & 0.31 (-6.1\%)    & 0.70 (112\%)    & 0.31 (-6.1\%) & 0.36 (9.1\%)  \\
 \hline
 \end{tabular}
 \caption{\label{table:NiMo_elastic_constants}
@@ -975,7 +974,7 @@ The above results suggest that with machine learning and essential physical
 constraints, for the fcc and bcc solids, the traditional empirical potentials, 
 EAM/ADP, can be improved to be almost as accurate as the SNAP method. But, 
 EAM/ADP are around $10^2$ to $10^3$ times faster than SNAP. To understand this,
-we can start from the many-body expansion (MBE) scheme.
+we can start from the many-body expansion (MBE) scheme \cite{kCON}.
 
 MBE is one of the most widely used schemes for fitting potential energy 
 surfaces. In the many-body expansion scheme, the total energy of a system with N 
