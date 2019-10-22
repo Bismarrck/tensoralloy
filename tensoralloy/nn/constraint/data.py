@@ -63,6 +63,8 @@ class Crystal:
     atoms: Atoms
     bulk_modulus: float
     elastic_constants: List[ElasticConstant]
+    vacancy_formation_energy: float
+    vacancy_atoms: Union[Atoms, None]
 
 
 built_in_crystals = {
@@ -72,7 +74,9 @@ built_in_crystals = {
                   atoms=bulk('Al', cubic=True, crystalstructure='fcc'),
                   elastic_constants=[ElasticConstant([0, 0, 0, 0], 104),
                                      ElasticConstant([0, 0, 1, 1], 73),
-                                     ElasticConstant([1, 2, 1, 2], 32)]),
+                                     ElasticConstant([1, 2, 1, 2], 32)],
+                  vacancy_formation_energy=0.0,
+                  vacancy_atoms=None),
     "Al/bcc": Crystal(name='Al',
                       phase='bcc',
                       bulk_modulus=0,
@@ -81,21 +85,38 @@ built_in_crystals = {
                                       f'Al_bcc_{_identifier}.cif')),
                       elastic_constants=[ElasticConstant([0, 0, 0, 0], 36),
                                          ElasticConstant([0, 0, 1, 1], 86),
-                                         ElasticConstant([1, 2, 1, 2], 42)]),
+                                         ElasticConstant([1, 2, 1, 2], 42)],
+                      vacancy_formation_energy=0.0,
+                      vacancy_atoms=None),
     "Ni": Crystal(name="Ni",
                   phase="fcc",
                   bulk_modulus=188,
                   atoms=bulk("Ni", cubic=True, crystalstructure='fcc'),
                   elastic_constants=[ElasticConstant([0, 0, 0, 0], 276),
                                      ElasticConstant([0, 0, 1, 1], 159),
-                                     ElasticConstant([1, 2, 1, 2], 132)]),
+                                     ElasticConstant([1, 2, 1, 2], 132)],
+                  vacancy_formation_energy=1.46,
+                  vacancy_atoms=None),
     "Mo": Crystal(name="Mo",
                   phase="bcc",
                   bulk_modulus=259,
                   atoms=bulk("Mo", cubic=True, crystalstructure='bcc'),
                   elastic_constants=[ElasticConstant([0, 0, 0, 0], 472),
                                      ElasticConstant([0, 0, 1, 1], 158),
-                                     ElasticConstant([1, 2, 1, 2], 106)]),
+                                     ElasticConstant([1, 2, 1, 2], 106)],
+                  vacancy_formation_energy=0.0,
+                  vacancy_atoms=None),
+    "Mo/dft": Crystal(name="Mo",
+                      phase="dft",
+                      bulk_modulus=259,
+                      atoms=bulk("Mo", a=3.168, cubic=True, crystalstructure='bcc'),
+                      elastic_constants=[ElasticConstant([0, 0, 0, 0], 472),
+                                         ElasticConstant([0, 0, 1, 1], 158),
+                                         ElasticConstant([1, 2, 1, 2], 106)],
+                      vacancy_formation_energy=2.87,
+                      vacancy_atoms=read(join(test_dir(),
+                                              'crystals',
+                                              'Mo.vacancy.extxyz'))),
     "Ni4Mo": Crystal(name="Ni4Mo",
                      phase="cubic",
                      bulk_modulus=0,
@@ -109,7 +130,9 @@ built_in_crystals = {
                                         ElasticConstant([2, 2, 2, 2], 313),
                                         ElasticConstant([1, 2, 1, 2], 106),
                                         ElasticConstant([0, 2, 0, 2], 130),
-                                        ElasticConstant([0, 1, 0, 1], 130)]),
+                                        ElasticConstant([0, 1, 0, 1], 130)],
+                     vacancy_formation_energy=0.0,
+                     vacancy_atoms=None),
     "Ni3Mo": Crystal(name="Ni3Mo",
                      phase="cubic",
                      bulk_modulus=0,
@@ -124,7 +147,9 @@ built_in_crystals = {
                                         ElasticConstant([2, 2, 2, 2], 402),
                                         ElasticConstant([1, 2, 1, 2], 58),
                                         ElasticConstant([0, 2, 0, 2], 66),
-                                        ElasticConstant([0, 1, 0, 1], 94)]),
+                                        ElasticConstant([0, 1, 0, 1], 94)],
+                     vacancy_formation_energy=0.0,
+                     vacancy_atoms=None),
 }
 
 
@@ -143,6 +168,16 @@ def read_external_crystal(toml_file: str) -> Crystal:
 
         atoms = read(real_path,
                      format=key_value_pairs.pop('format'))
+
+        if 'vacancy' in key_value_pairs:
+            vacancy = key_value_pairs.pop('vacancy')
+            vacancy_formation_energy = vacancy['formation_energy']
+            vacancy_atoms = read(join(dirname(toml_file),
+                                      vacancy['file']),
+                                 format='extxyz', index='0')
+        else:
+            vacancy_formation_energy = 0.0
+            vacancy_atoms = None
 
         constants = []
         for key, value in key_value_pairs.items():
@@ -167,7 +202,9 @@ def read_external_crystal(toml_file: str) -> Crystal:
                        phase=phase,
                        bulk_modulus=bulk_modulus,
                        atoms=atoms,
-                       elastic_constants=constants)
+                       elastic_constants=constants,
+                       vacancy_formation_energy=vacancy_formation_energy,
+                       vacancy_atoms=vacancy_atoms)
 
 
 def get_crystal(crystal_or_name_or_file: Union[str, Crystal]) -> Crystal:

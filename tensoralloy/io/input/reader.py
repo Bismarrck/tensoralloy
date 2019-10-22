@@ -203,7 +203,8 @@ class InputReader:
             nested_set(results, keypath, _convert_filepath(path))
 
         for keypath in ("nn.loss.elastic.crystals",
-                        "nn.loss.rose.crystals"):
+                        "nn.loss.rose.crystals",
+                        "nn.loss.vacancy.crystals"):
             list_of_values = nested_get(results, keypath)
             if list_of_values is None:
                 continue

@@ -28,6 +28,7 @@ from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
+from tensoralloy.nn.constraint import vacancy as vacancy_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -72,7 +73,8 @@ all_properties = (
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
     StructuralProperty(name='elastic'),
-    StructuralProperty(name='rose', exportable=False)
+    StructuralProperty(name='rose', exportable=False),
+    StructuralProperty(name='vacancy', exportable=False),
 )
 
 exportable_properties = [
@@ -584,6 +586,14 @@ class BasicNN:
                         options=loss_parameters.rose,
                         verbose=verbose)
 
+            if 'vacancy' in self._minimize_properties:
+                if loss_parameters.vacancy.crystals is not None:
+                    losses.vacancy = \
+                        vacancy_ops.get_vacancy_formation_energy_loss(
+                            base_nn=self,
+                            options=loss_parameters.vacancy,
+                            verbose=verbose)
+
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
 
@@ -634,7 +644,7 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop in ('elastic', 'rose'):
+            if prop in ('elastic', 'rose', 'vacancy'):
                 continue
             assert prop in labels
 

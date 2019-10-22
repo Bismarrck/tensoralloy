@@ -173,6 +173,17 @@ class RoseLossOptions(_LossOptions):
     beta: List[float] = None
 
 
+@add_slots
+@dataclass
+class VacancyLossOptions(_LossOptions):
+    """
+    Special options for the vacancy constraint loss.
+    """
+
+    crystals: List[str] = None
+    forces_weight: float = 0.0
+
+
 @dataclass
 class _HyperParameters:
     """
@@ -196,6 +207,7 @@ class LossParameters(_HyperParameters):
     l2: L2LossOptions = L2LossOptions()
     elastic: ElasticLossOptions = ElasticLossOptions()
     rose: RoseLossOptions = RoseLossOptions()
+    vacancy: VacancyLossOptions = VacancyLossOptions()
 
 
 @add_slots

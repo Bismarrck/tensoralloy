@@ -50,6 +50,11 @@ decayed = true
 decay_rate = 0.99
 decay_steps = 10
 
+[nn.loss.vacancy]
+crystals = []
+weight = 0.1
+forces_weight = 0.0
+
 [nn.loss.elastic]
 crystals = []
 weight = 0.1
