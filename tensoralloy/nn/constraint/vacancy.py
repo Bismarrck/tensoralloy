@@ -92,7 +92,9 @@ def get_vacancy_formation_energy_loss(base_nn,
                 mae = tf.math.multiply(mae, weight, name='mae/weighted')
 
                 if options.forces_weight > 0.0:
-                    loss = tf.math.add(mae, fnorm1, name='loss')
+                    weight = tf.convert_to_tensor(
+                        options.forces_weight, dtype=dtype, name='fweight')
+                    loss = tf.math.add(mae, weight * fnorm1, name='loss')
                 else:
                     loss = tf.identity(mae, name='loss')
 
