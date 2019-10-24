@@ -32,6 +32,7 @@ from tensoralloy.nn.constraint import vacancy as vacancy_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -926,6 +927,8 @@ class BasicNN:
                 timestamp = tf.constant(str(datetime.today()), name='timestamp')
                 y_atomic = tf.constant(nn._get_atomic_energy_tensor_name(),
                                        name="y_atomic")
+                fp_prec = get_float_precision()
+                fp_prec_op = tf.constant(fp_prec.name, name='precision')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -960,6 +963,7 @@ class BasicNN:
                 transformer_params.op.name,
                 timestamp.op.name,
                 y_atomic.op.name,
+                fp_prec_op.op.name,
             ]
 
             for tensor in predictions.values():
