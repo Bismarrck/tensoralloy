@@ -147,10 +147,12 @@ In this work, we propose a virtual-atom approach to model the total energy of
 symmetry function descriptors based atomistic neural network. Our approach 
 creates the computation graph directly from atomic positions. Thus, the 
 derivations of forces and virial can be handled by TensorFlow automatically and 
-efficiently. This new approach is implemented in our open-source program 
-TensorAlloy, which supports constructing machine learning interaction potentials 
-for both \textit{molecules} and \textit{solids}. The QM7 and SNAP/Ni-Mo datasets 
-are used to demostrate the performances of our program.
+efficiently. The virtual atom approach with AutoGrad within TensorFlow allows 
+for efficient training to not just energies and forces, but also virial stress. 
+This new approach is implemented in our open-source program TensorAlloy, which 
+supports constructing machine learning interaction potentials for both 
+\textit{molecules} and \textit{solids}. The QM7 and SNAP/Ni-Mo datasets are used 
+to demostrate the performances of our program.
 \end{abstract}
 
 \begin{keyword}
@@ -268,7 +270,9 @@ descriptor based neural network.
 Our apporach can move the entry of the computation graph from atomic descriptors 
 back to the raw atomic positions. Thus, calculating the derivatives of total 
 energy with respect to atomic positons (force) or lattice tensor (virial) can be 
-handled by TensorFlow directly and automatically. 
+handled by TensorFlow directly and automatically. Hence, the technical barrier 
+of training ANNs with atomic forces and (especially) virial stress becomes 
+completely neglectable.
 
 This paper is organized as follows. Section \ref{section:theory} introduces the 
 theory of the symmetry function descriptor and the ANN framework. Section 
@@ -1230,10 +1234,10 @@ corresponding SNAP benchmarks (bracket)}
   & \multicolumn{2}{c|}{Energy (meV/atom)} & \multicolumn{2}{c|}{Force (eV/\AA)}
   & Stress (GPa) \\
 \hline
-Elementary Model & Mo & Ni & Mo & Ni & Mo \\
+Elementary Model & Mo         & Ni        & Mo            & Ni   & Mo          \\
 \hline
-Mo & 4.5 (13.2) & & 0.19 (0.25) & & 0.28 (0.87) \\
-Ni & & 1.3 (1.2) & & 0.04 (0.05) & \\
+Mo               & 4.5 (13.2) &           & 0.19 (0.25)   &      & 0.28 (0.87) \\
+Ni               &            & 1.3 (1.2) & & 0.04 (0.05) & 2.05               \\
 \hline
 \end{tabular}
 \caption{\label{table:MAE1}
@@ -1247,9 +1251,20 @@ stress prediction performances of our trained models compared with their
 corresponding SNAP benchmarks. 
 The original SNAP formalism contains both radial and angular 
 interactions. However, in most cases, the radial-only TensorAlloy-trained 
-models can significantly outperform corresponding SNAP models. The trainings of 
-these models are also very fast. All these models are trained within 2 GPU hours
-on our workstation. 
+models can significantly outperform corresponding SNAP models. We can also 
+notice that including virial stress in the total loss function can significantly
+reduce the stress prediction error. The virial stress 
+(Equation \ref{eq:stress}) consists of two parts: the net force contribution 
+$-F^TR$ and the partial force contribution 
+$\left(\partial E / \partial \mathbf{h}\right)^T\mathbf{h}$. The atomic forces 
+used by the total loss equation \ref{eq:loss} are net forces only but virial 
+stress only depends on the partial forces (the force between two atoms). 
+Compared with the binary \textbf{NN}(Mo-Ni) model, the elementary 
+\textbf{NN}(Ni) model has lower net force error (0.04 eV/\AA vs 0.07 eV\AA). 
+However, the elementary model trained with energy and forces only has much 
+larger stress MAE (2.05 GPa vs 0.83 GPa). These results clearly suggest that 
+including virial stress in the total loss function is necessary for obtaining 
+better virial stress accuracy.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
