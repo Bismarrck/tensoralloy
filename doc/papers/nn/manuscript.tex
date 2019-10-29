@@ -1356,8 +1356,12 @@ constructing symmetry function based atomistic neural networks.
 With the virtual atom approach, the calculations of the symmetry function 
 descriptors can be implemented within TensorFlow. Thus, we can now build direct 
 computation graph from atomic positions to total energy, making the technical 
-barrier of calculating NN-derived atomic forces and virial stress neglectable.
-This new algorithm is implemented in our Python program, TensorAlloy.
+barrier of calculating NN-derived atomic forces and virial stress neglectable. 
+Hence, not only energies and forces, but also virial stress, can be used to 
+train atomistic neural networks. Our experiment also suggests that including 
+virial stress in the total loss function can significantly improve the accuracy
+of predicting stress. All the new algorithms are implemented in our open-source
+Python program TensorAlloy.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
