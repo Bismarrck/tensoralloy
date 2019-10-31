@@ -303,7 +303,9 @@ class ExamplesPerSecondHook(session_run_hook.SessionRunHook):
         """
         return basic_session_run_hooks.SessionRunArgs(self._global_step_tensor)
 
-    def after_run(self, run_context: tf.train.SessionRunContext, run_values):
+    def after_run(self,
+                  run_context: tf.estimator.SessionRunContext,
+                  run_values):
         """
         Called after each call to run().
         """
