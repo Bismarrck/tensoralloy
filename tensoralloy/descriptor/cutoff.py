@@ -13,7 +13,7 @@ from tensorflow.python.ops import math_ops
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["cosine_cutoff", "polynomial_cutoff", "meam_cutoff"]
+__all__ = ["cosine_cutoff", "polynomial_cutoff", "meam_cutoff", "deepmd_cutoff"]
 
 
 def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
@@ -97,3 +97,26 @@ def meam_cutoff(x: tf.Tensor, name=None):
         x = tf.nn.relu(x)
         x = tf.minimum(x, one)
         return tf.square(one - (one - x)**4, name=name)
+
+
+def deepmd_cutoff(r: tf.Tensor, rc: float, rcs: float, name=None):
+    """
+    The DeePMD cutoff function.
+    """
+    with ops.name_scope(name, "DeepmdCutoff", [r, rc, rcs]) as name:
+        r = ops.convert_to_tensor(r, name='r')
+        rc = ops.convert_to_tensor(rc, dtype=r.dtype, name='rc')
+        rcs = ops.convert_to_tensor(rcs, dtype=r.dtype, name='rcs')
+        half = ops.convert_to_tensor(0.5, dtype=r.dtype, name='half')
+        one = ops.convert_to_tensor(1.0, dtype=r.dtype, name='one')
+        zero = ops.convert_to_tensor(0.0, dtype=r.dtype, name='zero')
+        recip = math_ops.div_no_nan(one, r, name='recip')
+        step = math_ops.subtract(rc, rcs)
+        dr = math_ops.subtract(r, rcs)
+        z = math_ops.divide(dr, step, name='z')
+        z = math_ops.maximum(z, zero, name='zmax')
+        z = math_ops.minimum(z, one, name='zmin')
+        pi = ops.convert_to_tensor(np.pi, dtype=r.dtype, name='pi')
+        zpi = math_ops.multiply(pi, z)
+        return math_ops.multiply(recip, half * math_ops.cos(zpi) + half,
+                                 name=name)
