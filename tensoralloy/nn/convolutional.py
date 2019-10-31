@@ -83,7 +83,7 @@ class Conv(keras_Conv, base.Layer):
 
 
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
-                   variable_scope, kernel_initializer='he_normal',
+                   variable_scope, num_out=1, kernel_initializer='he_normal',
                    l2_weight=0.0, collections=None, verbose=False):
     """
     Construct a 1x1 convolutional neural network.
@@ -99,6 +99,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         The size of the hidden layers.
     variable_scope : str or None
         The name of the variable scope.
+    num_out : int
+        The number of outputs.
     kernel_initializer : str
         The initialization algorithm for kernel variables.
     l2_weight : float
@@ -144,7 +146,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
             _x = layer.apply(_x)
             if verbose:
                 log_tensor(_x)
-        layer = Conv(rank=rank, filters=1, kernel_size=1,
+        layer = Conv(rank=rank, filters=num_out, kernel_size=1,
                      strides=1, use_bias=False, activation=None,
                      kernel_initializer=kernel_initializer,
                      kernel_regularizer=regularizer,
