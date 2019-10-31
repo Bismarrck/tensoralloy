@@ -67,6 +67,13 @@ minmax_scale = true
 [nn.atomic.resnet]
 fixed_static_energy = false
 
+[nn.atomic.deepmd]
+rcs = 4.0
+m1 = 100
+m2 = 4
+embedding_sizes = [20, 40, 80]
+embedding_activation = 'tanh'
+
 [nn.atomic.behler]
 angular = false
 cutoff_function = 'cosine'

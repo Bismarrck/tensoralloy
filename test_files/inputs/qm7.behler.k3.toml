@@ -3,7 +3,7 @@ precision = 'medium'
 [dataset]
 sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
-descriptor = "behler"
+descriptor = "atomic"
 rc = 6.5
 tfrecords_dir = "../../experiments/qm7-k3"
 test_size = 1000

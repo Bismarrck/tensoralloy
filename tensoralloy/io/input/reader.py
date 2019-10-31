@@ -159,7 +159,7 @@ class InputReader:
 
         descriptor = nested_get(configs, 'dataset.descriptor')
 
-        if descriptor == 'behler':
+        if descriptor == 'atomic':
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):
                 for key, val in layers.items():
@@ -188,8 +188,6 @@ class InputReader:
                             dst = None
                         _safe_update(src, dst)
 
-            if 'behler' in results:
-                del results['behler']
             if 'atomic' in results['nn']:
                 del results['nn']['atomic']
 

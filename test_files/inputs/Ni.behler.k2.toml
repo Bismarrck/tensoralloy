@@ -4,7 +4,7 @@ precision = 'medium'
 [dataset]
 sqlite3 = "../Ni/Ni.db"
 name = "Ni"
-descriptor = "behler"
+descriptor = "atomic"
 rc = 6.0
 tfrecords_dir = "../Ni"
 test_size = 1

@@ -36,7 +36,7 @@ def test_read_behler_angular_toml():
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
     assert_equal(reader['train.ckpt.checkpoint_filename'], False)
 
-    assert_equal(nested_get(configs, 'dataset.descriptor'), 'behler')
+    assert_equal(nested_get(configs, 'dataset.descriptor'), 'atomic')
     assert_equal(nested_get(configs, 'nn.atomic.arch'), 'AtomicNN')
     assert_equal(nested_get(configs, 'nn.atomic.kernel_initializer'),
                  'truncated_normal')
@@ -120,6 +120,18 @@ def test_read_eam_fs_toml():
     assert_list_equal(nested_get(configs, 'nn.eam.phi.AlFe'), [32, 32])
     assert_equal(reader['nn.eam.phi.AlAl'], 'msah11')
     assert_equal(reader['train.ckpt.checkpoint_filename'], False)
+
+
+def test_read_deepmd_toml():
+    """
+    Test `InputReader` with the file `Ni.deepmd.toml` for a `DeePotSE` task.
+    """
+    reader = InputReader(join(test_dir(), 'inputs', 'Ni.deepmd.toml'))
+
+    assert_equal(reader['nn.atomic.arch'], 'DeepPotSE')
+    assert_equal(reader['nn.atomic.deepmd.m1'], 50)
+    assert_equal(reader['nn.atomic.deepmd.m2'], 4)
+    assert_list_equal(reader['nn.atomic.deepmd.embedding_sizes'], [20, 40])
 
 
 if __name__ == "__main__":
