@@ -21,12 +21,14 @@ from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.resnet import AtomicResNN
 from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
+from tensoralloy.transformer import BatchDeePMDTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
@@ -131,7 +133,7 @@ class TrainingManager:
 
         return hparams
 
-    def _get_atomic_nn(self, kwargs: dict) -> AtomicNN:
+    def _get_atomic_nn(self, kwargs: dict):
         """
         Initialize an `AtomicNN` or one of its variant.
         """
@@ -149,12 +151,17 @@ class TrainingManager:
 
         if self._reader['nn.atomic.arch'] == 'AtomicNN':
             return AtomicNN(**kwargs)
-        else:
+        elif self._reader['nn.atomic.arch'] == 'AtomicResNN':
             kwargs['atomic_static_energy'] = \
                 self._dataset.atomic_static_energy
             kwargs['fixed_static_energy'] = \
                 self._reader['nn.atomic.resnet.fixed_static_energy']
             return AtomicResNN(**kwargs)
+        else:
+            if 'minmax_scale' in kwargs:
+                kwargs.pop('minmax_scale')
+            kwargs.update(self._reader['nn.atomic.deepmd'])
+            return DeepPotSE(**kwargs)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:
         """
@@ -208,7 +215,7 @@ class TrainingManager:
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties,
                   'activation': activation}
-        if self._reader['dataset.descriptor'] == 'behler':
+        if self._reader['dataset.descriptor'] == 'atomic':
             nn = self._get_atomic_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
@@ -229,19 +236,26 @@ class TrainingManager:
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-        if descriptor == 'behler':
-            if self._reader['nn.atomic.behler.angular']:
-                nijk_max = database.get_nijk_max(rc, allow_calculation=True)
+        if descriptor == 'atomic':
+            if self._reader['nn.atomic.arch'] == 'DeepPotSE':
+                nnl_max = database.get_nnl_max(rc, allow_calculation=True)
+                clf = BatchDeePMDTransformer(rc=rc, max_occurs=max_occurs,
+                                             nij_max=nij_max, nnl_max=nnl_max,
+                                             use_forces=database.has_forces,
+                                             use_stress=database.has_stress)
             else:
-                nijk_max = 0
-            clf = BatchSymmetryFunctionTransformer(
-                rc=rc,
-                max_occurs=max_occurs,
-                nij_max=nij_max,
-                nijk_max=nijk_max,
-                use_stress=database.has_stress,
-                use_forces=database.has_forces,
-                **self._reader['nn.atomic.behler'])
+                if self._reader['nn.atomic.behler.angular']:
+                    nijk_max = database.get_nijk_max(rc, allow_calculation=True)
+                else:
+                    nijk_max = 0
+                clf = BatchSymmetryFunctionTransformer(
+                    rc=rc,
+                    max_occurs=max_occurs,
+                    nij_max=nij_max,
+                    nijk_max=nijk_max,
+                    use_stress=database.has_stress,
+                    use_forces=database.has_forces,
+                    **self._reader['nn.atomic.behler'])
         else:
             nnl_max = database.get_nnl_max(rc, allow_calculation=True)
             if self._reader['nn.eam.arch'] == 'AdpNN':
