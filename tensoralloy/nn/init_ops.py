@@ -78,17 +78,27 @@ lecun_uniform_initializer = lecun_uniform
 lecun_normal_initializer = lecun_normal
 
 
-def get_initializer(name: str, dtype=tf.float64, seed=Defaults.seed):
+def get_initializer(name: str, dtype=tf.float64, seed=Defaults.seed,
+                    mean=0.0, stddev=0.05, minval=-0.05, maxval=0.05):
     """
     Return a variable initializer.
+
+    `mean` and `stddev` are special variables for `random_normal_initializer`
+    and `truncated_normal_initializer`.
+
+    `minval` and `maxval` are special variables for
+    `random_uniform_initializer`.
+
+    These four variables will not affect other initialization methods.
+
     """
     name = name.lower()
     if name == 'random_uniform':
-        init_fn = random_uniform_initializer
+        return random_uniform_initializer(minval, maxval, seed, dtype)
     elif name == 'random_normal':
-        init_fn = random_normal_initializer
+        return random_normal_initializer(mean, stddev, seed, dtype)
     elif name == 'truncated_normal':
-        init_fn = truncated_normal_initializer
+        return truncated_normal_initializer(mean, stddev, seed, dtype)
     elif name == 'glorot_uniform' or name == 'xavier_uniform':
         init_fn = glorot_uniform_initializer
     elif name == 'glorot_normal' or name == 'xavier_normal':
