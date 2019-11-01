@@ -14,6 +14,7 @@ from typing import List
 
 from tensoralloy.nn.init_ops import get_initializer
 from tensoralloy.nn.utils import log_tensor
+from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -34,22 +35,32 @@ class Conv(keras_Conv, base.Layer):
     def __init__(self, rank, filters, kernel_size, strides=1, padding='valid',
                  data_format=None, dilation_rate=1, activation=None,
                  use_bias=True, kernel_initializer='glorot_uniform',
-                 bias_initializer='zeros', kernel_regularizer=None,
+                 bias_initializer=None, kernel_regularizer=None,
                  bias_regularizer=None, activity_regularizer=None,
                  kernel_constraint=None, bias_constraint=None, trainable=True,
                  name=None, collections=None, **kwargs):
+
+        if not isinstance(bias_initializer, str):
+            _bias_initializer = 'zeros'
+        else:
+            _bias_initializer = bias_initializer
+
         super(Conv, self).__init__(
             rank, filters, kernel_size, strides=strides, padding=padding,
             data_format=data_format, dilation_rate=dilation_rate,
             activation=activation, use_bias=use_bias,
             kernel_initializer=kernel_initializer,
-            bias_initializer=bias_initializer,
+            bias_initializer=_bias_initializer,
             kernel_regularizer=kernel_regularizer,
             bias_regularizer=bias_regularizer,
             activity_regularizer=activity_regularizer,
             kernel_constraint=kernel_constraint,
             bias_constraint=bias_constraint, trainable=trainable, name=name,
             **kwargs)
+
+        # Add a small hack since we maymodify the mean of `bias_initializer`.
+        if not isinstance(bias_initializer, str):
+            self.bias_initializer = bias_initializer
 
         if collections is not None:
             assert isinstance(collections, list)
@@ -84,7 +95,8 @@ class Conv(keras_Conv, base.Layer):
 
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                    variable_scope, num_out=1, kernel_initializer='he_normal',
-                   l2_weight=0.0, collections=None, verbose=False):
+                   l2_weight=0.0, collections=None, output_bias=False,
+                   output_bias_mean=0, use_resnet_dt=False, verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 
@@ -105,6 +117,14 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         The initialization algorithm for kernel variables.
     l2_weight : float
         The weight of the l2 regularization of kernel variables.
+    output_bias : bool
+        A flag. If True, a bias will be applied to the output layer as well.
+    output_bias_mean : float
+        The bias unit of the output layer will be initialized with
+        `random_normal_initializer`. This defines the mean of the normal
+        distribution.
+    use_resnet_dt : bool
+        Use ResNet block (x = sigma(wx + b) + x) if True.
     collections : List[str] or None
         A list of str as the collections where the variables should be added.
     verbose : bool
@@ -118,8 +138,14 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
 
     """
     dtype = x.dtype
-    kernel_initializer = get_initializer(kernel_initializer, dtype=x.dtype)
+    kernel_initializer = get_initializer(kernel_initializer, dtype=dtype)
     bias_initializer = get_initializer('zero', dtype=dtype)
+
+    if output_bias:
+        output_bias_initializer = get_initializer(
+            'random_normal', mean=output_bias_mean, dtype=dtype)
+    else:
+        output_bias_initializer = None
 
     if l2_weight > 0.0:
         regularizer = l2_regularizer(l2_weight)
@@ -143,13 +169,18 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                          name=f'Conv{rank}d{j + 1}',
                          collections=collections,
                          _reuse=tf.AUTO_REUSE)
-            _x = layer.apply(_x)
+            if j > 0 and use_resnet_dt:
+                _x = layer.apply(_x) + _x
+            else:
+                _x = layer.apply(_x)
             if verbose:
                 log_tensor(_x)
+
         layer = Conv(rank=rank, filters=num_out, kernel_size=1,
-                     strides=1, use_bias=False, activation=None,
+                     strides=1, use_bias=output_bias, activation=None,
                      kernel_initializer=kernel_initializer,
                      kernel_regularizer=regularizer,
+                     bias_initializer=output_bias_initializer,
                      name='Output',
                      collections=collections,
                      _reuse=tf.AUTO_REUSE)
