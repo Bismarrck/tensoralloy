@@ -12,6 +12,7 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.descriptor.cutoff import deepmd_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor, get_activation_fn
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
@@ -25,6 +26,8 @@ class DeepPotSE(BasicNN):
     The tensorflow based implementation of the DeepPot-SE model.
     """
 
+    default_collection = GraphKeys.DEEPMD_VARIABLES
+
     def __init__(self,
                  elements: List[str],
                  rcs: float,
@@ -35,6 +38,8 @@ class DeepPotSE(BasicNN):
                  kernel_initializer='he_normal',
                  embedding_activation='tanh',
                  embedding_sizes=(20, 40, 80),
+                 use_resnet_dt=False,
+                 atomic_static_energy=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -55,6 +60,8 @@ class DeepPotSE(BasicNN):
         self._kernel_initializer = kernel_initializer
         self._embedding_activation = embedding_activation
         self._embedding_sizes = embedding_sizes
+        self._use_resnet_dt = use_resnet_dt
+        self._atomic_static_energy = atomic_static_energy or {}
         self._kbody_terms = get_kbody_terms(self._elements, angular=False)[1]
 
     def as_dict(self):
@@ -71,6 +78,7 @@ class DeepPotSE(BasicNN):
                 "rcs": self._rcs,
                 "embedding_activation": self._embedding_activation,
                 "embedding_sizes": self._embedding_sizes,
+                "use_resnet_dt": self._use_resnet_dt,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -138,6 +146,7 @@ class DeepPotSE(BasicNN):
             A dict.
 
         """
+        collections = [self.default_collection]
         outputs = {}
         for kbody_term, (value, mask) in partitions.items():
             with tf.variable_scope(f"{kbody_term}"):
@@ -158,6 +167,7 @@ class DeepPotSE(BasicNN):
                                     activation_fn=activation_fn,
                                     hidden_sizes=self._embedding_sizes,
                                     num_out=self._m1,
+                                    collections=collections,
                                     variable_scope=None,
                                     verbose=verbose)
                 g2 = tf.identity(g1[..., :self._m2], name='g2')
@@ -350,7 +360,7 @@ class DeepPotSE(BasicNN):
 
         """
         with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
-
+            collections = [self.default_collection]
             partitions, max_occurs = self._dynamic_partition(
                 descriptors=descriptors,
                 mode=mode,
@@ -365,8 +375,11 @@ class DeepPotSE(BasicNN):
                 activation_fn = get_activation_fn(self._activation)
                 outputs = []
                 for element, (_, atom_mask) in descriptors.items():
+                    bias_mean = self._atomic_static_energy.get(element, 0.0)
                     with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                         x = embeddings[element]
+                        if verbose:
+                            log_tensor(x)
                         hidden_sizes = self._hidden_sizes[element]
                         yi = convolution1x1(
                             x,
@@ -374,7 +387,10 @@ class DeepPotSE(BasicNN):
                             hidden_sizes=hidden_sizes,
                             num_out=1,
                             l2_weight=1.0,
-                            collections=None,
+                            collections=collections,
+                            output_bias=True,
+                            output_bias_mean=bias_mean,
+                            use_resnet_dt=self._use_resnet_dt,
                             kernel_initializer="he_normal",
                             variable_scope=None,
                             verbose=verbose)

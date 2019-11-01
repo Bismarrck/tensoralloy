@@ -160,6 +160,8 @@ class TrainingManager:
         else:
             if 'minmax_scale' in kwargs:
                 kwargs.pop('minmax_scale')
+            kwargs['atomic_static_energy'] = \
+                self._dataset.atomic_static_energy
             kwargs.update(self._reader['nn.atomic.deepmd'])
             return DeepPotSE(**kwargs)
 

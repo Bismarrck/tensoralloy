@@ -73,6 +73,7 @@ m1 = 100
 m2 = 4
 embedding_sizes = [20, 40, 80]
 embedding_activation = 'tanh'
+use_resnet_dt = false
 
 [nn.atomic.behler]
 angular = false
