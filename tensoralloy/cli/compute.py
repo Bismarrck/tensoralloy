@@ -339,8 +339,8 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                             predictions_, labels_, n_atoms_, mask_ = sess.run([
                                 predictions,
                                 labels,
-                                features.n_atoms,
-                                features.mask])
+                                features["n_atoms"],
+                                features["atom_masks"]])
                             mask_ = mask_[:, 1:].astype(bool)
 
                             for prop in properties:
