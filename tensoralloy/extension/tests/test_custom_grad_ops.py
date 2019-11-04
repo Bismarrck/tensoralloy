@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+import os
 
 from nose.tools import assert_almost_equal, assert_true
 
@@ -25,6 +26,9 @@ def test_safe_pow():
     def assert_equal(a, b):
         """ A wrapper. """
         return assert_almost_equal(a, b, delta=1e-12)
+
+    val = os.environ.get('TENSORALLOY_USE_CUSTOM_POW', False)
+    os.environ['TENSORALLOY_USE_CUSTOM_POW'] = "1"
 
     with precision_scope("high"):
         dtype = get_float_dtype()
@@ -64,6 +68,8 @@ def test_safe_pow():
 
                 assert_true(np.isnan(sess.run(g2, feed_dict={x: 0.0, y: 1.0})))
                 assert_equal(sess.run(g1, feed_dict={x: 0.0, y: 1.0}), 1.0)
+
+    os.environ['TENSORALLOY_USE_CUSTOM_POW'] = val
 
 
 def test_safe_pow_1():
