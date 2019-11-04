@@ -25,6 +25,7 @@ from tensoralloy.transformer import EAMTransformer
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
 from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
 from tensoralloy.io.lammps import LAMMPS_COMMAND
+from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -219,6 +220,8 @@ def test_export_setfl():
     assert_list_equal(out_key_lines, ref_key_lines)
 
 
+# TODO: the test below will fail if ase-3.18.1 is used.
+
 class EamFsTest(unittest.TestCase):
 
     def setUp(self):
@@ -265,26 +268,29 @@ class EamFsTest(unittest.TestCase):
         atoms.set_chemical_symbols(symbols)
         elements = sorted(set(symbols))
 
-        with tf.Graph().as_default():
-            clf = EAMTransformer(rc=rc, elements=elements)
-            nn = EamFsNN(elements=elements,
-                         export_properties=['energy', 'forces', 'stress'],
-                         custom_potentials={
-                             "Al": {"embed": "msah11"},
-                             "Fe": {"embed": "msah11"},
-                             "AlAl": {"phi": "msah11", "rho": "msah11"},
-                             "AlFe": {"phi": "msah11", "rho": "msah11"},
-                             "FeFe": {"phi": "msah11", "rho": "msah11"},
-                             "FeAl": {"phi": "msah11", "rho": "msah11"}})
-            nn.attach_transformer(clf)
-            predictions = nn.build(
-                features=clf.get_placeholder_features(),
-                mode=tf_estimator.ModeKeys.PREDICT,
-                verbose=True)
+        with precision_scope("high"):
 
-            with tf.Session() as sess:
-                tf.global_variables_initializer().run()
-                result = sess.run(predictions, feed_dict=clf.get_feed_dict(atoms))
+            with tf.Graph().as_default():
+                clf = EAMTransformer(rc=rc, elements=elements)
+                nn = EamFsNN(elements=elements,
+                             export_properties=['energy', 'forces', 'stress'],
+                             custom_potentials={
+                                 "Al": {"embed": "msah11"},
+                                 "Fe": {"embed": "msah11"},
+                                 "AlAl": {"phi": "msah11", "rho": "msah11"},
+                                 "AlFe": {"phi": "msah11", "rho": "msah11"},
+                                 "FeFe": {"phi": "msah11", "rho": "msah11"},
+                                 "FeAl": {"phi": "msah11", "rho": "msah11"}})
+                nn.attach_transformer(clf)
+                predictions = nn.build(
+                    features=clf.get_placeholder_features(),
+                    mode=tf_estimator.ModeKeys.PREDICT,
+                    verbose=True)
+
+                with tf.Session() as sess:
+                    tf.global_variables_initializer().run()
+                    result = sess.run(predictions,
+                                      feed_dict=clf.get_feed_dict(atoms))
 
         lammps = self.get_lammps_calculator()
         atoms.calc = lammps
