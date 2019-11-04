@@ -14,14 +14,14 @@ from tensoralloy.descriptor.cutoff import deepmd_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor, get_activation_fn
-from tensoralloy.nn.basic import BasicNN
+from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.convolutional import convolution1x1
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class DeepPotSE(BasicNN):
+class DeepPotSE(AtomicNN):
     """
     The tensorflow based implementation of the DeepPot-SE model.
     """
@@ -39,6 +39,7 @@ class DeepPotSE(BasicNN):
                  embedding_activation='tanh',
                  embedding_sizes=(20, 40, 80),
                  use_resnet_dt=False,
+                 use_atomic_static_energy=True,
                  atomic_static_energy=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
@@ -51,17 +52,19 @@ class DeepPotSE(BasicNN):
             elements=elements,
             hidden_sizes=hidden_sizes,
             activation=activation,
+            kernel_initializer=kernel_initializer,
+            minmax_scale=False,
+            use_resnet_dt=use_resnet_dt,
+            use_atomic_static_energy=use_atomic_static_energy,
+            atomic_static_energy=atomic_static_energy,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
         self._m1 = m1
         self._m2 = m2
         self._rcs = rcs
-        self._kernel_initializer = kernel_initializer
         self._embedding_activation = embedding_activation
         self._embedding_sizes = embedding_sizes
-        self._use_resnet_dt = use_resnet_dt
-        self._atomic_static_energy = atomic_static_energy or {}
         self._kbody_terms = get_kbody_terms(self._elements, angular=False)[1]
 
     def as_dict(self):
@@ -79,47 +82,9 @@ class DeepPotSE(BasicNN):
                 "embedding_activation": self._embedding_activation,
                 "embedding_sizes": self._embedding_sizes,
                 "use_resnet_dt": self._use_resnet_dt,
+                'use_atomic_static_energy': self._use_atomic_static_energy,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
-
-    def _get_internal_energy_op(self, outputs: tf.Tensor, features: dict,
-                                name='energy', verbose=True):
-        """
-        Return the Op to compute internal energy E.
-
-        Parameters
-        ----------
-        outputs : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_atoms - 1]` as the unmasked
-            atomic energies.
-        features : Dict
-            A dict of input features.
-        name : str
-            The name of the output tensor.
-        verbose : bool
-            If True, the total energy tensor will be logged.
-
-        Returns
-        -------
-        energy : tf.Tensor
-            The total energy tensor.
-
-        """
-        y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-        ndims = features["atom_masks"].shape.ndims
-        axis = ndims - 1
-        with tf.name_scope("mask"):
-            if ndims == 1:
-                y_atomic = tf.squeeze(y_atomic, axis=0)
-            mask = tf.split(
-                features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-            y_mask = tf.multiply(y_atomic, mask, name='mask')
-            self._y_atomic_op_name = y_mask.name
-        energy = tf.reduce_sum(
-            y_mask, axis=axis, keepdims=False, name=name)
-        if verbose:
-            log_tensor(energy)
-        return energy
 
     def _build_embedding_nn(self,
                             partitions: dict,
@@ -388,7 +353,7 @@ class DeepPotSE(BasicNN):
                             num_out=1,
                             l2_weight=1.0,
                             collections=collections,
-                            output_bias=True,
+                            output_bias=self._use_atomic_static_energy,
                             output_bias_mean=bias_mean,
                             use_resnet_dt=self._use_resnet_dt,
                             kernel_initializer="he_normal",

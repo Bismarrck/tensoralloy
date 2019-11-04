@@ -7,21 +7,17 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
-import os
-import unittest
 
 from ase.db import connect
-from os.path import exists, join, dirname
+from os.path import join
 from nose.tools import assert_equal, assert_list_equal
-from nose.tools import assert_true, assert_false
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.nn.atomic import AtomicNN, AtomicResNN
+from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.test_utils import test_dir, datasets_dir
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.utils import GraphKeys
-from tensoralloy.precision import precision_scope
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -35,6 +31,7 @@ def test_as_dict():
     hidden_sizes = 32
     old_nn = AtomicNN(elements, hidden_sizes,
                       activation='tanh',
+                      use_atomic_static_energy=False,
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
 
@@ -69,11 +66,11 @@ def test_as_dict_advanced():
                                            omega=omega, use_forces=False,
                                            use_stress=False)
 
-    nn = AtomicResNN(max_occurs.keys())
+    nn = AtomicNN(max_occurs.keys(), use_atomic_static_energy=False)
     nn.attach_transformer(bsf)
 
     configs = nn.as_dict()
-    assert_equal(configs.pop('class'), 'AtomicResNN')
+    assert_equal(configs.pop('class'), 'AtomicNN')
 
     gen = nn.__class__(**configs)
     sf = bsf.as_descriptor_transformer()
@@ -108,6 +105,7 @@ def test_inference():
         nn = AtomicNN(elements, hidden_sizes,
                       activation='tanh',
                       minmax_scale=False,
+                      use_atomic_static_energy=False,
                       minimize_properties=['energy', ],
                       export_properties=['energy', ])
 
@@ -156,71 +154,25 @@ def test_inference_from_transformer():
         elements = ['Al', 'Cu']
         clf = SymmetryFunctionTransformer(rc=rc, elements=elements,
                                           angular=False)
-        nn = AtomicResNN(elements=clf.elements,
-                         minmax_scale=False,
-                         export_properties=['energy', 'forces'])
+        nn = AtomicNN(elements=clf.elements,
+                      minmax_scale=False,
+                      use_atomic_static_energy=True,
+                      export_properties=['energy', 'forces'])
         nn.attach_transformer(clf)
         prediction = nn.build(features=clf.get_placeholder_features(),
                               mode=tf_estimator.ModeKeys.PREDICT)
         assert_list_equal(prediction["energy"].shape.as_list(), [])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        assert_equal(len(collection), 16)
+        assert_equal(len(collection), 17)
 
-        assert_equal(len(tf.trainable_variables()), 11)
+        assert_equal(len(tf.trainable_variables()), 12)
 
-        collection = tf.get_collection(GraphKeys.ATOMIC_RES_NN_VARIABLES)
-        assert_equal(len(collection), 11)
+        collection = tf.get_collection(GraphKeys.ATOMIC_NN_VARIABLES)
+        assert_equal(len(collection), 12)
 
         collection = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         assert_equal(len(collection), 10)
-
-
-class ExportToPbTest(unittest.TestCase):
-
-    def setUp(self):
-        """
-        The setup function.
-        """
-        self.output_graph_path = join(
-            test_dir(), 'checkpoints', 'qm7-k2', 'Ni.belher.k2.pb')
-        self.checkpoint_path = join(
-            test_dir(), 'checkpoints', 'qm7-k2', 'model.ckpt-10000')
-
-    def tearDown(self) -> None:
-        """
-        The cleanup function.
-        """
-        if exists(self.output_graph_path):
-            os.remove(self.output_graph_path)
-
-    def test_export_to_pb(self):
-        """
-        Test exporting an `AtomicResNN` to a pb file.
-        """
-        db = connect(join(datasets_dir(), 'qm7.db'))
-        max_occurs = db.metadata['max_occurs']
-        elements = list(sorted(max_occurs.keys()))
-
-        with precision_scope('medium'):
-            clf = SymmetryFunctionTransformer(
-                rc=6.5, elements=elements, angular=False, trainable=True,
-                eta=[0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 40.0],
-                omega=[0.0, 3.2])
-            atomic_static_energy = db.metadata['atomic_static_energy']
-            nn = AtomicResNN(elements=elements,
-                             hidden_sizes=[64, 32],
-                             minmax_scale=False,
-                             activation='softplus',
-                             export_properties=['energy', 'forces', 'stress'],
-                             atomic_static_energy=atomic_static_energy)
-            nn.attach_transformer(clf)
-            nn.export(output_graph_path=self.output_graph_path,
-                      checkpoint=self.checkpoint_path,
-                      keep_tmp_files=False)
-            assert_true(exists(self.output_graph_path))
-            assert_false(
-                exists(join(dirname(self.output_graph_path), 'export')))
 
 
 if __name__ == "__main__":

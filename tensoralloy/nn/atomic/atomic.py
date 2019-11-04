@@ -31,6 +31,9 @@ class AtomicNN(BasicNN):
                  activation=None,
                  kernel_initializer='he_normal',
                  minmax_scale=True,
+                 use_resnet_dt=False,
+                 atomic_static_energy=None,
+                 use_atomic_static_energy=True,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -43,8 +46,11 @@ class AtomicNN(BasicNN):
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
-        self._kernel_init_method = kernel_initializer
+        self._kernel_initializer = kernel_initializer
         self._minmax_scale = minmax_scale
+        self._use_resnet_dt=use_resnet_dt
+        self._atomic_static_energy = atomic_static_energy or {}
+        self._use_atomic_static_energy = use_atomic_static_energy
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -61,8 +67,11 @@ class AtomicNN(BasicNN):
                 "elements": self._elements,
                 "hidden_sizes": self._hidden_sizes,
                 "activation": self._activation,
-                'kernel_initializer': self._kernel_init_method,
+                'kernel_initializer': self._kernel_initializer,
                 'minmax_scale': self._minmax_scale,
+                'use_resnet_dt': self._use_resnet_dt,
+                'use_atomic_static_energy': self._use_atomic_static_energy,
+                'atomic_static_energy': self._atomic_static_energy,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -145,13 +154,22 @@ class AtomicNN(BasicNN):
                     hidden_sizes = self._hidden_sizes[element]
                     if verbose:
                         log_tensor(x)
+
+                    if self._use_atomic_static_energy:
+                        bias_mean = self._atomic_static_energy.get(element, 0.0)
+                    else:
+                        bias_mean = 0.0
+
                     yi = convolution1x1(
                         x,
                         activation_fn=activation_fn,
                         hidden_sizes=hidden_sizes,
                         l2_weight=1.0,
                         collections=collections,
-                        kernel_initializer=self._kernel_init_method,
+                        output_bias=self._use_atomic_static_energy,
+                        output_bias_mean=bias_mean,
+                        use_resnet_dt=self._use_resnet_dt,
+                        kernel_initializer=self._kernel_initializer,
                         variable_scope=None,
                         verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')

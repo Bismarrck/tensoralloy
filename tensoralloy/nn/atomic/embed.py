@@ -97,7 +97,7 @@ class EmbeddedAtomicNN(AtomicNN):
                         hidden_sizes=hidden_sizes,
                         l2_weight=1.0,
                         collections=collections,
-                        kernel_initializer=self._kernel_init_method,
+                        kernel_initializer=self._kernel_initializer,
                         variable_scope=None,
                         verbose=verbose)
                     yi = tf.squeeze(yi, axis=2, name='atomic')
