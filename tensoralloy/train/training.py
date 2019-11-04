@@ -33,7 +33,7 @@ from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
 from tensoralloy.train.dataclasses import EstimatorHyperParams
-from tensoralloy.train import distribute_utils
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -347,9 +347,23 @@ class TrainingManager:
                 tf.logging.info(f'seed={self._hparams.seed}')
                 tf.logging.info(f'input= \n{str(self._reader)}')
 
-                strategy = distribute_utils.get_distribution_strategy(
-                    **hparams.distribute.as_dict()
-                )
+                if tf.__version__ >= "1.14":
+                    from tensoralloy.train import distribute_utils
+                    strategy = distribute_utils.get_distribution_strategy(
+                        **hparams.distribute.as_dict()
+                    )
+                    # The lambda wrap of `input_fn` is necessary for distributed
+                    # training.
+                    train_input_fn = lambda: dataset.input_fn(
+                        mode=tf_estimator.ModeKeys.TRAIN,
+                        batch_size=hparams.train.batch_size,
+                        shuffle=hparams.train.shuffle)
+                else:
+                    strategy = None
+                    train_input_fn = dataset.input_fn(
+                        mode=tf_estimator.ModeKeys.TRAIN,
+                        batch_size=hparams.train.batch_size,
+                        shuffle=hparams.train.shuffle)
 
                 session_config = tf.ConfigProto(
                     allow_soft_placement=hparams.debug.allow_soft_placement,
@@ -390,12 +404,7 @@ class TrainingManager:
                     hooks = None
 
                 train_spec = tf_estimator.TrainSpec(
-                    # The lambda wrap of `input_fn` is necessary for distributed
-                    # training.
-                    input_fn=lambda: dataset.input_fn(
-                        mode=tf_estimator.ModeKeys.TRAIN,
-                        batch_size=hparams.train.batch_size,
-                        shuffle=hparams.train.shuffle),
+                    input_fn=train_input_fn,
                     max_steps=hparams.train.train_steps,
                     hooks=hooks)
 
