@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from os.path import join
 
 from tensoralloy.precision import precision_scope, Precision, get_float_dtype
-from tensoralloy.test_utils import Pd3O2, qm7m, test_dir
+from tensoralloy.test_utils import Pd3O2, get_qm7m_test_dict, test_dir
 from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
 from tensoralloy.descriptor import compute_dimension, cosine_cutoff
 from tensoralloy.utils import get_kbody_terms, Defaults
@@ -712,6 +712,7 @@ def _compute_qm7m_descriptors_legacy(rc):
     The legacy approach to compute symmetry function descriptors of the qm7m
     trajectory.
     """
+    qm7m = get_qm7m_test_dict()
     batch_size = len(qm7m["trajectory"])
     max_n_atoms = sum(qm7m["max_occurs"].values())
     all_kbody_terms, kbody_terms, elements = get_kbody_terms(
@@ -758,6 +759,7 @@ def test_batch_multi_elements():
     Test computing descriptors of a batch of multi-elements molecules.
     """
     rc = 6.0
+    qm7m = get_qm7m_test_dict()
     batch_size = len(qm7m["trajectory"])
     targets = _compute_qm7m_descriptors_legacy(rc)
 

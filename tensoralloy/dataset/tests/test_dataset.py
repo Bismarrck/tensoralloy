@@ -17,7 +17,7 @@ from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import VirtualAtomMap
 from tensoralloy.dataset.dataset import Dataset
 from tensoralloy.utils import Defaults
-from tensoralloy.test_utils import qm7m, test_dir
+from tensoralloy.test_utils import get_qm7m_test_dict, test_dir
 from tensoralloy.precision import precision_scope, get_float_dtype
 from tensoralloy.io.read import read_file
 from tensoralloy.io.db import connect
@@ -30,6 +30,7 @@ def qm7m_compute():
     """
     Compute the reference values.
     """
+    qm7m = get_qm7m_test_dict()
     batch_size = len(qm7m["trajectory"])
     sf = BatchSymmetryFunctionTransformer(rc=Defaults.rc,
                                           max_occurs=qm7m["max_occurs"],

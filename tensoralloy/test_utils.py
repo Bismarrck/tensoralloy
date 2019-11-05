@@ -76,18 +76,22 @@ def test_dir(absolute=False):
     return path
 
 
-qm7m = dict(
-    max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
-    nij_max=198,
-    nijk_max=1217,
-    trajectory=read(join(test_dir(), 'qm7m', 'qm7m.xyz'),
-                    index=':', format='xyz'),
-)
-
-for _atoms in qm7m["trajectory"]:
-    # Setting the boundary cell is important because `neighbor_list` may give
-    # totally different results.
-    _atoms.set_cell(np.eye(3) * 20.0)
+def get_qm7m_test_dict():
+    """
+    Return the minimal QM7 dataset dict.
+    """
+    qm7m = dict(
+        max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
+        nij_max=198,
+        nijk_max=1217,
+        trajectory=read(join(test_dir(), 'qm7m', 'qm7m.xyz'),
+                        index=':', format='xyz'),
+    )
+    for atoms in qm7m["trajectory"]:
+        # Setting the boundary cell is important because `neighbor_list` may
+        # give totally different results.
+        atoms.set_cell(np.eye(3) * 20.0)
+    return qm7m
 
 
 def datasets_dir(absolute=False):
