@@ -14,15 +14,27 @@ import subprocess
 import setuptools
 
 from tensorflow.python.framework.versions import MONOLITHIC_BUILD
-import platform as _platform
 
-from os.path import join, dirname
+from typing import List
+from os.path import join, dirname, relpath
 from setuptools.command.build_ext import build_ext
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 __all__ = ["BuildExtension", "CppExtension", 'CUDAExtension',
            "get_interp_extension"]
+
+
+def convert_to_relative_paths(source_files: List[str]):
+    """
+    Convert absolute paths to relative paths.
+    """
+    root_dir = join(dirname(__file__), "..", "..", "..")
+    results = []
+    for afile in source_files:
+        results.append(relpath(afile, root_dir))
+    return results
 
 
 def get_interp_extension() -> setuptools.Extension:
@@ -40,6 +52,7 @@ def get_interp_extension() -> setuptools.Extension:
 
     if tf.test.is_built_with_cuda() and len(cuda_files):
         flags.append("-DGOOGLE_CUDA=1")
+        # TODO: fix the paths of the CUDAExtension
         return CUDAExtension(
             ext_name,
             cpp_files + cuda_files,
@@ -53,8 +66,8 @@ def get_interp_extension() -> setuptools.Extension:
 
     return CppExtension(
         ext_name,
-        cpp_files,
-        include_dirs=[path, "include"],
+        convert_to_relative_paths(cpp_files),
+        include_dirs=[convert_to_relative_paths([path])[0], "include"],
         extra_compile_args=flags,
         extra_link_args=flags,
     )
