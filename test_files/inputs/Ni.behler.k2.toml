@@ -15,13 +15,11 @@ minimize = ['energy']
 export = ['energy']
 
 [nn.atomic]
-arch = "AtomicResNN"
+arch = "AtomicNN"
 kernel_initializer = 'he_uniform'
 
-[nn.atomic.resnet]
-fixed_static_energy = true
-
 [nn.atomic.behler]
+minmax_scale = true
 cutoff_function = 'polynomial'
 trainable = true
 eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]

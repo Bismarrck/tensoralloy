@@ -19,7 +19,7 @@ from nose.tools import with_setup, assert_dict_equal, assert_true
 
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
-from tensoralloy.nn import EamAlloyNN, AtomicResNN
+from tensoralloy.nn import AtomicNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 
@@ -63,9 +63,8 @@ class InitializationTest(unittest.TestCase):
         assert_dict_equal(hparams.opt.additional_kwargs,
                           {'use_nesterov': True, 'momentum': 0.8})
 
-        assert_true(isinstance(nn, AtomicResNN))
-        assert_true(nn.fixed_static_energy)
-        assert_equal(getattr(nn, "_kernel_init_method"), "he_uniform")
+        assert_true(isinstance(nn, AtomicNN))
+        assert_equal(getattr(nn, "_kernel_initializer"), "he_normal")
 
 
 @skipUnless(os.environ.get('TEST_EXPERIMENTS'),
@@ -73,6 +72,9 @@ class InitializationTest(unittest.TestCase):
 class EamSgdTrainingTest(unittest.TestCase):
 
     def setUp(self):
+        """
+        The setup function.
+        """
         self.model_dir = join(test_dir(), 'inputs', 'snap_Ni_zjw04')
         self.tfrecords_dir = join(test_dir(), 'inputs', 'temp')
 

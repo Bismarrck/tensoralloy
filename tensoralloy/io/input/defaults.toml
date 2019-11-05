@@ -62,10 +62,8 @@ tau = 1.0
 [nn.atomic]
 arch = "AtomicNN"
 kernel_initializer = 'he_normal'
-minmax_scale = true
-
-[nn.atomic.resnet]
-fixed_static_energy = false
+use_resnet_dt = false
+use_atomic_static_energy = true
 
 [nn.atomic.deepmd]
 rcs = 4.0
@@ -73,9 +71,9 @@ m1 = 100
 m2 = 4
 embedding_sizes = [20, 40, 80]
 embedding_activation = 'tanh'
-use_resnet_dt = false
 
 [nn.atomic.behler]
+minmax_scale = true
 angular = false
 cutoff_function = 'cosine'
 trainable = false

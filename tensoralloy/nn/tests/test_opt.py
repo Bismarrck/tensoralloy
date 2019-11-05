@@ -86,25 +86,26 @@ def test_get_train_op():
         # xlo, xhi
         # kernel 1,2,3 (trainable)
         # bias 1,2 (trainable)
+        # bias 3 (trainable, output)
 
-        assert_equal(len(tf.trainable_variables()), 5)
-        assert_equal(len(tf.moving_average_variables()), 5)
-        assert_equal(len(tf.model_variables()), 12)
+        assert_equal(len(tf.trainable_variables()), 6)
+        assert_equal(len(tf.moving_average_variables()), 6)
+        assert_equal(len(tf.model_variables()), 13)
 
     with tf.Graph().as_default():
         tf.train.get_or_create_global_step()
         _get_train_op(trainable=True)
 
-        assert_equal(len(tf.trainable_variables()), 10)
-        assert_equal(len(tf.moving_average_variables()), 10)
-        assert_equal(len(tf.model_variables()), 12)
+        assert_equal(len(tf.trainable_variables()), 11)
+        assert_equal(len(tf.moving_average_variables()), 11)
+        assert_equal(len(tf.model_variables()), 13)
 
-        # variables 10, moving averged 10, 10 * 2
+        # variables 11, moving averged 11, 12 * 2
         # xlo, xhi
         # global step 1
         # adam 2
-        # 2 adam variables per variable, 10 * 2
-        assert_equal(len(tf.global_variables()), 10 * 2 + 2 + 1 + 2 + 10 * 2)
+        # 2 adam variables per variable, 11 * 2
+        assert_equal(len(tf.global_variables()), 11 * 2 + 2 + 1 + 2 + 11 * 2)
 
 
 if __name__ == "__main__":

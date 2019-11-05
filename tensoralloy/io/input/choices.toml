@@ -9,7 +9,7 @@ descriptor = ['eam', 'atomic']
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
 
 [nn.atomic]
-arch = ['AtomicResNN', 'AtomicNN', 'DeepPotSE']
+arch = ['AtomicNN', 'DeepPotSE']
 kernel_initializer = [
     'he_normal', 'he_uniform',
     'random_normal', 'random_uniform',

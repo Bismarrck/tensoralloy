@@ -79,14 +79,17 @@ lecun_normal_initializer = lecun_normal
 
 
 def get_initializer(name: str, dtype=tf.float64, seed=Defaults.seed,
-                    mean=0.0, stddev=0.05, minval=-0.05, maxval=0.05):
+                    value=0.0, mean=0.0, stddev=0.05, minval=-0.05,
+                    maxval=0.05):
     """
     Return a variable initializer.
 
-    `mean` and `stddev` are special variables for `random_normal_initializer`
+    `value` is the specific variable for `constant_initializer`.
+
+    `mean` and `stddev` are specific variables for `random_normal_initializer`
     and `truncated_normal_initializer`.
 
-    `minval` and `maxval` are special variables for
+    `minval` and `maxval` are specific variables for
     `random_uniform_initializer`.
 
     These four variables will not affect other initialization methods.
@@ -113,6 +116,8 @@ def get_initializer(name: str, dtype=tf.float64, seed=Defaults.seed,
         init_fn = lecun_normal_initializer
     elif name == 'zero':
         return tf.zeros_initializer(dtype=dtype)
+    elif name == 'constant':
+        return tf.constant_initializer(value, dtype)
     else:
         raise ValueError(f"The initializer {name} cannot be recognized!")
     return init_fn(dtype=dtype, seed=seed)

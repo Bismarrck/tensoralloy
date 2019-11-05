@@ -14,7 +14,6 @@ from typing import List
 
 from tensoralloy.nn.init_ops import get_initializer
 from tensoralloy.nn.utils import log_tensor
-from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -121,8 +120,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         A flag. If True, a bias will be applied to the output layer as well.
     output_bias_mean : float
         The bias unit of the output layer will be initialized with
-        `random_normal_initializer`. This defines the mean of the normal
-        distribution.
+        `constant_initializer`. This defines the initial value.
     use_resnet_dt : bool
         Use ResNet block (x = sigma(wx + b) + x) if True.
     collections : List[str] or None
@@ -143,7 +141,7 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
 
     if output_bias:
         output_bias_initializer = get_initializer(
-            'random_normal', mean=output_bias_mean, dtype=dtype)
+            'constant', value=output_bias_mean, dtype=dtype)
     else:
         output_bias_initializer = None
 

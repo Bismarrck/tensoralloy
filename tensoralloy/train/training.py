@@ -19,7 +19,6 @@ from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 from tensoralloy.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
-from tensoralloy.nn.atomic.resnet import AtomicResNN
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
@@ -144,25 +143,20 @@ class TrainingManager:
             if value is not None:
                 hidden_sizes[element] = value
 
-        kwargs['hidden_sizes'] = hidden_sizes
-        kwargs['minmax_scale'] = self._reader['nn.atomic.minmax_scale']
-        kwargs['kernel_initializer'] = \
-            self._reader['nn.atomic.kernel_initializer']
+        configs = self._reader['nn.atomic']
+        params = {
+            'hidden_sizes': hidden_sizes,
+            'kernel_initializer': configs['kernel_initializer'],
+            'use_atomic_static_energy': configs['use_atomic_static_energy'],
+            'use_resnet_dt': configs['use_resnet_dt'],
+        }
+        params.update(kwargs)
 
-        if self._reader['nn.atomic.arch'] == 'AtomicNN':
+        if configs['arch'] == 'AtomicNN':
+            params.update(configs['behler'])
             return AtomicNN(**kwargs)
-        elif self._reader['nn.atomic.arch'] == 'AtomicResNN':
-            kwargs['atomic_static_energy'] = \
-                self._dataset.atomic_static_energy
-            kwargs['fixed_static_energy'] = \
-                self._reader['nn.atomic.resnet.fixed_static_energy']
-            return AtomicResNN(**kwargs)
         else:
-            if 'minmax_scale' in kwargs:
-                kwargs.pop('minmax_scale')
-            kwargs['atomic_static_energy'] = \
-                self._dataset.atomic_static_energy
-            kwargs.update(self._reader['nn.atomic.deepmd'])
+            params.update(configs['nn.atomic.deepmd'])
             return DeepPotSE(**kwargs)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:
@@ -250,6 +244,8 @@ class TrainingManager:
                     nijk_max = database.get_nijk_max(rc, allow_calculation=True)
                 else:
                     nijk_max = 0
+                params = self._reader['nn.atomic.behler']
+                params.pop('minmax_scale')
                 clf = BatchSymmetryFunctionTransformer(
                     rc=rc,
                     max_occurs=max_occurs,
@@ -257,7 +253,7 @@ class TrainingManager:
                     nijk_max=nijk_max,
                     use_stress=database.has_stress,
                     use_forces=database.has_forces,
-                    **self._reader['nn.atomic.behler'])
+                    **params)
         else:
             nnl_max = database.get_nnl_max(rc, allow_calculation=True)
             if self._reader['nn.eam.arch'] == 'AdpNN':
@@ -352,15 +348,17 @@ class TrainingManager:
                     strategy = distribute_utils.get_distribution_strategy(
                         **hparams.distribute.as_dict()
                     )
-                    # The lambda wrap of `input_fn` is necessary for distributed
-                    # training.
-                    train_input_fn = lambda: dataset.input_fn(
+                else:
+                    strategy = None
+                if strategy is None:
+                    train_input_fn = dataset.input_fn(
                         mode=tf_estimator.ModeKeys.TRAIN,
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
                 else:
-                    strategy = None
-                    train_input_fn = dataset.input_fn(
+                    # The lambda wrap of `input_fn` is necessary for distributed
+                    # training.
+                    train_input_fn = lambda: dataset.input_fn(
                         mode=tf_estimator.ModeKeys.TRAIN,
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
