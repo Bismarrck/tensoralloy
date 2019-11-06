@@ -19,8 +19,8 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.utils import Defaults, check_path
-from tensoralloy.dataset.utils import should_be_serial
-from tensoralloy.dataset.utils import brange
+from tensoralloy.train.dataset.utils import should_be_serial
+from tensoralloy.train.dataset.utils import brange
 from tensoralloy.io.sqlite import CoreDatabase
 from tensoralloy.io.db import connect
 from tensoralloy.precision import get_float_dtype, precision_scope

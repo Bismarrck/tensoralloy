@@ -16,7 +16,7 @@ from tensorflow.python import debug as tf_debug
 from tensorflow_estimator import estimator as tf_estimator
 from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 
-from tensoralloy.dataset import Dataset
+from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.atomic import AtomicNN

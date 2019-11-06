@@ -15,7 +15,7 @@ from os.path import join
 
 from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import VirtualAtomMap
-from tensoralloy.dataset.dataset import Dataset
+from tensoralloy.train.dataset.dataset import Dataset
 from tensoralloy.utils import Defaults
 from tensoralloy.test_utils import get_qm7m_test_dict, test_dir
 from tensoralloy.precision import precision_scope, get_float_dtype

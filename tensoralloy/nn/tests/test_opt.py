@@ -12,7 +12,7 @@ from nose.tools import assert_equal
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.test_utils import test_dir
-from tensoralloy.dataset import Dataset
+from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.db import connect
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.nn.opt import get_train_op
