@@ -84,7 +84,7 @@ def get_qm7m_test_dict():
         max_occurs=Counter({'C': 5, 'H': 8, 'O': 2}),
         nij_max=198,
         nijk_max=1217,
-        trajectory=read(join(test_dir(), 'qm7m', 'qm7m.xyz'),
+        trajectory=read(join(test_dir(), 'datasets', 'qm7m', 'qm7m.xyz'),
                         index=':', format='xyz'),
     )
     for atoms in qm7m["trajectory"]:
