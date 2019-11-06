@@ -6,14 +6,17 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import nose
+import glob
 
-from os.path import join
-from nose.tools import assert_equal
+from os import remove
+from os.path import join, exists
+from nose.tools import assert_equal, with_setup
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.test_utils import test_dir
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.db import connect
+from tensoralloy.io.read import read_file
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.nn.opt import get_train_op
 from tensoralloy.nn.atomic import AtomicNN
@@ -24,13 +27,17 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def _get_train_op(trainable=False):
+def run_case(trainable=False):
     """
     A helper function to created a `train_op`.
     """
-    work_dir = join(test_dir(), 'Ni')
+    work_dir = join(test_dir(), "datasets", "Ni")
 
-    database = connect(join(work_dir, 'Ni.db'))
+    db_file = join(work_dir, "Ni.db")
+    if not exists(db_file):
+        database = read_file(join(work_dir, "Ni.extxyz"), verbose=False)
+    else:
+        database = connect(db_file)
     clf = BatchSymmetryFunctionTransformer(
         rc=Defaults.rc,
         max_occurs=database.max_occurs,
@@ -73,6 +80,19 @@ def _get_train_op(trainable=False):
     return get_train_op(losses, opt_parameters, nn.minimize_properties)
 
 
+def cleanup():
+    """
+    The cleanup function.
+    """
+    data_dir = join(test_dir(), "datasets", "Ni")
+    db_file = join(test_dir(), "datasets", "Ni", "Ni.db")
+    if exists(db_file):
+        remove(db_file)
+    for tfrecord_file in glob.glob(f"{data_dir}/*.tfrecords"):
+        remove(tfrecord_file)
+
+
+@with_setup(teardown=cleanup)
 def test_get_train_op():
     """
     Test the function `get_train_op`.
@@ -80,7 +100,7 @@ def test_get_train_op():
     with tf.Graph().as_default():
 
         tf.train.get_or_create_global_step()
-        _get_train_op(trainable=False)
+        run_case(trainable=False)
 
         # eta0, eta1, eta2, eta3, omega0
         # xlo, xhi
@@ -94,7 +114,7 @@ def test_get_train_op():
 
     with tf.Graph().as_default():
         tf.train.get_or_create_global_step()
-        _get_train_op(trainable=True)
+        run_case(trainable=True)
 
         assert_equal(len(tf.trainable_variables()), 11)
         assert_equal(len(tf.moving_average_variables()), 11)

@@ -2,7 +2,7 @@ seed = 1958
 precision = 'medium'
 
 [dataset]
-sqlite3 = "../Ni/Ni.db"
+sqlite3 = "../datasets/Ni/Ni.db"
 name = "Ni"
 descriptor = "atomic"
 rc = 6.0

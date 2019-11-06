@@ -17,6 +17,7 @@ from os.path import join, exists
 from nose.tools import assert_equal, assert_is_none, assert_in
 from nose.tools import with_setup, assert_dict_equal, assert_true
 
+from tensoralloy.io.read import read_file
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
 from tensoralloy.nn import AtomicNN
@@ -29,6 +30,15 @@ __email__ = 'Bismarrck@me.com'
 
 class InitializationTest(unittest.TestCase):
 
+    def setUp(self):
+        """
+        The setup function.
+        """
+        extxyz = join(test_dir(), "datasets", "Ni", "Ni.extxyz")
+        self.db_file = join(test_dir(), "datasets", "Ni", "Ni.db")
+        if not exists(self.db_file):
+            read_file(extxyz, verbose=False)
+
     def tearDown(self):
         """
         The cleanup function.
@@ -36,6 +46,11 @@ class InitializationTest(unittest.TestCase):
         model_dir = join(test_dir(), 'inputs', 'model')
         if exists(model_dir):
             shutil.rmtree(model_dir, ignore_errors=True)
+        if exists(self.db_file):
+            os.remove(self.db_file)
+        work_dir = join(test_dir(), "datasets", "Ni")
+        for tfrecord_file in glob.glob(f"{work_dir}/*.tfrecords"):
+            os.remove(tfrecord_file)
 
     @staticmethod
     def test_initialization():
