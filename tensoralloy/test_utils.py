@@ -98,7 +98,17 @@ def datasets_dir(absolute=False):
     """
     Return the directory of `datasets`. Built-in datasets can be found here.
     """
-    path = join(dirname(__file__), "..", "datasets")
+    path = join(dirname(__file__), "data/datasets")
+    if absolute:
+        path = abspath(path)
+    return path
+
+
+def data_dir(absolute=False):
+    """
+    Return the directory of `data`.
+    """
+    path = join(dirname(__file__), "data")
     if absolute:
         path = abspath(path)
     return path

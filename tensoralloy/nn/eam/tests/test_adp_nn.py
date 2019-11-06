@@ -18,7 +18,7 @@ from collections import Counter
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
-from tensoralloy.test_utils import test_dir
+from tensoralloy.test_utils import data_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,7 +28,7 @@ def test_dynamic_partition():
     """
     Test the modified implementation of `_dynamic_partition`.
     """
-    atoms = read(join(test_dir(), "crystals",
+    atoms = read(join(data_dir(), "crystals",
                       "Ni4Mo_mp-11507_conventional_standard.cif"))
     atoms.calc = SinglePointCalculator(
         atoms, **{'energy': 0.0, 'forces': np.zeros_like(atoms.positions)})

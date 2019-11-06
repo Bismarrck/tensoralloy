@@ -15,7 +15,7 @@ from ase.build import bulk
 from ase.io import read
 
 from tensoralloy.nn.constraint.voigt import voigt_to_ijkl
-from tensoralloy.test_utils import test_dir
+from tensoralloy.test_utils import data_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -76,7 +76,7 @@ built_in_crystals = {
     "Al/bcc": Crystal(name='Al',
                       phase='bcc',
                       bulk_modulus=0,
-                      atoms=read(join(test_dir(),
+                      atoms=read(join(data_dir(),
                                       'crystals',
                                       f'Al_bcc_{_identifier}.cif')),
                       elastic_constants=[ElasticConstant((0, 0, 0, 0), 36),
@@ -99,7 +99,7 @@ built_in_crystals = {
     "Ni4Mo": Crystal(name="Ni4Mo",
                      phase="cubic",
                      bulk_modulus=0,
-                     atoms=read(join(test_dir(),
+                     atoms=read(join(data_dir(),
                                      'crystals',
                                      f'Ni4Mo_mp-11507_{_identifier}.cif')),
                      elastic_constants=[ElasticConstant((0, 0, 0, 0), 300),
@@ -113,7 +113,7 @@ built_in_crystals = {
     "Ni3Mo": Crystal(name="Ni3Mo",
                      phase="cubic",
                      bulk_modulus=0,
-                     atoms=read(join(test_dir(),
+                     atoms=read(join(data_dir(),
                                      'crystals',
                                      f'Ni3Mo_mp-11506_{_identifier}.cif')),
                      elastic_constants=[ElasticConstant((0, 0, 0, 0), 385),

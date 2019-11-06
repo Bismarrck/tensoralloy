@@ -1,7 +1,7 @@
 precision = 'medium'
 
 [dataset]
-sqlite3 = "../../datasets/qm7.db"
+sqlite3 = "../../tensoralloy/data/datasets/qm7.db"
 name = "qm7"
 descriptor = "atomic"
 rc = 6.5

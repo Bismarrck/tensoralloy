@@ -31,7 +31,7 @@ from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer import EAMTransformer, BatchEAMTransformer
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
-from tensoralloy.test_utils import assert_array_almost_equal, test_dir
+from tensoralloy.test_utils import assert_array_almost_equal, test_dir, data_dir
 from tensoralloy.utils import GraphKeys, Defaults
 from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.io.lammps import LAMMPS_COMMAND
@@ -493,7 +493,7 @@ class NiMoAlloyTest(unittest.TestCase):
         """
         calc = TensorAlloyCalculator(self.pb_file)
 
-        crysts_dir = join(test_dir(), 'crystals')
+        crysts_dir = join(data_dir(), 'crystals')
         files = {
             'Ni3Mo': 'Ni3Mo_mp-11506_conventional_standard.cif',
             'Ni4Mo': 'Ni4Mo_mp-11507_conventional_standard.cif'

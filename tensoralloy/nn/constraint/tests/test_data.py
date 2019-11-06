@@ -11,7 +11,7 @@ from nose.tools import assert_equal, assert_in
 
 from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.nn.constraint.data import read_external_crystal
-from tensoralloy.test_utils import test_dir
+from tensoralloy.test_utils import data_dir
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -21,7 +21,7 @@ def test_read_external_crystal():
     """
     Test the function `read_external_crystal`.
     """
-    toml_file = join(test_dir(), "crystals", "Ni3Mo_elastic_tensor.toml")
+    toml_file = join(data_dir(), "crystals", "Ni3Mo_elastic_tensor.toml")
     crystal = read_external_crystal(toml_file)
     builtin = built_in_crystals['Ni3Mo']
 
