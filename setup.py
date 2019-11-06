@@ -47,6 +47,9 @@ if __name__ == "__main__":
         ext_modules=extensions,
         description="Tensor-graph based machine learning framework for alloys.",
         packages=packages,
+        package_data={
+            "": ["*.toml", "*.db", "*.cif"],
+        },
         include_package_data=True,
         entry_points={
             'console_scripts': ['tensoralloy=tensoralloy.cli.entry:main']
