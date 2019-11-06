@@ -34,7 +34,7 @@ def _get_train_op(trainable=False):
     clf = BatchSymmetryFunctionTransformer(
         rc=Defaults.rc,
         max_occurs=database.max_occurs,
-        nij_max=database.get_nij_max(Defaults.rc),
+        nij_max=database.get_nij_max(Defaults.rc, allow_calculation=True),
         nijk_max=0,
         angular=False,
         trainable=trainable)
