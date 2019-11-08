@@ -153,7 +153,7 @@ class TrainingManager:
         params.update(kwargs)
 
         if configs['arch'] == 'AtomicNN':
-            params.update(configs['behler'])
+            params['minmax_scale'] = configs['behler']['minmax_scale']
             return AtomicNN(**params)
         else:
             params.update(configs['deepmd'])
