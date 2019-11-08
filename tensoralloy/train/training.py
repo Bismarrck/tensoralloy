@@ -154,10 +154,10 @@ class TrainingManager:
 
         if configs['arch'] == 'AtomicNN':
             params.update(configs['behler'])
-            return AtomicNN(**kwargs)
+            return AtomicNN(**params)
         else:
-            params.update(configs['nn.atomic.deepmd'])
-            return DeepPotSE(**kwargs)
+            params.update(configs['deepmd'])
+            return DeepPotSE(**params)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:
         """

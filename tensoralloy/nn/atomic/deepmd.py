@@ -133,6 +133,10 @@ class DeepPotSE(AtomicNN):
                                     hidden_sizes=self._embedding_sizes,
                                     num_out=self._m1,
                                     collections=collections,
+                                    # `resnet_dt` and `output_bias` are fixed to
+                                    # False for embedding networks
+                                    use_resnet_dt=False,
+                                    output_bias=False,
                                     variable_scope=None,
                                     verbose=verbose)
                 g2 = tf.identity(g1[..., :self._m2], name='g2')
