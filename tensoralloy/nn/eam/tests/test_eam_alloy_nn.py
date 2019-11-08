@@ -456,7 +456,7 @@ class NiMoAlloyTest(unittest.TestCase):
         """
         Setup this test.
         """
-        work_dir = join(test_dir(True), 'crystals', 'zjw04')
+        work_dir = join(test_dir(), 'zjw04')
         if not exists(work_dir):
             os.makedirs(work_dir)
 
@@ -525,6 +525,8 @@ class NiMoAlloyTest(unittest.TestCase):
         """
         if exists(self.lammps.tmp_dir):
             shutil.rmtree(self.lammps.tmp_dir, ignore_errors=True)
+        if exists(self.work_dir):
+            shutil.rmtree(self.work_dir)
 
 
 class BulkStressOpTest(unittest.TestCase):

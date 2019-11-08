@@ -21,7 +21,7 @@ def test_find_sizes():
     """
     Test the function `_find_sizes`.
     """
-    db = connect(join(test_dir(), 'qm7m', 'qm7m.db'))
+    db = connect(join(test_dir(), 'datasets', 'qm7m', 'qm7m.db'))
 
     atoms = db.get_atoms('id=2')
     size = find_neighbor_size_of_atoms(atoms, 6.5, angular=False)

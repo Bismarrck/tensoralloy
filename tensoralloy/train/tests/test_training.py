@@ -79,7 +79,7 @@ class InitializationTest(unittest.TestCase):
                           {'use_nesterov': True, 'momentum': 0.8})
 
         assert_true(isinstance(nn, AtomicNN))
-        assert_equal(getattr(nn, "_kernel_initializer"), "he_normal")
+        assert_equal(getattr(nn, "_kernel_initializer"), "he_uniform")
 
 
 @skipUnless(os.environ.get('TEST_EXPERIMENTS'),

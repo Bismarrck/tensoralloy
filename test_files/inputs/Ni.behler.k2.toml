@@ -6,7 +6,7 @@ sqlite3 = "../datasets/Ni/Ni.db"
 name = "Ni"
 descriptor = "atomic"
 rc = 6.0
-tfrecords_dir = "../Ni"
+tfrecords_dir = "../datasets/Ni"
 test_size = 1
 
 [nn]
@@ -17,9 +17,9 @@ export = ['energy']
 [nn.atomic]
 arch = "AtomicNN"
 kernel_initializer = 'he_uniform'
+minmax_scale = true
 
 [nn.atomic.behler]
-minmax_scale = true
 cutoff_function = 'polynomial'
 trainable = true
 eta = [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0]

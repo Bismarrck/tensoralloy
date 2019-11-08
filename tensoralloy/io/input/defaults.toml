@@ -64,6 +64,7 @@ arch = "AtomicNN"
 kernel_initializer = 'he_normal'
 use_resnet_dt = false
 use_atomic_static_energy = true
+minmax_scale = true
 
 [nn.atomic.deepmd]
 rcs = 4.0
@@ -73,7 +74,6 @@ embedding_sizes = [20, 40, 80]
 embedding_activation = 'tanh'
 
 [nn.atomic.behler]
-minmax_scale = true
 angular = false
 cutoff_function = 'cosine'
 trainable = false

@@ -153,7 +153,7 @@ class TrainingManager:
         params.update(kwargs)
 
         if configs['arch'] == 'AtomicNN':
-            params['minmax_scale'] = configs['behler']['minmax_scale']
+            params['minmax_scale'] = configs['minmax_scale']
             return AtomicNN(**params)
         else:
             params.update(configs['deepmd'])
@@ -245,7 +245,6 @@ class TrainingManager:
                 else:
                     nijk_max = 0
                 params = self._reader['nn.atomic.behler']
-                params.pop('minmax_scale')
                 clf = BatchSymmetryFunctionTransformer(
                     rc=rc,
                     max_occurs=max_occurs,

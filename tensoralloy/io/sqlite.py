@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import json
+import os
 
 from ase import Atoms
 from ase.db.sqlite import SQLite3Database
@@ -243,6 +244,10 @@ class CoreDatabase(SQLite3Database):
         else:
             verb = 0
         size = len(self)
+
+        val = os.environ.get('TENSORALLOY_JOBLIB_PAR', None)
+        if isinstance(val, str):
+            n_jobs = int(val)
 
         results = Parallel(n_jobs=n_jobs,
                            verbose=verb)(

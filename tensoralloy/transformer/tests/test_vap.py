@@ -68,7 +68,7 @@ def test_reverse_map_hessian():
     """
     Test the method `VirtualAtomMap.reverse_map_hessian()`.
     """
-    graph_model_path = join(test_dir(), 'Ni', 'Ni.zjw04xc.pb')
+    graph_model_path = join(test_dir(), 'datasets', 'Ni', 'Ni.zjw04xc.pb')
     calc = TensorAlloyCalculator(graph_model_path)
     atoms = bulk('Ni', crystalstructure='fcc', cubic=True) * [2, 2, 2]
     atoms.calc = calc
