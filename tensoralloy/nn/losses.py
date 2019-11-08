@@ -146,7 +146,7 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
         if per_atom_loss:
             n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
             x = tf.math.truediv(labels, n_atoms, name='labels')
-            y = tf.math.truediv(predictions, n_atoms, name='labels')
+            y = tf.math.truediv(predictions, n_atoms, name='predictions')
         else:
             x = tf.identity(labels, name='labels')
             y = tf.identity(predictions, name='predictions')
