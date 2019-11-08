@@ -344,7 +344,10 @@ class DeepPotSE(AtomicNN):
                 activation_fn = get_activation_fn(self._activation)
                 outputs = []
                 for element, (_, atom_mask) in descriptors.items():
-                    bias_mean = self._atomic_static_energy.get(element, 0.0)
+                    if self._use_atomic_static_energy:
+                        bias_mean = self._atomic_static_energy.get(element, 0.0)
+                    else:
+                        bias_mean = 0.0
                     with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                         x = embeddings[element]
                         if verbose:

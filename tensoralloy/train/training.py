@@ -148,6 +148,7 @@ class TrainingManager:
             'hidden_sizes': hidden_sizes,
             'kernel_initializer': configs['kernel_initializer'],
             'use_atomic_static_energy': configs['use_atomic_static_energy'],
+            'atomic_static_energy': self._dataset.atomic_static_energy,
             'use_resnet_dt': configs['use_resnet_dt'],
         }
         params.update(kwargs)
