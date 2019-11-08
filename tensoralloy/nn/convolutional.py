@@ -167,7 +167,9 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                          name=f'Conv{rank}d{j + 1}',
                          collections=collections,
                          _reuse=tf.AUTO_REUSE)
-            if j > 0 and use_resnet_dt:
+            # The condition `hidden_sizes[j] == hidden_sizes[j - 1]` is required
+            # for constructing reset block.
+            if j and use_resnet_dt and hidden_sizes[j] == hidden_sizes[j - 1]:
                 _x = layer.apply(_x) + _x
             else:
                 _x = layer.apply(_x)
