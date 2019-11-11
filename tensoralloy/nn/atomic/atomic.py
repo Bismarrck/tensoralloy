@@ -34,6 +34,7 @@ class AtomicNN(BasicNN):
                  use_resnet_dt=False,
                  atomic_static_energy=None,
                  use_atomic_static_energy=True,
+                 fixed_atomic_static_energy=False,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -51,6 +52,7 @@ class AtomicNN(BasicNN):
         self._use_resnet_dt=use_resnet_dt
         self._atomic_static_energy = atomic_static_energy or {}
         self._use_atomic_static_energy = use_atomic_static_energy
+        self._fixed_atomci_static_energy = fixed_atomic_static_energy
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -71,6 +73,7 @@ class AtomicNN(BasicNN):
                 'minmax_scale': self._minmax_scale,
                 'use_resnet_dt': self._use_resnet_dt,
                 'use_atomic_static_energy': self._use_atomic_static_energy,
+                'fixed_atomic_static_energy': self._fixed_atomci_static_energy,
                 'atomic_static_energy': self._atomic_static_energy,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
@@ -168,6 +171,7 @@ class AtomicNN(BasicNN):
                         collections=collections,
                         output_bias=self._use_atomic_static_energy,
                         output_bias_mean=bias_mean,
+                        fixed_output_bias=self._fixed_atomci_static_energy,
                         use_resnet_dt=self._use_resnet_dt,
                         kernel_initializer=self._kernel_initializer,
                         variable_scope=None,

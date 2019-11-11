@@ -64,6 +64,7 @@ arch = "AtomicNN"
 kernel_initializer = 'he_normal'
 use_resnet_dt = false
 use_atomic_static_energy = true
+fixed_atomic_static_energy = false
 minmax_scale = false
 
 [nn.atomic.deepmd]

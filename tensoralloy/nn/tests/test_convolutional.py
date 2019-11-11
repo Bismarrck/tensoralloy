@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from nose.tools import assert_almost_equal
+from nose.tools import assert_almost_equal, assert_equal
 
 from tensoralloy.nn.convolutional import convolution1x1
 
@@ -66,6 +66,19 @@ def test_convolution1x1_without_l2_reg():
             tf.global_variables_initializer().run()
             assert_almost_equal(sess.run(reg_loss), 0.0, delta=1e-12)
 
+
+def test_fixed_output_bias():
+    """
+    Test the function `convolution1x1` with fixed bias.
+    """
+    with tf.Graph().as_default():
+        x = tf.convert_to_tensor(np.random.rand(5, 100, 8), name='x')
+        convolution1x1(x, collections=[tf.GraphKeys.MODEL_VARIABLES],
+                       activation_fn=tf.nn.tanh, hidden_sizes=[128, 64],
+                       variable_scope='NN', output_bias=True,
+                       fixed_output_bias=True, l2_weight=0.0)
+        assert_equal(len(tf.trainable_variables()), 5)
+        assert_equal(len(tf.model_variables()), 6)
 
 
 if __name__ == "__main__":

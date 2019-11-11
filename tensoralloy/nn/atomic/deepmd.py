@@ -40,6 +40,7 @@ class DeepPotSE(AtomicNN):
                  embedding_sizes=(20, 40, 80),
                  use_resnet_dt=False,
                  use_atomic_static_energy=True,
+                 fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
@@ -56,6 +57,7 @@ class DeepPotSE(AtomicNN):
             minmax_scale=False,
             use_resnet_dt=use_resnet_dt,
             use_atomic_static_energy=use_atomic_static_energy,
+            fixed_atomic_static_energy=fixed_atomic_static_energy,
             atomic_static_energy=atomic_static_energy,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
@@ -83,6 +85,7 @@ class DeepPotSE(AtomicNN):
                 "embedding_sizes": self._embedding_sizes,
                 "use_resnet_dt": self._use_resnet_dt,
                 'use_atomic_static_energy': self._use_atomic_static_energy,
+                'fixed_atomic_static_energy': self._fixed_atomci_static_energy,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -362,6 +365,7 @@ class DeepPotSE(AtomicNN):
                             collections=collections,
                             output_bias=self._use_atomic_static_energy,
                             output_bias_mean=bias_mean,
+                            fixed_output_bias=self._fixed_atomci_static_energy,
                             use_resnet_dt=self._use_resnet_dt,
                             kernel_initializer="he_normal",
                             variable_scope=None,

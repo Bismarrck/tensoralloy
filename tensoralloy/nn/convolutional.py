@@ -10,6 +10,10 @@ import six
 from tensorflow.contrib.layers import l2_regularizer
 from tensorflow.python.layers import base
 from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
+from tensorflow.python.keras.engine.input_spec import InputSpec
+from tensorflow.python.ops import nn_ops
+from tensorflow.python.keras.utils import conv_utils
+from tensorflow.python.framework import tensor_shape
 from typing import List
 
 from tensoralloy.nn.init_ops import get_initializer
@@ -33,7 +37,8 @@ class Conv(keras_Conv, base.Layer):
 
     def __init__(self, rank, filters, kernel_size, strides=1, padding='valid',
                  data_format=None, dilation_rate=1, activation=None,
-                 use_bias=True, kernel_initializer='glorot_uniform',
+                 use_bias=True, fixed_bias=False,
+                 kernel_initializer='glorot_uniform',
                  bias_initializer=None, kernel_regularizer=None,
                  bias_regularizer=None, activity_regularizer=None,
                  kernel_constraint=None, bias_constraint=None, trainable=True,
@@ -68,14 +73,65 @@ class Conv(keras_Conv, base.Layer):
             collections = list(set(collections).difference(_set))
             if len(collections) == 0:
                 collections = None
+
+        self.fixed_bias = fixed_bias
         self.collections = collections
+        self.kernel = None
+        self.bias = None
+        self._convolution_op = None
 
     def build(self, input_shape):
         """
         Build the convolution layer and add the variables 'kernel' and 'bias' to
         given collections.
         """
-        super(Conv, self).build(input_shape)
+        input_shape = tensor_shape.TensorShape(input_shape)
+        if self.data_format == 'channels_first':
+            channel_axis = 1
+        else:
+            channel_axis = -1
+        if input_shape.dims[channel_axis].value is None:
+            raise ValueError('The channel dimension of the inputs '
+                             'should be defined. Found `None`.')
+        input_dim = int(input_shape[channel_axis])
+        kernel_shape = self.kernel_size + (input_dim, self.filters)
+
+        self.kernel = self.add_weight(
+            name='kernel',
+            shape=kernel_shape,
+            initializer=self.kernel_initializer,
+            regularizer=self.kernel_regularizer,
+            constraint=self.kernel_constraint,
+            trainable=True,
+            dtype=self.dtype)
+        if self.use_bias:
+            self.bias = self.add_weight(
+                name='bias',
+                shape=(self.filters,),
+                initializer=self.bias_initializer,
+                regularizer=self.bias_regularizer,
+                constraint=self.bias_constraint,
+                trainable=(not self.fixed_bias),
+                dtype=self.dtype)
+        else:
+            self.bias = None
+        self.input_spec = InputSpec(ndim=self.rank + 2,
+                                    axes={channel_axis: input_dim})
+        if self.padding == 'causal':
+            op_padding = 'valid'
+        else:
+            op_padding = self.padding
+        if not isinstance(op_padding, (list, tuple)):
+            op_padding = op_padding.upper()
+        self._convolution_op = nn_ops.Convolution(
+            input_shape,
+            filter_shape=self.kernel.shape,
+            dilation_rate=self.dilation_rate,
+            strides=self.strides,
+            padding=op_padding,
+            data_format=conv_utils.convert_data_format(self.data_format,
+                                                       self.rank + 2))
+        self.built = True
 
         if self.collections is not None:
             # `tf.add_to_collections` will not check for pre-existing membership
@@ -95,7 +151,8 @@ class Conv(keras_Conv, base.Layer):
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                    variable_scope, num_out=1, kernel_initializer='he_normal',
                    l2_weight=0.0, collections=None, output_bias=False,
-                   output_bias_mean=0, use_resnet_dt=False, verbose=False):
+                   output_bias_mean=0, fixed_output_bias=False,
+                   use_resnet_dt=False, verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 
@@ -177,7 +234,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                 log_tensor(_x)
 
         layer = Conv(rank=rank, filters=num_out, kernel_size=1,
-                     strides=1, use_bias=output_bias, activation=None,
+                     strides=1, use_bias=output_bias,
+                     fixed_bias=fixed_output_bias,  activation=None,
                      kernel_initializer=kernel_initializer,
                      kernel_regularizer=regularizer,
                      bias_initializer=output_bias_initializer,
