@@ -223,9 +223,11 @@ class BuildDeepkitDataProgram(CLIProgram):
                     f_fp.close()
                 if db.has_stress:
                     v_fp.close()
-            with open(join(args.outdir, "type_map"), "w+") as fp:
-                fp.write(str(elements) + "\n")
+            with open(join(args.outdir, "metadata"), "w+") as fp:
+                fp.write(f"type_map: {str(elements)}\n")
+                fp.write(f"sel: {str([db.max_occurs[e] for e in elements])}\n")
             print(f"Type map: {str(elements)}")
+            print(f"Max occurs: {str([db.max_occurs[e] for e in elements])}")
         return func
 
     def config_subparser(self, subparser: argparse.ArgumentParser):
