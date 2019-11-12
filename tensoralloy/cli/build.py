@@ -178,7 +178,7 @@ class BuildDeepkitDataProgram(CLIProgram):
                 table[system] = table.get(system, []) + [atoms_id]
                 name[system] = "".join([f"{e}{c[e]}" for e in elements])
 
-            def floats2str(x, n1=8, n2=4):
+            def floats2str(x, n1=12, n2=6):
                 fmt = "{:%d.%df}" % (n1, n2)
                 return " ".join([fmt.format(xi)
                                  for xi in np.asarray(x).flatten()]) + "\n"
