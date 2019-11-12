@@ -201,7 +201,7 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
 
     if file_type == 'db':
         database = connect(filename)
-        validated_keys = ('max_occurs', 'ext')
+        validated_keys = ('max_occurs', 'extxyz')
         for key in validated_keys:
             if key not in database.metadata:
                 print("Warning: the key '{}' is missing!".format(key))
