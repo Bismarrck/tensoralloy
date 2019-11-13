@@ -540,6 +540,9 @@ class EquationOfStateProgram(CLIProgram):
             v0, e0, bulk_modulus, residual = eos.fit()
             eos.plot(filename, show=False)
 
+            df = pd.DataFrame({"E": energies, "V": volumes})
+            df.to_csv(join(work_dir, f"{formula}_EV.csv"))
+
             print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
                 formula,
                 args.eos,
