@@ -161,6 +161,7 @@ class BuildDeepkitDataProgram(CLIProgram):
             if not exists(args.outdir):
                 makedirs(args.outdir)
             db = read_file(args.target)
+            nnl_max = db.get_nnl_max(rc=args.rc, allow_calculation=True)
             print(f"Source: {args.target}")
             elements = sorted(db.max_occurs.keys())
             size = len(db)
@@ -225,9 +226,9 @@ class BuildDeepkitDataProgram(CLIProgram):
                     v_fp.close()
             with open(join(args.outdir, "metadata"), "w+") as fp:
                 fp.write(f"type_map: {str(elements)}\n")
-                fp.write(f"sel: {str([db.max_occurs[e] for e in elements])}\n")
+                fp.write(f"sel@{args.rc:.2f}: {[nnl_max] * len(elements)}\n")
             print(f"Type map: {str(elements)}")
-            print(f"Max occurs: {str([db.max_occurs[e] for e in elements])}")
+            print(f"Sel [{args.rc:.2f}]: {str([nnl_max] * len(elements))}")
         return func
 
     def config_subparser(self, subparser: argparse.ArgumentParser):
@@ -244,6 +245,12 @@ class BuildDeepkitDataProgram(CLIProgram):
             default=".",
             type=str,
             help="Set the output dir."
+        )
+        subparser.add_argument(
+            '--rc',
+            default=6.0,
+            type=float,
+            help="The cutoff radius for detecting \"sel\""
         )
         super(BuildDeepkitDataProgram, self).config_subparser(subparser)
 
