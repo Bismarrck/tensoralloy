@@ -256,7 +256,10 @@ class PlotDeepmdKitLearningCurveProgram(CLIProgram):
                 indices = [int(x) for x in args.indices.split(",")]
                 cols = [labels[i] for i in indices if i > 0]
             elif args.cols is not None:
-                cols = args.cols.split(",")
+                if args.cols == "all":
+                    cols = labels[1:]
+                else:
+                    cols = args.cols.split(",")
                 for col in cols:
                     assert col in labels and col != "batch"
             else:
@@ -315,7 +318,7 @@ class PlotDeepmdKitLearningCurveProgram(CLIProgram):
             "--cols",
             type=str,
             default=None,
-            help="Comma-separated column names. "
+            help="Comma-separated column names or 'all' for all columns."
         )
         subparser.add_argument(
             "--indices",
