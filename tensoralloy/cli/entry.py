@@ -15,6 +15,7 @@ from tensoralloy.cli.build import BuildProgram
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.cli.compute import ComputeMetricsProgram
 from tensoralloy.cli.export import ExportModelProgram
+from tensoralloy.cli.dpmd import DeepmdKitProgram
 from tensoralloy.cli.run import RunExperimentProgram, StopExperimentProgram
 
 __author__ = 'Xin Chen'
@@ -132,6 +133,7 @@ def main():
     )
 
     for prog in (BuildProgram(),
+                 DeepmdKitProgram(),
                  RunExperimentProgram(),
                  ExportModelProgram(),
                  StopExperimentProgram(),

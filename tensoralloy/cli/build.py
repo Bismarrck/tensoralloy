@@ -5,13 +5,7 @@ Command-line programs under the `build` scope.
 from __future__ import print_function, absolute_import
 
 import pandas as pd
-import numpy as np
 import argparse
-
-from os.path import exists, join
-from os import makedirs
-from collections import Counter
-from itertools import repeat, chain
 
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.io.read import read_file
@@ -33,7 +27,6 @@ class BuildProgram(CLIProgram):
         self._programs = [
             BuildDatabaseProgram(),
             BuildSplineGuessProgram(),
-            BuildDeepkitDataProgram()
         ]
 
     @property
@@ -136,123 +129,6 @@ class BuildDatabaseProgram(CLIProgram):
             help='The unit of the stress tensors in the file.',
         )
         super(BuildDatabaseProgram, self).config_subparser(subparser)
-
-
-class BuildDeepkitDataProgram(CLIProgram):
-    """
-    Convert an extxyz file or a sqlite3 database to DeepKit data files.
-    """
-
-    @property
-    def name(self):
-        return "deepkit"
-
-    @property
-    def help(self):
-        return "Build Deepkit data files from an extxyz file or a sqlite3 " \
-               "database."
-
-    @property
-    def main_func(self):
-        """
-        The main function.
-        """
-        def func(args: argparse.Namespace):
-            if not exists(args.outdir):
-                makedirs(args.outdir)
-            db = read_file(args.target)
-            nnl_max = db.get_nnl_max(rc=args.rc, allow_calculation=True)
-            print(f"Source: {args.target}")
-            elements = sorted(db.max_occurs.keys())
-            size = len(db)
-            table = {}
-            name = {}
-
-            # Check the total number of systems
-            for atoms_id in range(1, 1 + size):
-                atoms = db.get_atoms(id=atoms_id)
-                symbols = atoms.get_chemical_symbols()
-                c = Counter(symbols)
-                system = " ".join(
-                    map(str,
-                        chain(*[repeat(elements.index(e), c[e]) for e in c])))
-                table[system] = table.get(system, []) + [atoms_id]
-                name[system] = "".join([f"{e}{c[e]}" for e in elements])
-
-            def floats2str(x, n1=12, n2=6):
-                fmt = "{:%d.%df}" % (n1, n2)
-                return " ".join([fmt.format(xi)
-                                 for xi in np.asarray(x).flatten()]) + "\n"
-
-            # Loop through each system
-            for i, (system, id_list) in enumerate(table.items()):
-                sys_dir = join(args.outdir, f"system.{i:03d}")
-                if not exists(sys_dir):
-                    makedirs(sys_dir)
-                print(f"system.{i:03d}: {name[system]}, {len(id_list)}")
-                h_fp = open(join(sys_dir, "box.raw"), "w")
-                r_fp = open(join(sys_dir, "coord.raw"), "w")
-                e_fp = open(join(sys_dir, "energy.raw"), "w")
-                if db.has_forces:
-                    f_fp = open(join(sys_dir, "force.raw"), "w")
-                else:
-                    f_fp = None
-                if db.has_stress:
-                    v_fp = open(join(sys_dir, "virial.raw"), "w")
-                else:
-                    v_fp = None
-                for atoms_id in id_list:
-                    atoms = db.get_atoms(id=atoms_id)
-                    symbols = atoms.get_chemical_symbols()
-                    h_fp.write(floats2str(atoms.cell))
-                    e_fp.write(f"{atoms.get_potential_energy():.8g}\n")
-                    if db.has_stress:
-                        volume = atoms.get_volume()
-                        virial = atoms.get_stress(voigt=False) * volume
-                        v_fp.write(floats2str(virial, 12, 6))
-                    order = np.argsort([elements.index(e) for e in symbols])
-                    r_fp.write(floats2str(atoms.positions[order], 12, 6))
-                    if db.has_forces:
-                        f_fp.write(floats2str(atoms.get_forces()[order], 12, 6))
-                t_fp = open(join(sys_dir, "type.raw"), "w")
-                t_fp.write(f"{system}\n")
-                t_fp.close()
-                e_fp.close()
-                h_fp.close()
-                r_fp.close()
-                if db.has_forces:
-                    f_fp.close()
-                if db.has_stress:
-                    v_fp.close()
-            with open(join(args.outdir, "metadata"), "w+") as fp:
-                fp.write(f"type_map: {str(elements)}\n")
-                fp.write(f"sel@{args.rc:.2f}: {[nnl_max] * len(elements)}\n")
-            print(f"Type map: {str(elements)}")
-            print(f"Sel [{args.rc:.2f}]: {str([nnl_max] * len(elements))}")
-        return func
-
-    def config_subparser(self, subparser: argparse.ArgumentParser):
-        """
-        Config the parser.
-        """
-        subparser.add_argument(
-            'target',
-            type=str,
-            help="Specify the extxyz or database file to read.",
-        )
-        subparser.add_argument(
-            '--outdir',
-            default=".",
-            type=str,
-            help="Set the output dir."
-        )
-        subparser.add_argument(
-            '--rc',
-            default=6.0,
-            type=float,
-            help="The cutoff radius for detecting \"sel\""
-        )
-        super(BuildDeepkitDataProgram, self).config_subparser(subparser)
 
 
 class BuildSplineGuessProgram(CLIProgram):
