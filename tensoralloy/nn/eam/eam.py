@@ -90,7 +90,6 @@ class EamNN(BasicNN):
                  elements: List[str],
                  custom_potentials=None,
                  hidden_sizes=None,
-                 activation=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -103,7 +102,6 @@ class EamNN(BasicNN):
         super(EamNN, self).__init__(
             elements=elements,
             hidden_sizes=hidden_sizes,
-            activation=activation,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
@@ -144,7 +142,6 @@ class EamNN(BasicNN):
                 "elements": self._elements,
                 "custom_potentials": self._potentials,
                 "hidden_sizes": self._hidden_sizes,
-                "activation": self._activation,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 

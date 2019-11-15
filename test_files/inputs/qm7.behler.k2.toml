@@ -7,9 +7,11 @@ tfrecords_dir = "./qm7"
 test_size = 1000
 
 [nn]
-activation = "leaky_relu"
 minimize = ['energy']
 export = ['energy']
+
+[nn.atomic]
+activation = "leaky_relu"
 
 [nn.loss.l2]
 weight = 0.01

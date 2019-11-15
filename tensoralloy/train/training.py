@@ -145,6 +145,7 @@ class TrainingManager:
 
         configs = self._reader['nn.atomic']
         params = {
+            'activation': configs['activation'],
             'hidden_sizes': hidden_sizes,
             'kernel_initializer': configs['kernel_initializer'],
             'use_atomic_static_energy': configs['use_atomic_static_energy'],
@@ -208,11 +209,9 @@ class TrainingManager:
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
         export_properties = self._reader['nn.export']
-        activation = self._reader['nn.activation']
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
-                  'export_properties': export_properties,
-                  'activation': activation}
+                  'export_properties': export_properties}
         if self._reader['dataset.descriptor'] == 'atomic':
             nn = self._get_atomic_nn(kwargs)
         else:

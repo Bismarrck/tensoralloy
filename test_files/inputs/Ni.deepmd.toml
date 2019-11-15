@@ -10,12 +10,12 @@ tfrecords_dir = "deepmd"
 test_size = 61
 
 [nn]
-activation = "softplus"
 minimize = ['energy', 'forces', 'stress']
 export = ['energy', 'forces', 'stress']
 
 [nn.atomic]
 arch = "DeepPotSE"
+activation = "softplus"
 kernel_initializer = 'he_normal'
 
 [nn.atomic.deepmd]

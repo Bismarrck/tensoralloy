@@ -9,7 +9,6 @@ tfrecords_dir = "../../experiments/qm7-k3"
 test_size = 1000
 
 [nn]
-activation = "leaky_relu"
 minimize = ['energy']
 export = ['energy', 'forces', 'hessian']
 
@@ -21,6 +20,7 @@ weight = 0.01
 
 [nn.atomic]
 arch = 'AtomicNN'
+activation = "leaky_relu"
 kernel_initializer = 'truncated_normal'
 
 [nn.atomic.behler]
