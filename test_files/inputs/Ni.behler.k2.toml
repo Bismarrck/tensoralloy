@@ -14,7 +14,6 @@ minimize = ['energy']
 export = ['energy']
 
 [nn.atomic]
-arch = "AtomicNN"
 activation = "leaky_relu"
 kernel_initializer = 'he_uniform'
 minmax_scale = true

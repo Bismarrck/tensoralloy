@@ -155,14 +155,14 @@ class TrainingManager:
         }
         params.update(kwargs)
 
-        if configs['arch'] == 'AtomicNN':
+        if self._reader['model'] == 'symmetry_function':
             params['minmax_scale'] = configs['minmax_scale']
             return AtomicNN(**params)
         else:
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
 
-    def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN]:
+    def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN, AdpNN]:
         """
         Initialize an `EamAlloyNN` or an 'EamFsNN'.
         """
@@ -192,15 +192,15 @@ class TrainingManager:
         kwargs.update(dict(hidden_sizes=hidden_sizes,
                            custom_potentials=custom_potentials))
 
-        arch = self._reader['nn.eam.arch']
-        if arch == "EamAlloyNN":
+        model = self._reader['model']
+        if model == "eam/alloy":
             return EamAlloyNN(**kwargs)
-        elif arch == "EamFsNN":
+        elif model == "eam/fs":
             return EamFsNN(**kwargs)
-        elif arch == "AdpNN":
+        elif model == "adp":
             return AdpNN(**kwargs)
         else:
-            raise ValueError(f"Unknown arch {arch}")
+            raise ValueError(f"Unknown model {model}")
 
     def _get_nn(self):
         """
@@ -212,7 +212,8 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        if self._reader['dataset.descriptor'] == 'atomic':
+        if self._reader['model'] in ('deepmd',
+                                     'symmetry_function'):
             nn = self._get_atomic_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
@@ -227,40 +228,40 @@ class TrainingManager:
         """
         database = connect(self._reader['dataset.sqlite3'])
 
-        descriptor = self._reader['dataset.descriptor']
+        model = self._reader['model']
+        rcut = self._reader['rcut']
 
-        rc = self._reader['dataset.rc']
         max_occurs = database.max_occurs
-        nij_max = database.get_nij_max(rc, allow_calculation=True)
+        nij_max = database.get_nij_max(rcut, allow_calculation=True)
 
-        if descriptor == 'atomic':
-            if self._reader['nn.atomic.arch'] == 'DeepPotSE':
-                nnl_max = database.get_nnl_max(rc, allow_calculation=True)
-                clf = BatchDeePMDTransformer(rc=rc, max_occurs=max_occurs,
-                                             nij_max=nij_max, nnl_max=nnl_max,
-                                             use_forces=database.has_forces,
-                                             use_stress=database.has_stress)
+        if model == 'deepmd':
+            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
+            clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
+                                         nij_max=nij_max, nnl_max=nnl_max,
+                                         use_forces=database.has_forces,
+                                         use_stress=database.has_stress)
+
+        elif model == 'symmetry_function':
+            if self._reader['nn.atomic.behler.angular']:
+                nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
             else:
-                if self._reader['nn.atomic.behler.angular']:
-                    nijk_max = database.get_nijk_max(rc, allow_calculation=True)
-                else:
-                    nijk_max = 0
-                params = self._reader['nn.atomic.behler']
-                clf = BatchSymmetryFunctionTransformer(
-                    rc=rc,
-                    max_occurs=max_occurs,
-                    nij_max=nij_max,
-                    nijk_max=nijk_max,
-                    use_stress=database.has_stress,
-                    use_forces=database.has_forces,
-                    **params)
+                nijk_max = 0
+            params = self._reader['nn.atomic.behler']
+            clf = BatchSymmetryFunctionTransformer(
+                rc=rcut,
+                max_occurs=max_occurs,
+                nij_max=nij_max,
+                nijk_max=nijk_max,
+                use_stress=database.has_stress,
+                use_forces=database.has_forces,
+                **params)
         else:
-            nnl_max = database.get_nnl_max(rc, allow_calculation=True)
-            if self._reader['nn.eam.arch'] == 'AdpNN':
+            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
+            if model == 'adp':
                 cls = BatchADPTransformer
             else:
                 cls = BatchEAMTransformer
-            clf = cls(rc=rc, max_occurs=max_occurs, nij_max=nij_max,
+            clf = cls(rc=rcut, max_occurs=max_occurs, nij_max=nij_max,
                       nnl_max=nnl_max, use_forces=database.has_forces,
                       use_stress=database.has_stress)
 
