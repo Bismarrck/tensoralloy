@@ -155,7 +155,7 @@ class TrainingManager:
         }
         params.update(kwargs)
 
-        if self._reader['model'] == 'symmetry_function':
+        if self._reader['pair_style'] == 'symmetry_function':
             params['minmax_scale'] = configs['minmax_scale']
             return AtomicNN(**params)
         else:
@@ -192,15 +192,15 @@ class TrainingManager:
         kwargs.update(dict(hidden_sizes=hidden_sizes,
                            custom_potentials=custom_potentials))
 
-        model = self._reader['model']
-        if model == "eam/alloy":
+        pair_style = self._reader['model']
+        if pair_style == "eam/alloy":
             return EamAlloyNN(**kwargs)
-        elif model == "eam/fs":
+        elif pair_style == "eam/fs":
             return EamFsNN(**kwargs)
-        elif model == "adp":
+        elif pair_style == "adp":
             return AdpNN(**kwargs)
         else:
-            raise ValueError(f"Unknown model {model}")
+            raise ValueError(f"Unknown pair_style {pair_style}")
 
     def _get_nn(self):
         """
