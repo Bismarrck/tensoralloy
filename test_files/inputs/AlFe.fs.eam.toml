@@ -1,8 +1,9 @@
+model = "eam/fs"
+rcut = 6.5
+
 [dataset]
 sqlite3 = "AlFe.db"
 name = "AlFe"
-descriptor = "eam"
-rc = 6.5
 tfrecords_dir = "experiments/AlFe/fs"
 test_size = 1000
 

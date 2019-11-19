@@ -1,8 +1,9 @@
+model = 'symmetry_function'
+rcut = 4.6
+
 [dataset]
 sqlite3 = "../../../datasets/snap-Ni.db"
 name = "snap_Ni"
-descriptor = "behler"
-rc = 4.6
 test_size = 61
 tfrecords_file = '.'
 
@@ -17,7 +18,7 @@ weight = 1.0
 per_atom_loss = true
 
 [nn.atomic]
-arch = "AtomicNN"
+use_atomic_static_energy = false
 
 [nn.atomic.behler]
 trainable = false

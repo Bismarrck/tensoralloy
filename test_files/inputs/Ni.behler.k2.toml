@@ -1,11 +1,11 @@
 seed = 1958
 precision = 'medium'
+model = "symmetry_function"
+rcut = 6.0
 
 [dataset]
 sqlite3 = "../datasets/Ni/Ni.db"
 name = "Ni"
-descriptor = "atomic"
-rc = 6.0
 tfrecords_dir = "../datasets/Ni"
 test_size = 1
 

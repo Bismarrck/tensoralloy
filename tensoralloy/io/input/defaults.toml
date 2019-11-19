@@ -2,12 +2,13 @@
 
 precision = 'high'
 seed = 611
+model = "required"
+rcut = 6.5
+acut = 4.0
 
 [dataset]
 sqlite3 = "required"
 name = "required"
-descriptor = "required"
-rc = 6.5
 tfrecords_dir = "."
 test_size = 0.2
 serial = false
@@ -59,7 +60,6 @@ stress_weight = 0.1
 tau = 1.0
 
 [nn.atomic]
-arch = "AtomicNN"
 kernel_initializer = 'he_normal'
 use_resnet_dt = false
 use_atomic_static_energy = true
@@ -86,7 +86,6 @@ zeta = [1.0, 4.0]
 [nn.atomic.layers]
 
 [nn.eam]
-arch = "EamAlloyNN"
 
 [nn.eam.rho]
 [nn.eam.phi]
@@ -148,7 +147,7 @@ use_ema_variables = true
 restore_all_variables = true
 
 [distribute]
-strategy = "default"
+strategy = "off"
 num_workers = 1
 all_reduce_alg = "nccl"
 num_packs = 1

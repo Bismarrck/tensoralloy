@@ -1,10 +1,10 @@
 precision = 'medium'
+model = "symmetry_function"
+rcut = 6.5
 
 [dataset]
 sqlite3 = "../../tensoralloy/data/datasets/qm7.db"
 name = "qm7"
-descriptor = "atomic"
-rc = 6.5
 tfrecords_dir = "../../experiments/qm7-k3"
 test_size = 1000
 
@@ -19,7 +19,6 @@ per_atom_loss = false
 weight = 0.01
 
 [nn.atomic]
-arch = 'AtomicNN'
 activation = "leaky_relu"
 kernel_initializer = 'truncated_normal'
 

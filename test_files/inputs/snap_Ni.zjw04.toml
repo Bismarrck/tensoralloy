@@ -1,10 +1,10 @@
 precision = "medium"
+model = 'eam/alloy'
+rcut = 6.0
 
 [dataset]
 sqlite3 = "../../datasets/snap-Ni.db"
 name = "snap_Ni"
-descriptor = "eam"
-rc = 6.0
 test_size = 61
 tfrecords_dir = 'temp'
 
@@ -25,9 +25,6 @@ beta = [0.5e-2]
 
 [nn.loss.forces]
 weight = 3.0
-
-[nn.eam]
-arch = "EamAlloyNN"
 
 [nn.eam.rho]
 Ni = "zjw04"

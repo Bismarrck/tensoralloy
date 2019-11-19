@@ -1,8 +1,9 @@
+model = "symmetry_function"
+rcut = 6.5
+
 [dataset]
 sqlite3 = "../../datasets/qm7.db"
 name = "qm7"
-descriptor = "atomic"
-rc = 6.5
 tfrecords_dir = "./qm7"
 test_size = 1000
 

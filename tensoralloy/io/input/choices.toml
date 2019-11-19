@@ -1,12 +1,12 @@
 # This toml file defines the default values of the options.
 
 precision = ['high', 'medium']
+model = ['eam/alloy', 'eam/fs', 'adp', 'deepmd', 'symmetry_function']
 
 [dataset]
 descriptor = ['eam', 'atomic']
 
 [nn.atomic]
-arch = ['AtomicNN', 'DeepPotSE']
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
 kernel_initializer = [
     'he_normal', 'he_uniform',
@@ -18,9 +18,6 @@ kernel_initializer = [
 
 [nn.atomic.behler]
 cutoff_function = ["cosine", "polynomial"]
-
-[nn.eam]
-arch = ["EamAlloyNN", "EamFsNN", "AdpNN"]
 
 [nn.loss.energy]
 method = ["rmse", "logcosh"]
