@@ -1,4 +1,4 @@
-model = 'symmetry_function'
+pair_style = 'symmetry_function'
 rcut = 4.6
 
 [dataset]

@@ -1,4 +1,4 @@
-model = "eam/fs"
+pair_style = "eam/fs"
 rcut = 6.5
 
 [dataset]

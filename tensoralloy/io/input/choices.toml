@@ -1,10 +1,7 @@
 # This toml file defines the default values of the options.
 
 precision = ['high', 'medium']
-model = ['eam/alloy', 'eam/fs', 'adp', 'deepmd', 'symmetry_function']
-
-[dataset]
-descriptor = ['eam', 'atomic']
+pair_style = ['eam/alloy', 'eam/fs', 'adp', 'deepmd', 'symmetry_function']
 
 [nn.atomic]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']

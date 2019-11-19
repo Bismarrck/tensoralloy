@@ -1,5 +1,5 @@
 precision = 'medium'
-model = "symmetry_function"
+pair_style = "symmetry_function"
 rcut = 6.5
 
 [dataset]

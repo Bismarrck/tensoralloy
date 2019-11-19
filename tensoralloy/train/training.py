@@ -212,8 +212,8 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        if self._reader['model'] in ('deepmd',
-                                     'symmetry_function'):
+        if self._reader['pair_style'] in ('deepmd',
+                                          'symmetry_function'):
             nn = self._get_atomic_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
@@ -228,20 +228,20 @@ class TrainingManager:
         """
         database = connect(self._reader['dataset.sqlite3'])
 
-        model = self._reader['model']
+        pair_style = self._reader['pair_style']
         rcut = self._reader['rcut']
 
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
 
-        if model == 'deepmd':
+        if pair_style == 'deepmd':
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
                                          nij_max=nij_max, nnl_max=nnl_max,
                                          use_forces=database.has_forces,
                                          use_stress=database.has_stress)
 
-        elif model == 'symmetry_function':
+        elif pair_style == 'symmetry_function':
             if self._reader['nn.atomic.behler.angular']:
                 nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
             else:
@@ -257,7 +257,7 @@ class TrainingManager:
                 **params)
         else:
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-            if model == 'adp':
+            if pair_style == 'adp':
                 cls = BatchADPTransformer
             else:
                 cls = BatchEAMTransformer

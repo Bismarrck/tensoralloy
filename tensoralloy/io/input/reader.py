@@ -138,7 +138,7 @@ class InputReader:
 
         _safe_update('precision')
         _safe_update('seed')
-        _safe_update('model')
+        _safe_update('pair_style')
         _safe_update('rcut')
         _safe_update('acut')
 
@@ -160,10 +160,10 @@ class InputReader:
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
 
-        model = nested_get(configs, 'model')
+        pair_style = nested_get(configs, 'pair_style')
 
-        if model in ('deepmd',
-                     'symmetry_function'):
+        if pair_style in ('deepmd',
+                          'symmetry_function'):
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):
                 for key, val in layers.items():

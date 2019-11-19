@@ -1,6 +1,6 @@
 seed = 1958
 precision = 'medium'
-model = "symmetry_function"
+pair_style = "symmetry_function"
 rcut = 6.0
 
 [dataset]

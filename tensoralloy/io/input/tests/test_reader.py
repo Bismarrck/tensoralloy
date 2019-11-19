@@ -36,7 +36,7 @@ def test_read_behler_angular_toml():
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
     assert_equal(reader['train.ckpt.checkpoint_filename'], False)
 
-    assert_equal(nested_get(configs, 'model'), 'symmetry_function')
+    assert_equal(nested_get(configs, 'pair_style'), 'symmetry_function')
     assert_equal(nested_get(configs, 'nn.atomic.kernel_initializer'),
                  'truncated_normal')
     assert_list_equal(nested_get(configs, 'nn.atomic.behler.eta'),
@@ -125,7 +125,7 @@ def test_read_deepmd_toml():
     """
     reader = InputReader(join(test_dir(), 'inputs', 'Ni.deepmd.toml'))
 
-    assert_equal(reader['model'], 'deepmd')
+    assert_equal(reader['pair_style'], 'deepmd')
     assert_equal(reader['nn.atomic.deepmd.m1'], 50)
     assert_equal(reader['nn.atomic.deepmd.m2'], 4)
     assert_list_equal(reader['nn.atomic.deepmd.embedding_sizes'], [20, 40])

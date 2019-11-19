@@ -1,5 +1,5 @@
 precision = "medium"
-model = 'eam/alloy'
+pair_style = 'eam/alloy'
 rcut = 6.0
 
 [dataset]

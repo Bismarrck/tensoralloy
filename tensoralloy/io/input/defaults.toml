@@ -2,7 +2,7 @@
 
 precision = 'high'
 seed = 611
-model = "required"
+pair_style = "required"
 rcut = 6.5
 acut = 4.0
 
