@@ -192,7 +192,7 @@ class TrainingManager:
         kwargs.update(dict(hidden_sizes=hidden_sizes,
                            custom_potentials=custom_potentials))
 
-        pair_style = self._reader['model']
+        pair_style = self._reader['pair_style']
         if pair_style == "eam/alloy":
             return EamAlloyNN(**kwargs)
         elif pair_style == "eam/fs":
