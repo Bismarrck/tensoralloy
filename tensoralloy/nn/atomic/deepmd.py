@@ -126,7 +126,8 @@ class DeepPotSE(AtomicNN):
                                 axis=1, name='dz')
                 rij = tf.squeeze(tf.expand_dims(value[0], axis=-1),
                                  axis=1, name='rij')
-                sij = deepmd_cutoff(rij, self._transformer.rc, self._rcs)
+                sij = deepmd_cutoff(rij, self._transformer.rc, self._rcs,
+                                    name="sij")
                 if verbose:
                     log_tensor(sij)
 

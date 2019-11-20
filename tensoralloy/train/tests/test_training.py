@@ -57,7 +57,7 @@ class InitializationTest(unittest.TestCase):
         """
         Test the initialization of a `TrainingManager`.
         """
-        input_file = join(test_dir(), 'inputs', 'Ni.behler.k2.toml')
+        input_file = join(test_dir(), 'inputs', 'Ni.sfr.toml')
         manager = TrainingManager(input_file)
         transformer = manager.dataset.transformer
         hparams = manager.hparams

@@ -1,6 +1,6 @@
 seed = 1
 precision = 'medium'
-pair_style = 'deepmd'
+pair_style = 'atomic/deepmd'
 rcut = 6.5
 
 [dataset]

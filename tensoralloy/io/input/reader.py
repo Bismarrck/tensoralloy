@@ -162,8 +162,7 @@ class InputReader:
 
         pair_style = nested_get(configs, 'pair_style')
 
-        if pair_style in ('deepmd',
-                          'symmetry_function'):
+        if pair_style.startswith("atomic"):
             layers = nested_get(configs, 'nn.atomic.layers')
             if isinstance(layers, dict):
                 for key, val in layers.items():

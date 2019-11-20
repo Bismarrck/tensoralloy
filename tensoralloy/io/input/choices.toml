@@ -1,7 +1,7 @@
 # This toml file defines the default values of the options.
 
 precision = ['high', 'medium']
-pair_style = ['eam/alloy', 'eam/fs', 'adp', 'deepmd', 'symmetry_function']
+pair_style = ['eam/alloy', 'eam/fs', 'eam/adp', 'atomic/deepmd', 'atomic/sf']
 
 [nn.atomic]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
@@ -13,7 +13,7 @@ kernel_initializer = [
     'xavier_normal', 'xavier_uniform',
     'truncated_normal']
 
-[nn.atomic.behler]
+[nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
 
 [nn.loss.energy]

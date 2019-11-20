@@ -73,7 +73,7 @@ m2 = 4
 embedding_sizes = [20, 40, 80]
 embedding_activation = 'tanh'
 
-[nn.atomic.behler]
+[nn.atomic.sf]
 angular = false
 cutoff_function = 'cosine'
 trainable = false

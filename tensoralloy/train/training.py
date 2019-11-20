@@ -155,7 +155,7 @@ class TrainingManager:
         }
         params.update(kwargs)
 
-        if self._reader['pair_style'] == 'symmetry_function':
+        if self._reader['pair_style'] == 'atomic/sf':
             params['minmax_scale'] = configs['minmax_scale']
             return AtomicNN(**params)
         else:
@@ -197,7 +197,7 @@ class TrainingManager:
             return EamAlloyNN(**kwargs)
         elif pair_style == "eam/fs":
             return EamFsNN(**kwargs)
-        elif pair_style == "adp":
+        elif pair_style == "eam/adp":
             return AdpNN(**kwargs)
         else:
             raise ValueError(f"Unknown pair_style {pair_style}")
@@ -212,8 +212,7 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        if self._reader['pair_style'] in ('deepmd',
-                                          'symmetry_function'):
+        if self._reader['pair_style'].startswith("atomic"):
             nn = self._get_atomic_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
@@ -234,19 +233,19 @@ class TrainingManager:
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
 
-        if pair_style == 'deepmd':
+        if pair_style == 'atomic/deepmd':
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
                                          nij_max=nij_max, nnl_max=nnl_max,
                                          use_forces=database.has_forces,
                                          use_stress=database.has_stress)
 
-        elif pair_style == 'symmetry_function':
-            if self._reader['nn.atomic.behler.angular']:
+        elif pair_style == 'atomic/sf':
+            if self._reader['nn.atomic.sf.angular']:
                 nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
             else:
                 nijk_max = 0
-            params = self._reader['nn.atomic.behler']
+            params = self._reader['nn.atomic.sf']
             clf = BatchSymmetryFunctionTransformer(
                 rc=rcut,
                 max_occurs=max_occurs,
