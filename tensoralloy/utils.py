@@ -89,19 +89,29 @@ def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
 def get_kbody_terms(elements: List[str], angular=False):
     """
     Return ordered k-body terms (k=2 or k=2,3 if angular is True).
+
+    Returns
+    -------
+    all_kbody_terms : List[str]
+        A list of str as the ordered k-body terms.
+    kbody_terms_for_element : Dict[str, List[str]]
+        A dict of (element, List[str]) as the k-body terms for each element.
+    elements : List[str]
+        The sorted elements.
+
     """
     elements = sorted(list(set(elements)))
     n = len(elements)
-    kbody_terms = {}
+    kbody_terms_for_element = {}
     for i in range(n):
         kbody_term = "{}{}".format(elements[i], elements[i])
-        kbody_terms[elements[i]] = [kbody_term]
+        kbody_terms_for_element[elements[i]] = [kbody_term]
     for i in range(n):
         for j in range(n):
             if i == j:
                 continue
             kbody_term = "{}{}".format(elements[i], elements[j])
-            kbody_terms[elements[i]].append(kbody_term)
+            kbody_terms_for_element[elements[i]].append(kbody_term)
     if angular:
         for i in range(n):
             center = elements[i]
@@ -109,10 +119,11 @@ def get_kbody_terms(elements: List[str], angular=False):
                 for k in range(j, n):
                     suffix = "".join(sorted([elements[j], elements[k]]))
                     kbody_term = "{}{}".format(center, suffix)
-                    kbody_terms[elements[i]].append(kbody_term)
-    all_terms = [
-        x for x in chain(*[kbody_terms[element] for element in elements])]
-    return all_terms, kbody_terms, elements
+                    kbody_terms_for_element[elements[i]].append(kbody_term)
+    all_kbody_terms = [
+        x for x in chain(*[kbody_terms_for_element[element]
+                           for element in elements])]
+    return all_kbody_terms, kbody_terms_for_element, elements
 
 
 def set_logging_configs(logfile="logfile", level=logging.INFO):
