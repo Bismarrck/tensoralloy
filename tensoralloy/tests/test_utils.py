@@ -72,47 +72,75 @@ def test_get_kbody_terms():
     """
     Test `get_kbody_terms`.
     """
-    all_terms, kbody_terms, elements = get_kbody_terms(['A'], angular=False)
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['A'],
+        angular=False)
     assert_list_equal(all_terms, ['AA'])
-    assert_dict_equal(kbody_terms, {'A': ['AA']})
+    assert_dict_equal(kbody_terms_for_element, {'A': ['AA']})
 
-    all_terms, kbody_terms, elements = get_kbody_terms(['A', 'B'],
-                                                       angular=False)
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['A', 'B'],
+        angular=False)
     assert_list_equal(all_terms, ['AA', 'AB', 'BB', 'BA'])
-    assert_dict_equal(kbody_terms, {'A': ['AA', 'AB'], 'B': ['BB', 'BA']})
+    assert_dict_equal(kbody_terms_for_element,
+                      {'A': ['AA', 'AB'], 'B': ['BB', 'BA']})
 
-    all_terms, kbody_terms, elements = get_kbody_terms(['A', 'B'], angular=True)
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['A', 'B'],
+        angular=True)
     assert_list_equal(all_terms, ['AA', 'AB', 'AAA', 'AAB', 'ABB',
                                   'BB', 'BA', 'BAA', 'BAB', 'BBB'])
-    assert_dict_equal(kbody_terms, {'A': ['AA', 'AB', 'AAA', 'AAB', 'ABB'],
-                                    'B': ['BB', 'BA', 'BAA', 'BAB', 'BBB']})
+    assert_dict_equal(
+        kbody_terms_for_element, {'A': ['AA', 'AB', 'AAA', 'AAB', 'ABB'],
+                                  'B': ['BB', 'BA', 'BAA', 'BAB', 'BBB']})
 
-    all_terms, kbody_terms, elements = get_kbody_terms(['A', 'B', 'C'],
-                                                       angular=False)
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['A', 'B', 'C'],
+        angular=False)
     assert_list_equal(all_terms, ['AA', 'AB', 'AC',
                                   'BB', 'BA', 'BC',
                                   'CC', 'CA', 'CB'])
-    assert_dict_equal(kbody_terms, {'A': ['AA', 'AB', 'AC'],
-                                    'B': ['BB', 'BA', 'BC'],
-                                    'C': ['CC', 'CA', 'CB']})
+    assert_dict_equal(kbody_terms_for_element, {'A': ['AA', 'AB', 'AC'],
+                                                'B': ['BB', 'BA', 'BC'],
+                                                'C': ['CC', 'CA', 'CB']})
 
-    all_terms, kbody_terms, elements = get_kbody_terms(['A', 'B', 'C'],
-                                                       angular=True)
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['A', 'B', 'C'],
+        angular=True)
     assert_list_equal(all_terms, ['AA', 'AB', 'AC',
                                   'AAA', 'AAB', 'AAC', 'ABB', 'ABC', 'ACC',
                                   'BB', 'BA', 'BC',
                                   'BAA', 'BAB', 'BAC', 'BBB', 'BBC', 'BCC',
                                   'CC', 'CA', 'CB',
                                   'CAA', 'CAB', 'CAC', 'CBB', 'CBC', 'CCC'])
-    assert_dict_equal(kbody_terms, {'A': ['AA', 'AB', 'AC',
-                                          'AAA', 'AAB', 'AAC',
-                                          'ABB', 'ABC', 'ACC'],
-                                    'B': ['BB', 'BA', 'BC',
-                                          'BAA', 'BAB', 'BAC',
-                                          'BBB', 'BBC', 'BCC'],
-                                    'C': ['CC', 'CA', 'CB',
-                                          'CAA', 'CAB', 'CAC',
-                                          'CBB', 'CBC', 'CCC']})
+    assert_dict_equal(kbody_terms_for_element,
+                      {'A': ['AA', 'AB', 'AC',
+                             'AAA', 'AAB', 'AAC',
+                             'ABB', 'ABC', 'ACC'],
+                       'B': ['BB', 'BA', 'BC',
+                             'BAA', 'BAB', 'BAC',
+                             'BBB', 'BBC', 'BCC'],
+                       'C': ['CC', 'CA', 'CB',
+                             'CAA', 'CAB', 'CAC',
+                             'CBB', 'CBC', 'CCC']})
+
+    all_terms, kbody_terms_for_element, elements = get_kbody_terms(
+        elements=['C', 'A', 'B'],
+        angular=True,
+        symmetric=False)
+    assert_list_equal(all_terms, ['AA', 'AB', 'AC', 'AAA', 'AAB', 'AAC',
+                                  'ABA', 'ABB', 'ABC', 'ACA', 'ACB', 'ACC',
+                                  'BB', 'BA', 'BC', 'BAA', 'BAB', 'BAC',
+                                  'BBA', 'BBB', 'BBC', 'BCA', 'BCB', 'BCC',
+                                  'CC', 'CA', 'CB', 'CAA', 'CAB', 'CAC',
+                                  'CBA', 'CBB', 'CBC', 'CCA', 'CCB', 'CCC'])
+    assert_dict_equal(kbody_terms_for_element,
+                      {'A': ['AA', 'AB', 'AC', 'AAA', 'AAB', 'AAC',
+                             'ABA', 'ABB', 'ABC', 'ACA', 'ACB', 'ACC'],
+                       'B': ['BB', 'BA', 'BC', 'BAA', 'BAB', 'BAC',
+                             'BBA', 'BBB', 'BBC', 'BCA', 'BCB', 'BCC'],
+                       'C': ['CC', 'CA', 'CB', 'CAA', 'CAB', 'CAC',
+                             'CBA', 'CBB', 'CBC', 'CCA', 'CCB', 'CCC']})
 
 
 if __name__ == "__main__":
