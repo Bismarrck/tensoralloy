@@ -59,6 +59,42 @@ def cantor_pairing(x, y):
     return (x + y) * (x + y + 1) // 2 + y
 
 
+def szudzik_pairing(x, y):
+    """
+    The szudzik pairing function which supports negative numbers.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    xx = x * 2 if x >= 0 else x * -2 - 1
+    yy = y * 2 if y >= 0 else y * -2 - 1
+    return xx * xx + xx + yy if xx >= yy else yy * yy + xx
+
+
+def szudzik_pairing_reverse(z):
+    """
+    The reverse of `szudzik_pairing`.
+    """
+    sqrtz = int(np.floor(np.sqrt(z)))
+    sqz = sqrtz**2
+    ab = (sqrtz, z - sqz - sqrtz) if (z - sqz) >= sqrtz else (z - sqz, sqrtz)
+    xx = ab[0] // 2 if ab[0] % 2 == 0 else (ab[0] + 1) // -2
+    yy = ab[1] // 2 if ab[1] % 2 == 0 else (ab[1] + 1) // -2
+    return xx, yy
+
+
+def szudzik_pairing_nd(d1, d2, *args):
+    """
+    The n-dimensional szudzik pairing function.
+    """
+    dval = szudzik_pairing(d1, d2)
+    for di in args:
+        dval = szudzik_pairing(dval, di)
+    return dval
+
+
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     """
     Return the atoms in the given k-body term.
@@ -86,9 +122,20 @@ def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     return atoms
 
 
-def get_kbody_terms(elements: List[str], angular=False):
+def get_kbody_terms(elements: List[str],
+                    angular=False,
+                    symmetric=True):
     """
     Return ordered k-body terms (k=2 or k=2,3 if angular is True).
+
+    Parameters
+    ----------
+    elements : List[str]
+        A list of str as the target elements.
+    angular : bool
+        If True, 3-body terms will also be included.
+    symmetric : SymmetricMode
+        A boolean flag. If False, both ABA and AAB shall be included.
 
     Returns
     -------
@@ -116,10 +163,15 @@ def get_kbody_terms(elements: List[str], angular=False):
         for i in range(n):
             center = elements[i]
             for j in range(n):
-                for k in range(j, n):
-                    suffix = "".join(sorted([elements[j], elements[k]]))
-                    kbody_term = "{}{}".format(center, suffix)
-                    kbody_terms_for_element[elements[i]].append(kbody_term)
+                if symmetric:
+                    for k in range(j, n):
+                        suffix = "".join(sorted([elements[j], elements[k]]))
+                        kbody_term = f"{center}{suffix}"
+                        kbody_terms_for_element[elements[i]].append(kbody_term)
+                else:
+                    for k in range(n):
+                        kbody_term = f"{center}{elements[j]}{elements[k]}"
+                        kbody_terms_for_element[elements[i]].append(kbody_term)
     all_kbody_terms = [
         x for x in chain(*[kbody_terms_for_element[element]
                            for element in elements])]
