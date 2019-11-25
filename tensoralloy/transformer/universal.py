@@ -46,7 +46,7 @@ def get_g2_map(atoms: Atoms,
         nij_max = nij
 
     iaxis = _get_iaxis(mode)
-    g2_map = np.zeros((nij_max, iaxis + 4), dtype=np.int32)
+    g2_map = np.zeros((nij_max, iaxis + 5), dtype=np.int32)
     g2_map.fill(0)
     tlist = np.zeros(nij_max, dtype=np.int32)
     symbols = atoms.get_chemical_symbols()
@@ -81,7 +81,7 @@ def get_g2_map(atoms: Atoms,
         counters[atomi][tlist[index]] += 1
 
     # The mask
-    g2_map[:, iaxis + 3] = ilist > 0
+    g2_map[:, iaxis + 4] = ilist > 0
 
     return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
 
@@ -124,7 +124,7 @@ def get_g4_map(atoms: Atoms,
         nijk_max = nijk
 
     iaxis = _get_iaxis(mode)
-    g4_map = np.zeros((nijk_max, iaxis + 4), dtype=np.int32)
+    g4_map = np.zeros((nijk_max, iaxis + 5), dtype=np.int32)
     g4_map.fill(0)
     ilist = np.zeros(nijk_max, dtype=np.int32)
     jlist = np.zeros(nijk_max, dtype=np.int32)
@@ -156,16 +156,19 @@ def get_g4_map(atoms: Atoms,
                 n1[count] = vectors[atom_vap_i][j]
                 n2[count] = vectors[atom_vap_i][k]
                 n3[count] = vectors[atom_vap_i][k] - vectors[atom_vap_i][j]
-                index = angular_interactions[interaction]
+                idx = angular_interactions[interaction]
                 if atom_vap_i not in counters:
                     counters[atom_vap_i] = Counter()
-                    if index not in counters[atom_vap_i]:
-                        counters[atom_vap_i][index] = 0
-                g4_map[count, iaxis + 0] = index
+                if atom_vap_j not in counters[atom_vap_i]:
+                    counters[atom_vap_i][atom_vap_j] = Counter()
+                if idx not in counters[atom_vap_i][atom_vap_j]:
+                    counters[atom_vap_i][atom_vap_j][idx] = 0
+                g4_map[count, iaxis + 0] = idx
                 g4_map[count, iaxis + 1] = atom_vap_i
-                g4_map[count, iaxis + 2] = counters[atom_vap_i][index]
-                g4_map[count, iaxis + 3] = 1
-                counters[atom_vap_i][index] += 1
+                g4_map[count, iaxis + 2] = atom_vap_j
+                g4_map[count, iaxis + 3] = counters[atom_vap_i][atom_vap_j][idx]
+                g4_map[count, iaxis + 4] = 1
+                counters[atom_vap_i][atom_vap_j][idx] += 1
                 count += 1
     return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
 
@@ -237,6 +240,7 @@ class UniversalTransformer(DescriptorTransformer):
         self._n_elements = len(elements)
         self._periodic = periodic
         self._angular = angular
+        self._use_new_g4 = True
 
     def as_dict(self) -> Dict:
         """
@@ -368,12 +372,15 @@ class UniversalTransformer(DescriptorTransformer):
         Return the shape of the descriptor matrix.
         """
         if angular:
-            key = "nnl_a_max"
-            ndim = self._max_na_terms
+            return [np.int32(self._max_na_terms),
+                    features["n_atoms_vap"],
+                    features["nnl_j_max"],
+                    features["nnl_k_max"]]
         else:
-            key = "nnl_max"
-            ndim = self._max_nr_terms
-        return [np.int32(ndim), features["n_atoms_vap"], features[key]]
+            return [np.int32(self._max_nr_terms),
+                    features["n_atoms_vap"],
+                    features["nnl_max"],
+                    1]
 
     def get_v2g_map(self, features: dict, angular=False):
         """
@@ -385,8 +392,8 @@ class UniversalTransformer(DescriptorTransformer):
             key = "g2.v2g_map"
         splits = tf.split(features[key], [-1, 1], axis=1)
         v2g_map = tf.identity(splits[0], name='v2g_map')
-        v2g_mask = tf.identity(splits[1], name='v2g_mask')
-        return v2g_map, v2g_mask
+        v2g_masks = tf.identity(splits[1], name='v2g_masks')
+        return v2g_map, v2g_masks
 
     def get_row_split_sizes(self, features):
         """
@@ -401,7 +408,7 @@ class UniversalTransformer(DescriptorTransformer):
         """
         return 1
 
-    def _split_descriptors(self, features, g, mask):
+    def _split_descriptors(self, features, dists, masks):
         """
         Split the descriptors into `N_element` subsets.
         """
@@ -411,11 +418,12 @@ class UniversalTransformer(DescriptorTransformer):
 
             # `axis` should increase by one for `g` because `g` is created by
             # `tf.concat((gr, gx, gy, gz), axis=0, name='g')`
-            rows = tf.split(g, split_sizes, axis=axis + 1, name='rows')[1:]
+            dists = tf.split(
+                dists, split_sizes, axis=axis + 1, name='dists')[1:]
 
             # Use the original axis
-            masks = tf.split(mask, split_sizes, axis=axis, name='masks')[1:]
-            return dict(zip(self._elements, zip(rows, masks)))
+            masks = tf.split(masks, split_sizes, axis=axis, name='masks')[1:]
+            return dict(zip(self._elements, zip(dists, masks)))
 
     def _check_keys(self, features: dict):
         """
@@ -433,7 +441,8 @@ class UniversalTransformer(DescriptorTransformer):
         assert 'g2.v2g_map' in features
 
         if self._angular:
-            assert 'nnl_a_max' in features
+            assert 'nnl_j_max' in features
+            assert 'nnl_k_max' in features
             assert 'g4.ilist' in features
             assert 'g4.jlist' in features
             assert 'g4.klist' in features
@@ -451,7 +460,7 @@ class UniversalTransformer(DescriptorTransformer):
                                    features["g2.n1"],
                                    name='rij')
             shape = self.get_g_shape(features, angular=False)
-            v2g_map, v2g_mask = self.get_v2g_map(features, angular=False)
+            v2g_map, v2g_masks = self.get_v2g_map(features, angular=False)
 
             dx = tf.identity(dij[..., 0], name='dijx')
             dy = tf.identity(dij[..., 1], name='dijy')
@@ -462,12 +471,12 @@ class UniversalTransformer(DescriptorTransformer):
             gy = tf.expand_dims(tf.scatter_nd(v2g_map, dy, shape), 0, name='gy')
             gz = tf.expand_dims(tf.scatter_nd(v2g_map, dz, shape), 0, name='gz')
 
-            g = tf.concat((gr, gx, gy, gz), axis=0, name='g')
+            dists = tf.concat((gr, gx, gy, gz), axis=0, name='dists')
 
-            v2g_mask = tf.squeeze(v2g_mask, axis=self.get_row_split_axis())
-            mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
-            mask = tf.cast(mask, dtype=rr.dtype, name='mask')
-            return self._split_descriptors(features, g, mask)
+            v2g_masks = tf.squeeze(v2g_masks, axis=self.get_row_split_axis())
+            masks = tf.scatter_nd(v2g_map, v2g_masks, shape)
+            masks = tf.cast(masks, dtype=rr.dtype, name='masks')
+            return self._split_descriptors(features, dists, masks)
 
     def build_angular_graph(self, features: dict):
         with tf.name_scope("Angular"):
@@ -490,7 +499,7 @@ class UniversalTransformer(DescriptorTransformer):
                                     features['g4.n3'],
                                     name='rjk')
             shape = self.get_g_shape(features, angular=True)
-            v2g_map, v2g_mask = self.get_v2g_map(features, angular=True)
+            v2g_map, v2g_masks = self.get_v2g_map(features, angular=True)
 
             ijx = tf.identity(dij[..., 0], name='dijx')
             ijy = tf.identity(dij[..., 1], name='dijy')
@@ -514,14 +523,14 @@ class UniversalTransformer(DescriptorTransformer):
             gjkx = tf.expand_dims(tf.scatter_nd(v2g_map, jkx, shape), 0, 'gjkx')
             gjky = tf.expand_dims(tf.scatter_nd(v2g_map, jky, shape), 0, 'gjky')
             gjkz = tf.expand_dims(tf.scatter_nd(v2g_map, jkz, shape), 0, 'gjkz')
-            g = tf.concat((grij, gijx, gijy, gijz,
-                           grik, gikx, giky, gikz,
-                           grjk, gjkx, gjky, gjkz), axis=0, name='g')
+            dists = tf.concat((grij, gijx, gijy, gijz,
+                               grik, gikx, giky, gikz,
+                               grjk, gjkx, gjky, gjkz), axis=0, name='dists')
 
-            v2g_mask = tf.squeeze(v2g_mask, axis=self.get_row_split_axis())
-            mask = tf.scatter_nd(v2g_map, v2g_mask, shape)
-            mask = tf.cast(mask, dtype=rij.dtype, name='mask')
-            return self._split_descriptors(features, g, mask)
+            v2g_masks = tf.squeeze(v2g_masks, axis=self.get_row_split_axis())
+            masks = tf.scatter_nd(v2g_map, v2g_masks, shape)
+            masks = tf.cast(masks, dtype=rij.dtype, name='masks')
+            return self._split_descriptors(features, dists, masks)
 
     def build_graph(self, features: dict):
         """
@@ -571,12 +580,13 @@ class UniversalTransformer(DescriptorTransformer):
             self._placeholders["g2.n1"] = self._create_float_2d(
                 dtype=dtype, d0=None, d1=3, name='g2.n1')
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
-                d0=None, d1=4, name='g2.v2g_map')
+                d0=None, d1=5, name='g2.v2g_map')
 
             if self._angular:
-                self._placeholders["nnl_a_max"] = self._create_int('nnl_a_max')
+                self._placeholders["nnl_j_max"] = self._create_int('nnl_j_max')
+                self._placeholders["nnl_k_max"] = self._create_int('nnl_k_max')
                 self._placeholders["g4.v2g_map"] = self._create_int_2d(
-                    d0=None, d1=4, name='g4.v2g_map')
+                    d0=None, d1=5, name='g4.v2g_map')
                 self._placeholders["g4.ilist"] = self._create_int_1d('g4.ilist')
                 self._placeholders["g4.jlist"] = self._create_int_1d('g4.jlist')
                 self._placeholders["g4.klist"] = self._create_int_1d('g4.klist')
@@ -679,7 +689,8 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict.update(g2.as_dict())
 
         if self._angular:
-            feed_dict['nnl_a_max'] = np.int32(g4.v2g_map[:, 2].max() + 1)
+            feed_dict['nnl_j_max'] = np.int32(g4.v2g_map[:, 2].max() + 1)
+            feed_dict['nnl_k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
             feed_dict.update(g4.as_dict())
 
         return feed_dict
