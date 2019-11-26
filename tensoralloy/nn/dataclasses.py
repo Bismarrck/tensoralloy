@@ -158,11 +158,21 @@ class RoseLossOptions(_LossOptions):
     """
     Special options for the Rose Equation of State loss.
     """
-
     dx: float = 0.10
     delta: float = 0.01
     crystals: List[str] = None
     beta: List[float] = None
+
+
+@add_slots
+@dataclass
+class EnergyDifferenceLossOptions(_LossOptions):
+    """
+    Special options for the energy difference loss.
+    """
+    references: List[str] = None
+    crystals: List[str] = None
+    diff: List[float] = None
 
 
 @dataclass
@@ -186,6 +196,7 @@ class LossParameters(_HyperParameters):
     l2: L2LossOptions = L2LossOptions()
     elastic: ElasticLossOptions = ElasticLossOptions()
     rose: RoseLossOptions = RoseLossOptions()
+    ediff: EnergyDifferenceLossOptions = EnergyDifferenceLossOptions()
 
 
 @add_slots
