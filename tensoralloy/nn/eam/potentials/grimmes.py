@@ -39,7 +39,7 @@ class RWGrimes(EamAlloyPotential):
         return defaults
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The pairwise potential function.
         """
@@ -63,7 +63,7 @@ class RWGrimes(EamAlloyPotential):
             return phi
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The electron density function.
         """
@@ -87,7 +87,7 @@ class RWGrimes(EamAlloyPotential):
             return rho
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
+              fixed=False, verbose=False):
         """
         The embedding function.
         """
@@ -105,6 +105,7 @@ class RWGrimes(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         RWGrimes does not support calculating dipole.
@@ -116,6 +117,7 @@ class RWGrimes(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         RWGrimes does not support calculating dipole.

@@ -41,7 +41,7 @@ class AgSutton90(EamAlloyPotential):
         return defaults
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The pairwise potential function:
 
@@ -62,7 +62,7 @@ class AgSutton90(EamAlloyPotential):
             return phi
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The electron density function:
 
@@ -83,7 +83,7 @@ class AgSutton90(EamAlloyPotential):
             return rho
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
+              fixed=False, verbose=False):
         """
         The embedding function:
 
@@ -100,6 +100,7 @@ class AgSutton90(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         Ag/Sutton90 does not support calculating dipole.
@@ -111,6 +112,7 @@ class AgSutton90(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         Ag/Sutton90 does not support calculating dipole.

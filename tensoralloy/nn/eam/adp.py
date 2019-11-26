@@ -158,9 +158,11 @@ class AdpNN(EamAlloyNN):
                 variable_scope=f"{variable_scope}/{kbody_term}",
                 verbose=verbose)
         else:
+            fixed = f"{kbody_term}.dipole" in self.fixed_functions
             return partial(self._empirical_functions[name].dipole,
                            kbody_term=kbody_term,
                            variable_scope=variable_scope,
+                           fixed=fixed,
                            verbose=verbose)
 
     def _get_quadrupole_fn(self, kbody_term: str, variable_scope='Quadrupole',
@@ -178,9 +180,11 @@ class AdpNN(EamAlloyNN):
                 variable_scope=f"{variable_scope}/{kbody_term}",
                 verbose=verbose)
         else:
+            fixed = f"{kbody_term}.quadrupole" in self.fixed_functions
             return partial(self._empirical_functions[name].quadrupole,
                            kbody_term=kbody_term,
                            variable_scope=variable_scope,
+                           fixed=fixed,
                            verbose=verbose)
 
     def _build_rho_nn(self,

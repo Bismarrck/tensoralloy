@@ -127,7 +127,7 @@ class EamEmpiricalPotential:
         return False
 
     def _get_variable(self, parameter, dtype, section, variable_scope: str,
-                      reuse=False):
+                      fixed=False, reuse=False):
         """
         A function to initialize a new local `tf.Variable`.
         Local variables cannot be used by potential functions outside `section`.
@@ -152,7 +152,10 @@ class EamEmpiricalPotential:
             The corresponding variable.
 
         """
-        trainable = self._is_trainable(parameter, section)
+        if fixed:
+            trainable = False
+        else:
+            trainable = self._is_trainable(parameter, section)
         with tf.variable_scope(variable_scope, reuse=reuse):
             var = get_variable(name=parameter, dtype=dtype,
                                initializer=tf.constant_initializer(
@@ -165,7 +168,8 @@ class EamEmpiricalPotential:
                                trainable=trainable)
             return var
 
-    def _get_shared_variable(self, parameter: str, dtype, section: str):
+    def _get_shared_variable(self, parameter: str, dtype, section: str,
+                             fixed=False):
         """
         Return a shared variable. A shared variable may be reused by potential
         functions in different sections.
@@ -181,6 +185,8 @@ class EamEmpiricalPotential:
             The data type of the variable.
         section : str
             The section to which the parameter belongs.
+        fixed : bool
+            Fix this parameter.
 
         Returns
         -------
@@ -190,12 +196,14 @@ class EamEmpiricalPotential:
         """
         return self._get_variable(parameter, dtype, section,
                                   variable_scope=f"Shared/{section}",
+                                  fixed=fixed,
                                   reuse=tf.AUTO_REUSE)
 
     def rho(self,
             r: tf.Tensor,
             element_or_kbody_term: str,
             variable_scope: str,
+            fixed=False,
             verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
@@ -207,6 +215,7 @@ class EamEmpiricalPotential:
             r: tf.Tensor,
             kbody_term: str,
             variable_scope: str,
+            fixed=False,
             verbose=False):
         """
         Return the Op to compute pairwise potential `phi(r)`.
@@ -219,6 +228,8 @@ class EamEmpiricalPotential:
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -235,6 +246,7 @@ class EamEmpiricalPotential:
               rho: tf.Tensor,
               element: str,
               variable_scope: str,
+              fixed=False,
               verbose=False):
         """
         Return the Op to compute the embedding energy F(rho(r)).
@@ -248,6 +260,8 @@ class EamEmpiricalPotential:
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -264,6 +278,7 @@ class EamEmpiricalPotential:
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         Return the Op to compute pairwise dipole potential `u(r)`.
@@ -276,6 +291,8 @@ class EamEmpiricalPotential:
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -292,6 +309,7 @@ class EamEmpiricalPotential:
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         Return the Op to compute pairwise quadrupole potential `w(r)`.
@@ -323,7 +341,7 @@ class EamAlloyPotential(EamEmpiricalPotential, ABC):
     """
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -335,6 +353,8 @@ class EamAlloyPotential(EamEmpiricalPotential, ABC):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -354,7 +374,7 @@ class EamFSPotential(EamEmpiricalPotential, ABC):
     """
 
     def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -366,6 +386,8 @@ class EamFSPotential(EamEmpiricalPotential, ABC):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 

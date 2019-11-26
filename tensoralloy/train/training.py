@@ -169,6 +169,7 @@ class TrainingManager:
 
         hidden_sizes = {}
         custom_potentials = {}
+        fixed_functions = self._reader["nn.eam.fixed_functions"]
 
         for pot in ('rho', 'embed', 'phi', 'dipole', 'quadrupole'):
             keypath = f'nn.eam.{pot}'
@@ -190,7 +191,8 @@ class TrainingManager:
                     nested_set(custom_potentials, f'{key}.{pot}', 'nn')
 
         kwargs.update(dict(hidden_sizes=hidden_sizes,
-                           custom_potentials=custom_potentials))
+                           custom_potentials=custom_potentials,
+                           fixed_functions=fixed_functions))
 
         pair_style = self._reader['pair_style']
         if pair_style == "eam/alloy":

@@ -151,7 +151,7 @@ class AlFeMsah11(EamFSPotential):
         return _phi
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The pairwise potential function.
 
@@ -163,6 +163,8 @@ class AlFeMsah11(EamFSPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -285,7 +287,7 @@ class AlFeMsah11(EamFSPotential):
                 return phi
 
     def rho(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         Return the Op to compute electron density `rho(r)`.
 
@@ -297,6 +299,8 @@ class AlFeMsah11(EamFSPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -359,7 +363,7 @@ class AlFeMsah11(EamFSPotential):
                 return rho
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
+              fixed=False, verbose=False):
         """
         Return the Op to compute the embedding energy F(rho(r)).
 
@@ -372,6 +376,8 @@ class AlFeMsah11(EamFSPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            Set all associated parameters to be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -414,6 +420,7 @@ class AlFeMsah11(EamFSPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         AlFeMsah11 does not support calculating dipole.
@@ -425,6 +432,7 @@ class AlFeMsah11(EamFSPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         AlFeMsah11 does not support calculating dipole.

@@ -56,7 +56,7 @@ class CubicSplinePotential(EamAlloyPotential):
         keys = self._df.keys()
         return f"{key}.x" in keys and f"{key}.y" in keys
 
-    def _make(self, t: tf.Tensor, pot: str, name: str):
+    def _make(self, t: tf.Tensor, pot: str, name: str, fixed=False):
         """
         Make a spline potential.
 
@@ -82,8 +82,13 @@ class CubicSplinePotential(EamAlloyPotential):
             xval = xval.to_numpy(dtype.as_numpy_dtype)
             yval = yval.to_numpy(dtype.as_numpy_dtype)
         x = tf.convert_to_tensor(xval, dtype=dtype, name="spline/x")
+
+        if fixed:
+            trainable = False
+        else:
+            trainable = True
         y = get_variable(
-            "spline/y", shape=yval.shape, dtype=dtype, trainable=True,
+            "spline/y", shape=yval.shape, dtype=dtype, trainable=trainable,
             initializer=tf.constant_initializer(yval, dtype=dtype),
             collections=[tf.GraphKeys.MODEL_VARIABLES, ]
         )
@@ -94,7 +99,7 @@ class CubicSplinePotential(EamAlloyPotential):
         return val
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The electron density function rho(r).
 
@@ -119,7 +124,7 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{element}",
                     reuse=tf.AUTO_REUSE):
-                rho = self._make(r, f"{element}.rho", "rho")
+                rho = self._make(r, f"{element}.rho", "rho", fixed)
                 if verbose:
                     log_tensor(rho)
                 return rho
@@ -128,6 +133,7 @@ class CubicSplinePotential(EamAlloyPotential):
               rho: tf.Tensor,
               element: str,
               variable_scope: str,
+              fixed=False,
               verbose=False):
         """
         The embedding function.
@@ -136,7 +142,7 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{element}",
                     reuse=tf.AUTO_REUSE):
-                embed = self._make(rho, f"{element}.embed", "phi")
+                embed = self._make(rho, f"{element}.embed", "phi", fixed)
                 if verbose:
                     log_tensor(embed)
                 return embed
@@ -145,6 +151,7 @@ class CubicSplinePotential(EamAlloyPotential):
             r: tf.Tensor,
             kbody_term: str,
             variable_scope: str,
+            fixed=False,
             verbose=False):
         """
         The pairwise interaction function.
@@ -153,7 +160,7 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{kbody_term}",
                     reuse=tf.AUTO_REUSE):
-                phi = self._make(r, f"{kbody_term}.phi", "phi")
+                phi = self._make(r, f"{kbody_term}.phi", "phi", fixed)
                 if verbose:
                     log_tensor(phi)
                 return phi
@@ -162,6 +169,7 @@ class CubicSplinePotential(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         The dipole function.
@@ -170,7 +178,7 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{kbody_term}",
                     reuse=tf.AUTO_REUSE):
-                dipole = self._make(r, f"{kbody_term}.dipole", "u")
+                dipole = self._make(r, f"{kbody_term}.dipole", "u", fixed)
                 if verbose:
                     log_tensor(dipole)
                 return dipole
@@ -179,6 +187,7 @@ class CubicSplinePotential(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         The quadrupole function.
@@ -187,7 +196,8 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{kbody_term}",
                     reuse=tf.AUTO_REUSE):
-                quadrupole = self._make(r, f"{kbody_term}.quadrupole", "w")
+                quadrupole = self._make(
+                    r, f"{kbody_term}.quadrupole", "w", fixed)
                 if verbose:
                     log_tensor(quadrupole)
                 return quadrupole
