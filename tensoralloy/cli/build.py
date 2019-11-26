@@ -198,7 +198,11 @@ class BuildSplineGuessProgram(CLIProgram):
                                 if ptype not in exclude_types:
                                     update_field(ab, ptype)
             df = pd.DataFrame(data)
-            df.to_csv(args.output, index=None)
+            if not args.output:
+                output = f"{args.setfl}.guess"
+            else:
+                output = args.output
+            df.to_csv(output, index=None)
         return func
 
     def config_subparser(self, subparser: argparse.ArgumentParser):
@@ -211,8 +215,9 @@ class BuildSplineGuessProgram(CLIProgram):
             help="A lammps setfl potential file."
         )
         subparser.add_argument(
-            "output",
+            "-o", "--output",
             type=str,
+            default=None,
             help="The output initial guess csv file."
         )
         subparser.add_argument(
