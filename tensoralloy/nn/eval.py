@@ -139,5 +139,10 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
                 istop = slist.index('EOS')
                 key = "/".join(slist[istart: istop])
                 metrics[key] = (tensor, tf.no_op())
+            elif "Diff" in tensor.op.name:
+                istart = slist.index('Diff')
+                istop = slist.index('mae')
+                key = "/".join(slist[istart: istop - 1])
+                metrics[key] = (tensor, tf.no_op())
 
         return metrics
