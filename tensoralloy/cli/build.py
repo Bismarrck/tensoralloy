@@ -5,6 +5,7 @@ Command-line programs under the `build` scope.
 from __future__ import print_function, absolute_import
 
 import pandas as pd
+import numpy as np
 import argparse
 
 from tensoralloy.cli.cli import CLIProgram
@@ -197,12 +198,18 @@ class BuildSplineGuessProgram(CLIProgram):
                             for ptype in ("dipole", "quadrupole"):
                                 if ptype not in exclude_types:
                                     update_field(ab, ptype)
-            df = pd.DataFrame(data)
-            if not args.output:
-                output = f"{args.setfl}.guess"
+            if len(set([len(y) for y in data.values()])) == 1:
+                if not args.output:
+                    output = f"{args.setfl}.guess"
+                else:
+                    output = args.output
+                df = pd.DataFrame(data)
+                df.to_csv(output, index=None)
             else:
-                output = args.output
-            df.to_csv(output, index=None)
+                output = f"{args.setfl}.npz"
+                print(f"Save the guess to {output} because not all arrays have "
+                      f"the same length")
+                np.savez(output, **data)
         return func
 
     def config_subparser(self, subparser: argparse.ArgumentParser):

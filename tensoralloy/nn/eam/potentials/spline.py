@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 import pandas as pd
+import numpy as np
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.nn.eam.potentials.potentials import get_variable
@@ -33,7 +34,13 @@ class CubicSplinePotential(EamAlloyPotential):
         """
         super(CubicSplinePotential, self).__init__()
         self._name = "Spline"
-        self._df = pd.read_csv(filename, index_col=None)
+
+        if filename.endswith("npz"):
+            self._df = np.load(filename)
+            self._load_from_npz = True
+        else:
+            self._load_from_npz = False
+            self._df = pd.read_csv(filename, index_col=None)
 
     @property
     def defaults(self):
@@ -69,11 +76,14 @@ class CubicSplinePotential(EamAlloyPotential):
             raise ValueError(f"{pot} is not available!")
 
         dtype = t.dtype
-        xval = self._df[f"{pot}.x"].to_numpy(dtype.as_numpy_dtype)
-        yval = self._df[f"{pot}.y"].to_numpy(dtype.as_numpy_dtype)
-        x = tf.convert_to_tensor(xval, dtype=dtype, name="x")
+        xval = self._df[f"{pot}.x"]
+        yval = self._df[f"{pot}.y"]
+        if not self._load_from_npz:
+            xval = xval.to_numpy(dtype.as_numpy_dtype)
+            yval = yval.to_numpy(dtype.as_numpy_dtype)
+        x = tf.convert_to_tensor(xval, dtype=dtype, name="spline/x")
         y = get_variable(
-            "y", shape=yval.shape, dtype=dtype, trainable=True,
+            "spline/y", shape=yval.shape, dtype=dtype, trainable=True,
             initializer=tf.constant_initializer(yval, dtype=dtype),
             collections=[tf.GraphKeys.MODEL_VARIABLES, ]
         )

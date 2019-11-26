@@ -38,6 +38,7 @@ from phonopy import file_IO
 
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
+from tensoralloy.transformer import ADPTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.analysis.phonon import Phonopy
 from tensoralloy.analysis.phonon import print_phonopy_version, print_phonopy
@@ -159,6 +160,8 @@ class TensorAlloyCalculator(Calculator):
             return SymmetryFunctionTransformer(**params)
         elif cls == 'EAMTransformer':
             return EAMTransformer(**params)
+        elif cls == "ADPTransformer":
+            return ADPTransformer(**params)
         else:
             raise ValueError(f"Unknown transformer: {cls}")
 
