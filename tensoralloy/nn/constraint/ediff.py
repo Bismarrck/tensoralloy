@@ -100,6 +100,8 @@ def get_energy_difference_constraint_loss(
                     y_pred = tf.stack(y_pred, name='y_pred')
                     y_diff = tf.math.subtract(y_pred, y_true, name='y_diff')
                     mae = tf.reduce_mean(tf.math.abs(y_diff), name='mae')
+                    if is_first_replica():
+                        tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
                     weight = tf.convert_to_tensor(
                         options.weight, dtype, name='weight')
                     mae = tf.math.multiply(mae, weight, name='mae/weighted')
@@ -112,6 +114,5 @@ def get_energy_difference_constraint_loss(
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
-                        tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
                     losses.append(loss)
         return tf.add_n(losses, name='loss')
