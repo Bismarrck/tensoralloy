@@ -149,3 +149,12 @@ def log_tensor(tensor: tf.Tensor):
     dimensions = ",".join(["{:5d}".format(dim if dim is not None else -1)
                            for dim in tensor.get_shape().as_list()])
     tf.logging.info("{:<60s} : [{}]".format(tensor.op.name, dimensions))
+
+
+def logcosh(x, dtype=None, name=None):
+    """
+    The keras implemnetation of `logcosh`.
+    """
+    two = tf.convert_to_tensor(2.0, dtype=dtype, name='two')
+    return tf.math.subtract(x + tf.nn.softplus(-two * x), tf.math.log(two),
+                            name=name)

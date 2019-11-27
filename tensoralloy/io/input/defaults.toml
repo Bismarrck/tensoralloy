@@ -37,6 +37,7 @@ crystals = []
 diff = []
 weight = 1.0
 forces_weight = 1.0
+method = "mae"
 
 [nn.loss.forces]
 weight = 1.0

@@ -11,8 +11,7 @@ from enum import Enum
 
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.dataclasses import L2LossOptions
-from tensoralloy.nn.utils import is_first_replica
-
+from tensoralloy.nn.utils import is_first_replica, logcosh
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -34,15 +33,6 @@ class LossMethod(Enum):
     rmse = 0
     rrmse = 1
     logcosh = 2
-
-
-def _logcosh(x, dtype=None, name=None):
-    """
-    The keras implemnetation of `logcosh`.
-    """
-    two = tf.convert_to_tensor(2.0, dtype=dtype, name='two')
-    return tf.math.subtract(x + tf.nn.softplus(-two * x), tf.math.log(two),
-                            name=name)
 
 
 def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
@@ -87,7 +77,7 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     diff = tf.math.subtract(x, y, name='diff')
     mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
     dtype = get_float_dtype()
-    z = tf.reduce_mean(_logcosh(diff, dtype), name='logcosh' + suffix)
+    z = tf.reduce_mean(logcosh(diff, dtype), name='logcosh' + suffix)
     return z, mae
 
 
@@ -181,7 +171,7 @@ def _absolute_forces_loss(labels: tf.Tensor,
         if method == LossMethod.rmse:
             val = tf.math.square(diff, name='square')
         else:
-            val = _logcosh(diff, dtype=dtype, name='logcosh')
+            val = logcosh(diff, dtype=dtype, name='logcosh')
         mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
 
         if method == LossMethod.rmse:

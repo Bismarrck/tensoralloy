@@ -28,6 +28,9 @@ method = ["rmse", "logcosh", "rrmse"]
 [nn.loss.total_pressure]
 method = ["rmse", "logcosh"]
 
+[nn.loss.ediff]
+method = ["mae", "logcosh"]
+
 [opt]
 method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']

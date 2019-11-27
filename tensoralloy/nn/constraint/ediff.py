@@ -13,7 +13,7 @@ from tensoralloy.nn.constraint.data import get_crystal, Crystal
 from tensoralloy.nn.dataclasses import EnergyDifferenceLossOptions
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import GraphKeys
-from tensoralloy.nn.utils import is_first_replica
+from tensoralloy.nn.utils import is_first_replica, logcosh
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -100,19 +100,24 @@ def get_energy_difference_constraint_loss(
                     y_pred = tf.stack(y_pred, name='y_pred')
                     y_diff = tf.math.subtract(y_pred, y_true, name='y_diff')
                     mae = tf.reduce_mean(tf.math.abs(y_diff), name='mae')
+                    if options.method == "mae":
+                        loss = mae
+                    else:
+                        loss = tf.reduce_mean(
+                            logcosh(y_diff, dtype), name='logcosh')
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.EVAL_METRICS, mae)
                     weight = tf.convert_to_tensor(
                         options.weight, dtype, name='weight')
-                    mae = tf.math.multiply(mae, weight, name='mae/weighted')
+                    loss = tf.math.multiply(loss, weight,
+                                            name=f'{options.method}/weighted')
                     fnorm_weight = tf.convert_to_tensor(
                         options.forces_weight, dtype=dtype, name='weight/fnorm')
                     residual = tf.add_n(fnorms, name='residual')
                     residual = tf.math.multiply(
                         residual, fnorm_weight, name='residual/weighted')
-                    loss = tf.math.add(mae, residual, name='loss')
+                    loss = tf.math.add(loss, residual, name='loss')
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
-                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
                     losses.append(loss)
         return tf.add_n(losses, name='loss')
