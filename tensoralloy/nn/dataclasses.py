@@ -173,6 +173,7 @@ class EnergyDifferenceLossOptions(_LossOptions):
     references: List[str] = None
     crystals: List[str] = None
     diff: List[float] = None
+    forces_weight: float = 1.0
 
 
 @dataclass

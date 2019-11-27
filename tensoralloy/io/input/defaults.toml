@@ -31,6 +31,13 @@ beta = []
 dx = 0.10
 delta = 0.01
 
+[nn.loss.ediff]
+references = []
+crystals = []
+diff = []
+weight = 1.0
+forces_weight = 1.0
+
 [nn.loss.forces]
 weight = 1.0
 method = "rmse"

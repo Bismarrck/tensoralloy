@@ -83,16 +83,17 @@ def get_energy_difference_constraint_loss(
                 for (crystal, ediff) in pairs:
                     crystal = get_crystal(crystal)
                     with tf.name_scope(f"{crystal.name}/{crystal.phase}"):
-                        ei, fi = calculate(base_nn=base_nn,
+                        ei, fnorm = calculate(base_nn=base_nn,
                                            crystal=crystal,
                                            verbose=verbose)
+                        val = tf.math.subtract(ei, e0, name='pred')
                         y_true.append(
                             tf.constant(ediff, dtype=dtype, name="diff"))
-                        y_pred.append(
-                            tf.math.subtract(ei, e0, name='pred'))
-                        fnorms.append(fi)
+                        y_pred.append(val)
+                        fnorms.append(fnorm)
                         if is_first_replica():
-                            tf.add_to_collection(GraphKeys.TRAIN_METRICS, fi)
+                            tf.add_to_collection(GraphKeys.TRAIN_METRICS, fnorm)
+                            tf.add_to_collection(GraphKeys.EVAL_METRICS, val)
 
                 with tf.name_scope("Loss"):
                     y_true = tf.stack(y_true, name='y_true')
@@ -101,8 +102,13 @@ def get_energy_difference_constraint_loss(
                     mae = tf.reduce_mean(tf.math.abs(y_diff), name='mae')
                     weight = tf.convert_to_tensor(
                         options.weight, dtype, name='weight')
+                    mae = tf.math.multiply(mae, weight, name='mae/weighted')
+                    fnorm_weight = tf.convert_to_tensor(
+                        options.forces_weight, dtype=dtype, name='weight/fnorm')
                     residual = tf.add_n(fnorms, name='residual')
-                    loss = tf.multiply(mae + residual, weight, name='loss')
+                    residual = tf.math.multiply(
+                        residual, fnorm_weight, name='residual/weighted')
+                    loss = tf.math.add(mae, residual, name='loss')
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
