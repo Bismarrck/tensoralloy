@@ -151,6 +151,10 @@ zjw04_defaults = {
     },
 }
 
+# Additional initial parameters
+zjw04_defaults['Nb'] = zjw04_defaults['Mo']
+zjw04_defaults['V'] = zjw04_defaults['Mo']
+
 
 class Zjw04(EamAlloyPotential):
     """
