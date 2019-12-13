@@ -102,9 +102,7 @@ class SFNN(AtomicNN):
                         v = tf.exp(tf.negative(tf.math.multiply(z, eta)))
                         v = tf.math.multiply(v, fc)
                         v = tf.math.multiply(v, masks, name='v/masked')
-                        g = tf.expand_dims(
-                            tf.reduce_sum(v, axis=[-1, -2], keep_dims=False),
-                            axis=-1, name='g')
+                        g = tf.reduce_sum(v, axis=-1, keep_dims=True, name='g')
                         gtau.append(g)
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
@@ -167,9 +165,7 @@ class SFNN(AtomicNN):
                                 fc))
                         v = tf.math.multiply(v, outer)
                         v = tf.math.multiply(v, masks, name='v/masked')
-                        g = tf.expand_dims(
-                            tf.reduce_sum(v, axis=[-1, -2], keep_dims=False),
-                            axis=-1, name='g')
+                        g = tf.reduce_sum(v, axis=-1, keep_dims=True, name='g')
                         gtau.append(g)
                 g = tf.concat(gtau, axis=-1, name='g')
                 index = clf.kbody_terms_for_element[center].index(kbody_term)

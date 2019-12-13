@@ -46,7 +46,7 @@ def get_g2_map(atoms: Atoms,
         nij_max = nij
 
     iaxis = _get_iaxis(mode)
-    g2_map = np.zeros((nij_max, iaxis + 5), dtype=np.int32)
+    g2_map = np.zeros((nij_max, iaxis + 4), dtype=np.int32)
     g2_map.fill(0)
     tlist = np.zeros(nij_max, dtype=np.int32)
     symbols = atoms.get_chemical_symbols()
@@ -81,7 +81,7 @@ def get_g2_map(atoms: Atoms,
         counters[atomi][tlist[index]] += 1
 
     # The mask
-    g2_map[:, iaxis + 4] = ilist > 0
+    g2_map[:, iaxis + 3] = ilist > 0
 
     return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
 
@@ -124,7 +124,7 @@ def get_g4_map(atoms: Atoms,
         nijk_max = nijk
 
     iaxis = _get_iaxis(mode)
-    g4_map = np.zeros((nijk_max, iaxis + 5), dtype=np.int32)
+    g4_map = np.zeros((nijk_max, iaxis + 4), dtype=np.int32)
     g4_map.fill(0)
     ilist = np.zeros(nijk_max, dtype=np.int32)
     jlist = np.zeros(nijk_max, dtype=np.int32)
@@ -156,19 +156,16 @@ def get_g4_map(atoms: Atoms,
                 n1[count] = vectors[atom_vap_i][j]
                 n2[count] = vectors[atom_vap_i][k]
                 n3[count] = vectors[atom_vap_i][k] - vectors[atom_vap_i][j]
-                idx = angular_interactions[interaction]
+                index = angular_interactions[interaction]
                 if atom_vap_i not in counters:
                     counters[atom_vap_i] = Counter()
-                if atom_vap_j not in counters[atom_vap_i]:
-                    counters[atom_vap_i][atom_vap_j] = Counter()
-                if idx not in counters[atom_vap_i][atom_vap_j]:
-                    counters[atom_vap_i][atom_vap_j][idx] = 0
-                g4_map[count, iaxis + 0] = idx
+                    if index not in counters[atom_vap_i]:
+                        counters[atom_vap_i][index] = 0
+                g4_map[count, iaxis + 0] = index
                 g4_map[count, iaxis + 1] = atom_vap_i
-                g4_map[count, iaxis + 2] = atom_vap_j
-                g4_map[count, iaxis + 3] = counters[atom_vap_i][atom_vap_j][idx]
-                g4_map[count, iaxis + 4] = 1
-                counters[atom_vap_i][atom_vap_j][idx] += 1
+                g4_map[count, iaxis + 2] = counters[atom_vap_i][index]
+                g4_map[count, iaxis + 3] = 1
+                counters[atom_vap_i][index] += 1
                 count += 1
     return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
 
@@ -374,13 +371,11 @@ class UniversalTransformer(DescriptorTransformer):
         if angular:
             return [np.int32(self._max_na_terms),
                     features["n_atoms_vap"],
-                    features["nnl_j_max"],
-                    features["nnl_k_max"]]
+                    features["nnl_a_max"]]
         else:
             return [np.int32(self._max_nr_terms),
                     features["n_atoms_vap"],
-                    features["nnl_max"],
-                    1]
+                    features["nnl_max"]]
 
     def get_v2g_map(self, features: dict, angular=False):
         """
@@ -441,8 +436,7 @@ class UniversalTransformer(DescriptorTransformer):
         assert 'g2.v2g_map' in features
 
         if self._angular:
-            assert 'nnl_j_max' in features
-            assert 'nnl_k_max' in features
+            assert 'nnl_a_max' in features
             assert 'g4.ilist' in features
             assert 'g4.jlist' in features
             assert 'g4.klist' in features
@@ -580,13 +574,12 @@ class UniversalTransformer(DescriptorTransformer):
             self._placeholders["g2.n1"] = self._create_float_2d(
                 dtype=dtype, d0=None, d1=3, name='g2.n1')
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
-                d0=None, d1=5, name='g2.v2g_map')
+                d0=None, d1=4, name='g2.v2g_map')
 
             if self._angular:
-                self._placeholders["nnl_j_max"] = self._create_int('nnl_j_max')
-                self._placeholders["nnl_k_max"] = self._create_int('nnl_k_max')
+                self._placeholders["nnl_a_max"] = self._create_int('nnl_a_max')
                 self._placeholders["g4.v2g_map"] = self._create_int_2d(
-                    d0=None, d1=5, name='g4.v2g_map')
+                    d0=None, d1=4, name='g4.v2g_map')
                 self._placeholders["g4.ilist"] = self._create_int_1d('g4.ilist')
                 self._placeholders["g4.jlist"] = self._create_int_1d('g4.jlist')
                 self._placeholders["g4.klist"] = self._create_int_1d('g4.klist')
@@ -689,8 +682,7 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict.update(g2.as_dict())
 
         if self._angular:
-            feed_dict['nnl_j_max'] = np.int32(g4.v2g_map[:, 2].max() + 1)
-            feed_dict['nnl_k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
+            feed_dict['nnl_a_max'] = np.int32(g4.v2g_map[:, 2].max() + 1)
             feed_dict.update(g4.as_dict())
 
         return feed_dict

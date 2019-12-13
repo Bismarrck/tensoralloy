@@ -106,7 +106,7 @@ def dynamic_partition(dists_and_masks: dict,
                 masks = tf.convert_to_tensor(masks, name='masks')
 
                 if mode == tf_estimator.ModeKeys.PREDICT:
-                    assert dists.shape.ndims == 5
+                    assert dists.shape.ndims == 4
                     dists = tf.expand_dims(dists, axis=1)
                     masks = tf.expand_dims(masks, axis=0)
                     max_occurs[element] = tf.shape(dists)[3]
