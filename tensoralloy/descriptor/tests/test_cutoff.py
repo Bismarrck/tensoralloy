@@ -13,7 +13,9 @@ from nose.tools import assert_less
 from tensoralloy.descriptor.cutoff import cosine_cutoff
 from tensoralloy.descriptor.cutoff import polynomial_cutoff
 from tensoralloy.descriptor.cutoff import meam_cutoff
-from tensoralloy.precision import get_float_dtype, set_float_precision, Precision
+from tensoralloy.descriptor.cutoff import tersoff_cutoff
+from tensoralloy.precision import get_float_dtype, set_float_precision
+from tensoralloy.precision import Precision
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -103,12 +105,35 @@ def test_meam_cutoff():
     """
     x = np.linspace(-1.0, 2.0, num=11, endpoint=True)
     y = np.asarray([meam_cutoff_simple(xi) for xi in x])
-    print(y)
 
     with tf.Session() as sess:
         z = sess.run(meam_cutoff(
             tf.convert_to_tensor(x, dtype=tf.float64, name='x')))
-        print(z)
+        assert_less(np.abs(y - z).max(), 1e-8)
+
+
+def tersoff_cutoff_simple(r, R, D):
+    """
+    A plain implementation of the Tersoff cutoff function.
+    """
+    if r < R - D:
+        return 1.0
+    elif r > R + D:
+        return 0.0
+    else:
+        return 0.5 - 0.5 * np.sin(0.5 * np.pi * (r - R) / D)
+
+
+def test_tersoff_cutoff():
+    """
+    Test the Tersoff cutoff function.
+    """
+    x = np.linspace(0.0, 4.0, num=41, endpoint=True)
+    y = np.asarray([tersoff_cutoff_simple(xi, 3.0, 0.2) for xi in x])
+    with tf.Session() as sess:
+        z = sess.run(
+            tersoff_cutoff(
+                tf.convert_to_tensor(x, dtype=tf.float64, name='x'), 3.0, 0.2))
         assert_less(np.abs(y - z).max(), 1e-8)
 
 
