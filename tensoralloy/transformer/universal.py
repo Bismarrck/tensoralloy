@@ -140,7 +140,10 @@ def get_g4_map(atoms: Atoms,
         nijk = 0
         for atomi, nl in indices.items():
             n = len(nl)
-            nijk += (n - 1) * n // 2
+            if symmetric:
+                nijk += (n - 1) * n // 2
+            else:
+                nijk += (n - 1) * n
         nijk_max = nijk
 
     iaxis = _get_iaxis(mode)
@@ -165,11 +168,16 @@ def get_g4_map(atoms: Atoms,
             symbolj = symbols[atom_local_j]
             if symmetric:
                 kstart = j + 1
+            elif atom_vap_i == atom_vap_j:
+                continue
             else:
                 kstart = 0
             for k in range(kstart, len(nl)):
                 atom_vap_k = nl[k]
                 atom_local_k = vap.gsl_to_local_map[atom_vap_k]
+                if not symmetric and \
+                        (atom_vap_k == atom_vap_j or atom_vap_k == atom_vap_i):
+                    continue
                 symbolk = symbols[atom_local_k]
                 ilist[count] = atom_vap_i
                 jlist[count] = atom_vap_j
