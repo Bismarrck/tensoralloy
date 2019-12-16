@@ -12,7 +12,7 @@ from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import get_pulay_stress
+from tensoralloy.utils import get_pulay_stress, szudzik_pairing_nd
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap
@@ -28,6 +28,15 @@ def _get_iaxis(mode: tf_estimator.ModeKeys):
         return 0
     else:
         return 1
+
+
+def get_ijn_id(ilist, jlist, n1, index):
+    """
+    Return the unique id of (i, j, nx, ny, nz)
+    """
+    ij_id = szudzik_pairing_nd(ilist[index], jlist[index])
+    n_id = szudzik_pairing_nd(*n1[index].astype(int))
+    return ij_id, n_id
 
 
 def get_g2_map(atoms: Atoms,
@@ -46,7 +55,7 @@ def get_g2_map(atoms: Atoms,
         nij_max = nij
 
     iaxis = _get_iaxis(mode)
-    g2_map = np.zeros((nij_max, iaxis + 4), dtype=np.int32)
+    g2_map = np.zeros((nij_max, iaxis + 5), dtype=np.int32)
     g2_map.fill(0)
     tlist = np.zeros(nij_max, dtype=np.int32)
     symbols = atoms.get_chemical_symbols()
@@ -71,19 +80,27 @@ def get_g2_map(atoms: Atoms,
 
     # The indices of center atoms
     counters = {}
+    ijn_id_map = {}
     for index in range(nij):
         atomi = ilist[index]
         if atomi not in counters:
             counters[atomi] = Counter()
 
         # The indices of the pair atoms
-        g2_map[index, iaxis + 2] = counters[atomi][tlist[index]]
+        inc = counters[atomi][tlist[index]]
+        g2_map[index, iaxis + 2] = inc
+        g2_map[index, iaxis + 3] = 0
         counters[atomi][tlist[index]] += 1
 
-    # The mask
-    g2_map[:, iaxis + 3] = ilist > 0
+        # The `ijn_id` map
+        ijn_id = get_ijn_id(ilist, jlist, n1, index)
+        ijn_id_map[ijn_id] = inc
 
-    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+        # The mask
+        g2_map[index, iaxis + 4] = ilist[index] > 0
+
+    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    return g2, ijn_id_map
 
 
 def get_g4_map(atoms: Atoms,
@@ -93,18 +110,21 @@ def get_g4_map(atoms: Atoms,
                vap: VirtualAtomMap,
                mode: tf_estimator.ModeKeys,
                g2: G2IndexedSlices = None,
+               ijn_id_map: Dict[int, int] = None,
                nijk_max: int = None,
+               symmetric=True,
                dtype=np.float32):
     """
     Build the base `v2g_map`.
     """
     if g2 is None:
-        g2 = get_g2_map(atoms=atoms,
-                        rc=rc,
-                        interactions=radial_interactions,
-                        vap=vap,
-                        mode=mode,
-                        dtype=dtype)
+        g2, ijn_id_map = get_g2_map(
+            atoms=atoms,
+            rc=rc,
+            interactions=radial_interactions,
+            vap=vap,
+            mode=mode,
+            dtype=dtype)
     indices = {}
     vectors = {}
     for i, atom_vap_i in enumerate(g2.ilist):
@@ -124,7 +144,7 @@ def get_g4_map(atoms: Atoms,
         nijk_max = nijk
 
     iaxis = _get_iaxis(mode)
-    g4_map = np.zeros((nijk_max, iaxis + 4), dtype=np.int32)
+    g4_map = np.zeros((nijk_max, iaxis + 5), dtype=np.int32)
     g4_map.fill(0)
     ilist = np.zeros(nijk_max, dtype=np.int32)
     jlist = np.zeros(nijk_max, dtype=np.int32)
@@ -139,33 +159,47 @@ def get_g4_map(atoms: Atoms,
     for atom_vap_i, nl in indices.items():
         atom_local_i = vap.gsl_to_local_map[atom_vap_i]
         symboli = symbols[atom_local_i]
-        prefix = '{}'.format(symboli)
         for j in range(len(nl)):
             atom_vap_j = nl[j]
             atom_local_j = vap.gsl_to_local_map[atom_vap_j]
             symbolj = symbols[atom_local_j]
-            for k in range(j + 1, len(nl)):
+            if symmetric:
+                kstart = j + 1
+            else:
+                kstart = 0
+            for k in range(kstart, len(nl)):
                 atom_vap_k = nl[k]
                 atom_local_k = vap.gsl_to_local_map[atom_vap_k]
                 symbolk = symbols[atom_local_k]
-                interaction = '{}{}'.format(
-                    prefix, ''.join(sorted([symbolj, symbolk])))
                 ilist[count] = atom_vap_i
                 jlist[count] = atom_vap_j
                 klist[count] = atom_vap_k
                 n1[count] = vectors[atom_vap_i][j]
                 n2[count] = vectors[atom_vap_i][k]
                 n3[count] = vectors[atom_vap_i][k] - vectors[atom_vap_i][j]
+                if symmetric:
+                    interaction = \
+                        f"{symboli}{''.join(sorted([symbolj, symbolk]))}"
+                    if symbolj < symbolk:
+                        ijn_id = get_ijn_id(ilist, jlist, n1, count)
+                    else:
+                        ijn_id = get_ijn_id(ilist, klist, n2, count)
+                else:
+                    interaction = f"{symboli}{symbolj}{symbolk}"
+                    ijn_id = get_ijn_id(ilist, jlist, n1, count)
                 index = angular_interactions[interaction]
                 if atom_vap_i not in counters:
-                    counters[atom_vap_i] = Counter()
-                    if index not in counters[atom_vap_i]:
-                        counters[atom_vap_i][index] = 0
+                    counters[atom_vap_i] = {}
+                if index not in counters[atom_vap_i]:
+                    counters[atom_vap_i][index] = Counter()
+                if ijn_id not in counters[atom_vap_i][index]:
+                    counters[atom_vap_i][index][ijn_id] = 0
                 g4_map[count, iaxis + 0] = index
                 g4_map[count, iaxis + 1] = atom_vap_i
-                g4_map[count, iaxis + 2] = counters[atom_vap_i][index]
-                g4_map[count, iaxis + 3] = 1
-                counters[atom_vap_i][index] += 1
+                g4_map[count, iaxis + 2] = ijn_id_map[ijn_id]
+                g4_map[count, iaxis + 3] = counters[atom_vap_i][index][ijn_id]
+                g4_map[count, iaxis + 4] = 1
+                counters[atom_vap_i][index][ijn_id] += 1
                 count += 1
     return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
 
@@ -178,7 +212,7 @@ class UniversalTransformer(DescriptorTransformer):
     gather_fn = staticmethod(tf.gather)
 
     def __init__(self, elements: List[str], rcut, acut=None, angular=False,
-                 periodic=True):
+                 periodic=True, symmetric=True):
         """
         The initialization metho.d
 
@@ -193,6 +227,9 @@ class UniversalTransformer(DescriptorTransformer):
         angular : bool
             A boolean indicating whether angular interactions shall be included
             or not. Defaults to False.
+        periodic : bool
+
+        symmetric : bool
 
         """
         DescriptorTransformer.__init__(self)
@@ -205,7 +242,7 @@ class UniversalTransformer(DescriptorTransformer):
             acut = rcut
 
         all_kbody_terms, kbody_terms_for_element, elements = \
-            get_kbody_terms(elements, angular=angular)
+            get_kbody_terms(elements, angular=angular, symmetric=symmetric)
 
         angular_kbody_terms = []
         radial_kbody_terms = []
@@ -237,7 +274,7 @@ class UniversalTransformer(DescriptorTransformer):
         self._n_elements = len(elements)
         self._periodic = periodic
         self._angular = angular
-        self._use_new_g4 = True
+        self._symmetric = symmetric
 
     def as_dict(self) -> Dict:
         """
@@ -245,7 +282,7 @@ class UniversalTransformer(DescriptorTransformer):
         """
         return {'class': self.__class__.__name__, 'rcut': self._rcut,
                 'acut': self._acut, 'angular': self._angular,
-                'periodic': self._periodic}
+                'periodic': self._periodic, 'symmetric': self._symmetric}
 
     @property
     def rcut(self) -> float:
@@ -371,15 +408,17 @@ class UniversalTransformer(DescriptorTransformer):
         if angular:
             return [np.int32(self._max_na_terms),
                     features["n_atoms_vap"],
-                    features["nnl_a_max"]]
+                    features["nnl_max"],
+                    features["ij2k_max"]]
         else:
             return [np.int32(self._max_nr_terms),
                     features["n_atoms_vap"],
-                    features["nnl_max"]]
+                    features["nnl_max"],
+                    1]
 
     def get_v2g_map(self, features: dict, angular=False):
         """
-        A wrapper function to get `v2g_map`.
+        A wrapper function to get `v2g_map` and `v2g_masks`.
         """
         if angular:
             key = "g4.v2g_map"
@@ -436,7 +475,7 @@ class UniversalTransformer(DescriptorTransformer):
         assert 'g2.v2g_map' in features
 
         if self._angular:
-            assert 'nnl_a_max' in features
+            assert 'ij2k_max' in features
             assert 'g4.ilist' in features
             assert 'g4.jlist' in features
             assert 'g4.klist' in features
@@ -454,7 +493,7 @@ class UniversalTransformer(DescriptorTransformer):
                                    features["g2.n1"],
                                    name='rij')
             shape = self.get_g_shape(features, angular=False)
-            v2g_map, v2g_masks = self.get_v2g_map(features, angular=False)
+            v2g_map, v2g_masks = self.get_v2g_map(features)
 
             dx = tf.identity(dij[..., 0], name='dijx')
             dy = tf.identity(dij[..., 1], name='dijy')
@@ -574,12 +613,12 @@ class UniversalTransformer(DescriptorTransformer):
             self._placeholders["g2.n1"] = self._create_float_2d(
                 dtype=dtype, d0=None, d1=3, name='g2.n1')
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
-                d0=None, d1=4, name='g2.v2g_map')
+                d0=None, d1=5, name='g2.v2g_map')
 
             if self._angular:
-                self._placeholders["nnl_a_max"] = self._create_int('nnl_a_max')
+                self._placeholders["ij2k_max"] = self._create_int('ij2k_max')
                 self._placeholders["g4.v2g_map"] = self._create_int_2d(
-                    d0=None, d1=4, name='g4.v2g_map')
+                    d0=None, d1=5, name='g4.v2g_map')
                 self._placeholders["g4.ilist"] = self._create_int_1d('g4.ilist')
                 self._placeholders["g4.jlist"] = self._create_int_1d('g4.jlist')
                 self._placeholders["g4.klist"] = self._create_int_1d('g4.klist')
@@ -623,21 +662,24 @@ class UniversalTransformer(DescriptorTransformer):
                     angular_interactions[kbody_term] = i - len(self._elements)
 
         dtype = get_float_dtype().as_numpy_dtype
-        g2 = get_g2_map(atoms=atoms,
-                        rc=self._rcut,
-                        interactions=radial_interactions,
-                        vap=vap,
-                        mode=tf_estimator.ModeKeys.PREDICT,
-                        nij_max=None,
-                        dtype=dtype)
+        g2, ijn_id_map = get_g2_map(atoms=atoms,
+            rc=self._rcut,
+            interactions=radial_interactions,
+            vap=vap,
+            mode=tf_estimator.ModeKeys.PREDICT,
+            nij_max=None,
+            dtype=dtype)
         if self._angular:
             if np.round(self._acut - self._rcut, 2) == 0.0:
                 ref_g2 = g2
+                ref_ijn_id_map = ijn_id_map
             else:
                 ref_g2 = None
+                ref_ijn_id_map = None
             g4 = get_g4_map(atoms,
                             rc=self._acut,
                             g2=ref_g2,
+                            ijn_id_map=ref_ijn_id_map,
                             radial_interactions=radial_interactions,
                             angular_interactions=angular_interactions,
                             vap=vap,
@@ -682,7 +724,7 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict.update(g2.as_dict())
 
         if self._angular:
-            feed_dict['nnl_a_max'] = np.int32(g4.v2g_map[:, 2].max() + 1)
+            feed_dict['ij2k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
             feed_dict.update(g4.as_dict())
 
         return feed_dict
