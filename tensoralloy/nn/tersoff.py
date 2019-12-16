@@ -114,7 +114,6 @@ class Tersoff(BasicNN):
 
         """
         with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
-            collections = [self.default_collection]
             clf = self._transformer
             dtype = get_float_dtype()
             assert isinstance(clf, UniversalTransformer)
@@ -149,6 +148,7 @@ class Tersoff(BasicNN):
                     c2 = tf.square(c, name='c2')
                     d2 = tf.square(d, name='d2')
                     with tf.variable_scope(f"{kbody_term}"):
+                        masks = tf.squeeze(masks, axis=1, name='masks')
                         rij = tf.squeeze(dists[0], axis=1, name='rij')
                         rik = tf.squeeze(dists[4], axis=1, name='rik')
                         rjk = tf.squeeze(dists[8], axis=1, name='rjk')
@@ -170,6 +170,7 @@ class Tersoff(BasicNN):
                         z = tf.math.multiply(fc * gtheta,
                                              tf.math.exp(l3m * drijkm),
                                              name='zeta/single')
+                        z = tf.math.multiply(z, masks, name='zeta/masked')
                         z = tf.reduce_sum(z, axis=-1, keepdims=True, name='zeta')
                         zeta[f'{center}{mid}'] = z
 
@@ -189,15 +190,16 @@ class Tersoff(BasicNN):
                         R = tf.convert_to_tensor(3.0, dtype=dtype, name='R')
                         D = tf.convert_to_tensor(0.2, dtype=dtype, name='D')
                         A = tf.convert_to_tensor(3264.7, dtype=dtype, name='A')
-                        B = tf.convert_to_tensor(0.2, dtype=dtype, name='B')
-                        lambda1 = tf.convert_to_tensor(3.2394, dtype=dtype, name='lambda3')
-                        lambda2 = tf.convert_to_tensor(95.373, dtype=dtype, name='lambda3')
+                        B = tf.convert_to_tensor(95.373, dtype=dtype, name='B')
+                        lambda1 = tf.convert_to_tensor(3.2394, dtype=dtype, name='lambda1')
+                        lambda2 = tf.convert_to_tensor(1.3258, dtype=dtype, name='lambda2')
                         beta = tf.convert_to_tensor(0.33675, dtype=dtype, name='beta')
                         n = tf.convert_to_tensor(22.956, dtype=dtype, name='n')
                     with tf.variable_scope(f"{kbody_term}"):
+                        masks = tf.squeeze(masks, axis=1, name='masks')
                         rij = tf.squeeze(dists[0], axis=1, name='rij')
                         fc = tersoff_cutoff(rij, R, D, name='fc')
-                        fr = tf.math.multiply(A, tf.exp(tf.negative(lambda1 * rij)), name='fr')
+                        fr = tf.math.multiply(A, tf.exp(-lambda1 * rij), name='fr')
                         fa = tf.negative(tf.math.multiply(B, tf.exp(tf.negative(lambda2 * rij))), name='fa')
                         bz = tf.math.multiply(beta, zeta[f'{center}{pair}'], name='bz')
                         bzn = safe_pow(bz, n)
@@ -205,6 +207,7 @@ class Tersoff(BasicNN):
                         bij = safe_pow(one + bzn, coef)
                         vij = tf.math.multiply(fc, fr + bij * fa, name='vij')
                         vij = tf.math.multiply(half, vij, name='vij/half')
+                        vij = tf.math.multiply(vij, masks, name='vij/masked')
                         outputs[kbody_term] = tf.reduce_sum(vij, axis=[-1, -2], keepdims=False, name='vij/sum')
 
             y_atomic = self._dynamic_stitch(outputs, max_occurs)

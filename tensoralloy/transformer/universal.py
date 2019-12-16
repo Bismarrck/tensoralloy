@@ -30,12 +30,12 @@ def _get_iaxis(mode: tf_estimator.ModeKeys):
         return 1
 
 
-def get_ijn_id(ilist, jlist, n1, index):
+def get_ijn_id(i, j, nx, ny, nz):
     """
     Return the unique id of (i, j, nx, ny, nz)
     """
-    ij_id = szudzik_pairing_nd(ilist[index], jlist[index])
-    n_id = szudzik_pairing_nd(*n1[index].astype(int))
+    ij_id = szudzik_pairing_nd(int(i), int(j))
+    n_id = szudzik_pairing_nd(int(nx), int(ny), int(nz))
     return ij_id, n_id
 
 
@@ -93,7 +93,7 @@ def get_g2_map(atoms: Atoms,
         counters[atomi][tlist[index]] += 1
 
         # The `ijn_id` map
-        ijn_id = get_ijn_id(ilist, jlist, n1, index)
+        ijn_id = get_ijn_id(ilist[index], jlist[index], *n1[index])
         ijn_id_map[ijn_id] = inc
 
         # The mask
@@ -140,6 +140,7 @@ def get_g4_map(atoms: Atoms,
         nijk = 0
         for atomi, nl in indices.items():
             n = len(nl)
+            # nijk += (n - 1) * n // 2
             if symmetric:
                 nijk += (n - 1) * n // 2
             else:
@@ -168,33 +169,33 @@ def get_g4_map(atoms: Atoms,
             symbolj = symbols[atom_local_j]
             if symmetric:
                 kstart = j + 1
-            elif atom_vap_i == atom_vap_j:
-                continue
             else:
                 kstart = 0
             for k in range(kstart, len(nl)):
                 atom_vap_k = nl[k]
                 atom_local_k = vap.gsl_to_local_map[atom_vap_k]
-                if not symmetric and \
-                        (atom_vap_k == atom_vap_j or atom_vap_k == atom_vap_i):
-                    continue
                 symbolk = symbols[atom_local_k]
+                if symmetric:
+                    interaction = \
+                        f"{symboli}{''.join(sorted([symbolj, symbolk]))}"
+                    if symbolj < symbolk:
+                        ijn_id = get_ijn_id(
+                            atom_vap_i, atom_vap_j, *vectors[atom_vap_i][j])
+                    else:
+                        ijn_id = get_ijn_id(
+                            atom_vap_i, atom_vap_k, *vectors[atom_vap_i][k])
+                else:
+                    ijn_id = get_ijn_id(atom_vap_i, atom_vap_j, *vectors[atom_vap_i][j])
+                    ikn_id = get_ijn_id(atom_vap_i, atom_vap_k, *vectors[atom_vap_i][k])
+                    if ijn_id == ikn_id:
+                        continue
+                    interaction = f"{symboli}{symbolj}{symbolk}"
                 ilist[count] = atom_vap_i
                 jlist[count] = atom_vap_j
                 klist[count] = atom_vap_k
                 n1[count] = vectors[atom_vap_i][j]
                 n2[count] = vectors[atom_vap_i][k]
                 n3[count] = vectors[atom_vap_i][k] - vectors[atom_vap_i][j]
-                if symmetric:
-                    interaction = \
-                        f"{symboli}{''.join(sorted([symbolj, symbolk]))}"
-                    if symbolj < symbolk:
-                        ijn_id = get_ijn_id(ilist, jlist, n1, count)
-                    else:
-                        ijn_id = get_ijn_id(ilist, klist, n2, count)
-                else:
-                    interaction = f"{symboli}{symbolj}{symbolk}"
-                    ijn_id = get_ijn_id(ilist, jlist, n1, count)
                 index = angular_interactions[interaction]
                 if atom_vap_i not in counters:
                     counters[atom_vap_i] = {}
@@ -691,6 +692,7 @@ class UniversalTransformer(DescriptorTransformer):
                             radial_interactions=radial_interactions,
                             angular_interactions=angular_interactions,
                             vap=vap,
+                            symmetric=self._symmetric,
                             mode=tf_estimator.ModeKeys.PREDICT,
                             nijk_max=None,
                             dtype=dtype)
