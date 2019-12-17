@@ -220,6 +220,7 @@ class GraphKeys:
     EAM_FS_NN_VARIABLES = 'eam_fs_nn_variables'
     EAM_POTENTIAL_VARIABLES = 'eam_potential_variables'
     DEEPMD_VARIABLES = "deepmd_variables"
+    TERSOFF_VARIABLES = "tersoff_variables"
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'
