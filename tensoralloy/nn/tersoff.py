@@ -10,8 +10,10 @@ from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict
 from collections import Counter
 
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.utils import GraphKeys
 from tensoralloy.descriptor.cutoff import tersoff_cutoff
+from tensoralloy.io.lammps import read_tersoff_file
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.utils import log_tensor
@@ -23,6 +25,25 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+# The default Tersoff parameters
+default_tersoff_params = {
+    "m": 3.0,
+    "gamma": 1.0,
+    "lambda3": 1.3258,
+    "c": 4.8381,
+    "d": 2.0417,
+    "costheta0": 0.0,
+    "n": 22.956,
+    "beta": 0.33675,
+    "lambda2": 1.3258,
+    "B": 95.373,
+    "R": 3.0,
+    "D": 0.2,
+    "lambda1": 3.2394,
+    "A": 3264.7
+}
+
+
 class Tersoff(BasicNN):
     """
     The Tersoff interaction potential.
@@ -30,12 +51,61 @@ class Tersoff(BasicNN):
 
     def __init__(self,
                  elements: List[str],
+                 custom_potentials=None,
+                 symmetric_mixing=False,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'stress')):
+        """
+        Initialization method.
+        """
         super(Tersoff, self).__init__(elements=elements, hidden_sizes=None,
                                       minimize_properties=minimize_properties,
                                       export_properties=export_properties)
         self._nn_scope = "Tersoff"
+        self._custom_potentials = custom_potentials
+        self._params = {}
+        self._symmetric_mixing = symmetric_mixing
+        self._variable_pool = {}
+        self._read_initial_params()
+
+    def _read_initial_params(self):
+        """
+        Read the initial parameters.
+        """
+        if self._custom_potentials is None:
+            for kbody_term in get_kbody_terms(
+                    self._elements, angular=True, symmetric=False)[0]:
+                if len(get_elements_from_kbody_term(kbody_term)) == 3:
+                    self._params[kbody_term] = default_tersoff_params
+        else:
+            tersoff = read_tersoff_file(self._custom_potentials)
+            assert self._elements == tersoff.elements
+            for kbody_term, params in tersoff.params.items():
+                self._params[kbody_term] = params
+
+    def _is_angular_parameter(self, parameter):
+        return True
+
+    def _get_variable(self, kbody_term, parameter):
+        """
+
+        """
+        dtype = get_float_dtype()
+
+        if self._symmetric_mixing:
+            pass
+
+        with tf.variable_scope(kbody_term, reuse=True):
+            var = tf.get_variable(name=parameter, dtype=dtype,
+                                  initializer=tf.constant_initializer(
+                                      value=self._params[section][parameter],
+                                   dtype=dtype),
+                               collections=[
+                                   GraphKeys.TERSOFF_VARIABLES,
+                                   tf.GraphKeys.MODEL_VARIABLES,
+                               ],
+                               trainable=True)
+            return var
 
     def _dynamic_stitch(self,
                         outputs: Dict[str, tf.Tensor],
