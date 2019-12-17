@@ -18,7 +18,8 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["LAMMPS_COMMAND", "SetFL", "read_adp_setfl",
-           "read_eam_alloy_setfl", "write_adp_setfl"]
+           "read_eam_alloy_setfl", "write_adp_setfl",
+           "read_tersoff_file"]
 
 
 def get_lammps_command():
@@ -260,3 +261,45 @@ def write_adp_setfl(nrho, drho, nr, dr, eampots, pairpots, out=sys.stdout,
         nr, dr, eampots, pairpots[nab * 1: nab * 2], out, False)
     _write_setfl_pairpots(
         nr, dr, eampots, pairpots[nab * 2: nab * 3], out, False)
+
+
+@dataclass
+class TersoffPotential:
+    """
+    The representation of a Lammps Tersoff potential file.
+    """
+    elements: List[str]
+    params: Dict[str, Dict[str, float]]
+
+
+# Parameter names of the standard Tersoff potential
+TERSOFF_KEYS = ["m", "gamma", "lambda3", "c", "d", "costheta0", "n",
+                "beta", "lambda2", "B", "R", "D", "lambda1", "A"]
+
+
+def read_tersoff_file(filename: str) -> TersoffPotential:
+    """
+    Read Lammps Tersoff potential file.
+    """
+
+    params = {}
+    elements = []
+    stack = []
+    kbody_term = None
+    with open(filename) as fp:
+        for line in fp:
+            line = line.strip()
+            if line.startswith("#") or line == "":
+                continue
+            splits = line.split()
+            if len(splits) == 10:
+                kbody_term = f"{splits[0]}{splits[1]}{splits[2]}"
+                elements.extend(splits[:3])
+                stack.extend(splits[3:])
+            elif len(splits) == 7:
+                stack.extend(splits)
+                params[kbody_term] = {
+                    key: float(stack[i]) for i, key in enumerate(TERSOFF_KEYS)}
+                stack.clear()
+
+    return TersoffPotential(sorted(list(set(elements))), params)

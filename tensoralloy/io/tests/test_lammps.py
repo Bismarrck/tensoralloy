@@ -11,6 +11,7 @@ from nose.tools import assert_almost_equal, assert_equal
 from os.path import join
 
 from tensoralloy.io.lammps import read_eam_alloy_setfl, read_adp_setfl
+from tensoralloy.io.lammps import read_tersoff_file
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
@@ -64,6 +65,18 @@ def test_read_adp_setfl():
     assert_almost_equal(w[4], 2.6693870526066510e-01, delta=1e-8)
     assert_almost_equal(w[5], 2.6682250567962379e-01, delta=1e-8)
     assert_almost_equal(w[6], 2.6670634177050295e-01, delta=1e-8)
+
+
+def test_read_tersoff():
+    """
+    Test the function `read_tersoff_file`.
+    """
+    filename = join(test_dir(), 'lammps', 'SiC.tersoff')
+    p = read_tersoff_file(filename)
+
+    assert_equal(p.elements, ['C', 'Si'])
+    assert_almost_equal(p.params['SiSiSi']['n'], .78734)
+    assert_almost_equal(p.params['SiCC']['lambda1'], 2.9839)
 
 
 if __name__ == "__main__":
