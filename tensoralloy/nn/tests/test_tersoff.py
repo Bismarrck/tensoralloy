@@ -55,11 +55,14 @@ class TersoffTest(unittest.TestCase):
         if system == TestSystem.Si:
             pot_file = 'Si.tersoff'
             pair_coeff = ['* * Si.tersoff Si']
+            specorder = ['Si']
         else:
             pot_file = 'SiC.tersoff'
-            pair_coeff = ['* * Si.tersoff Si C Si']
+            pair_coeff = ['* * SiC.tersoff Si C']
+            specorder = ['Si', 'C']
         return LAMMPS(files=[join(test_dir(True), 'lammps', pot_file)],
                       binary_dump=False,
+                      parameters={"specorder": specorder},
                       write_velocities=False,
                       tmp_dir=self.work_dir,
                       keep_tmp_files=False,
@@ -84,7 +87,8 @@ class TersoffTest(unittest.TestCase):
         with tf.Graph().as_default():
             with precision_scope("high"):
                 elements = sorted(list(set(atoms.get_chemical_symbols())))
-                nn = Tersoff(elements)
+                potential = join(test_dir(), "lammps", "Si.tersoff")
+                nn = Tersoff(elements, custom_potentials=potential)
                 clf = UniversalTransformer(
                     elements, rcut=3.2, acut=3.2, angular=True, symmetric=False)
                 nn.attach_transformer(clf)
@@ -98,16 +102,25 @@ class TersoffTest(unittest.TestCase):
                     assert_array_almost_equal(
                         results['forces'], forces, delta=1e-5)
 
-    @unittest.skip
     def test_sic(self):
+        """
+        Test the SiC system.
+        """
         atoms = read(join(data_dir(), "crystals", "SiC_mp-8062_primitive.cif"))
+        delta = np.random.uniform(-0.05, 0.05, size=(len(atoms), 3))
+        atoms.set_positions(atoms.positions + delta)
+        atoms.wrap()
         calc = self.get_lammps_calculator(system=TestSystem.SiC)
         pe = calc.get_potential_energy(atoms)
+        forces = calc.get_forces(atoms)
 
         with tf.Graph().as_default():
             with precision_scope("high"):
                 elements = list(set(atoms.get_chemical_symbols()))
-                nn = Tersoff(elements)
+                potential = join(test_dir(), "lammps", "SiC.tersoff")
+                nn = Tersoff(elements,
+                             custom_potentials=potential,
+                             symmetric_mixing=False)
                 clf = UniversalTransformer(
                     elements, rcut=3.0, acut=3.0, angular=True, symmetric=False)
                 nn.attach_transformer(clf)
@@ -116,8 +129,10 @@ class TersoffTest(unittest.TestCase):
                     mode=tf_estimator.ModeKeys.PREDICT)
                 with tf.Session() as sess:
                     tf.global_variables_initializer().run()
-                    print(sess.run(predictions))
-                    print(pe)
+                    results = sess.run(predictions)
+                    assert_almost_equal(results['energy'], pe)
+                    assert_array_almost_equal(
+                        results['forces'][[1, 0]], forces, delta=1e-5)
 
     def tearDown(self):
         """

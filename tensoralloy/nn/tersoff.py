@@ -68,6 +68,17 @@ class Tersoff(BasicNN):
         self._variable_pool = {}
         self._read_initial_params()
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        return {"class": self.__class__.__name__,
+                "elements": self._elements,
+                "custom_potentials": self._custom_potentials,
+                "symmetric_mixing": self._symmetric_mixing,
+                "minimize_properties": self._minimize_properties,
+                "export_properties": self._export_properties}
+
     def _read_initial_params(self):
         """
         Read the initial parameters.
@@ -83,29 +94,77 @@ class Tersoff(BasicNN):
             for kbody_term, params in tersoff.params.items():
                 self._params[kbody_term] = params
 
-    def _is_angular_parameter(self, parameter):
-        return True
-
-    def _get_variable(self, kbody_term, parameter):
+    def _get_or_create_variable(self, section, parameter, trainable=False):
         """
+        Get or create the variable.
+        """
+        query = f"{section}.{parameter}"
+        if query in self._variable_pool:
+            return self._variable_pool[query]
+        value = self._params[section][parameter]
+        var = self._create_variable(parameter, value, trainable=trainable)
+        self._variable_pool[query] = var
+        return var
 
+    def _get_radial_variable(self, kbody_term, parameter, trainable=True):
+        """
+        Get a radial variable.
+        """
+        element1, element2 = get_elements_from_kbody_term(kbody_term)
+        if self._symmetric_mixing:
+            if element1 < element2:
+                full = f'{element1}{element2}{element2}'
+            else:
+                kbody_term = f'{element2}{element1}'
+                full = f'{element2}{element1}{element1}'
+        else:
+            full = f'{element1}{element2}{element2}'
+        return self._get_or_create_variable(full, parameter, trainable)
+
+    def _get_angular_variable(self, kbody_term, parameter, trainable=True):
+        """
+        Get an angular variable.
+        """
+        return self._get_or_create_variable(kbody_term, parameter, trainable)
+
+    @staticmethod
+    def _create_variable(parameter, value, trainable=True):
+        """
+        A helper function for creating a variable.
         """
         dtype = get_float_dtype()
-
-        if self._symmetric_mixing:
-            pass
-
-        with tf.variable_scope(kbody_term, reuse=True):
-            var = tf.get_variable(name=parameter, dtype=dtype,
+        with tf.variable_scope(f"Parameters", reuse=tf.AUTO_REUSE):
+            collections = [
+                GraphKeys.TERSOFF_VARIABLES,
+                tf.GraphKeys.MODEL_VARIABLES,
+                tf.GraphKeys.GLOBAL_VARIABLES,
+            ]
+            if trainable:
+                collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
+            var = tf.get_variable(parameter,
+                                  shape=(), dtype=dtype,
                                   initializer=tf.constant_initializer(
-                                      value=self._params[section][parameter],
-                                   dtype=dtype),
-                               collections=[
-                                   GraphKeys.TERSOFF_VARIABLES,
-                                   tf.GraphKeys.MODEL_VARIABLES,
-                               ],
-                               trainable=True)
+                                      value=value, dtype=dtype),
+                                  regularizer=None,
+                                  trainable=trainable,
+                                  collections=collections,
+                                  aggregation=tf.VariableAggregation.MEAN)
             return var
+
+    def attach_transformer(self, clf: UniversalTransformer):
+        rmax = 0.0
+        dmax = 0.0
+        for kbody_term, params in self._params.items():
+            rmax = max(params['R'], rmax)
+            dmax = max(params['D'], dmax)
+        rdmax = rmax + dmax
+        rcut = clf.rcut
+        if rcut < rdmax:
+            raise ValueError(f"The rcut {rcut:.2f} < max(R + D) = {rdmax:.2f}")
+        if clf.rcut != clf.acut:
+            raise ValueError(f"rcut {rcut:.2f} != acut {clf.acut}")
+
+        super(Tersoff, self).attach_transformer(clf)
 
     def _dynamic_stitch(self,
                         outputs: Dict[str, tf.Tensor],
@@ -193,7 +252,7 @@ class Tersoff(BasicNN):
                 one = tf.convert_to_tensor(1.0, dtype=dtype, name='one')
                 half = tf.convert_to_tensor(0.5, dtype=dtype, name='half')
 
-            zeta = {}
+            zeta_dict: Dict = {}
 
             with tf.name_scope("Angular"):
                 angular = dynamic_partition(
@@ -206,18 +265,23 @@ class Tersoff(BasicNN):
 
                 for kbody_term, (dists, masks) in angular.items():
                     center, mid = get_elements_from_kbody_term(kbody_term)[0: 2]
-                    with tf.name_scope("Parameters"):
-                        gamma = tf.convert_to_tensor(1.0, dtype=dtype, name='gamma')
-                        c = tf.convert_to_tensor(4.8381, dtype=dtype, name='c')
-                        d = tf.convert_to_tensor(2.0417, dtype=dtype, name='d')
-                        costheta0 = tf.convert_to_tensor(0.0, dtype=dtype, name='costheta0')
-                        R = tf.convert_to_tensor(3.0, dtype=dtype, name='R')
-                        D = tf.convert_to_tensor(0.2, dtype=dtype, name='D')
-                        m = tf.convert_to_tensor(3.0, dtype=dtype, name='m')
-                        lambda3 = tf.convert_to_tensor(1.3258, dtype=dtype, name='lambda3')
-                    c2 = tf.square(c, name='c2')
-                    d2 = tf.square(d, name='d2')
                     with tf.variable_scope(f"{kbody_term}"):
+                        gamma = self._get_angular_variable(kbody_term, "gamma")
+                        c = self._get_angular_variable(kbody_term, "c")
+                        d = self._get_angular_variable(kbody_term, "d")
+                        costheta0 = self._get_angular_variable(
+                            kbody_term, "costheta0")
+                        lambda3 = self._get_angular_variable(
+                            kbody_term, "lambda3")
+                        with tf.variable_scope("Fixed"):
+                            R = self._get_angular_variable(
+                                kbody_term, "R", trainable=False)
+                            D = self._get_angular_variable(
+                                kbody_term, "D", trainable=False)
+                            m = self._get_angular_variable(
+                                kbody_term, "m", trainable=False)
+                        c2 = tf.square(c, name='c2')
+                        d2 = tf.square(d, name='d2')
                         masks = tf.squeeze(masks, axis=1, name='masks')
                         rij = tf.squeeze(dists[0], axis=1, name='rij')
                         rik = tf.squeeze(dists[4], axis=1, name='rik')
@@ -225,13 +289,15 @@ class Tersoff(BasicNN):
                         rij2 = tf.square(rij, name='rij2')
                         rik2 = tf.square(rik, name='rik2')
                         rjk2 = tf.square(rjk, name='rjk2')
-                        upper = tf.math.subtract(rij2 + rik2, rjk2, name='upper')
+                        upper = tf.math.subtract(
+                            rij2 + rik2, rjk2, name='upper')
                         lower = tf.math.multiply(
                             tf.math.multiply(two, rij), rik, name='lower')
-                        costheta = tf.math.divide_no_nan(upper, lower, name='costheta')
+                        costheta = tf.math.divide_no_nan(
+                            upper, lower, name='costheta')
+                        right = c2 / d2 - c2 / (d2 + (costheta - costheta0)**2)
                         gtheta = tf.math.multiply(
-                            gamma,
-                            tf.math.add(one, c2 / d2 - c2 / (d2 + (costheta - costheta0) ** 2)),
+                            gamma, tf.math.add(one, right),
                             name='gtheta')
                         fc = tersoff_cutoff(rik, R, D, name='fc')
                         l3m = safe_pow(lambda3, m)
@@ -241,8 +307,10 @@ class Tersoff(BasicNN):
                                              tf.math.exp(l3m * drijkm),
                                              name='zeta/single')
                         z = tf.math.multiply(z, masks, name='zeta/masked')
-                        z = tf.reduce_sum(z, axis=-1, keepdims=True, name='zeta')
-                        zeta[f'{center}{mid}'] = z
+                        z = tf.reduce_sum(
+                            z, axis=-1, keepdims=True, name='zeta')
+                        key = f'{center}{mid}'
+                        zeta_dict[key] = zeta_dict.get(key, []) + [z]
 
             outputs = {}
 
@@ -256,29 +324,42 @@ class Tersoff(BasicNN):
                     merge_symmetric=False)
                 for kbody_term, (dists, masks) in radial.items():
                     center, pair = get_elements_from_kbody_term(kbody_term)
-                    with tf.name_scope("Parameters"):
-                        R = tf.convert_to_tensor(3.0, dtype=dtype, name='R')
-                        D = tf.convert_to_tensor(0.2, dtype=dtype, name='D')
-                        A = tf.convert_to_tensor(3264.7, dtype=dtype, name='A')
-                        B = tf.convert_to_tensor(95.373, dtype=dtype, name='B')
-                        lambda1 = tf.convert_to_tensor(3.2394, dtype=dtype, name='lambda1')
-                        lambda2 = tf.convert_to_tensor(1.3258, dtype=dtype, name='lambda2')
-                        beta = tf.convert_to_tensor(0.33675, dtype=dtype, name='beta')
-                        n = tf.convert_to_tensor(22.956, dtype=dtype, name='n')
                     with tf.variable_scope(f"{kbody_term}"):
+                        with tf.variable_scope("Fixed"):
+                            R = self._get_radial_variable(
+                                kbody_term, "R", trainable=False)
+                            D = self._get_radial_variable(
+                                kbody_term, "D", trainable=False)
+                        A = self._get_radial_variable(kbody_term, "A")
+                        B = self._get_radial_variable(kbody_term, "B")
+                        lambda1 = self._get_radial_variable(
+                            kbody_term, "lambda1")
+                        lambda2 = self._get_radial_variable(
+                            kbody_term, "lambda2")
+                        beta = self._get_radial_variable(kbody_term, "beta")
+                        n = self._get_radial_variable(kbody_term, "n")
                         masks = tf.squeeze(masks, axis=1, name='masks')
                         rij = tf.squeeze(dists[0], axis=1, name='rij')
                         fc = tersoff_cutoff(rij, R, D, name='fc')
-                        fr = tf.math.multiply(A, tf.exp(-lambda1 * rij), name='fr')
-                        fa = tf.negative(tf.math.multiply(B, tf.exp(tf.negative(lambda2 * rij))), name='fa')
-                        bz = tf.math.multiply(beta, zeta[f'{center}{pair}'], name='bz')
+                        fr = tf.math.multiply(
+                            A, tf.exp(-lambda1 * rij), name='fr')
+                        repulsion = tf.math.multiply(fc, fr, name='repulsion')
+                        fa = tf.math.multiply(
+                            -B, tf.exp(-lambda2 * rij), name='fa')
+                        zeta = tf.add_n(
+                            zeta_dict[f'{center}{pair}'], name='zeta')
+                        bz = tf.math.multiply(beta, zeta, name='bz')
                         bzn = safe_pow(bz, n)
                         coef = tf.math.truediv(one, -two * n, name='2ni')
                         bij = safe_pow(one + bzn, coef)
-                        vij = tf.math.multiply(fc, fr + bij * fa, name='vij')
+                        bij = tf.identity(bij, name='bij')
+                        attraction = tf.math.multiply(fc, bij * fa,
+                                                      name='attraction')
+                        vij = tf.math.add(repulsion, attraction, name='vij')
                         vij = tf.math.multiply(half, vij, name='vij/half')
                         vij = tf.math.multiply(vij, masks, name='vij/masked')
-                        outputs[kbody_term] = tf.reduce_sum(vij, axis=[-1, -2], keepdims=False, name='vij/sum')
+                        outputs[kbody_term] = tf.reduce_sum(
+                            vij, axis=[-1, -2], keepdims=False, name='vij/sum')
 
             y_atomic = self._dynamic_stitch(outputs, max_occurs)
             if mode == tf_estimator.ModeKeys.PREDICT:
