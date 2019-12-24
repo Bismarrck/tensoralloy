@@ -21,7 +21,8 @@ __email__ = 'Bismarrck@me.com'
 
 __all__ = ["LAMMPS_COMMAND", "SetFL", "read_adp_setfl",
            "read_eam_alloy_setfl", "write_adp_setfl",
-           "read_tersoff_file"]
+           "read_tersoff_file",
+           "read_meam_spline_file"]
 
 
 def get_lammps_command():
@@ -325,19 +326,22 @@ def read_tersoff_file(filename: str) -> TersoffPotential:
     return TersoffPotential(sorted(list(set(elements))), params)
 
 
+@add_slots
 @dataclass
-class MeamSpline(SetFL):
-    fs: Dict[str, Dict[str, Union[float, np.ndarray]]]
-    gs: Dict[str, Dict[str, Union[float, np.ndarray]]]
+class MeamSpline:
+    elements: List[str]
+    rho: Dict[str, Spline]
+    phi: Dict[str, Spline]
+    embed: Dict[str, Spline]
+    fs: Dict[str, Spline]
+    gs: Dict[str, Spline]
 
 
 def read_meam_spline_file(filename: str, element=None):
     """
     Read the Lammps MEAM/Spline potential file.
     """
-
     with open(filename) as fp:
-        number = 0
         is_new_format = False
         stage = 0
         ncols = 0
@@ -348,18 +352,22 @@ def read_meam_spline_file(filename: str, element=None):
         phi = {}
         gs = {}
         fs = {}
+        nspline = 0
+        kbody_terms = []
+        spline = None
         for line in fp:
             if line.startswith("#"):
                 continue
             line = line.strip()
             if stage == 0:
-                if number == 0 and line.startswith("meam/spline"):
+                if line.startswith("meam/spline"):
                     is_new_format = True
                 if not is_new_format:
                     if element is None:
                         raise ValueError("The 'element' must be specified for "
                                          "old meam/spline format!")
                     elements.append(element)
+                    kbody_terms.append(f"{element}{element}")
                     nel = 1
                 else:
                     splits = line.split()
@@ -367,10 +375,15 @@ def read_meam_spline_file(filename: str, element=None):
                     if nel != len(splits) - 2:
                         raise IOError(f"Line error: {line}")
                     elements.extend(splits[2:])
+                    for i in range(nel):
+                        for j in range(i, nel):
+                            kbody_terms.append(f"{elements[i]}{elements[j]}")
                 ncols = int((nel + 1) * nel / 2)
                 stage = 1
-            elif stage == 1:
-                nknots = len(line)
+            if stage == 1:
+                if is_new_format and line == "spline3eq":
+                    continue
+                nknots = int(line)
                 stage = 2
             elif stage == 2:
                 splits = line.split()
@@ -378,6 +391,7 @@ def read_meam_spline_file(filename: str, element=None):
                     raise IOError(f"Line error: {line}")
                 bc_start = float(splits[0])
                 bc_end = float(splits[1])
+                spline = _init_spline_dict(nknots, 0.0, bc_start, bc_end)
                 if is_new_format:
                     stage = 4
                 else:
@@ -387,5 +401,26 @@ def read_meam_spline_file(filename: str, element=None):
                 stage = 4
             elif stage == 4:
                 values = [float(x) for x in line.split()]
-                if len(values) == ncols:
-                    pass
+                if len(values) == 3:
+                    spline['x'][idx] = values[0]
+                    spline['y'][idx] = values[1]
+                    idx += 1
+                if idx == nknots:
+                    obj = Spline(**spline)
+                    if nspline < ncols:
+                        phi[kbody_terms[nspline]] = obj
+                    elif ncols <= nspline < ncols + nel:
+                        rho[elements[nspline - ncols]] = obj
+                    elif ncols + nel <= nspline < ncols + nel * 2:
+                        frho[elements[nspline - ncols - nel]] = obj
+                    elif ncols + nel * 2 <= nspline < ncols + nel * 3:
+                        fs[elements[nspline - ncols - nel * 2]] = obj
+                    else:
+                        gs[kbody_terms[nspline - ncols - nel * 3]] = obj
+                    nspline += 1
+                    if nspline == ncols * 2 + nel * 3:
+                        break
+                    else:
+                        stage = 1
+                        idx = 0
+        return MeamSpline(elements, rho, phi, frho, fs, gs)

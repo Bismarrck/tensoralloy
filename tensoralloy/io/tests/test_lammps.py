@@ -11,7 +11,7 @@ from nose.tools import assert_almost_equal, assert_equal
 from os.path import join
 
 from tensoralloy.io.lammps import read_eam_alloy_setfl, read_adp_setfl
-from tensoralloy.io.lammps import read_tersoff_file
+from tensoralloy.io.lammps import read_tersoff_file, read_meam_spline_file
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
@@ -77,6 +77,28 @@ def test_read_tersoff():
     assert_equal(p.elements, ['C', 'Si'])
     assert_almost_equal(p.params['SiSiSi']['n'], .78734)
     assert_almost_equal(p.params['SiCC']['lambda1'], 2.9839)
+
+
+def test_read_old_meam_spline():
+    """
+    Test the function `read_meam_spline_file` for old meam/spline file.
+    """
+    filename = join(test_dir(), 'lammps', 'Ti.meam.spline')
+    p = read_meam_spline_file(filename, element='Ti')
+
+    assert_almost_equal(p.rho['Ti'].bc_start, -1.0)
+    assert_almost_equal(p.fs['Ti'].y[2], 2.011336597660079661e+00, delta=1e-8)
+
+
+def test_read_new_meam_spline():
+    """
+    Test the function `read_meam_spline_file` for new meam/spline file.
+    """
+    filename = join(test_dir(), 'lammps', 'TiO.meam.spline')
+    p = read_meam_spline_file(filename)
+
+    assert_almost_equal(p.phi['TiTi'].bc_start, -20.0)
+    assert_almost_equal(p.rho['Ti'].x[3], 2.7620612369, delta=1e-6)
 
 
 if __name__ == "__main__":
