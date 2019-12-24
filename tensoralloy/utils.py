@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import logging
 
+from dataclasses import fields
 from ase import Atoms
 from genericpath import isdir
 from os import makedirs
@@ -17,6 +18,40 @@ from typing import List, Union, Any
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def add_slots(cls):
+    """
+    A decorator to put __slots__ on a dataclass with fields with defaults.
+
+    Need to create a new class, since we can't set __slots__ after a class has
+    been created.
+
+    References
+    ----------
+    https://github.com/ericvsmith/dataclasses/blob/master/dataclass_tools.py
+
+    """
+    # Make sure __slots__ isn't already set.
+    if '__slots__' in cls.__dict__:
+        raise TypeError(f'{cls.__name__} already specifies __slots__')
+
+    # Create a new dict for our new class.
+    cls_dict = dict(cls.__dict__)
+    field_names = tuple(f.name for f in fields(cls))
+    cls_dict['__slots__'] = field_names
+    for field_name in field_names:
+        # Remove our attributes, if present. They'll still be
+        #  available in _MARKER.
+        cls_dict.pop(field_name, None)
+    # Remove __dict__ itself.
+    cls_dict.pop('__dict__', None)
+    # And finally create the class.
+    qualname = getattr(cls, '__qualname__', None)
+    cls = type(cls)(cls.__name__, cls.__bases__, cls_dict)
+    if qualname is not None:
+        cls.__qualname__ = qualname
+    return cls
 
 
 def get_pulay_stress(atoms: Atoms) -> float:
