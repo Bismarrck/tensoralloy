@@ -31,9 +31,9 @@ def test_read_eam_alloy():
     assert_equal(setfl.lattice_types, ['fcc', 'fcc'])
     assert_equal(setfl.lattice_constants, [0.0, 0.0])
     assert_almost_equal(setfl.atomic_masses[0], 26.98, delta=1e-3)
-    assert_almost_equal(setfl.embed['Al'][1, 10], -1.8490865619220642e-01,
+    assert_almost_equal(setfl.embed['Al'].y[10], -1.8490865619220642e-01,
                         delta=1e-10)
-    assert_almost_equal(setfl.phi['CuCu'][1, 1] * setfl.phi['CuCu'][0, 1],
+    assert_almost_equal(setfl.phi['CuCu'].y[1] * setfl.phi['CuCu'].x[1],
                         3.8671050028993639e+00,
                         delta=1e-10)
 
@@ -52,12 +52,12 @@ def test_read_adp_setfl():
     assert_almost_equal(adpfl.drho, 2.2770502180000001e-03, delta=1e-8)
     assert_almost_equal(adpfl.dr, 6.2872099999999995e-04, delta=1e-8)
 
-    assert_equal(np.all(adpfl.quadrupole['CuCu'][1] == 0.0), True)
-    assert_equal(np.all(adpfl.quadrupole['AlAl'][1] == 0.0), True)
-    assert_equal(np.all(adpfl.dipole['CuCu'][1] == 0.0), True)
-    assert_equal(np.all(adpfl.dipole['AlAl'][1] == 0.0), True)
+    assert_equal(np.all(adpfl.quadrupole['CuCu'].y == 0.0), True)
+    assert_equal(np.all(adpfl.quadrupole['AlAl'].y == 0.0), True)
+    assert_equal(np.all(adpfl.dipole['CuCu'].y == 0.0), True)
+    assert_equal(np.all(adpfl.dipole['AlAl'].y == 0.0), True)
 
-    w = adpfl.quadrupole['AlCu'][1]
+    w = adpfl.quadrupole['AlCu'].y
     assert_almost_equal(w[0], 2.6740386039473818e-01, delta=1e-8)
     assert_almost_equal(w[1], 2.6728751808066320e-01, delta=1e-8)
     assert_almost_equal(w[2], 2.6717121145664957e-01, delta=1e-8)
