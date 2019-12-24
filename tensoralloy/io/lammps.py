@@ -11,8 +11,10 @@ import os
 
 from io import StringIO
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Union
 from atsim.potentials import writeSetFL
+
+from tensoralloy.utils import add_slots
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -47,18 +49,30 @@ def get_lammps_command():
 LAMMPS_COMMAND = get_lammps_command()
 
 
+@add_slots
+@dataclass
+class Spline:
+    """
+    Representation of a cubic spline function.
+    """
+    bc_start: float
+    bc_end: float
+    x: np.ndarray
+    y: np.ndarray
+
+
+@add_slots
 @dataclass
 class SetFL:
     """
     Representation of a Lammps eam/alloy file.
     """
-
     elements: List[str]
-    rho: Dict[str, np.ndarray]
-    phi: Dict[str, np.ndarray]
-    embed: Dict[str, np.ndarray]
-    dipole: Dict[str, np.ndarray]
-    quadrupole: Dict[str, np.ndarray]
+    rho: Dict[str, Spline]
+    phi: Dict[str, Spline]
+    embed: Dict[str, Spline]
+    dipole: Dict[str, Spline]
+    quadrupole: Dict[str, Spline]
     nr: int
     dr: float
     nrho: int
@@ -68,9 +82,14 @@ class SetFL:
     lattice_constants: List[float]
     lattice_types: List[str]
 
-    __slots__ = ("elements", "rho", "phi", "embed", "dipole", "quadrupole",
-                 "nr", "dr", "nrho", "drho", "rcut", "atomic_masses",
-                 "lattice_constants", "lattice_types")
+
+def _init_spline_dict(nx: int, dx: float, bc_start=0.0, bc_end=0.0):
+    return {
+        "bc_start": bc_start,
+        "bc_end": bc_end,
+        "x": np.linspace(0.0, nx * dx, nx, endpoint=False),
+        "y": np.zeros(nx),
+    }
 
 
 def _read_setfl(filename, is_adp=False) -> SetFL:
@@ -117,24 +136,15 @@ def _read_setfl(filename, is_adp=False) -> SetFL:
                 rcut = float(values[4])
                 for i in range(n_el):
                     el_i = elements[i]
-                    rho[el_i] = np.zeros((2, nr))
-                    rho[el_i][0] = np.linspace(0.0, nr * dr, nr, endpoint=False)
-                    frho[el_i] = np.zeros((2, nrho))
-                    frho[el_i][0] = np.linspace(0.0, nrho * drho, nrho,
-                                                endpoint=False)
+                    rho[el_i] = _init_spline_dict(nr, dr)
+                    frho[el_i] = _init_spline_dict(nrho, drho)
                     for j in range(i, n_el):
                         el_j = elements[j]
                         key = f"{el_i}{el_j}"
-                        phi[key] = np.zeros((2, nr))
-                        phi[key][0] = np.linspace(0.0, nr * dr, nr,
-                                                  endpoint=False)
+                        phi[key] = _init_spline_dict(nr, dr)
                         if is_adp:
-                            dipole[key] = np.zeros((2, nr))
-                            dipole[key][0] = np.linspace(0.0, nr * dr, nr,
-                                                         endpoint=False)
-                            quadrupole[key] = np.zeros((2, nr))
-                            quadrupole[key][0] = np.linspace(0.0, nr * dr, nr,
-                                                             endpoint=False)
+                            dipole[key] = _init_spline_dict(nr, dr)
+                            quadrupole[key] = _init_spline_dict(nr, dr)
                         ab.append(key)
                 nab = len(ab)
                 curr_element = elements[0]
@@ -149,9 +159,9 @@ def _read_setfl(filename, is_adp=False) -> SetFL:
                     lattice_types.append(values[3].strip())
                     continue
                 elif inc < nrho:
-                    frho[curr_element][1, inc] = float(line)
+                    frho[curr_element]['y'][inc] = float(line)
                 else:
-                    rho[curr_element][1, inc - nrho] = float(line)
+                    rho[curr_element]['y'][inc - nrho] = float(line)
                 if inc + 1 == nr + nrho:
                     if stage < n_el:
                         stage += 1
@@ -174,11 +184,21 @@ def _read_setfl(filename, is_adp=False) -> SetFL:
                 # ADP dipole and quadrupole tabulated values are just raw values
                 # but not u(r) * r.
                 if inc == 0 or ab_cycle > 0:
-                    adict[key][1, inc] = float(line)
+                    adict[key]['y'][inc] = float(line)
                 else:
-                    adict[key][1, inc] = float(line) / adict[key][0, inc]
+                    adict[key]['y'][inc] = float(line) / adict[key]['x'][inc]
                 if div + 1 == nab and inc + 1 == nr and is_adp:
                     ab_cycle += 1
+
+        def _dict_to_spline(group: Dict[str, dict]):
+            for _key, _val in group.items():
+                group[_key] = Spline(**_val)
+
+        _dict_to_spline(rho)
+        _dict_to_spline(phi)
+        _dict_to_spline(frho)
+        _dict_to_spline(dipole)
+        _dict_to_spline(quadrupole)
 
         return SetFL(**{'elements': elements, 'rho': rho, 'phi': phi,
                         'embed': frho, 'dipole': dipole,
@@ -303,3 +323,69 @@ def read_tersoff_file(filename: str) -> TersoffPotential:
                 stack.clear()
 
     return TersoffPotential(sorted(list(set(elements))), params)
+
+
+@dataclass
+class MeamSpline(SetFL):
+    fs: Dict[str, Dict[str, Union[float, np.ndarray]]]
+    gs: Dict[str, Dict[str, Union[float, np.ndarray]]]
+
+
+def read_meam_spline_file(filename: str, element=None):
+    """
+    Read the Lammps MEAM/Spline potential file.
+    """
+
+    with open(filename) as fp:
+        number = 0
+        is_new_format = False
+        stage = 0
+        ncols = 0
+        idx = 0
+        elements = []
+        frho = {}
+        rho = {}
+        phi = {}
+        gs = {}
+        fs = {}
+        for line in fp:
+            if line.startswith("#"):
+                continue
+            line = line.strip()
+            if stage == 0:
+                if number == 0 and line.startswith("meam/spline"):
+                    is_new_format = True
+                if not is_new_format:
+                    if element is None:
+                        raise ValueError("The 'element' must be specified for "
+                                         "old meam/spline format!")
+                    elements.append(element)
+                    nel = 1
+                else:
+                    splits = line.split()
+                    nel = int(splits[1])
+                    if nel != len(splits) - 2:
+                        raise IOError(f"Line error: {line}")
+                    elements.extend(splits[2:])
+                ncols = int((nel + 1) * nel / 2)
+                stage = 1
+            elif stage == 1:
+                nknots = len(line)
+                stage = 2
+            elif stage == 2:
+                splits = line.split()
+                if len(splits) != 2:
+                    raise IOError(f"Line error: {line}")
+                bc_start = float(splits[0])
+                bc_end = float(splits[1])
+                if is_new_format:
+                    stage = 4
+                else:
+                    stage = 3
+            elif stage == 3:
+                # Skip this line directly.
+                stage = 4
+            elif stage == 4:
+                values = [float(x) for x in line.split()]
+                if len(values) == ncols:
+                    pass
