@@ -5,7 +5,8 @@ Cubic spline based EAM/ADP potentials.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
-import pandas as pd
+import numpy as np
+import json
 
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.nn.eam.potentials.potentials import get_variable
@@ -33,7 +34,9 @@ class CubicSplinePotential(EamAlloyPotential):
         """
         super(CubicSplinePotential, self).__init__()
         self._name = "Spline"
-        self._df = pd.read_csv(filename, index_col=None)
+
+        with open(filename) as fp:
+            self._df = dict(json.load(fp))
 
     @property
     def defaults(self):
@@ -69,15 +72,18 @@ class CubicSplinePotential(EamAlloyPotential):
             raise ValueError(f"{pot} is not available!")
 
         dtype = t.dtype
-        xval = self._df[f"{pot}.x"].to_numpy(dtype.as_numpy_dtype)
-        yval = self._df[f"{pot}.y"].to_numpy(dtype.as_numpy_dtype)
+        xval = np.asarray(self._df[f"{pot}.x"], dtype=dtype.as_numpy_dtype)
+        yval = np.asarray(self._df[f"{pot}.y"], dtype=dtype.as_numpy_dtype)
         x = tf.convert_to_tensor(xval, dtype=dtype, name="x")
         y = get_variable(
             "y", shape=yval.shape, dtype=dtype, trainable=True,
             initializer=tf.constant_initializer(yval, dtype=dtype),
             collections=[tf.GraphKeys.MODEL_VARIABLES, ]
         )
-        cubic = CubicInterpolator(x, y, natural_boundary=True)
+        bc_start = self._df[f"{pot}.bc_start"]
+        bc_end = self._df[f"{pot}.bc_start"]
+        cubic = CubicInterpolator(x, y, natural_boundary=True,
+                                  bc_start=bc_start, bc_end=bc_end)
         shape = tf.shape(t, name='shape')
         val = cubic.evaluate(tf.reshape(t, (-1, ), name='t/flat'), name='eval')
         val = tf.reshape(val, shape, name=name)
@@ -181,3 +187,37 @@ class CubicSplinePotential(EamAlloyPotential):
                 if verbose:
                     log_tensor(quadrupole)
                 return quadrupole
+
+    def gs(self,
+           r: tf.Tensor,
+           kbody_term: str,
+           variable_scope: str,
+           verbose=False):
+        """
+        The Gs function for meam/spline.
+        """
+        with tf.name_scope(f"{self._name}/Gs/{kbody_term}"):
+            with tf.variable_scope(
+                    f"{variable_scope}/{kbody_term}",
+                    reuse=tf.AUTO_REUSE):
+                gs = self._make(r, f"{kbody_term}.gs", "w")
+                if verbose:
+                    log_tensor(gs)
+                return gs
+
+    def fs(self,
+           r: tf.Tensor,
+           element: str,
+           variable_scope: str,
+           verbose=False):
+        """
+        The Fs function for meam/spline.
+        """
+        with tf.name_scope(f"{self._name}/Fs/{element}"):
+            with tf.variable_scope(
+                    f"{variable_scope}/{element}",
+                    reuse=tf.AUTO_REUSE):
+                fs = self._make(r, f"{element}.fs", "w")
+                if verbose:
+                    log_tensor(fs)
+                return fs
