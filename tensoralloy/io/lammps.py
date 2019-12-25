@@ -19,8 +19,8 @@ from tensoralloy.utils import add_slots
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["LAMMPS_COMMAND", "SetFL", "read_adp_setfl",
-           "read_eam_alloy_setfl", "write_adp_setfl",
+__all__ = ["LAMMPS_COMMAND", "SetFL", "MeamSpline",
+           "read_adp_setfl", "read_eam_alloy_setfl", "write_adp_setfl",
            "read_tersoff_file",
            "read_meam_spline_file"]
 
@@ -337,7 +337,21 @@ class MeamSpline:
     gs: Dict[str, Spline]
 
 
-def read_meam_spline_file(filename: str, element=None):
+def read_old_meam_spline_file(filename: str, element: str):
+    """
+    Read an old meam/spline potential file.
+    """
+    return _read_meam_spline_file(filename, element)
+
+
+def read_meam_spline_file(filename: str):
+    """
+    Read a meam/spline potential file.
+    """
+    return _read_meam_spline_file(filename)
+
+
+def _read_meam_spline_file(filename: str, element=None):
     """
     Read the Lammps MEAM/Spline potential file.
     """
