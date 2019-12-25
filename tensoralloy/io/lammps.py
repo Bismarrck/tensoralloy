@@ -36,15 +36,16 @@ def get_lammps_command():
         4. None
 
     """
-    lmp = shutil.which("lmp_serial")
-    if lmp:
-        return lmp
-    elif shutil.which("lammps"):
-        return shutil.which("lammps")
-    elif "LAMMPS_COMMAND" in os.environ:
+    if "LAMMPS_COMMAND" in os.environ:
         return os.environ["LAMMPS_COMMAND"]
     else:
-        return None
+        lmp = shutil.which("lmp_serial")
+        if lmp:
+            return lmp
+        elif shutil.which("lammps"):
+            return shutil.which("lammps")
+        else:
+            return None
 
 
 LAMMPS_COMMAND = get_lammps_command()
