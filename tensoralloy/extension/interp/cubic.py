@@ -111,11 +111,15 @@ class CubicInterpolator(object):
 
             if self.bc_start is None:
                 bc_start = 0.0
+            else:
+                bc_start = self.bc_start
             bc_start = tf.convert_to_tensor(
                 bc_start, dtype=x.dtype, name='bc_start')
 
             if self.bc_end is None:
                 bc_end = 0.0
+            else:
+                bc_end = self.bc_end
             bc_end = tf.convert_to_tensor(bc_end, dtype=x.dtype, name='bc_end')
 
             two = tf.constant(2.0, dtype=x.dtype, name='two')
