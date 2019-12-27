@@ -15,7 +15,7 @@
 \begin{document}
 
 \title{
-    Machine-learned embedded atom method
+    Machine learning enhanced empirical potentials for metals and alloys
 }
 
 \author{Xin Chen}
@@ -71,21 +71,21 @@
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{abstract}
 Interatomic potential or force-field plays a vital role in simulating materials. 
-Embedded atom method (EAM) and its variant angular-dependent potential (ADP) 
-have proven successful in modeling fcc and bcc metals qualitatively. In the past 
-few years, machine learning has became the central approach for modeling 
-interatomic interactions. Powered by big data and efficient optimizers, machine 
-learning interatomic potentials can generally approximate first-principle 
-accuracy. In this works, we successfully integrated machine learning with EAM 
-and ADP. Machine learning can significantly boost their performances. 
-For energy and force predictions, machine leaned EAM and ADP can be almost 
-as accurate as the spectral neighbor analysis potential (SNAP) on the fcc Ni, 
-bcc Mo and Mo-Ni alloy systems, while the later approach is nealy 1000 times 
-slower. ML-EAM and ML-ADP can also give first-principle accuracy key material 
-properties, such as elastic constants, melting temperatures. Our results suggest 
-a new and systematic route for developing machine learning interatomic 
-potentials. 
-Our 
+Empirical potentials like the embedded atom method (EAM) and its variant 
+angular-dependent potential (ADP) have proven successful in modeling many 
+metals qualitatively. In the past few years, machine learning has became the 
+key approach for modeling interatomic interactions. Powered by big data and 
+efficient optimizers, machine learning interatomic potentials can generally 
+approximate to the first-principles accuracy. In this works, we successfully 
+integrated machine learning with EAM and ADP. Machine learning can significantly 
+boost their performances. For energy and force predictions, machine leaned EAM 
+and ADP can be almost as accurate as the spectral neighbor analysis potential 
+(SNAP) on the fcc Ni, bcc Mo and Mo-Ni alloy systems, while the molecular 
+dynamics simulations performed by the later approach is nealy 1000 times 
+slower. Machine learned EAM and ADP can also give first-principle accuracy key 
+material properties, such as elastic constants, melting temperatures and surface 
+energies. Our results suggest a new and systematic route for developing machine 
+learning interatomic potentials. 
 \end{abstract}
 
 \maketitle
@@ -250,10 +250,10 @@ strengths of dipole and quadrupole interactions.
 \subsection{Transformation}
 \label{sec:transformation}
 
-To integrate EAM/ADP with machine learning, the original total energy expression 
-(Equation \ref{eq:eam_total_energy}) must be transformed to a vectorizable form. 
-Without loss of generality, we take the binary alloy, AB, to demonstrate how to 
-do the transformation.
+To integrate EAM/ADP with machine learning strategy, the original total energy 
+expression (Equation \ref{eq:eam_total_energy}) must be transformed to a 
+vectorizable form. Without loss of generality, we take the binary alloy, AB, to 
+demonstrate how to do the transformation.
 
 \newcommand{\niaa}{N_{i}^{\mathrm{AA}}}
 \newcommand{\niab}{N_{i}^{\mathrm{AB}}}
@@ -296,8 +296,8 @@ E_{j}^{B}
 \right)
 \end{align}
 When $r_c$ is fixed, $\niaa$, $\niab$, $\njbb$ and $\njba$ are all constants and
-$\nnli$ is the maximum of these numbers. Finally, we can pre-determine the 
-maximum neighor list size $\nnl$:
+$\nnli$ is the maximum of these numbers of structure $i$. Hence, we can 
+pre-determine the maximum neighor list size $\nnl$:
 \begin{equation}
 \label{eq:nnl}
 \nnl = \max{\left(\nnli\right)}
@@ -370,23 +370,44 @@ atom $i$:
 \begin{equation}
 \mathbf{g}_i = \begin{bmatrix}
     \riaa & \riab & \ribb & \riba \\
-\end{bmatrix}
+\end{bmatrix}^T
 \end{equation}
-$\mathbf{g}_i$ is a $\nnl \times 4$ matrix. If the specie of atom $i$ is A, only
+$\mathbf{g}_i$ is a $4 \times \nnl$ matrix. If the specie of atom $i$ is A, only
 the first two columns have non-zero values. Similarly, the last two columns will
 have non-zeros values if atom $i$ is a B-type atom. In fact, $\mathbf{g}_i$ can
 be viewed as the EAM descriptors for atom $i$. Hence, each structure can be 
-expressed with a 3D matrix, $\mathbf{G}$ , of shape $N \times \nnl \times 4$.
+expressed with a 3D matrix, $\mathbf{G}$ , of shape $N \times 4 \times \nnl$.
 
 During the training phase, the maximum appearances of element A and B in any 
 structure ($\namax$ and $\nbmax$) are also constants. Thus, any $\mathbf{G}$ can 
-be expanded to a $(\namax + \nbmax) \times \nnl \times 4$ matrix $\mathbf{G}'$ 
+be expanded to a $(\namax + \nbmax) \times 4 \times \nnl$ matrix $\mathbf{G}'$ 
 by zero-padding. In summary, arbitrary structure in the training dataset can be 
 converted to a fixed-shape descriptor matrix $\mathbf{G}'$. 
 
 For the ADP formalism, the corresponding transformation is almost the same 
-except that $\mathbf{g}_{i}^{\mathrm{adp}}$ should also include the XYZ 
-components of $\vec{\mathbf{r}}_i$.
+except that $\mathbf{g}_{i}^{\mathrm{adp}}$ should also include the 
+$\alpha,\beta,\gamma$ components of $\vec{\mathbf{r}}_i$.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Transformation
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}
+\centering
+\includegraphics[scale=0.3]{figures/transformation.png}
+\caption{\label{fig:transformation} Visualization of the descriptor matrix 
+$\mathbf{G}'$ of the binary AB system and $\nnl$ is 7. Non-colored cells are 
+padded zeros. \textbf{(a)} is a sample $\mathbf{g}_i$ of A-type atom and 
+\textbf{(b)} represents a B-type atom.}
+\end{figure}
+
+Fig \ref{fig:transformation} is the visualization of the descriptor matrix 
+$\mathbf{G}'$. $\mathbf{G}'$ has three axes: the neighbor axis, the interaction 
+axis and the atom axis. $\nnl$ is the maximum of the neighbor axis (in this case 
+$\nnl = 7$). For the binary AB system there are four types of interactions: AA, 
+AB, BB and BA. \textbf{(a)} and \textbf{(b)} are samples of $\mathbf{g}_i$ for 
+A-type atoms and B-type atoms.
 
 % -----------
 % Section 2.C Functions
@@ -419,8 +440,8 @@ between the same species can be computed with:
 \end{equation}
 where $A$, $B$, $\alpha$ and $\kappa$ are also trainable parameters, $\beta$ and 
 $\kappa$ are used in Equation \ref{eq:zjw04_rho} already. For the pairwise 
-interaction between two atoms of different species, Zhou et al proposed an 
-interpolation form:
+interaction between two atoms of different species, the interpolation form is 
+used:
 \begin{equation}
 \label{eq:zjw04_phi_ab}
 \phi_{ab}(r) = \frac{1}{2}\left(
@@ -463,7 +484,7 @@ c_{1} = & \frac{1}{1 + e^{-2\left(\rho_{n} - \rho\right)}} \\
 c_{3} = & \frac{1}{1 + e^{-2\left(\rho - \rho_{0}\right)}} \\
 c_{2} = & 1 - c_1 - c_3
 \end{align}
-$\omega_1$ and $\omega_3$ are just damping factors calculated by the sigmoid 
+$c_1$ and $c_3$ are just damping factors calculated by the sigmoid 
 functions (Equations \ref{eq:frho_c1} and \ref{eq:frho_c3}).
 
 The dipole ($\mu_{ab}$) and quadrupole ($\lambda_{ab}$) functions have the same 
@@ -525,9 +546,9 @@ factor ($a$ is the lattice constant), $\beta$ is a chosen parameter and
 \label{eq:rose_alpha}
 \alpha = \sqrt{-\frac{9 V_{0} B }{E_{0}}}
 \end{equation}
-where $V_0$ is the equilibrium volume and $B$ is the bulk modulus. The adoption
-of the Rose constraint guarantees the exact predictions of bulk modulus and 
-the energy-volume curve. The loss of the Rose EOS constraint 
+where $V_0$ is the equilibrium volume and $B$ is the corresponding bulk modulus. 
+The adoption of the Rose constraint guarantees the exact predictions of bulk 
+modulus and the energy-volume curve. The loss of the Rose EOS constraint 
 $\mathbf{L}^{\mathrm{Rose}}$  is measured as the 2-norm of the energy 
 differences between $E(x)^{\mathrm{dft}}$ and their corresponding predicted 
 $E(x)$: 
@@ -538,17 +559,17 @@ $E(x)$:
 }
 \end{equation}
 Here $\Omega$ denotes all selected crystals. In this work, for each included 
-crystal, we use the same choices of $x$: 
+crystal, we use the same choices of $x$, which determines the fitting region: 
 $x_{i} = x_{0} + \Delta x \cdot i, x_{0} = -0.1, N_{t}^{\mathrm{max}} = 20, 
-\Delta x=0.01$. In this work, $\beta^{\mathrm{Ni}}$ is 0.005 and 
-$\beta^{\mathrm{Mo}}$ is 0.008.
+\Delta x=0.01$. (-10\% to +10\% of the equilibrium volume). In this work, 
+$\beta^{\mathrm{Ni}}$ is 0.005 and $\beta^{\mathrm{Mo}}$ is 0.008.
  
 Elastic tensor is also a popular constraint for tuning empirical potentials but 
 rarely used directly in optimizing MILPs. Shyue Ping Ong used this constraint in 
 the outer loop (the global optimization based property-matching step) to find 
 optimal parameters of SNAP potentials. 
 
-In this work, we successfully find a way to use elastic tensor directly as a 
+In this work, we find a straightforward way to use elastic tensor directly as a 
 constraint. Given an equilibrium crystal structure, its elastic constant 
 $c_{ijkl}$ can be derived from $E^{total}$ directly \cite{Elastic}:
 \begin{align}
@@ -592,6 +613,18 @@ and root mean squared error between predicted elastic constants and DFT elastic
 constants. $\tau$ is a pre-selected gate parameter. 
 When $\mathbf{MAE}$ is below $\tau$, $\mathbf{L}^{\mathrm{elastic}}$ will not 
 contribute to the total loss. In this work, $\tau$ is set to 2 GPa.
+
+The adoption of physical constraints in optimizing MLIPs can be very helpful. 
+Without any physical constraint, adding high-quality data points is, perhaps, 
+the only effective way to tune MLIPs for specific purposes. On the contrast, 
+with physical constraints very few training samples are sufficient.
+As an example, the elementary SNAP potentials (Mo, Ni) were fitted with just 
+hundreds of structures but they performed quite well on elastic constants and 
+surface energies, as in the outer loop \cite{SNAP_Mo} of the fitting process 
+such material properties were already used. One must also note that data 
+consistency is important. Physical constrains are just supplementary roles in 
+developing MLIPs. So the values of the are preferred to be measured with 
+first-principle calculations.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -647,11 +680,11 @@ constraints are beyond the scope of this work. The details will be discussed
 in another paper. Here, we will give a brief description.
 
 Both ML-EAM and ML-ADP are implemented within Google's TensorFlow. The 
-virtual-atom approach (VAP) is adopted so that we can construct a computation 
-graph from atomic positions to total energy directly. Thus, atomic forces 
-(Equation \ref{eq:forces}) and virial stress (Equation \ref{eq:virial}) can be 
-derived by the AutoGrad module of TensorFlow and calcualted automatically and 
-efficiently. 
+virtual-atom approach (VAP) is adopted \cite{TensorAlloy} so that we can 
+construct a computation graph from atomic positions to total energy directly. 
+Thus, atomic forces (Equation \ref{eq:forces}) and virial stress 
+(Equation \ref{eq:virial}) can be derived by the AutoGrad module of TensorFlow 
+automatically and efficiently. 
 \begin{equation}
 \label{eq:forces}
 \mathbf{F} = -\frac{\partial E^{total}}{\partial \mathbf{R}}
@@ -685,9 +718,10 @@ $i$. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$
 are overall weights of force, rose EOS and elastic contributions. 
 The Adam optimizer \cite{adam} is used to minimize Equation \ref{eq:loss}. 
 In most cases, we use 0.01 as the initial learning rate and the batch size 
-ranges from 20 to 50. Since there are very few adjustable parameters, the 
-optimization typically needs very few epochs to converge. When the optimization 
-is finished, the corresponding Lammps setfl potential file will be exported.
+ranges from 20 to 50. Since there are very few adjustable parameters compared 
+with neural networks, the optimization typically needs very few epochs to 
+converge. When the optimization is finished, the corresponding Lammps setfl 
+potential file will be exported.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -697,10 +731,11 @@ is finished, the corresponding Lammps setfl potential file will be exported.
 \section{Results}
 \label{sec:results}
 
-The publicly Ni-Mo dataset \cite{SNAP} is used to evaluate our approach. This 
-dataset is provided by Shyue Ping Ong. It contains 3973 different Ni-Mo solids. 
-All calculations were done by VASP \cite{VASP} with the PBE \cite{PBE} 
-functional and the projector augmented-wave approach \cite{PAW}. 
+The public Ni-Mo dataset \cite{SNAP} is used to evaluate our approach. This 
+dataset is provided by Shyue Ping Ong and co-workers along with their SNAP 
+models. It contains 3973 different Ni-Mo solids. All calculations were done by 
+VASP \cite{VASP} with the PBE \cite{PBE} functional and the projector 
+augmented-wave approach \cite{PAW}. 
 
 The optimized parameters are listed in the appendix.
 
@@ -712,11 +747,11 @@ The optimized parameters are listed in the appendix.
 \subsection{Elementary Ni and Mo}
 \label{sec:elementary}
 
-We first use the two elementary datasets (Ni and Mo) to show our approach. These 
+We firstly use the two elementary datasets (Ni and Mo) to show our approach. These 
 two datasets has 461 and 284 structures, respectively. 61 and 34 were randomly 
 selected to form the test subsets. In these two experiments, 
 $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$ were 
-set to 1, 3 and 0.05 respectively. The batch size was fixed to 25. 
+set to 1, 3 and 0.05 respectively. The batch size was fixed to 25.
 
 The original Zjw04 potentials were fitted to experimentally obtained quantities.
 Thus, we use the relative MAE:
@@ -732,11 +767,9 @@ energy of Zjw04 and DFT, respectively.
 
 Figure \ref{fig:Mo_eam_adp} compares the $\rho(r)$, $F(\rho)$, $\phi(r)$, 
 $\mu(r)$ and $\omega(r)$ functions. The differences between ML-EAM and ML-ADP 
-$\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. Both the angular-dependent 
-dipole $\mu(r)$ and quadrupole $\omega(r)$ quickly descrease to zero at 2.5 \AA, 
-which is lower than the equilibrium spacing (2.7 \AA) between two adjacent Mo 
-atoms. Hence, the dipole and quadrupole terms only contribute a little to the 
-total energy for this test case.
+$\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. For ML-ADP, both the dipole 
+and the quadrupole terms converge to zero at $\sim 4$ \AA. The dipole term gives
+the major contribution.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -766,8 +799,8 @@ For the Ni dataset, the original Zjw04 already has a reasonable performace.
 The energy \textbf{rMAE} is 10.6 meV/atom and the force MAE is just 0.06 eV/\AA 
 on the entire dataset. Our machine learning approach can further enhance the 
 performace. ML-EAM achieves 4.1 meV/atom and 0.05 eV/\AA on the test set and 
-3.9 meV/atom and 0.05 eV\AA on the entire dataset. ML-EAM is nearly as accurate 
-as SNAP (1.2 meV/atom, 0.05 eV\AA), but later has around three orders of 
+3.9 meV/atom and 0.05 eV/\AA on the entire dataset. ML-EAM is nearly as accurate 
+as SNAP (1.2 meV/atom, 0.05 eV/\AA), but later has almost three orders of 
 magnitude more computational expense. Figure \ref{fig:Ni_eam} demonstrates the 
 $\rho(r)$, $F(\rho)$ and $\phi(r)$ functions before (Zjw04) and after machine 
 learning optimization. The pairwise potential $\phi(r)$ almost remains the same 
@@ -785,7 +818,7 @@ this dataset. Interestingly, ML-ADP gets better results: 20.6 meV/atom and
 0.24 eV\AA on the test set and 18.7 meV/atom and 0.29 eV/\AA on the entire 
 dataset. On the contrast, the SNAP method (13.2 meV/atom, 0.25 eV/\AA) behaves 
 slightly better than ML-ADP. But considering the computational cost, the 
-ML-ADP is totally acceptable.
+performace of ML-ADP is totally acceptable.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -861,9 +894,9 @@ tested these models with surface energy, as shown in Fig
 \ref{fig:surface_energy}. One must note that all the slab structures are relaxed 
 independently with corresponding potentials. For the fcc Ni, ML-EAM can give 
 almost exactly the same results with DFT. For the more complicated bcc Mo, the 
-central-force ML-EAM model becomes not that good due to the directional d 
-bonding \cite{ADP0}. The angular correction, introduced by Mishin, shows 
-its importance. ML-ADP can give acceptable results, just like the SNAP method. 
+central-force ML-EAM model becomes not that good due to the lacking of 
+directional d bonding \cite{ADP0}. The angular correction, introduced by Mishin, 
+shows its importance. ML-ADP can give comparable results to the SNAP method.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -879,9 +912,10 @@ its importance. ML-ADP can give acceptable results, just like the SNAP method.
 
 We further examined our ML-EAM and ML-ADP by calculating the melting temperature
 of fcc Ni and bcc Mo using the solid-liquid coexistence approach. For fcc Ni, 
-$30 \times 10 \times 10$ supercells were used and for bcc the supercells were 
-$30 \times 15 \times 15$. The time step was set to 1 fs. The simulation for each 
-temperature was carried out for at least 300 ps. For fcc Ni, $T_{m}$ remains the 
+$30 \times 10 \times 10$ supercells were used and for bcc the supercells 
+$30 \times 15 \times 15$ were used. The time step was set to 1 fs. The 
+simulation for each temperature was carried out for at least 300 ps. 
+For fcc Ni, $T_{m}$ remains the 
 same for ML-EAM, 200 K lower than the experiment $T_m$. However, the calculated 
 $T_{m}$ of Mo is greatly improved. The original Zjw04 $T_{m}$ is around 3750 K, 
 800 K higher than experiment (2890 K) while both ML-EAM and ML-ADP can give 
@@ -896,13 +930,13 @@ quite accurate melting temperature.
 \label{sec:alloy}
 
 Secondly, we tested our method on the entire binary Mo-Ni dataset. 300 
-structures were randomly splitted to form the test dataset and the rest 3673 
+structures were randomly chosen to be the test dataset and the rest 3673 
 were used to train the potentials. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ 
 and $\chi_{\mathrm{elastic}}$ were set to 1, 1 and 0.05 respectively. The batch 
 size was increased to 50. Only the equilibrium fcc Ni and bcc Mo are included in 
 $\Omega$ of Equation \ref{eq:cijkl_loss} and \ref{eq:rose_loss}.
 
-The original EAM uses a simplified interpolation form to describe the pairwise 
+The original EAM uses a simplified combined form to describe the pairwise 
 interaction of A-B (Equation \ref{eq:zjw04_phi_ab}). However, we did a minor 
 modification: by adding more fitting parameters we use Equation 
 \ref{eq:zjw04_phi_aa} directly. Thus, in total, there are 44 learnable 
@@ -910,23 +944,25 @@ parameters for ML-EAM and 68 for ML-ADP. One should note that in this section,
 SNAP, ML-EAM and ML-ADP all refer to their corresponding binary form.
 
 Table \ref{table:MAE} summarizes the energy and force MAEs of SNAP, ML-EAM and 
-ML-ADP on the different subsets. Amazingly, ML-ADP becomes the overally best. 
+ML-ADP on the different subsets. ML-ADP becomes the overally best. 
 Both the energy MAE (19.6 meV/atom) and the force MAE (0.20 eV/\AA) are smaller 
 than those of the binary SNAP (22.5 meV/atom and 0.23 eV/\AA). 
 The pure Mo is still a challenge for ML-ADP as the energy and force MAEs are 
-noticeably large (still much smaller than the original Zjw04 EAM). The binary 
+noticeably large but still much smaller than the original Zjw04 EAM. The binary 
 SNAP predicts well on pure Ni and Mo. But ML-ADP outperforms the SNAP model on 
 binary phases (Ni$_3$Mo, Ni-doped Mo and especially the Mo-doped Ni).
-On the contrast, ML-EAM performs significantly worse compared with ML-ADP. 
-Interestingly, our results suggest that Mo-Ni dipole and quadrupole interactions 
-are completely negligible (Figure S1 in the appendix). The Ni-Ni dipole and 
-quadrupole interactions are an order of magnitude weaken than those of Mo-Mo. 
+On the contrast, ML-EAM still performs significantly worse compared with ML-ADP 
+due to the restriction of the central-force model, as discussed before. 
+Interestingly, our results suggest that Mo-Ni dipole and quadrupole 
+contributions are completely negligible (Figure S1 in the appendix). The Ni-Ni 
+dipole and quadrupole interactions are an order of magnitude weaken than those 
+of Mo-Mo. 
 
 Figure \ref{fig:alloy_eos} demonstrates the energy-volume curves of Ni$_3$Mo and
 Ni$_4$Mo. The original Zjw04 EAM can not properly describe the energy-volume 
-relations of these two crystals. The ML-ADP curves fit perfectly with the DFT 
-curves. ML-EAM fits well with tensile strains but overestimates the energy under 
-compress strains. 
+relations of these two crystals in wide range. The ML-ADP curves agrees 
+perfectly with the DFT curves. ML-EAM agrees well under tensile strains but 
+overestimates the energy under compress strains. 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -956,7 +992,7 @@ Mo-doped Ni, Ni) and the entire Mo-Ni dataset.}
 
 Table \ref{table:NiMo_elastic_constants} summarizes the elastic constants 
 predictions of Ni$_3$Mo and Ni$_4$Mo. One should note that these two crystals 
-were not included in $\Omega$ of Equation \ref{eq:cijkl_loss} and 
+were not included in the $\Omega$ of Equation \ref{eq:cijkl_loss} and 
 \ref{eq:rose_loss} but their elastic properties were used to tune the binary 
 SNAP model. The original Zjw04 EAM performs obviously poorly on predicting 
 elastic constants. Some absolute percentage errors can even exceed 100\%. With 
@@ -1018,13 +1054,14 @@ alloys Ni$_{3}$Mo and Ni$_{4}$Mo.
 
 The above results suggest that with machine learning and essential physical 
 constraints, for the fcc and bcc solids, the traditional empirical potentials, 
-EAM/ADP, can be improved to be almost as accurate as the SNAP method. But, 
-EAM/ADP are around $10^2$ to $10^3$ times faster than SNAP. To understand this,
-we can start from the many-body expansion (MBE) scheme \cite{kCON}.
+EAM/ADP, can be improved to be almost as accurate as the SNAP method using 
+exactly the same dataset. But, EAM/ADP are around $10^2$ to $10^3$ times faster 
+than SNAP. To understand this, we can start from the many-body expansion (MBE) 
+scheme \cite{kCON}.
 
 MBE is one of the most widely used schemes for fitting potential energy 
 surfaces. In the many-body expansion scheme, the total energy of a system with N 
-atoms can be expressed as the sum of all k-body terms where $k \le 1$:
+atoms can be expressed as the sum of all k-body terms where $k \le N$:
 \begin{equation}
 \label{eq:many_body_expansion}
 E = 
@@ -1051,33 +1088,35 @@ E & = \sum_{i}^{\mathrm{N}}{\left(
 where $E_{i}$ is the atomic energy of atom $i$. 
 
 In fact, both the EAM and the SNAP formalisms can be considered as variants of 
-MBE truncated at $k=2$. For the EAM method, the embedding contribution $F(\rho)$ 
-serves as the one-body term and the overall pairwise contribution 
-$\frac{1}{2}\sum_{j\ne i}{\phi(r_{ij})}$ is just a plain transcription of the 
-two-body term in Equation \ref{eq:MBE_atomic}. For the SNAP method, the atomic 
-energy is calculated with the following equation: 
+MBE. For the EAM method, the embedding contribution $F(\rho)$ 
+serves as a "special" one-body term because the many-body effect is considered.
+The overall pairwise contribution $\frac{1}{2}\sum_{j\ne i}{\phi(r_{ij})}$ is 
+just a plain transcription of the two-body term in Equation \ref{eq:MBE_atomic}. 
+For the SNAP method, the atomic energy is calculated with the following 
+equation: 
 \begin{equation}
 \label{eq:snap_formalism}
 E_i = \beta_{0}^{\alpha_{i}} + \sum_{k}{\beta_{k}^{\alpha_{i}}B_{k}^i}
 \end{equation} 
 where $\beta_{0}^{\alpha_i}$ and $\beta_{k}^{\alpha_i}$ are learnable scalar
 parameters, $\alpha_i$ indicates the element type of atom $i$. $B_{k}^{i}$ is a 
-bispectrum coefficient. The calculation of $B_{k}^{i}$ is very complicated but 
-it is still a two-body term. The overall two-body contribution is a linear 
-combination of $B_{k}^{i}$. Thus, the SNAP formalism can be viewed as an 
-assemble of a simplified one-body term with a complicated two-body term. On the 
-other hand, the EAM formalism is built up with a 'complicated' one-body term and 
-a rather simple two-body term. The central-force EAM works well on fcc metals. 
-For bcc metals with partially filled d bands, the directional d bonding cannot
-be ignored. Hence, the pairwise dipole and quadrupole functions introduced by 
-ADP are necessary.
+bispectrum coefficient. The calculation of $B_{k}^{i}$ is very complicated 
+\cite{SNAP_Algo} but it is still a two-body term. The overall two-body 
+contribution is a linear combination of $B_{k}^{i}$. Thus, the SNAP formalism 
+can be viewed as an assemble of a simplified one-body term with a complicated 
+two-body term. 
+On the other hand, the EAM formalism is built up with a 'complicated' one-body 
+term and a rather simple two-body term. The central-force EAM works well on fcc 
+metals. For bcc metals with partially filled d bands, the directional d bonding 
+cannot be ignored. Hence, the pairwise dipole and quadrupole functions 
+introduced by ADP are necessary.
 
 As we analysed in Section \ref{sec:transformation}, the fundamental atomic 
 descriptor of EAM, the $N \times N^{\mathrm{nl}} \times 4$ matrix $\mathbf{G}$, 
 is composed of just raw interatomic distances. However, interatomic distances
 alone may not uniquely describe a structure. To avoid this problem, the cutoff 
-was raised up to 6.5 \AA. As a comparison, the overall $r_{cut}$ is 4.6 \AA for 
-the binary SNAP. But such descriptor is still too rough to describe complicated 
+was raised up to 6.5 \AA. As a comparison, the overall $r_{cut}$ for the binary 
+SNAP is 4.6 \AA. But such descriptor is still too rough to describe complicated 
 potential energy surfaces (e.g. bcc Mo). To further enhance EAM/ADP, complicated
 three--atoms interactions may be necessary.
 
@@ -1091,12 +1130,12 @@ three--atoms interactions may be necessary.
 
 To conclude, we have successfully combined empirical potentials (EAM/ADP) with 
 machine learning. The machine learning approaches (big data, SGD, etc), together 
-with physical constraints (Rose EOS, elastic constants) can significantly boost
-the performaces of EAM/ADP. For the fcc Ni, bcc Mo and Mo-Ni alloys, ML-EAM and
-ML-ADP can be as accurate as SNAP, while later method is orders of magnitude 
-slower. Our work also indicates a new route to design and develop machine 
-learning interatomic potentials \textemdash the machine learning enhanced 
-empirical potential approach.
+with physical constraints (Rose EOS, elastic constants) can significantly 
+improve the performaces of EAM/ADP. For the fcc Ni, bcc Mo and Mo-Ni alloys, 
+ML-EAM and ML-ADP can be as accurate as SNAP, while later method is orders of 
+magnitude slower. Our work also indicates a new route to design and develop 
+machine learning interatomic potentials \textemdash the machine learning 
+enhanced empirical potential approach.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
