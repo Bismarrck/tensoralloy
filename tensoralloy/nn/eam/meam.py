@@ -264,7 +264,7 @@ class MeamNN(EamAlloyNN):
             dtype = get_float_dtype()
             with tf.name_scope("Constants"):
                 two = tf.constant(2.0, dtype=dtype, name='two')
-                half = tf.constant(2.0, dtype=dtype, name='half')
+                half = tf.constant(0.5, dtype=dtype, name='half')
 
             for kbody_term, (dists, masks) in partitions.items():
                 symboli, symbolj, symbolk = \
