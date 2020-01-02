@@ -61,6 +61,7 @@ class Spline:
     bc_end: float
     x: np.ndarray
     y: np.ndarray
+    natural_boundary: bool
 
 
 @add_slots
@@ -85,12 +86,15 @@ class SetFL:
     lattice_types: List[str]
 
 
-def _init_spline_dict(nx: int, dx: float, bc_start=0.0, bc_end=0.0):
+def _init_spline_dict(nx: int, dx: float, bc_start=0.0, bc_end=0.0,
+                      deriv_order=2):
+    assert deriv_order == 1 or deriv_order == 2
     return {
         "bc_start": bc_start,
         "bc_end": bc_end,
         "x": np.linspace(0.0, nx * dx, nx, endpoint=False),
         "y": np.zeros(nx),
+        "natural_boundary": False if deriv_order == 1 else True,
     }
 
 
@@ -406,7 +410,8 @@ def _read_meam_spline_file(filename: str, element=None):
                     raise IOError(f"Line error: {line}")
                 bc_start = float(splits[0])
                 bc_end = float(splits[1])
-                spline = _init_spline_dict(nknots, 0.0, bc_start, bc_end)
+                spline = _init_spline_dict(
+                    nknots, 0.0, bc_start, bc_end, deriv_order=1)
                 if is_new_format:
                     stage = 4
                 else:
