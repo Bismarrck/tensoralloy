@@ -55,18 +55,6 @@ class CubicSplinePotential(EamAlloyPotential):
     def _make(self, t: tf.Tensor, pot: str, name: str):
         """
         Make a spline potential.
-
-        nr = self._adpfl.nr
-            x = self._adpfl.rho[element][0][0:nr:self._interval]
-            y = self._adpfl.rho[element][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            rho = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            rho = tf.reshape(rho, shape, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
         """
         if not self.is_avaiblable(pot):
             raise ValueError(f"{pot} is not available!")
@@ -81,8 +69,9 @@ class CubicSplinePotential(EamAlloyPotential):
             collections=[tf.GraphKeys.MODEL_VARIABLES, ]
         )
         bc_start = self._df[f"{pot}.bc_start"]
-        bc_end = self._df[f"{pot}.bc_start"]
-        cubic = CubicInterpolator(x, y, natural_boundary=True,
+        bc_end = self._df[f"{pot}.bc_end"]
+        natural_boundary = self._df[f"{pot}.natural_boundary"]
+        cubic = CubicInterpolator(x, y, natural_boundary=natural_boundary,
                                   bc_start=bc_start, bc_end=bc_end)
         shape = tf.shape(t, name='shape')
         val = cubic.evaluate(tf.reshape(t, (-1, ), name='t/flat'), name='eval')
@@ -132,7 +121,7 @@ class CubicSplinePotential(EamAlloyPotential):
             with tf.variable_scope(
                     f"{variable_scope}/{element}",
                     reuse=tf.AUTO_REUSE):
-                embed = self._make(rho, f"{element}.embed", "phi")
+                embed = self._make(rho, f"{element}.embed", "embed")
                 if verbose:
                     log_tensor(embed)
                 return embed
@@ -221,3 +210,83 @@ class CubicSplinePotential(EamAlloyPotential):
                 if verbose:
                     log_tensor(fs)
                 return fs
+
+
+class LinearlyExtendedSplinePotential(CubicSplinePotential):
+    """
+    A special spline potential for pair style 'meam/spline'.
+
+    When x < xmin: f(x) = y[0] + (x - xmin) * deriv0
+    When x > xmax: f(x) = y[-1] + (x - xmax) * deriv1
+
+    """
+
+    def _make(self, t: tf.Tensor, pot: str, name: str):
+        """
+        Make a spline potential.
+        """
+        if not self.is_avaiblable(pot):
+            raise ValueError(f"{pot} is not available!")
+        if self._df[f"{pot}.natural_boundary"]:
+            raise ValueError("Natural boundary is not applicable for "
+                             "LinearlyExtendedSplinePotential")
+
+        dtype = t.dtype
+        xval = np.asarray(self._df[f"{pot}.x"], dtype=dtype.as_numpy_dtype)
+        yval = np.asarray(self._df[f"{pot}.y"], dtype=dtype.as_numpy_dtype)
+        x = tf.convert_to_tensor(xval, dtype=dtype, name="x")
+        y = get_variable(
+            "y",
+            shape=yval.shape,
+            dtype=dtype,
+            trainable=True,
+            initializer=tf.constant_initializer(yval, dtype=dtype),
+            collections=[tf.GraphKeys.MODEL_VARIABLES, ]
+        )
+        deriv0 = tf.constant(
+            self._df[f"{pot}.bc_start"], dtype=dtype, name='deriv0')
+        derivN = tf.constant(
+            self._df[f"{pot}.bc_end"], dtype=dtype, name='derivN')
+        cubic = CubicInterpolator(x, y, natural_boundary=False,
+                                  bc_start=deriv0, bc_end=derivN)
+        original_shape = tf.shape(t, name='shape')
+        t = tf.reshape(t, (-1,), name='t/flat')
+
+        with tf.name_scope("Seg"):
+            idx1 = tf.where(tf.less(t, x[0]), name='idx1')
+            idx2 = tf.where(tf.logical_and(tf.greater_equal(t, x[0]),
+                                           tf.less(t, x[-1])), name='idx2')
+            idx3 = tf.where(tf.greater_equal(t, x[-1]), name='idx3')
+            shape = tf.shape(t, name='shape', out_type=idx1.dtype)
+
+            def left_fn(z):
+                """
+                The linear function for x < xmin
+                """
+                return tf.math.add(y[0],
+                                   deriv0 * tf.math.subtract(z, x[0]),
+                                   name='left')
+
+            def mid_fn(z):
+                """
+                The cubic spline function for xmin <= x <= xmax
+                """
+                return cubic.evaluate(z, name='mid')
+
+            def right_fn(z):
+                """
+                The linear function for x > xmax
+                """
+                return tf.math.add(y[-1],
+                                   derivN * (tf.math.subtract(z, x[-1])),
+                                   name='right')
+
+            values = [
+                tf.scatter_nd(idx1, left_fn(tf.gather_nd(t, idx1)), shape),
+                tf.scatter_nd(idx2, mid_fn(tf.gather_nd(t, idx2)), shape),
+                tf.scatter_nd(idx3, right_fn(tf.gather_nd(t, idx3)), shape),
+            ]
+            val = tf.add_n(values, name='eval')
+
+        val = tf.reshape(val, original_shape, name=name)
+        return val
