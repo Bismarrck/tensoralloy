@@ -203,6 +203,8 @@ class BuildSplineGuessProgram(CLIProgram):
                         getattr(lmp, pot)[key].y[::step].tolist()
                 data[f"{key}.{pot}.bc_start"] = getattr(lmp, pot)[key].bc_start
                 data[f"{key}.{pot}.bc_end"] = getattr(lmp, pot)[key].bc_end
+                data[f"{key}.{pot}.natural_boundary"] = \
+                    getattr(lmp, pot)[key].natural_boundary
 
             if exclude_types:
                 exclude_types = [x.strip().lower()
