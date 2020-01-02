@@ -4,19 +4,21 @@ Test the implementation of MEAM/Spline.
 """
 from __future__ import print_function, absolute_import
 
+import numpy as np
 import tensorflow as tf
 import unittest
 import nose
 import os
 import shutil
 
+from nose.tools import assert_almost_equal
 from enum import Enum
 from os.path import dirname, join, exists
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.test_utils import test_dir
+from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 from tensoralloy.nn.eam.meam import MeamNN
 from tensoralloy.transformer.universal import UniversalTransformer
@@ -74,18 +76,22 @@ class MeamSplineTest(unittest.TestCase):
         Test the meam/spline implementation with the Ti system.
         """
         atoms = bulk('Ti', cubic=True)
+        delta = np.random.uniform(-0.05, 0.05, size=(len(atoms), 3))
+        atoms.set_positions(atoms.positions + delta)
         elements = ['Ti']
-        spline = f"spline@{join(dirname(__file__), 'Ti.meam.spline.json')}"
+        spline = f"lspline@{join(dirname(__file__), 'Ti.meam.spline.json')}"
 
         calc = self.get_lammps_calculator(TestSystem.Ti)
+        calc.calculate(atoms, properties=['energy', 'forces'])
         pe = calc.get_potential_energy(atoms)
+        forces = calc.get_forces(atoms)
 
         nn = MeamNN(elements,
                     custom_potentials={"Ti": {"rho": spline,
                                               "fs": spline,
                                               "embed": spline},
                                        "TiTi": {"phi": spline, "gs": spline}})
-        clf = UniversalTransformer(elements, rcut=5.5, acut=4.1, angular=True,
+        clf = UniversalTransformer(elements, rcut=5.50, acut=4.41, angular=True,
                                    symmetric=False)
         nn.attach_transformer(clf)
 
@@ -96,8 +102,10 @@ class MeamSplineTest(unittest.TestCase):
                 verbose=True)
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                print(sess.run(predictions['energy']))
-                print(pe)
+                results = sess.run(predictions)
+                assert_almost_equal(results['energy'], pe,
+                                    delta=1e-5)
+                assert_array_almost_equal(results['forces'], forces, delta=1e-4)
 
 
 if __name__ == "__main__":

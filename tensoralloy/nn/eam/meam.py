@@ -400,6 +400,7 @@ class MeamNN(EamAlloyNN):
             splits = tf.split(
                 rho, num_or_size_splits=split_sizes, axis=split_axis)
             values = []
+            zero = tf.constant(0.0, dtype=rho.dtype, name='zero')
             for i, element in enumerate(self._elements):
                 with tf.name_scope(f"{element}"):
                     x = tf.expand_dims(splits[i], axis=-1, name=element)
@@ -408,6 +409,9 @@ class MeamNN(EamAlloyNN):
                     # Apply the embedding function on `x`
                     comput = self._get_embed_fn(element, verbose=verbose)
                     y = comput(x)
+                    with tf.name_scope("Baseline"):
+                        base = comput(zero)
+                    y = tf.math.subtract(y, base, name='relative')
                     embed = tf.squeeze(y, axis=squeeze_axis, name='atomic')
                     if verbose:
                         log_tensor(embed)
