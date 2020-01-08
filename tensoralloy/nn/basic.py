@@ -915,7 +915,8 @@ class BasicNN:
                 fp_prec = get_float_precision()
                 fp_prec_op = tf.constant(fp_prec.name, name='precision')
                 tf_version_op = tf.constant(tf.__version__, name='tf_version')
-                use_legacy_keys_op = tf.constant(False, name="use_legacy_keys")
+                use_legacy_keys_op = tf.constant(
+                    "false", name="use_legacy_keys")
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
