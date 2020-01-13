@@ -79,6 +79,7 @@ class MishinH(EamAlloyPotential):
         params['MoMo'] = params['NiNi'].copy()
         params['MoNi'] = params['NiNi'].copy()
         params['VV'] = params['MoMo'].copy()
+        params['NbNb'] = params['NbNb'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
