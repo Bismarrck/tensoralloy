@@ -77,15 +77,15 @@ metals qualitatively. In the past few years, machine learning has became the
 key approach for modeling interatomic interactions. Powered by big data and 
 efficient optimizers, machine learning interatomic potentials can generally 
 approximate to the first-principles accuracy. In this works, we successfully 
-integrated machine learning with EAM and ADP. Machine learning can significantly 
-boost their performances. For energy and force predictions, machine leaned EAM 
-and ADP can be almost as accurate as the spectral neighbor analysis potential 
-(SNAP) on the fcc Ni, bcc Mo and Mo-Ni alloy systems, while the molecular 
-dynamics simulations performed by the later approach is nealy 1000 times 
-slower. Machine learned EAM and ADP can also give first-principle accuracy key 
-material properties, such as elastic constants, melting temperatures and surface 
-energies. Our results suggest a new and systematic route for developing machine 
-learning interatomic potentials. 
+integrated machine learning interatomic potential with EAM and ADP. Machine 
+learning can significantly boost their performances. For energy and force 
+predictions, machine leaned EAM and ADP can be almost as accurate as the 
+spectral neighbor analysis potential (SNAP) on the fcc Ni, bcc Mo and Mo-Ni 
+alloy systems, while the molecular dynamics simulations performed by the later 
+approach is nealy 1000 times slower. Machine learned EAM and ADP can also give 
+first-principle accuracy key material properties, such as elastic constants, 
+melting temperatures and surface energies. Our results suggest a new and 
+systematic route for developing machine learning interatomic potentials. 
 \end{abstract}
 
 \maketitle
@@ -98,7 +98,7 @@ learning interatomic potentials.
 \section{Introduction}
 \label{sec:introduction}
 
-Atomistic modeling plays a vital role in materials science. \textit{ab initio} 
+Atomistic modeling plays a vital role in materials science. \textit{Ab initio} 
 calculation or force-field based molecular dynamics simulation (MD) are 
 effective ways to study, understand or predict chemical and physical properties 
 of materials. \textit{ab initio} approaches are generally much more precise but 
@@ -118,7 +118,7 @@ optimization (GO) approaches (Basin-Hopping \cite{BH0,BH1}, genetic algorithm
 \cite{PCIPY,PGA}, etc) are traditionally used to find the best possible 
 parameters. However, the gradients of the losses with respect to model 
 parameters are difficult or even impossible to calcualte. Hence, 
-GO optimizations are generally not that effective.
+global optimizations are generally not that effective.
 
 In the last decade, machine learning (ML) has become one of the hottest 
 topics in many research areas. In the materials science, researchers have made 
@@ -153,7 +153,7 @@ efficiently. Second, MLIPs are mostly vectorizable. Hence, GPUs can be utilized
 to significantly accelerate training and using of MILPs.
 
 However, MLIPs also have challenges. The large parameter space and lack of 
-physical background makes the "big data" a necessarity. The cost of dataset is 
+physical background makes the "big data" a requisite. The cost of dataset is 
 non-negligible. Besides, even "big data" can only cover a small portion of real 
 physical environments (temperature, external pressure, etc). Outside the 
 training zone, the performances of MILPs may not that stable. For long-time 
@@ -622,9 +622,9 @@ As an example, the elementary SNAP potentials (Mo, Ni) were fitted with just
 hundreds of structures but they performed quite well on elastic constants and 
 surface energies, as in the outer loop \cite{SNAP_Mo} of the fitting process 
 such material properties were already used. One must also note that data 
-consistency is important. Physical constrains are just supplementary roles in 
-developing MLIPs. So the values of the are preferred to be measured with 
-first-principle calculations.
+consistency is important. Physical constraints are just supplementary roles in 
+developing MLIPs, so they are preferred to be measured with first-principle 
+calculations.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -675,7 +675,7 @@ elementary Ni SNAP model.
 \subsection{Implementation}
 \label{sec:implementation}
 
-The implementation of the machine learned embedded atom mathod and the physical
+The implementation of the machine learned EAM and the physical
 constraints are beyond the scope of this work. The details will be discussed
 in another paper. Here, we will give a brief description.
 
@@ -765,7 +765,7 @@ $i$, $E_i$ is the Zjw04 energy of structure $i$ while $E_i^{dft}$ represents its
 corresponding DFT energy, $E_{eq}$ and $E_{eq}^{dft}$ refers to the equilibrium 
 energy of Zjw04 and DFT, respectively.
 
-Figure \ref{fig:Mo_eam_adp} compares the $\rho(r)$, $F(\rho)$, $\phi(r)$, 
+Figure \ref{fig:Ni_eam} compares the $\rho(r)$, $F(\rho)$, $\phi(r)$, 
 $\mu(r)$ and $\omega(r)$ functions. The differences between ML-EAM and ML-ADP 
 $\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. For ML-ADP, both the dipole 
 and the quadrupole terms converge to zero at $\sim 4$ \AA. The dipole term gives
@@ -792,7 +792,7 @@ ML-EAM and DFT for the fcc Ni.}
 \centering
 \includegraphics[scale=0.65]{figures/Mo_all_eos.png}
 \caption{\label{fig:Mo_eos} The energy-volume curves of the original EAM, 
-ML-EAM and DFT for the bcc Mo.}
+ML-EAM, ML-ADP and DFT for the bcc Mo.}
 \end{figure}
 
 For the Ni dataset, the original Zjw04 already has a reasonable performace. 
@@ -858,7 +858,7 @@ elementary SNAP Mo model.
 \centering
 \includegraphics[scale=0.5]{figures/alloy_eos.png}
 \caption{\label{fig:alloy_eos} Energy-volume curves of Ni$_3$Mo and Ni$_4$Mo 
-obtained with the original Zjw04 EAM, ML-EAM, ML-ADP and DFT.}
+obtained with the original Zjw04 EAM, ML-EAM, ML-ADP, SNAP and DFT.}
 \end{figure*}
 
 Figure \ref{fig:Ni_eos} and \ref{fig:Mo_eos} plot the equation of state 
@@ -1069,8 +1069,9 @@ E =
 \sum_{i,j}^{\mathrm{C^N_2}}{E^{(2)}_{ij}} + 
 \sum_{i,j,k}^{\mathrm{C^N_3}}{E^{(3)}_{ijk}} + \cdots 
 \end{equation}
-where $\mathrm{C^N_k}$ is the binomial coefficient and $E^{(k)}$ represents the 
-k-body contribution. In many cases, higher-order terms like $E_{ij}$ or 
+where $\mathrm{C^N_k}$ (k=1,2,3) is the binomial coefficient and $E^{(k)}$ 
+represents the k-body contribution. In many cases, higher-order terms like 
+$E_{ij}$ or 
 $E_{ijk}$ are symmetric: $E_{ij}=E_{ji}$, $E_{ijk}=E_{ikj}=E_{jik}=\cdots$. 
 Thus, Equation \ref{eq:many_body_expansion} can be further transformed to:
 \begin{align}
