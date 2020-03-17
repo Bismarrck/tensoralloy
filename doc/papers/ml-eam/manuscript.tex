@@ -56,7 +56,7 @@
     Beijing 100088, China}
 
 \author{Hai-Feng Song}
-\email{song_haifeng@iapcm.ac.cn}
+\email{song\_haifeng@iapcm.ac.cn}
 \affiliation{
     Institute of Applied Physics and Computational Math, 
     Beijing 100088, China}
@@ -77,8 +77,11 @@ metals qualitatively. In the past few years, machine learning has became the
 key approach for modeling interatomic interactions. Powered by big data and 
 efficient optimizers, machine learning interatomic potentials can generally 
 approximate to the first-principles accuracy. In this works, we successfully 
-integrated machine learning interatomic potential with EAM and ADP. Machine 
-learning can significantly boost their performances. For energy and force 
+developed a route to express EAM and ADP within machine learning framework in 
+highly-vectorizable form and further enhanced the potentials with physical 
+constraints. Machine learning can significantly boost their performances with 
+few training data. 
+For energy and force 
 predictions, machine leaned EAM and ADP can be almost as accurate as the 
 spectral neighbor analysis potential (SNAP) on the fcc Ni, bcc Mo and Mo-Ni 
 alloy systems, while the molecular dynamics simulations performed by the later 
@@ -640,6 +643,42 @@ Zjw04 EAM and the machine learned EAM (ML-EAM).}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
+% Figure: Mo - EAM/ADP - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=0.6]{figures/Mo_eam_adp.png}
+\caption{\label{fig:Mo_eam_adp} $\rho(r)$, $F(\rho)$, $\phi(r)$ of the original 
+Zjw04 EAM, ML-EAM and ML-ADP for elementary Mo. \textbf{(d)} shows the $\mu(r)$ 
+and $\omega(r)$ of ML-ADP.}
+\end{figure}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Table: Ni / Mo MAEs
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{table}
+\centering
+\begin{tabular}{lccccc}
+\hline
+            &    & EAM\cite{ZJW2} & SNAP\cite{SNAP} & ML-EAM & ML-ADP \\
+\hline
+Energy     & Ni & 10.6           & 1.2             & 3.9    &        \\
+(meV/atom) & Mo & 58.9           & 13.2            & 23.8   & 18.7   \\
+\hline
+Force      & Ni & 0.06           & 0.05            & 0.05   &        \\
+(eV/\AA)   & Mo & 0.31           & 0.25            & 0.30   & 0.29   \\
+\hline
+\end{tabular}
+\caption{\label{table:Mo_Ni_mae} Comparisons of the energy and force MAEs of 
+elementary Ni and Mo. 
+}
+\end{table}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
 % Table: Ni - Material Properties
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
@@ -747,9 +786,21 @@ The optimized parameters are listed in the appendix.
 \subsection{Elementary Ni and Mo}
 \label{sec:elementary}
 
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Surface Energy - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}
+\centering
+\includegraphics[scale=0.4]{figures/surface_energy.png}
+\caption{\label{fig:surface_energy} Comparison of calculated surface energies of 
+\textbf{(a)} fcc Ni and \textbf{(b)} bcc Mo.}
+\end{figure}
+
 We firstly use the two elementary datasets (Ni and Mo) to show our approach. These 
-two datasets has 461 and 284 structures, respectively. 61 and 34 were randomly 
-selected to form the test subsets. In these two experiments, 
+two datasets has 461 and 284 structures, respectively. 61 and 34 structures were 
+randomly selected to form the test subsets. In these two experiments, 
 $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$ were 
 set to 1, 3 and 0.05 respectively. The batch size was fixed to 25.
 
@@ -767,9 +818,7 @@ energy of Zjw04 and DFT, respectively.
 
 Figure \ref{fig:Ni_eam} compares the $\rho(r)$, $F(\rho)$, $\phi(r)$, 
 $\mu(r)$ and $\omega(r)$ functions. The differences between ML-EAM and ML-ADP 
-$\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. For ML-ADP, both the dipole 
-and the quadrupole terms converge to zero at $\sim 4$ \AA. The dipole term gives
-the major contribution.
+$\rho(r)$, $\phi(r)$ and $F(\rho)$ are quite small. 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -810,15 +859,18 @@ at around $r=4.8$ \AA, which is rougly 2 times of the equilibrium spacing
 between nearest neighbors.
 
 For the Mo dataset, the situation is quite different. The original Zjw04 has 
-extremely large MAEs: the energy \textbf{rMAE} is $\sim 98$ meV/atom and the 
-force MAE is more than 0.40 eV/\AA. Our method can significantly reduce the 
+extremely large MAEs: the energy \textbf{rMAE} is $\sim 59$ meV/atom and the 
+force MAE is more than 0.31 eV/\AA. Our method can significantly reduce the 
 error: ML-EAM can achieve test MAEs of 23.8 meV/atom and 0.26 eV/\AA and overall
 MAEs of 26.7 meV/atom and 0.30 eV/\AA. We also optimized an ADP potential for 
 this dataset. Interestingly, ML-ADP gets better results: 20.6 meV/atom and 
 0.24 eV\AA on the test set and 18.7 meV/atom and 0.29 eV/\AA on the entire 
 dataset. On the contrast, the SNAP method (13.2 meV/atom, 0.25 eV/\AA) behaves 
 slightly better than ML-ADP. But considering the computational cost, the 
-performace of ML-ADP is totally acceptable.
+performace of ML-ADP is totally acceptable. Figure \ref{fig:Mo_eam_adp} 
+demonstrates the potential functions. The $\rho(r)$, $F(\rho)$ and $\phi(r)$ 
+functions of ML-EAM and ML-ADP are quite similar. The additional accuracy of 
+ML-ADP mainly comes from the dipole function $\mu(r)$. 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -868,19 +920,6 @@ underestimate the energy at both tensile and compress strains. However, our
 constrained machine learning approach can fix this problem. The 
 energy-volume curves of ML-EAM and ML-ADP overalp with the DFT curves very well. 
 
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
-% Figure: Mo - EAM/ADP - Plot
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure}[htp]
-\centering
-\includegraphics[scale=0.6]{figures/Mo_eam_adp.png}
-\caption{\label{fig:Mo_eam_adp} $\rho(r)$, $F(\rho)$, $\phi(r)$ of the original 
-Zjw04 EAM, ML-EAM and ML-ADP. \textbf{(d)} shows the $\mu(r)$ and $\omega(r)$ of 
-ML-ADP.}
-\end{figure}
-
 Table \ref{table:Ni_properties} and \ref{table:Mo_properties} summerize the 
 predicted material properties of fcc Ni and bcc Mo, including the melting point 
 $T_{m}$, the elastic constants ($c_{11}$, $c_{12}$ and $c_{44}$), the vacancy 
@@ -897,18 +936,6 @@ almost exactly the same results with DFT. For the more complicated bcc Mo, the
 central-force ML-EAM model becomes not that good due to the lacking of 
 directional d bonding \cite{ADP0}. The angular correction, introduced by Mishin, 
 shows its importance. ML-ADP can give comparable results to the SNAP method.
-
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
-% Figure: Surface Energy - Plot
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure}
-\centering
-\includegraphics[scale=0.4]{figures/surface_energy.png}
-\caption{\label{fig:surface_energy} Comparison of calculated surface energies of 
-\textbf{(a)} fcc Ni and \textbf{(b)} bcc Mo.}
-\end{figure}
 
 We further examined our ML-EAM and ML-ADP by calculating the melting temperature
 of fcc Ni and bcc Mo using the solid-liquid coexistence approach. For fcc Ni, 
