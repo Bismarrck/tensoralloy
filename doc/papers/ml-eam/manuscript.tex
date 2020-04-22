@@ -20,17 +20,17 @@
 
 \author{Xin Chen}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{Li-Fang Wang}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{Xing-Yu Gao}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{Ya-Fan Zhao}
@@ -38,7 +38,7 @@
     CAEP Software Center for High Performance Numerical Simulation, 
     Beijing 100088, China}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{De-Ye Lin}
@@ -47,18 +47,18 @@
     CAEP Software Center for High Performance Numerical Simulation, 
     Beijing 100088, China}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{Wei-Dong Chu}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 
 \author{Hai-Feng Song}
 \email{song\_haifeng@iapcm.ac.cn}
 \affiliation{
-    Institute of Applied Physics and Computational Math, 
+    Institute of Applied Physics and Computational Mathematics, 
     Beijing 100088, China}
 \affiliation{
     CAEP Software Center for High Performance Numerical Simulation, 
@@ -76,7 +76,7 @@ angular-dependent potential (ADP) have proven successful in modeling many
 metals qualitatively. In the past few years, machine learning has became the 
 key approach for modeling interatomic interactions. Powered by big data and 
 efficient optimizers, machine learning interatomic potentials can generally 
-approximate to the first-principles accuracy. In this works, we successfully 
+approximate to the first-principle accuracy. In this works, we successfully 
 developed a route to express EAM and ADP within machine learning framework in 
 highly-vectorizable form and further enhanced the potentials with physical 
 constraints. Machine learning can significantly boost their performances with 
@@ -84,11 +84,11 @@ few training data.
 For energy and force 
 predictions, machine lear̦ned EAM and ADP can be almost as accurate as the 
 spectral neighbor analysis potential (SNAP) on the fcc Ni, bcc Mo and Mo-Ni 
-alloy systems, while the molecular dynamics simulations performed by the later 
-approach is nearly 1000 times slower. Machine learned EAM and ADP can also give 
-first-principle accuracy key material properties, such as elastic constants, 
-melting temperatures and surface energies. Our results suggest a new and 
-systematic route for developing machine learning interatomic potentials. 
+alloy systems, while the molecular dynamics simulations performed by our 
+potentials are nearly 1000 times faster. Machine learned EAM and ADP can also 
+give first-principle accuracy key material properties, such as elastic 
+constants, melting temperatures and surface energies. Our results suggest a new 
+and systematic route for developing machine learning interatomic potentials. 
 \end{abstract}
 
 \maketitle
@@ -288,7 +288,7 @@ where $\niaa$ represents the number of A-type neighors of atom $i$ and
 $\niab$ represents the number of B-type neighors. For atom $j$ of specie $B$, we
 can also write a similar form. 
 \begin{align}
-\label{eq:e_atom_phase_1}
+\label{eq:e_atom_phase_2}
 E_{j}^{B} 
 = & 
 \frac{1}{2}\sum_{i \neq j}^{\njbb}\phi_{\mathrm{BB}}(r_{ij}) +
@@ -786,18 +786,6 @@ The optimized parameters are listed in the appendix.
 \subsection{Elementary Ni and Mo}
 \label{sec:elementary}
 
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-% 
-% Figure: Surface Energy - Plot
-%
-% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
-\begin{figure}
-\centering
-\includegraphics[scale=0.4]{figures/surface_energy.png}
-\caption{\label{fig:surface_energy} Comparison of calculated surface energies of 
-\textbf{(a)} fcc Ni and \textbf{(b)} bcc Mo.}
-\end{figure}
-
 We firstly use the two elementary datasets (Ni and Mo) to show our approach. These 
 two datasets has 461 and 284 structures, respectively. 61 and 34 structures were 
 randomly selected to form the test subsets. In these two experiments, 
@@ -842,6 +830,18 @@ ML-EAM and DFT for the fcc Ni.}
 \includegraphics[scale=0.65]{figures/Mo_all_eos.png}
 \caption{\label{fig:Mo_eos} The energy-volume curves of the original EAM, 
 ML-EAM, ML-ADP and DFT for the bcc Mo.}
+\end{figure}
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Figure: Surface Energy - Plot
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\begin{figure}
+\centering
+\includegraphics[scale=0.4]{figures/surface_energy.png}
+\caption{\label{fig:surface_energy} Comparison of calculated surface energies of 
+\textbf{(a)} fcc Ni and \textbf{(b)} bcc Mo.}
 \end{figure}
 
 For the Ni dataset, the original Zjw04 already has a reasonable performace. 
@@ -1157,13 +1157,24 @@ three--atoms interactions may be necessary.
 \label{sec:conclusions}
 
 To conclude, we have successfully combined empirical potentials (EAM/ADP) with 
-machine learning. The machine learning approaches (big data, SGD, etc), together 
-with physical constraints (Rose EOS, elastic constants) can significantly 
-improve the performaces of EAM/ADP. For the fcc Ni, bcc Mo and Mo-Ni alloys, 
-ML-EAM and ML-ADP can be as accurate as SNAP, while later method is orders of 
-magnitude slower. Our work also indicates a new route to design and develop 
-machine learning interatomic potentials \textemdash the machine learning 
+machine learning. The machine learning approaches (big data, optimization, etc), 
+together with physical constraints (Rose EOS, elastic constants) can 
+significantly improve the performaces of EAM/ADP. For the fcc Ni, bcc Mo and 
+Mo-Ni alloys, ML-EAM and ML-ADP can be as accurate as SNAP, while later method 
+is orders of magnitude slower. Our work also indicates a new route to design and 
+develop machine learning interatomic potentials \textemdash the machine learning 
 enhanced empirical potential approach.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Data Availability
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % 
+\section*{Data Availability}
+The optimized parameters of the associated EAM and ADP models are all listed in 
+the appendix. The learning datasets are originally created by Shyue Ping Ong 
+and can be accessed from 
+\href{https://github.com/materialsvirtuallab/snap}{GitHub} freely.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -1177,6 +1188,28 @@ This work was supported by the National Key Research and Development Program of
 China under Grant No. 2016YFB0201204, the Science Challenge Project under Grant 
 No. TZ2018002 and the National Natural Science Foundation of China under Grant 
 No. U1630250.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Author Contributions
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\section*{Author Contributions}
+X.C. designed the research project, wrote the related codes and build the 
+machine learning interatomic potentials. L.F.W did the molecular dynamics 
+simulations and calculations. X.Y.G., Y.F.Z., D.Y.L., W.D.C. and H.F.S. provided 
+valuable comments and suggestions to the work. X.C. and L.F.W. wrote the paper. 
+All authors contributed to discussions of the results.
+
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+% 
+% Additional Information
+%
+% % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\section*{Additional Information}
+
+\textbf{Competing interests}: The authors declare no Competing Financial or 
+Non-Financial Interests.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
