@@ -1,4 +1,35 @@
-\documentclass[prb,reprint,superscriptaddress]{revtex4-2}
+%% This template can be used to write a paper for
+%% Computer Physics Communications using LaTeX.
+%% For authors who want to write a computer program description,
+%% an example Program Summary is included that only has to be
+%% completed and which will give the correct layout in the
+%% preprint and the journal.
+%% The `elsarticle' style is used and more information on this style
+%% can be found at 
+%% http://www.elsevier.com/wps/find/authorsview.authors/elsarticle.
+%%
+%%
+%% \documentclass[preprint,12pt]{elsarticle}
+
+%% Use the option review to obtain double line spacing
+%% \documentclass[preprint,review,12pt]{elsarticle}
+
+%% Use the options 1p,twocolumn; 3p; 3p,twocolumn; 5p; or 5p,twocolumn
+%% for a journal layout:
+\documentclass[final,3p,times]{elsarticle}
+%% \documentclass[final,1p,times,twocolumn]{elsarticle}
+%% \documentclass[final,3p,times]{elsarticle}
+%% \documentclass[final,3p,times,twocolumn]{elsarticle}
+%% \documentclass[final,5p,times]{elsarticle}
+%% \documentclass[final,5p,times,twocolumn]{elsarticle}
+
+%% if you use PostScript figures in your article
+%% use the graphics package for simple commands
+%% \usepackage{graphics}
+%% or use the graphicx package for more complicated commands
+%% \usepackage{graphicx}
+%% or use the epsfig package if you prefer to use the old commands
+%% \usepackage{epsfig}
 
 \usepackage{amsmath}    % need for subequations
 \usepackage{graphicx}   % need for figures
@@ -6,63 +37,47 @@
 \usepackage{color}      % use if color is used in text
 \usepackage{subfigure}  % use for side-by-side figures
 \usepackage{hyperref}   % use for hypertext links, including those to external
-\raggedbottom           % don't add extra vertical space
-\begin{comment}
-\end{comment}
+\usepackage{amssymb}
 
-\bibliographystyle{apsrev4-2}
+\newcounter{bla}
+\newenvironment{refnummer}{%
+\list{[\arabic{bla}]}%
+{\usecounter{bla}%
+ \setlength{\itemindent}{0pt}%
+ \setlength{\topsep}{0pt}%
+ \setlength{\itemsep}{0pt}%
+ \setlength{\labelsep}{2pt}%
+ \setlength{\listparindent}{0pt}%
+ \settowidth{\labelwidth}{[9]}%
+ \setlength{\leftmargin}{\labelwidth}%
+ \addtolength{\leftmargin}{\labelsep}%
+ \setlength{\rightmargin}{0pt}}}
+{\endlist}
+
+\journal{Computer Physics Communications}
 
 \begin{document}
+\begin{frontmatter}
 
 \title{
     Machine learning enhanced empirical potentials for metals and alloys
 }
 
-\author{Xin Chen}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
+\author[a]{Xin Chen}
+\author[a]{Li-Fang Wang}
+\author[a]{Xing-Yu Gao}
+\author[b,a]{Ya-Fan Zhao}
+\author[b,a]{De-Ye Lin\corref{author}}
+\author[a]{Wei-Dong Chu}
+\author[a,b]{Hai-Feng Song\corref{author}}
 
-\author{Li-Fang Wang}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
+\cortext[author] {Corresponding author.
+\textit{E-mail address:} lindeye0716@163.com, song\_haifeng@iapcm.ac.cn}
+\address[a]{Institute of Applied Physics and Computational Mathematics, 
+Beijing 100088, China}
+\address[b]{CAEP Software Center for High Performance Numerical Simulation, 
+Beijing 100088, China}
 
-\author{Xing-Yu Gao}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-
-\author{Ya-Fan Zhao}
-\affiliation{
-    CAEP Software Center for High Performance Numerical Simulation, 
-    Beijing 100088, China}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-
-\author{De-Ye Lin}
-\email{lindeye0716@163.com}
-\affiliation{
-    CAEP Software Center for High Performance Numerical Simulation, 
-    Beijing 100088, China}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-
-\author{Wei-Dong Chu}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-
-\author{Hai-Feng Song}
-\email{song\_haifeng@iapcm.ac.cn}
-\affiliation{
-    Institute of Applied Physics and Computational Mathematics, 
-    Beijing 100088, China}
-\affiliation{
-    CAEP Software Center for High Performance Numerical Simulation, 
-    Beijing 100088, China}
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -92,7 +107,48 @@ and systematic route for developing machine learning interatomic potentials. All
 the new algorithms have been implemented in our program TensorAlloy.
 \end{abstract}
 
-\maketitle
+\begin{keyword}
+%% keywords here, in the form: keyword \sep keyword
+Machine Learning \sep Alloy \sep Materials Modeling \sep Computational Physics 
+\sep Empirical Potentials    
+\end{keyword}
+    
+\end{frontmatter}
+
+% Computer program descriptions should contain the following
+% PROGRAM SUMMARY.
+
+{\bf PROGRAM SUMMARY} \\
+\begin{small}
+\noindent
+{\em Program Title: TensorAlloy} \\
+{\em Licensing provisions(please choose one): LGPL}             \\
+{\em Programming language: Python 3.7}                          \\
+{\em Supplementary material:}                                   \\
+{\em Journal reference of previous version: 
+https://doi.org/10.1016/j.cpc.2019.107057}                      \\
+{\em Does the new version supersede the previous version?:} YES \\
+{\em Reasons for the new version: This new version is a significant extension to 
+the previous version. Now machine learning approaches and physical constraints 
+can be used together to tune empirical potentials (for example the embbeded atom 
+method). Machine learning optimized empirical potentials can be almost as 
+accurate as machine learning interaction potentials but run much faster} \\
+{\em Summary of revisions:}*\\
+{\em Nature of problem:} \\
+  Optimizing empirical potentials with machine learning approaches and physical 
+  constraints. \\
+{\em Solution method:} \\
+  The TensorAlloy program is built upon TensorFlow and the virtual-atom 
+  approach. we successfully developed a route to express the embbeded atom 
+  method and the angular-dependent potential within machine learning framework 
+  in highly-vectorizable form and further enhanced the potentials with physical
+  constraints. Machine learning can significantly boost their performances with 
+  few training data.   \\
+{\em Additional comments including Restrictions and Unusual features}\\
+  This program needs TensorFlow 1.14.*. Neither newer or older TensorFlow is 
+  supported. \\
+\end{small}
+
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -559,7 +615,7 @@ The adoption of the Rose constraint guarantees the exact predictions of bulk
 modulus and the energy-volume curve. The loss of the Rose EOS constraint 
 $\mathbf{L}^{\mathrm{Rose}}$  is measured as the 2-norm of the energy 
 differences between $E^{\mathrm{rose}}(x)$ and their corresponding predicted 
-$E(x)$: 
+energy $E(x)$: 
 \begin{equation}
 \label{eq:rose_loss}
 \mathbf{L}^{\mathrm{Rose}} = \sum_{\Omega}{
@@ -644,12 +700,12 @@ calculations.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
-% Figure: Mo - EAM/ADP - Plot
+% Figure: Arch
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure}
 \centering
-\includegraphics[scale=0.45]{tensoralloy.png}
+\includegraphics[scale=0.6]{tensoralloy.png}
 \caption{\label{fig:tensoralloy} The architecture of TensorAlloy.}
 \end{figure}
 
@@ -666,17 +722,22 @@ our virtual atom approach (VAP) \cite{TensorAlloy} and the vectorized EAM theory
 calculated automatically thanks to the AutoGrad featue of TensorFlow. The 
 batching scheme is adopted in this step.
 
-For the second step, VAP also plays the key role. Only very few specific 
+For the second step, only very few specific 
 structures are needed to form physical constraints. Thus, the batching scheme is 
-no longer a prerequiste. Instead, we use the codes of the 'prediction' phase of 
-VAP for flexibility \cite{TensorAlloy}. For each type of physical constraint and 
+no longer a pre-requiste. Instead, we use the codes of the 'prediction' phase of 
+VAP for flexibility \cite{TensorAlloy}. For each type of physical constraint of 
 each selected crystal structure, an independent computation graph shall be 
-generated by reusing the model parameters. 
- 
-To find optimal parameters of the funcitons in section \ref{sec:functions}, the 
-overall loss function shall be defined. Just like other machine learning tasks, 
-the mini-batch stochastic gradient descent algorithm is used to minimize the 
-loss function. Equation \ref{eq:loss} demonstrates the loss function used in 
+generated by reusing the model parameters. This can be easily achieved within 
+our VAP framework. Hence, the complicated derivatives of the losses with respect 
+to the model parameters can be solved by TensorFlow automatically.
+For example, for the Ni-Mo system, if we select the elastic constants of $c_11$, 
+$c_22$ and $c_44$ of fcc Ni and bcc Mo, and the Rose EOS of fcc Ni and bcc Mo as 
+the physical constraints, thereshould be $2 \times 2$ separate computation 
+graphs (\textrm{Elastic/fcc/Ni, Elastic/bcc/Mo, Rose/fcc/Ni, Rose/bcc/Mo}) under 
+the scope 'Constraint'.
+
+The total loss is just the sum of the two steps introduced above:
+Equation \ref{eq:loss} demonstrates the loss function used in 
 this work:
 \begin{align}
 \label{eq:loss}
@@ -696,6 +757,11 @@ this work:
 where $N_{b}$ is the batch size and $N_i$ is the number of atoms in structure 
 $i$. $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$ 
 are overall weights of force, rose EOS and elastic contributions. 
+
+To find optimal parameters of the funcitons in section \ref{sec:functions}, the 
+overall loss function shall be defined. Just like other machine learning tasks, 
+the mini-batch stochastic gradient descent algorithm is used to minimize the 
+loss function. 
 The Adam optimizer \cite{adam} is used to minimize Equation \ref{eq:loss}. 
 In most cases, we use 0.01 as the initial learning rate and the batch size 
 ranges from 20 to 50. Since there are very few adjustable parameters compared 
@@ -710,7 +776,7 @@ potential file will be exported.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure*}
 \centering
-\includegraphics[scale=0.57]{Ni_eam.png}
+\includegraphics[scale=0.4]{Ni_eam.png}
 \caption{\label{fig:Ni_eam} $\rho(r)$, $F(\rho)$ and $\phi(r)$ of the original 
 Zjw04 EAM and the machine learned EAM (ML-EAM).}
 \end{figure*}
@@ -928,7 +994,7 @@ elementary SNAP Mo model.
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 \begin{figure*}
 \centering
-\includegraphics[scale=0.5]{alloy_eos.png}
+\includegraphics[scale=0.4]{alloy_eos.png}
 \caption{\label{fig:alloy_eos} Energy-volume curves of Ni$_3$Mo and Ni$_4$Mo 
 obtained with the original Zjw04 EAM, ML-EAM, ML-ADP, SNAP and DFT.}
 \end{figure*}
@@ -1236,6 +1302,7 @@ Non-Financial Interests.
 % References
 %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
+\bibliographystyle{elsarticle-num}
 \bibliography{manuscript.bib}
 
 \end{document}
