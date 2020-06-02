@@ -11,10 +11,11 @@ import os
 
 from io import StringIO
 from dataclasses import dataclass
-from typing import List, Dict, Union
+from typing import List, Dict
 from atsim.potentials import writeSetFL
+from datetime import datetime
 
-from tensoralloy.utils import add_slots
+from tensoralloy.utils import add_slots, get_elements_from_kbody_term
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -331,6 +332,43 @@ def read_tersoff_file(filename: str) -> TersoffPotential:
     return TersoffPotential(sorted(list(set(elements))), params)
 
 
+_tersoff_header = """# DATE: {date} CONTRIBUTOR: TensorAlloy 
+
+# Tersoff parameters for various elements and mixtures
+# multiple entries can be added to this file, LAMMPS reads the ones it needs
+# these entries are in LAMMPS "metal" units:
+#   A,B = eV; lambda1,lambda2,lambda3 = 1/Angstroms; R,D = Angstroms
+#   other quantities are unitless
+
+# format of a single entry (one or more lines):
+#   element 1, element 2, element 3, 
+#   m, gamma, lambda3, c, d, costheta0, n, beta, lambda2, B, R, D, lambda1, A
+"""
+
+
+def write_tersoff_file(filename: str, potential: TersoffPotential):
+    """
+    Write tersoff parameters to file.
+    """
+    first_row_keys = TERSOFF_KEYS[:7]
+    second_row_keys = TERSOFF_KEYS[7:]
+    short_fstr_keys = ["m", "gamma", "D", "R"]
+    with open(filename, "w") as fp:
+        fp.write(_tersoff_header.format(date=str(datetime.today())))
+        for kbody_term, params in potential.params.items():
+            a, b, c = get_elements_from_kbody_term(kbody_term)
+            first_row = " ".join(
+                [f"{params[key]:.1f}"
+                 if key in short_fstr_keys else f"{params[key]}"
+                 for key in first_row_keys])
+            second_row = " ".join(
+                [f"{params[key]:.1f}"
+                 if key in short_fstr_keys else f"{params[key]}"
+                 for key in second_row_keys])
+            fp.write(f"{a:2s} {b:2s} {c:2s} {first_row}\n")
+            fp.write(f"          {second_row}\n")
+
+
 @add_slots
 @dataclass
 class MeamSpline:
@@ -399,6 +437,8 @@ def _read_meam_spline_file(filename: str, element=None):
                             kbody_terms.append(f"{elements[i]}{elements[j]}")
                 ncols = int((nel + 1) * nel / 2)
                 stage = 1
+                if is_new_format:
+                    continue
             if stage == 1:
                 if is_new_format and line == "spline3eq":
                     continue

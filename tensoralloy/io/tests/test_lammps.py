@@ -6,12 +6,16 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import nose
+import unittest
 
 from nose.tools import assert_almost_equal, assert_equal
-from os.path import join
+from os.path import join, exists
+from os import remove
 
 from tensoralloy.io.lammps import read_eam_alloy_setfl, read_adp_setfl
-from tensoralloy.io.lammps import read_tersoff_file, read_meam_spline_file
+from tensoralloy.io.lammps import read_tersoff_file, write_tersoff_file
+from tensoralloy.io.lammps import read_old_meam_spline_file
+from tensoralloy.io.lammps import read_meam_spline_file
 from tensoralloy.test_utils import test_dir
 
 __author__ = 'Xin Chen'
@@ -67,16 +71,38 @@ def test_read_adp_setfl():
     assert_almost_equal(w[6], 2.6670634177050295e-01, delta=1e-8)
 
 
-def test_read_tersoff():
-    """
-    Test the function `read_tersoff_file`.
-    """
-    filename = join(test_dir(), 'lammps', 'SiC.tersoff')
-    p = read_tersoff_file(filename)
+class TersoffFileTest(unittest.TestCase):
 
-    assert_equal(p.elements, ['C', 'Si'])
-    assert_almost_equal(p.params['SiSiSi']['n'], .78734)
-    assert_almost_equal(p.params['SiCC']['lambda1'], 2.9839)
+    def setUp(self):
+        """
+        The setup function.
+        """
+        self.input_file = join(test_dir(), 'lammps', 'SiC.tersoff')
+        self.output_file = join(test_dir(), 'lammps', 'SiC.tersoff.out')
+
+    def test_read_tersoff(self):
+        """
+        Test the function `read_tersoff_file`.
+        """
+        p = read_tersoff_file(self.input_file)
+
+        assert_equal(p.elements, ['C', 'Si'])
+        assert_almost_equal(p.params['SiSiSi']['n'], .78734)
+        assert_almost_equal(p.params['SiCC']['lambda1'], 2.9839)
+
+    def test_write_tersoff(self):
+        """
+        Test the function `write_tersoff_file`.
+        """
+        p = read_tersoff_file(self.input_file)
+        write_tersoff_file(self.output_file, p)
+
+    def tearDown(self):
+        """
+        The cleanup function.
+        """
+        if exists(self.output_file):
+            remove(self.output_file)
 
 
 def test_read_old_meam_spline():
@@ -84,7 +110,7 @@ def test_read_old_meam_spline():
     Test the function `read_meam_spline_file` for old meam/spline file.
     """
     filename = join(test_dir(), 'lammps', 'Ti.meam.spline')
-    p = read_meam_spline_file(filename, element='Ti')
+    p = read_old_meam_spline_file(filename, element='Ti')
 
     assert_almost_equal(p.rho['Ti'].bc_start, -1.0)
     assert_almost_equal(p.fs['Ti'].y[2], 2.011336597660079661e+00, delta=1e-8)
