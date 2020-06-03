@@ -720,11 +720,12 @@ the physical constraints.
 For the first step, the implementation is almost the same with our previous 
 work \cite{TensorAlloy} except the formula of the potential energy. Briefly, 
 this step starts from checking through the training dataset and determine some
-key constants, including $N^{vap}$ and $N^{\mathrm{max}}_{\mathrm{ij}}$. 
-$N^{\mathrm{max}}_{\mathrm{ijk}}$ is not needed as neither EAM nor ADP contains 
-triple-atoms interaction. Then we can build the global symbol list (GSL). Hence,
-structures of any stoichiometries can be transformed to their corresponding 
-unversal GSL forms for batching. The descriptors (\ref{sec:transformation}) are 
+key constants, including the global symbol list and its size $N^{vap}$. For 
+arbitrary structure, it has $N_{ij}$ different atom-atom pairs within cutoff 
+$r_c$. For a concrete dataset, the corresponding maximum 
+$N^{\mathrm{max}}_{\mathrm{ij}}$ can also be determined before training. Hence,
+Structures of any stoichiometries can be transformed to their corresponding 
+universal GSL forms for batching. The descriptors (\ref{sec:transformation}) are 
 built upon these GSL arrays. Then the direct computation graph from atomic 
 positions (GSL) to total energy can be easily built. Hence, atomic forces and 
 virial stress tensors can be calculated automatically thanks to the AutoGrad 
