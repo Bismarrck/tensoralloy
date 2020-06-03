@@ -17,6 +17,8 @@ from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer.base import bytes_feature
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -113,7 +115,7 @@ def get_g4_map(atoms: Atoms,
                ijn_id_map: Dict[int, int] = None,
                nijk_max: int = None,
                symmetric=True,
-               dtype=np.float32):
+               dtype=np.float32) -> G4IndexedSlices:
     """
     Build the base `v2g_map`.
     """
@@ -146,6 +148,10 @@ def get_g4_map(atoms: Atoms,
             else:
                 nijk += (n - 1) * n
         nijk_max = nijk
+    elif not symmetric:
+        # `find_neighbor_size_of_atoms` assumes `symmetric` is True. Hence the
+        # value should multiply with 2 if not symmetric.
+        nijk_max *= 2
 
     iaxis = _get_iaxis(mode)
     g4_map = np.zeros((nijk_max, iaxis + 5), dtype=np.int32)
@@ -185,8 +191,10 @@ def get_g4_map(atoms: Atoms,
                         ijn_id = get_ijn_id(
                             atom_vap_i, atom_vap_k, *vectors[atom_vap_i][k])
                 else:
-                    ijn_id = get_ijn_id(atom_vap_i, atom_vap_j, *vectors[atom_vap_i][j])
-                    ikn_id = get_ijn_id(atom_vap_i, atom_vap_k, *vectors[atom_vap_i][k])
+                    ijn_id = get_ijn_id(
+                        atom_vap_i, atom_vap_j, *vectors[atom_vap_i][j])
+                    ikn_id = get_ijn_id(
+                        atom_vap_i, atom_vap_k, *vectors[atom_vap_i][k])
                     if ijn_id == ikn_id:
                         continue
                     interaction = f"{symboli}{symbolj}{symbolk}"
@@ -292,6 +300,10 @@ class UniversalTransformer(DescriptorTransformer):
         return {'class': self.__class__.__name__, 'rcut': self._rcut,
                 'acut': self._acut, 'angular': self._angular,
                 'periodic': self._periodic, 'symmetric': self._symmetric}
+
+    @property
+    def descriptor(self):
+        return "universal"
 
     @property
     def rcut(self) -> float:
@@ -494,6 +506,9 @@ class UniversalTransformer(DescriptorTransformer):
             assert 'g4.v2g_map' in features
 
     def build_radial_graph(self, features: dict):
+        """
+        Build the computation graph for calculating radial descriptors.
+        """
         with tf.name_scope("Radial"):
             rr, dij = self.get_rij(features["positions"],
                                    features["cell"],
@@ -521,6 +536,9 @@ class UniversalTransformer(DescriptorTransformer):
             return self._split_descriptors(features, dists, masks)
 
     def build_angular_graph(self, features: dict):
+        """
+        Build the computation graph for calculating angular descriptors.
+        """
         with tf.name_scope("Angular"):
             rij, dij = self.get_rij(features['positions'],
                                     features['cell'],
@@ -763,3 +781,300 @@ class UniversalTransformer(DescriptorTransformer):
             for key, val in self._get_np_features(atoms).items():
                 feed_dict[key] = tf.convert_to_tensor(val, name=key)
         return feed_dict
+
+
+class BatchUniversalTransformer(UniversalTransformer,
+                                BatchDescriptorTransformer):
+    """
+    The universal transformer for mini-batch training.
+    """
+
+    def __init__(self, max_occurs: Counter, rcut, acut=None, angular=False,
+                 periodic=True, symmetric=True, nij_max=None, nijk_max=None,
+                 batch_size=None, use_forces=True, use_stress=False):
+        """
+        Initialization method.
+        """
+        elements = sorted(max_occurs.keys())
+
+        UniversalTransformer.__init__(
+            self, elements=elements, rcut=rcut, acut=acut, angular=angular,
+            periodic=periodic, symmetric=symmetric)
+
+        BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
+                                            use_stress=use_stress)
+
+        self._nij_max = nij_max
+        self._nijk_max = nijk_max
+        self._max_occurs = max_occurs
+        self._max_n_atoms = sum(max_occurs.values())
+
+        radial_interactions = {}
+        angular_interactions = {}
+        for element in self._elements:
+            kbody_terms = self._kbody_terms_for_element[element]
+            for i, kbody_term in enumerate(kbody_terms):
+                if len(get_elements_from_kbody_term(kbody_term)) == 2:
+                    radial_interactions[kbody_term] = i
+                else:
+                    angular_interactions[kbody_term] = i - len(self._elements)
+
+        self._radial_interactions = radial_interactions
+        self._angular_interactions = angular_interactions
+
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        d = {'class': self.__class__.__name__,
+             'max_occurs': self._max_occurs,
+             'rcut': self._rcut,
+             'acut': self._acut,
+             'angular': self._angular,
+             'nij_max': self._nij_max,
+             'nijk_max': self._nijk_max,
+             'batch_size': self._batch_size,
+             'use_forces': self._use_forces,
+             'use_stress': self._use_stress}
+        return d
+
+    @property
+    def descriptor(self):
+        """
+        Return the name of the descriptor.
+        """
+        return "universal"
+
+    @property
+    def batch_size(self):
+        """
+        Return the batch size.
+        """
+        return self._batch_size
+
+    @property
+    def rc(self):
+        return self._rcut
+
+    @property
+    def nij_max(self):
+        return self._nij_max
+
+    def as_descriptor_transformer(self) -> UniversalTransformer:
+        """
+        Return the corresponding `UniversalTransformer`.
+        """
+        return UniversalTransformer(elements=sorted(self._max_occurs.keys()),
+                                    rcut=self._rcut, acut=self._acut,
+                                    angular=self._angular,
+                                    periodic=self._periodic,
+                                    symmetric=self._symmetric)
+
+    def _get_indexed_slices(self, atoms, vap: VirtualAtomMap):
+        """
+        Return indexed slices.
+        """
+        dtype = get_float_dtype().as_numpy_dtype
+        g2, ijn_id_map = get_g2_map(atoms=atoms,
+                                    rc=self._rcut,
+                                    interactions=self._radial_interactions,
+                                    vap=vap,
+                                    mode=tf_estimator.ModeKeys.TRAIN,
+                                    nij_max=self._nij_max,
+                                    dtype=dtype)
+        if self._angular:
+            if np.round(self._acut - self._rcut, 2) == 0.0:
+                ref_g2 = g2
+                ref_ijn_id_map = ijn_id_map
+            else:
+                ref_g2 = None
+                ref_ijn_id_map = None
+            g4 = get_g4_map(atoms,
+                            rc=self._acut,
+                            g2=ref_g2,
+                            ijn_id_map=ref_ijn_id_map,
+                            radial_interactions=self._radial_interactions,
+                            angular_interactions=self._angular_interactions,
+                            vap=vap,
+                            symmetric=self._symmetric,
+                            mode=tf_estimator.ModeKeys.TRAIN,
+                            nijk_max=self._nijk_max,
+                            dtype=dtype)
+        else:
+            g4 = None
+        return g2, g4
+
+    @staticmethod
+    def _encode_g4_indexed_slices(g4: G4IndexedSlices):
+        """
+        Encode the indexed slices of G4:
+            * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
+              with key 'a_indices'.
+            * `ij_shift`, `ik_shift` and `jk_shift` are merged into another
+              array with key 'a_shifts'.
+
+        """
+        indices = np.concatenate(
+            (g4.v2g_map,
+             g4.ilist[..., np.newaxis],
+             g4.jlist[..., np.newaxis],
+             g4.klist[..., np.newaxis]), axis=1).tostring()
+        shifts = np.concatenate((g4.n1, g4.n2, g4.n3), axis=1).tostring()
+        return {'g4.indices': bytes_feature(indices),
+                'g4.shifts': bytes_feature(shifts)}
+
+    def encode(self, atoms: Atoms):
+        """
+        Encode the `Atoms` object and return a `tf.train.Example`.
+        """
+        feature_list = self._encode_atoms(atoms)
+        vap = self.get_vap_transformer(atoms)
+        g2, g4 = self._get_indexed_slices(atoms, vap=vap)
+        feature_list.update(self._encode_g2_indexed_slices(g2))
+        if isinstance(g4, G4IndexedSlices):
+            feature_list.update(self._encode_g4_indexed_slices(g4))
+        return tf.train.Example(
+            features=tf.train.Features(feature=feature_list))
+
+    def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode v2g_map, ilist, jlist and Slist for radial functions.
+        """
+        with tf.name_scope("G2"):
+            indices = tf.decode_raw(example['g2.indices'], tf.int32)
+            indices.set_shape([self._nij_max * 7])
+            indices = tf.reshape(
+                indices, [self._nij_max, 7], name='g2.indices')
+            v2g_map, ilist, jlist = tf.split(
+                indices, [5, 1, 1], axis=1, name='splits')
+            ilist = tf.squeeze(ilist, axis=1, name='ilist')
+            jlist = tf.squeeze(jlist, axis=1, name='jlist')
+
+            shift = tf.decode_raw(example['g2.shifts'], get_float_dtype())
+            shift.set_shape([self._nij_max * 3])
+            shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
+
+            return G2IndexedSlices(v2g_map, ilist, jlist, shift)
+
+    def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
+        functions.
+        """
+        with tf.name_scope("G4"):
+            indices = tf.decode_raw(example['g4.indices'], tf.int32)
+            indices.set_shape([self._nijk_max * 9])
+            indices = tf.reshape(
+                indices, [self._nijk_max, 9], name='g4.indices')
+            v2g_map, ilist, jlist, klist = \
+                tf.split(indices, [6, 1, 1, 1], axis=1, name='splits')
+            ilist = tf.squeeze(ilist, axis=1, name='ilist')
+            jlist = tf.squeeze(jlist, axis=1, name='jlist')
+            klist = tf.squeeze(klist, axis=1, name='klist')
+
+            shifts = tf.decode_raw(example['g4.shifts'], get_float_dtype())
+            shifts.set_shape([self._nijk_max * 9])
+            shifts = tf.reshape(
+                shifts, [self._nijk_max, 9], name='g4.shifts')
+            n1, n2, n3 = tf.split(shifts, [3, 3, 3], axis=1, name='splits')
+
+        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3)
+
+    def _decode_example(self, example: Dict[str, tf.Tensor]):
+        """
+        Decode the parsed single example.
+        """
+        decoded = self._decode_atoms(
+            example,
+            max_n_atoms=self._max_n_atoms,
+            n_elements=self._n_elements,
+            use_forces=self._use_forces,
+            use_stress=self._use_stress
+        )
+        g2 = self._decode_g2_indexed_slices(example)
+        decoded.update(g2.as_dict())
+        if self._angular:
+            g4 = self._decode_g4_indexed_slices(example)
+            decoded.update(g4.as_dict())
+        return decoded
+
+    def decode_protobuf(self, example_proto: tf.Tensor):
+        """
+        Decode the scalar string Tensor, which is a single serialized Example.
+        See `_parse_single_example_raw` documentation for more details.
+        """
+        with tf.name_scope("decoding"):
+
+            feature_list = {
+                'positions': tf.FixedLenFeature([], tf.string),
+                'n_atoms': tf.FixedLenFeature([], tf.int64),
+                'cell': tf.FixedLenFeature([], tf.string),
+                'volume': tf.FixedLenFeature([], tf.string),
+                'y_true': tf.FixedLenFeature([], tf.string),
+                'g2.indices': tf.FixedLenFeature([], tf.string),
+                'g2.shifts': tf.FixedLenFeature([], tf.string),
+                'atom_masks': tf.FixedLenFeature([], tf.string),
+                'compositions': tf.FixedLenFeature([], tf.string),
+                'pulay': tf.FixedLenFeature([], tf.string)
+            }
+            if self._use_forces:
+                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+
+            if self._use_stress:
+                feature_list['stress'] = \
+                    tf.FixedLenFeature([], tf.string)
+                feature_list['total_pressure'] = \
+                    tf.FixedLenFeature([], tf.string)
+
+            if self._angular:
+                feature_list.update({
+                    'g4.indices': tf.io.FixedLenFeature([], tf.string),
+                    'g4.shifts': tf.io.FixedLenFeature([], tf.string)})
+
+            example = tf.io.parse_single_example(example_proto, feature_list)
+            return self._decode_example(example)
+
+    def get_descriptors(self, batch_features: dict):
+        """
+        Return the graph for calculating symmetry function descriptors for the
+        given batch of examples.
+
+        This function is necessary because nested dicts are not supported by
+        `tf.data.Dataset.batch`.
+
+        Parameters
+        ----------
+        batch_features : dict
+            A batch of raw properties provided by `tf.data.Dataset`. Each batch
+            is produced by the function `decode_protobuf`.
+
+            Here are default keys:
+
+            * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
+            * 'cell': float64 or float32, [batch_size, 3, 3]
+            * 'volume': float64 or float32, [batch_size, ]
+            * 'n_atoms': int64, [batch_size, ]
+            * 'y_true': float64, [batch_size, ]
+            * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
+            * 'compositions': float64, [batch_size, n_elements]
+            * 'atom_masks': float64, [batch_size, max_n_atoms + 1]
+            * 'g2.ilist': int32, [batch_size, nij_max]
+            * 'g2.jlist': int32, [batch_size, nij_max]
+            * 'g2.n1': float64, [batch_size, nij_max, 3]
+            * 'g2.v2g_map': int32, [batch_size, nij_max, 5]
+
+            If `self.stress` is `True`, these following keys will be provided:
+
+            * 'stress': float64, [batch_size, 6]
+            * 'total_pressure': float64, [batch_size, ]
+
+        Returns
+        -------
+        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict of (element, (g, mask)) where `element` is the symbol of the
+            element, `g` is the Op to compute atomic descriptors and `mask` is
+            the Op to compute value masks.
+
+        """
+        self._infer_batch_size(batch_features)
+        return self.build_graph(batch_features)

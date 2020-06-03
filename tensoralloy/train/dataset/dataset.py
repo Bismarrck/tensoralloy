@@ -264,7 +264,10 @@ class Dataset:
             k_max = 3
         else:
             k_max = 2
-        rc = self._transformer.rc
+        if hasattr(self._transformer, "rcut"):
+            rc = self._transformer.rcut
+        else:
+            rc = self._transformer.rc
         sig = "k{:d}-rc{:.2f}".format(k_max, rc)
         dtype = get_float_dtype()
         if dtype == tf.float32:

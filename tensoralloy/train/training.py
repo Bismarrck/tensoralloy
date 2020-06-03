@@ -24,10 +24,12 @@ from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
+from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
 from tensoralloy.transformer import BatchDeePMDTransformer
+from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
@@ -202,6 +204,16 @@ class TrainingManager:
         else:
             raise ValueError(f"Unknown pair_style {pair_style}")
 
+    def _get_tersoff_nn(self, kwargs: dict) -> Tersoff:
+        """
+        Initialize a `Tersoff` model.
+        """
+        symmetric_mixing = self._reader['nn.tersoff.symmetric_mixing']
+        potential_file = self._reader['nn.tersoff.file']
+        kwargs.update(dict(symmetric_mixing=symmetric_mixing,
+                           custom_potentials=potential_file))
+        return Tersoff(**kwargs)
+
     def _get_nn(self):
         """
         Initialize a `BasicNN` using the configs of the input file.
@@ -212,8 +224,11 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        if self._reader['pair_style'].startswith("atomic"):
+        pair_style = self._reader['pair_style']
+        if pair_style.startswith("atomic"):
             nn = self._get_atomic_nn(kwargs)
+        elif pair_style == "tersoff":
+            nn = self._get_tersoff_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
 
@@ -229,6 +244,7 @@ class TrainingManager:
 
         pair_style = self._reader['pair_style']
         rcut = self._reader['rcut']
+        acut = self._reader['acut']
 
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
@@ -242,7 +258,7 @@ class TrainingManager:
 
         elif pair_style == 'atomic/sf':
             if self._reader['nn.atomic.sf.angular']:
-                nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
+                nijk_max = database.get_nijk_max(acut, allow_calculation=True)
             else:
                 nijk_max = 0
             params = self._reader['nn.atomic.sf']
@@ -254,7 +270,7 @@ class TrainingManager:
                 use_stress=database.has_stress,
                 use_forces=database.has_forces,
                 **params)
-        else:
+        elif pair_style.startswith("eam"):
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             if pair_style == 'adp':
                 cls = BatchADPTransformer
@@ -263,6 +279,13 @@ class TrainingManager:
             clf = cls(rc=rcut, max_occurs=max_occurs, nij_max=nij_max,
                       nnl_max=nnl_max, use_forces=database.has_forces,
                       use_stress=database.has_stress)
+        elif pair_style == "tersoff":
+            nijk_max = database.get_nijk_max(acut, allow_calculation=True)
+            clf = BatchUniversalTransformer(
+                max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
+                symmetric=False, nij_max=nij_max, nijk_max=nijk_max)
+        else:
+            raise ValueError(f"Unknown pair style: {pair_style}")
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']

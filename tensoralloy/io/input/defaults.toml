@@ -102,6 +102,10 @@ drho = 0.01
 [nn.eam.setfl.lattice.constant]
 [nn.eam.setfl.lattice.type]
 
+[nn.tersoff]
+file = "required"
+symmetric_mixing = false
+
 [opt]
 method = "adam"
 learning_rate = 0.01
