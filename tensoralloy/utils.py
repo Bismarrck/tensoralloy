@@ -94,9 +94,10 @@ def cantor_pairing(x, y):
     return (x + y) * (x + y + 1) // 2 + y
 
 
-def szudzik_pairing(x, y):
+def szudzik_pairing_scalar(x, y):
     """
-    The szudzik pairing function which supports negative numbers.
+    The szudzik pairing function for two scalars. This pairing function supports
+    negative numbers.
 
     See Also
     --------
@@ -108,15 +109,79 @@ def szudzik_pairing(x, y):
     return xx * xx + xx + yy if xx >= yy else yy * yy + xx
 
 
-def szudzik_pairing_reverse(z):
+def szudzik_pairing(x, y):
     """
-    The reverse of `szudzik_pairing`.
+    The szudzik pairing function which supports negative numbers.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    # xx = x * 2 if x >= 0 else x * -2 - 1
+    # yy = y * 2 if y >= 0 else y * -2 - 1
+    # return xx * xx + xx + yy if xx >= yy else yy * yy + xx
+    if np.isscalar(x):
+        return szudzik_pairing_scalar(x, y)
+    else:
+        stack = []
+        for v in (x, y):
+            ind = v >= 0
+            vv = np.zeros_like(v)
+            vv[ind] = v[ind] * 2
+            vv[~ind] = -2 * v[~ind] - 1
+            stack.append(vv)
+        xx, yy = stack
+        ind = xx >= yy
+        result = np.zeros_like(x)
+        result[ind] = xx[ind] * xx[ind] + xx[ind] + yy[ind]
+        result[~ind] = yy[~ind] * yy[~ind] + xx[~ind]
+        return result
+
+
+def szudzik_pairing_reverse_scalar(z):
+    """
+    The reverse of `szudzik_pairing` for a scalar.
     """
     sqrtz = int(np.floor(np.sqrt(z)))
     sqz = sqrtz**2
     ab = (sqrtz, z - sqz - sqrtz) if (z - sqz) >= sqrtz else (z - sqz, sqrtz)
     xx = ab[0] // 2 if ab[0] % 2 == 0 else (ab[0] + 1) // -2
     yy = ab[1] // 2 if ab[1] % 2 == 0 else (ab[1] + 1) // -2
+    return xx, yy
+
+
+def szudzik_pairing_reverse(z):
+    """
+    The reverse of `szudzik_pairing`.
+    """
+    if np.isscalar(z):
+        return szudzik_pairing_reverse_scalar(z)
+
+    z = np.asarray(z)
+    size = len(z)
+    sqrtz = np.floor(np.sqrt(z)).astype(z.dtype)
+    sqz = sqrtz**2
+    diff = z - sqz
+    ind = diff >= sqrtz
+
+    ab = np.zeros((2, size), dtype=z.dtype)
+    ab[0, ind] = sqrtz[ind]
+    ab[1, ind] = z[ind] - sqz[ind] - sqrtz[ind]
+    ab[0, ~ind] = z[~ind] - sqz[~ind]
+    ab[1, ~ind] = sqrtz[~ind]
+
+    xx = np.zeros_like(z)
+    yy = np.zeros_like(z)
+
+    ind = ab[0] % 2 == 0
+    xx[ind] = ab[0, ind] // 2
+    xx[~ind] = (ab[0, ~ind] + 1) // 2
+
+    ind = ab[1] % 2 == 0
+    yy[ind] = ab[1, ind] // 2
+    yy[~ind] = (ab[1, ~ind] + 1) // -2
+
     return xx, yy
 
 

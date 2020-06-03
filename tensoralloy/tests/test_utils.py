@@ -9,12 +9,43 @@ import nose
 
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
 
+from tensoralloy.utils import szudzik_pairing_scalar, szudzik_pairing
+from tensoralloy.utils import szudzik_pairing_nd
+from tensoralloy.utils import szudzik_pairing_reverse
 from tensoralloy.utils import cantor_pairing
 from tensoralloy.utils import nested_get, nested_set
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def test_szudzik_pairing():
+    """
+    Test the vectorized szudzik pairing function.
+    """
+    x = np.array([1, 3, 5, 8, 9])
+    y = np.array([3, 4, 2, 2, 1])
+    z = szudzik_pairing(x, y)
+    for i, zi in enumerate(z):
+        assert_equal(zi, szudzik_pairing_scalar(x[i], y[i]))
+
+    w = szudzik_pairing_nd(x, y, z)
+    for i, wi in enumerate(w):
+        assert_equal(szudzik_pairing_nd(x[i], y[i], z[i]), wi)
+
+
+def test_szudzik_pairing_reverse():
+    """
+    Test the reverse function of szudzik pairing.
+    """
+    x = np.array([1, 3, 5, 8, 9])
+    y = np.array([3, 4, 2, 2, 1])
+    z = szudzik_pairing(x, y)
+    xx, yy = szudzik_pairing_reverse(z)
+    for i in range(len(x)):
+        assert_equal(xx[i], x[i])
+        assert_equal(yy[i], y[i])
 
 
 def test_nested_set():
