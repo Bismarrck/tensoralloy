@@ -109,7 +109,7 @@ def szudzik_pairing_scalar(x, y):
     return xx * xx + xx + yy if xx >= yy else yy * yy + xx
 
 
-def szudzik_pairing(x, y):
+def _szudzik_pairing(x, y):
     """
     The szudzik pairing function which supports negative numbers.
 
@@ -137,6 +137,37 @@ def szudzik_pairing(x, y):
         result[ind] = xx[ind] * xx[ind] + xx[ind] + yy[ind]
         result[~ind] = yy[~ind] * yy[~ind] + xx[~ind]
         return result
+
+
+def szudzik_pairing(x, *args):
+    """
+    The szudzik pairing function.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    if np.isscalar(x):
+        z = x
+        for y in args:
+            assert np.isscalar(y)
+            z = _szudzik_pairing(z, y)
+    else:
+        x = np.asarray(x)
+        if np.ndim(x) == 1:
+            z = x
+            for y in args:
+                y = np.asarray(y)
+                assert np.ndim(y) == 1
+                z = _szudzik_pairing(z, y)
+        elif np.ndim(x) == 2:
+            z = x[:, 0]
+            for col in range(1, x.shape[1]):
+                z = _szudzik_pairing(z, x[:, col])
+        else:
+            raise ValueError("Dimension error")
+    return z
 
 
 def szudzik_pairing_reverse_scalar(z):
@@ -183,16 +214,6 @@ def szudzik_pairing_reverse(z):
     yy[~ind] = (ab[1, ~ind] + 1) // -2
 
     return xx, yy
-
-
-def szudzik_pairing_nd(d1, d2, *args):
-    """
-    The n-dimensional szudzik pairing function.
-    """
-    dval = szudzik_pairing(d1, d2)
-    for di in args:
-        dval = szudzik_pairing(dval, di)
-    return dval
 
 
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:

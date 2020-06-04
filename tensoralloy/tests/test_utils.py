@@ -10,7 +10,6 @@ import nose
 from nose.tools import assert_equal, assert_list_equal, assert_dict_equal
 
 from tensoralloy.utils import szudzik_pairing_scalar, szudzik_pairing
-from tensoralloy.utils import szudzik_pairing_nd
 from tensoralloy.utils import szudzik_pairing_reverse
 from tensoralloy.utils import cantor_pairing
 from tensoralloy.utils import nested_get, nested_set
@@ -30,9 +29,14 @@ def test_szudzik_pairing():
     for i, zi in enumerate(z):
         assert_equal(zi, szudzik_pairing_scalar(x[i], y[i]))
 
-    w = szudzik_pairing_nd(x, y, z)
+    w = szudzik_pairing(x, y, z)
     for i, wi in enumerate(w):
-        assert_equal(szudzik_pairing_nd(x[i], y[i], z[i]), wi)
+        assert_equal(szudzik_pairing(x[i], y[i], z[i]), wi)
+
+    u = np.stack((x, y), axis=0).T
+    v = szudzik_pairing(u)
+    for i, vi in enumerate(v):
+        assert_equal(z[i], v[i])
 
 
 def test_szudzik_pairing_reverse():
