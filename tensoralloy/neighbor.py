@@ -13,7 +13,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from typing import Union
 
-from tensoralloy.utils import cantor_pairing
+from tensoralloy.utils import cantor_pairing, szudzik_pairing
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -28,6 +28,7 @@ class NeighborProperty(Enum):
     nnl = 0
     nij = 1
     nijk = 2
+    ij2k = 3
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class NeighborSize:
     nnl: int
     nij: int
     nijk: int
+    ij2k: int
 
     def __getitem__(self, item: Union[str, NeighborProperty]):
         if isinstance(item, NeighborProperty):
@@ -58,7 +60,7 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
     rc : float
         The cutoff radius.
     angular : bool
-        If True, `nijk` will also be calculated.
+        If True, `nijk` and `ij2k` will also be calculated.
 
     Returns
     -------
@@ -72,9 +74,11 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
         * nnl : int
             Each atom has `n_A` A-type neighbors, `n_B` B-type neigbors, etc.
             `nnl` is the maximum of all {n_A}, {n_B}, etc.
+        * ij2k : int
+            A necessary constant for constructing triple-atoms interactions.
 
     """
-    ilist, jlist = neighbor_list('ij', atoms, cutoff=rc)
+    ilist, jlist, nlist = neighbor_list('ijS', atoms, cutoff=rc)
     nij = len(ilist)
     numbers = atoms.numbers
     nnl = 0
@@ -85,15 +89,49 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
         if len(ii) > 0:
             nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
     if angular:
-        nl = {}
-        for i, atomi in enumerate(ilist):
-            if atomi not in nl:
-                nl[atomi] = []
-            nl[atomi].append(jlist[i])
+        itypes = sorted(list(set(numbers)))
+        tlist = np.zeros(len(numbers), dtype=int)
+        for i, numberi in enumerate(numbers):
+            tlist[i] = itypes.index(numberi)
+        indices = {}
+        vectors = {}
+        for idx, atomi in enumerate(ilist):
+            if atomi not in indices:
+                indices[atomi] = []
+                vectors[atomi] = []
+            atomj = jlist[idx]
+            indices[atomi].append(atomj)
+            vectors[atomi].append(nlist[idx])
         nijk = 0
-        for atomi, nlist in nl.items():
-            n = len(nlist)
+        counters = {}
+        ntypes = len(itypes)
+        ijktypes = np.zeros((ntypes, ntypes, ntypes), dtype=int)
+        ijktype = 0
+        for i in range(ntypes):
+            for j in range(ntypes):
+                for k in range(ntypes):
+                    ijktypes[i, j, k] = ijktype
+                    ijktype += 1
+        ij2k = 0
+        for atomi, nl in indices.items():
+            itype = tlist[atomi]
+            n = len(nl)
             nijk += (n - 1 + 1) * (n - 1) // 2
+            for j, atomj in enumerate(nl):
+                jtype = tlist[atomj]
+                for k in range(len(nl)):
+                    if j == k:
+                        continue
+                    atomk = nl[k]
+                    ktype = tlist[atomk]
+                    tijk = ijktypes[itype][jtype][ktype]
+                    n_id = szudzik_pairing(*vectors[atomi][j])
+                    ijt_id = cantor_pairing(cantor_pairing(atomi, atomj), tijk)
+                    if ijt_id not in counters:
+                        counters[ijt_id] = Counter()
+                    counters[ijt_id][n_id] += 1
+                    ij2k = max(ij2k, counters[ijt_id][n_id])
     else:
         nijk = 0
-    return NeighborSize(nnl=nnl, nij=nij, nijk=nijk)
+        ij2k = 0
+    return NeighborSize(nnl=nnl, nij=nij, nijk=nijk, ij2k=ij2k)
