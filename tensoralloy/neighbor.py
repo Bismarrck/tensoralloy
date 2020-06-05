@@ -119,12 +119,12 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
             nijk += (n - 1 + 1) * (n - 1) // 2
             for j, atomj in enumerate(nl):
                 jtype = tlist[atomj]
-                for k in range(len(nl)):
-                    if j == k:
-                        continue
-                    atomk = nl[k]
+                for k, atomk in enumerate(nl):
                     ktype = tlist[atomk]
                     tijk = ijktypes[itype][jtype][ktype]
+                    if j == k and np.all(
+                            vectors[atomi][j] == vectors[atomi][k]):
+                        continue
                     n_id = szudzik_pairing(*vectors[atomi][j])
                     ijt_id = cantor_pairing(cantor_pairing(atomi, atomj), tijk)
                     if ijt_id not in counters:
