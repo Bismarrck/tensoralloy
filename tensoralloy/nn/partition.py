@@ -111,8 +111,8 @@ def dynamic_partition(dists_and_masks: dict,
                     masks = tf.expand_dims(masks, axis=0)
                     max_occurs[element] = tf.shape(dists)[3]
                 else:
-                    assert dists.shape.ndims == 5
-                    max_occurs[element] = dists.shape[3].value
+                    assert dists.shape.ndims == 6
+                    max_occurs[element] = dists.shape[4].value
 
                 if angular:
                     num = len([x for x in kbody_terms

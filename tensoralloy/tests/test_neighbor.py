@@ -24,13 +24,13 @@ def test_find_sizes():
     db = connect(join(test_dir(), 'datasets', 'qm7m', 'qm7m.db'))
 
     atoms = db.get_atoms('id=2')
-    size = find_neighbor_size_of_atoms(atoms, 6.5, angular=False)
+    size = find_neighbor_size_of_atoms(atoms, 6.5, find_nijk=False)
     assert_equal(size.nij, 20)
     assert_equal(size.nijk, 0)
     assert_equal(size.nnl, 4)
 
     atoms = db.get_atoms('id=3')
-    size = find_neighbor_size_of_atoms(atoms, 6.5, angular=True)
+    size = find_neighbor_size_of_atoms(atoms, 6.5, find_nijk=True)
     assert_equal(size.nij, 56)
     assert_equal(size.nijk, 168)
     assert_equal(size.nnl, 6)
@@ -84,7 +84,7 @@ def test_find_ij2k():
                         ijn_id_map=ijn_id_map)
 
         ij2k = g4.v2g_map[:, 3].max() + 1
-        nl = find_neighbor_size_of_atoms(atoms, rc, angular=True)
+        nl = find_neighbor_size_of_atoms(atoms, rc, find_ij2k=True)
         # TODO: a special case 'atoms_id=3000, nl.ij2k > ij2k' should be fixed
         assert_greater_equal(nl.ij2k, ij2k)
 

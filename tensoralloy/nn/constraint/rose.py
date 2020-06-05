@@ -68,6 +68,9 @@ def get_batch_transformer(original_clf: BatchDescriptorTransformer,
         configs['nij_max'] = nij_max
         configs['nnl_max'] = nnl_max
 
+    elif cls == "BatchUniversalTransformer":
+        pass
+
     else:
         raise ValueError(f"Unsupported batch transformer: {cls}")
 

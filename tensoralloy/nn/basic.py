@@ -618,7 +618,7 @@ class BasicNN:
         assert 'positions' in features
         assert 'cell' in features
         assert 'atom_masks' in features
-        assert 'n_atoms' in features
+        assert 'n_atoms_vap' in features
         assert 'volume' in features
         assert isinstance(self._transformer, BaseTransformer)
 

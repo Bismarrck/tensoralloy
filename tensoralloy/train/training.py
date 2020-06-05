@@ -280,10 +280,13 @@ class TrainingManager:
                       nnl_max=nnl_max, use_forces=database.has_forces,
                       use_stress=database.has_stress)
         elif pair_style == "tersoff":
+            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             nijk_max = database.get_nijk_max(acut, allow_calculation=True)
+            ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
             clf = BatchUniversalTransformer(
                 max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
-                symmetric=False, nij_max=nij_max, nijk_max=nijk_max)
+                symmetric=False, nij_max=nij_max, nijk_max=nijk_max,
+                nnl_max=nnl_max, ij2k_max=ij2k_max)
         else:
             raise ValueError(f"Unknown pair style: {pair_style}")
 

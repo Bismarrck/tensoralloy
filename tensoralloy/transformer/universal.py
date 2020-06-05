@@ -12,7 +12,7 @@ from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import get_pulay_stress, szudzik_pairing_nd
+from tensoralloy.utils import get_pulay_stress, szudzik_pairing
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap
@@ -36,8 +36,8 @@ def get_ijn_id(i, j, nx, ny, nz):
     """
     Return the unique id of (i, j, nx, ny, nz)
     """
-    ij_id = szudzik_pairing_nd(int(i), int(j))
-    n_id = szudzik_pairing_nd(int(nx), int(ny), int(nz))
+    ij_id = szudzik_pairing(int(i), int(j))
+    n_id = szudzik_pairing(int(nx), int(ny), int(nz))
     return ij_id, n_id
 
 
@@ -789,9 +789,12 @@ class BatchUniversalTransformer(UniversalTransformer,
     The universal transformer for mini-batch training.
     """
 
+    gather_fn = staticmethod(tf.batch_gather)
+
     def __init__(self, max_occurs: Counter, rcut, acut=None, angular=False,
                  periodic=True, symmetric=True, nij_max=None, nijk_max=None,
-                 batch_size=None, use_forces=True, use_stress=False):
+                 nnl_max=None, ij2k_max=None, batch_size=None, use_forces=True,
+                 use_stress=False):
         """
         Initialization method.
         """
@@ -806,6 +809,9 @@ class BatchUniversalTransformer(UniversalTransformer,
 
         self._nij_max = nij_max
         self._nijk_max = nijk_max
+        self._nnl_max = nnl_max
+        self._ij2k_max = ij2k_max
+        self._batch_size = batch_size
         self._max_occurs = max_occurs
         self._max_n_atoms = sum(max_occurs.values())
 
@@ -833,6 +839,7 @@ class BatchUniversalTransformer(UniversalTransformer,
              'angular': self._angular,
              'nij_max': self._nij_max,
              'nijk_max': self._nijk_max,
+             'nnl_max': self._nnl_max,
              'batch_size': self._batch_size,
              'use_forces': self._use_forces,
              'use_stress': self._use_stress}
@@ -859,6 +866,18 @@ class BatchUniversalTransformer(UniversalTransformer,
     @property
     def nij_max(self):
         return self._nij_max
+
+    @property
+    def nijk_max(self):
+        return self._nijk_max
+
+    @property
+    def nnl_max(self):
+        return self._nnl_max
+
+    @property
+    def ij2k_max(self):
+        return self._ij2k_max
 
     def as_descriptor_transformer(self) -> UniversalTransformer:
         """
@@ -905,6 +924,90 @@ class BatchUniversalTransformer(UniversalTransformer,
         return g2, g4
 
     @staticmethod
+    def get_pbc_displacements(shift, cell, dtype=tf.float64):
+        """
+        Return the periodic boundary shift displacements.
+
+        Parameters
+        ----------
+        shift : tf.Tensor
+            A `float64` or `float32` tensor of shape `[batch_size, ndim, 3]` as
+            the cell shift vectors and `ndim == nij_max` or `ndim == nijk_max`.
+        cell : tf.Tensor
+            A `float64` or `float32` tensor of shape `[batch_size, 3, 3]` as the
+            cell tensors.
+        dtype : DType
+            The corresponding data type of `shift` and `cell`.
+
+        Returns
+        -------
+        Dij : tf.Tensor
+            A `float64` tensor of shape `[-1, 3]` as the periodic displacements
+            vector.
+
+        """
+        with tf.name_scope("Einsum"):
+            shift = tf.convert_to_tensor(shift, dtype=dtype, name='shift')
+            cell = tf.convert_to_tensor(cell, dtype=dtype, name='cell')
+            return tf.einsum('ijk,ikl->ijl', shift, cell, name='displacements')
+
+    def get_g_shape(self, features: dict, angular=False):
+        """
+        Return the shape of the descriptor matrix.
+        """
+        if angular:
+            return [self._batch_size,
+                    self._max_na_terms,
+                    self._max_n_atoms + 1,
+                    self._nnl_max,
+                    self._ij2k_max]
+        else:
+            return [self._batch_size,
+                    self._max_nr_terms,
+                    self._max_n_atoms + 1,
+                    self._nnl_max,
+                    1]
+
+    @staticmethod
+    def get_row_split_axis():
+        return 2
+
+    def get_row_split_sizes(self, _):
+        row_splits = [1, ]
+        for i, element in enumerate(self._elements):
+            row_splits.append(self._max_occurs[element])
+        return row_splits
+
+    def _get_v2g_map_batch_indexing_matrix(self, angular=False):
+        """
+        Return an `int32` matrix of shape `[batch_size, ndim, D]` to rebuild the
+        batch indexing of a `v2g_map`.
+        """
+        if angular:
+            ndim = self._nijk_max
+        else:
+            ndim = self._nij_max
+        indexing_matrix = np.zeros((self._batch_size, ndim, 5), dtype=np.int32)
+        for i in range(self._batch_size):
+            indexing_matrix[i] += [i, 0, 0, 0, 0]
+        return indexing_matrix
+
+    def get_v2g_map(self, features: dict, angular=False):
+        """
+                A wrapper function to get `v2g_map` and `v2g_masks`.
+                """
+        if angular:
+            key = "g4.v2g_map"
+        else:
+            key = "g2.v2g_map"
+        splits = tf.split(features[key], [-1, 1], axis=2)
+        v2g_map = tf.identity(splits[0])
+        v2g_masks = tf.identity(splits[1], name='v2g_masks')
+        indexing = self._get_v2g_map_batch_indexing_matrix(angular=angular)
+        v2g_map = tf.add(v2g_map, indexing, name='v2g_map')
+        return v2g_map, v2g_masks
+
+    @staticmethod
     def _encode_g4_indexed_slices(g4: G4IndexedSlices):
         """
         Encode the indexed slices of G4:
@@ -942,11 +1045,11 @@ class BatchUniversalTransformer(UniversalTransformer,
         """
         with tf.name_scope("G2"):
             indices = tf.decode_raw(example['g2.indices'], tf.int32)
-            indices.set_shape([self._nij_max * 7])
+            indices.set_shape([self._nij_max * 8])
             indices = tf.reshape(
-                indices, [self._nij_max, 7], name='g2.indices')
+                indices, [self._nij_max, 8], name='g2.indices')
             v2g_map, ilist, jlist = tf.split(
-                indices, [5, 1, 1], axis=1, name='splits')
+                indices, [6, 1, 1], axis=1, name='splits')
             ilist = tf.squeeze(ilist, axis=1, name='ilist')
             jlist = tf.squeeze(jlist, axis=1, name='jlist')
 
@@ -996,6 +1099,7 @@ class BatchUniversalTransformer(UniversalTransformer,
         if self._angular:
             g4 = self._decode_g4_indexed_slices(example)
             decoded.update(g4.as_dict())
+        decoded["n_atoms_vap"] = decoded["n_atoms"]
         return decoded
 
     def decode_protobuf(self, example_proto: tf.Tensor):
@@ -1033,6 +1137,28 @@ class BatchUniversalTransformer(UniversalTransformer,
 
             example = tf.io.parse_single_example(example_proto, feature_list)
             return self._decode_example(example)
+
+    def _check_keys(self, features: dict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'positions' in features
+        assert 'cell' in features
+        assert 'volume' in features
+        assert 'n_atoms_vap' in features
+        assert 'g2.ilist' in features
+        assert 'g2.jlist' in features
+        assert 'g2.n1' in features
+        assert 'g2.v2g_map' in features
+
+        if self._angular:
+            assert 'g4.ilist' in features
+            assert 'g4.jlist' in features
+            assert 'g4.klist' in features
+            assert 'g4.n1' in features
+            assert 'g4.n2' in features
+            assert 'g4.n3' in features
+            assert 'g4.v2g_map' in features
 
     def get_descriptors(self, batch_features: dict):
         """

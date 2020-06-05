@@ -189,7 +189,15 @@ class CoreDatabase(SQLite3Database):
             if val is not None:
                 return val
         if allow_calculation:
-            dct = self.update_neighbor_meta(rc=rc, angular=True, verbose=True)
+            nijk = False
+            ij2k = False
+            if prop == NeighborProperty.nijk:
+                nijk = True
+            elif prop == NeighborProperty.ij2k:
+                nijk = True
+                ij2k = True
+            dct = self.update_neighbor_meta(rc=rc, nijk=nijk, ij2k=ij2k,
+                                            verbose=True)
             val = dct[prop]
         return val
 
@@ -217,9 +225,18 @@ class CoreDatabase(SQLite3Database):
                                            prop=NeighborProperty.nnl,
                                            allow_calculation=allow_calculation)
 
+    def get_ij2k_max(self, rc: float, allow_calculation=False):
+        """
+        Return the corresponding `ij2k_max`.
+        """
+        return self._get_neighbor_property(rc=rc,
+                                           prop=NeighborProperty.ij2k,
+                                           allow_calculation=allow_calculation)
+
     def update_neighbor_meta(self,
                              rc: float,
-                             angular=False,
+                             nijk=False,
+                             ij2k=False,
                              n_jobs=-1,
                              verbose=False) -> NeighborSize:
         """
@@ -227,10 +244,10 @@ class CoreDatabase(SQLite3Database):
         """
         def _find(aid):
             nl = find_neighbor_size_of_atoms(
-                self.get_atoms(f'id={aid}'), rc, angular=angular)
+                self.get_atoms(f'id={aid}'), rc, find_ij2k=ij2k, find_nijk=nijk)
             return nl
 
-        if angular:
+        if nijk or ij2k:
             cond = 'enabled'
             k_max = 3
         else:
@@ -264,7 +281,7 @@ class CoreDatabase(SQLite3Database):
             nested_set(self._metadata,
                        _get_keypath(k_max, rc, prop),
                        new_val=maxvals[prop])
-            if angular:
+            if ij2k or nijk:
                 if prop == NeighborProperty.nijk:
                     val = 0
                 else:
@@ -275,13 +292,12 @@ class CoreDatabase(SQLite3Database):
         self._write_metadata()
 
         if verbose:
-            print('All {} jobs are done. nij_max = {}, nijk_max = {}, '
-                  'nnl_max = {}'.format(size,
-                                        maxvals.nij,
-                                        maxvals.nijk,
-                                        maxvals.nnl))
+            print(f"All {size} jobs are done. nij_max = {maxvals.nij}, "
+                  f"nijk_max = {maxvals.nijk}, nnl_max = {maxvals.nnl}, "
+                  f"ij2k_max = {maxvals.ij2k}")
 
-        return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk, nnl=maxvals.nnl)
+        return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk, nnl=maxvals.nnl,
+                            ij2k=maxvals.ij2k)
 
 
 def _compute_atomic_static_energy(database: SQLite3Database,

@@ -49,7 +49,8 @@ class NeighborSize:
 
 def find_neighbor_size_of_atoms(atoms: Atoms,
                                 rc: float,
-                                angular=False) -> NeighborSize:
+                                find_nijk=False,
+                                find_ij2k=False) -> NeighborSize:
     """
     A helper function to find `nij`, `nijk` and `nnl` for the `Atoms` object.
 
@@ -59,8 +60,10 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
         The target `Atoms` object.
     rc : float
         The cutoff radius.
-    angular : bool
-        If True, `nijk` and `ij2k` will also be calculated.
+    find_nijk : bool
+        If True, `nijk` will be calculated.
+    find_ij2k : bool
+        If True, `ij2k` will be calculated.
 
     Returns
     -------
@@ -82,13 +85,15 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
     nij = len(ilist)
     numbers = atoms.numbers
     nnl = 0
+    nijk = 0
+    ij2k = 0
     for i in range(len(atoms)):
         indices = np.where(ilist == i)[0]
         ii = numbers[ilist[indices]]
         ij = numbers[jlist[indices]]
         if len(ii) > 0:
             nnl = max(max(Counter(cantor_pairing(ii, ij)).values()), nnl)
-    if angular:
+    if find_ij2k:
         itypes = sorted(list(set(numbers)))
         tlist = np.zeros(len(numbers), dtype=int)
         for i, numberi in enumerate(numbers):
@@ -102,7 +107,6 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
             atomj = jlist[idx]
             indices[atomi].append(atomj)
             vectors[atomi].append(nlist[idx])
-        nijk = 0
         counters = {}
         ntypes = len(itypes)
         ijktypes = np.zeros((ntypes, ntypes, ntypes), dtype=int)
@@ -112,7 +116,6 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
                 for k in range(ntypes):
                     ijktypes[i, j, k] = ijktype
                     ijktype += 1
-        ij2k = 0
         for atomi, nl in indices.items():
             itype = tlist[atomi]
             n = len(nl)
@@ -131,7 +134,13 @@ def find_neighbor_size_of_atoms(atoms: Atoms,
                         counters[ijt_id] = Counter()
                     counters[ijt_id][n_id] += 1
                     ij2k = max(ij2k, counters[ijt_id][n_id])
-    else:
-        nijk = 0
-        ij2k = 0
+    elif find_nijk:
+        nl = {}
+        for i, atomi in enumerate(ilist):
+            if atomi not in nl:
+                nl[atomi] = []
+            nl[atomi].append(jlist[i])
+        for atomi, nlist in nl.items():
+            n = len(nlist)
+            nijk += (n - 1 + 1) * (n - 1) // 2
     return NeighborSize(nnl=nnl, nij=nij, nijk=nijk, ij2k=ij2k)
