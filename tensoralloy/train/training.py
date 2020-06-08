@@ -281,7 +281,8 @@ class TrainingManager:
                       use_stress=database.has_stress)
         elif pair_style == "tersoff":
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-            nijk_max = database.get_nijk_max(acut, allow_calculation=True)
+            nijk_max = database.get_nijk_max(acut, allow_calculation=True,
+                                             symmetric=False)
             ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
             clf = BatchUniversalTransformer(
                 max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
@@ -419,7 +420,7 @@ class TrainingManager:
 
                 if debug:
                     system = platform.system().lower()
-                    if system == 'darwin' or system == 'linux':
+                    if system == 'linux':
                         ui_type = 'curses'
                     else:
                         ui_type = 'readline'

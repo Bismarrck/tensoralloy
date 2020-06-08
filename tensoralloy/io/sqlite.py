@@ -209,13 +209,14 @@ class CoreDatabase(SQLite3Database):
                                            prop=NeighborProperty.nij,
                                            allow_calculation=allow_calculation)
 
-    def get_nijk_max(self, rc: float, allow_calculation=False):
+    def get_nijk_max(self, rc: float, allow_calculation=False, symmetric=True):
         """
         Return the corresponding `N_ijk_max`.
         """
-        return self._get_neighbor_property(rc=rc,
-                                           prop=NeighborProperty.nijk,
-                                           allow_calculation=allow_calculation)
+        value = self._get_neighbor_property(rc=rc,
+                                            prop=NeighborProperty.nijk,
+                                            allow_calculation=allow_calculation)
+        return value * (2 - int(symmetric))
 
     def get_nnl_max(self, rc: float, allow_calculation=False):
         """

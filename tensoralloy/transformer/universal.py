@@ -148,10 +148,6 @@ def get_g4_map(atoms: Atoms,
             else:
                 nijk += (n - 1) * n
         nijk_max = nijk
-    elif not symmetric:
-        # `find_neighbor_size_of_atoms` assumes `symmetric` is True. Hence the
-        # value should multiply with 2 if not symmetric.
-        nijk_max *= 2
 
     iaxis = _get_iaxis(mode)
     g4_map = np.zeros((nijk_max, iaxis + 5), dtype=np.int32)
@@ -840,6 +836,7 @@ class BatchUniversalTransformer(UniversalTransformer,
              'nij_max': self._nij_max,
              'nijk_max': self._nijk_max,
              'nnl_max': self._nnl_max,
+             'ij2k_max': self._ij2k_max,
              'batch_size': self._batch_size,
              'use_forces': self._use_forces,
              'use_stress': self._use_stress}
@@ -1025,6 +1022,30 @@ class BatchUniversalTransformer(UniversalTransformer,
         shifts = np.concatenate((g4.n1, g4.n2, g4.n3), axis=1).tostring()
         return {'g4.indices': bytes_feature(indices),
                 'g4.shifts': bytes_feature(shifts)}
+
+    def get_vap_transformer(self, atoms: Atoms):
+        """
+        Return the corresponding `VirtualAtomMap`.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            An `Atoms` object.
+
+        Returns
+        -------
+        vap : VirtualAtomMap
+            The `VirtualAtomMap` for the given `Atoms` object.
+
+        """
+        # The mode 'reduce' is important here because chemical symbol lists of
+        # ['C', 'H', 'O'] and ['C', 'O', 'H'] should be treated differently!
+        formula = atoms.get_chemical_formula(mode='reduce')
+        if formula not in self._vap_transformers:
+            self._vap_transformers[formula] = VirtualAtomMap(
+                self._max_occurs, atoms.get_chemical_symbols()
+            )
+        return self._vap_transformers[formula]
 
     def encode(self, atoms: Atoms):
         """
