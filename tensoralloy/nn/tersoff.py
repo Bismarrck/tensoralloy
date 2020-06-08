@@ -94,6 +94,13 @@ class Tersoff(BasicNN):
             for kbody_term, params in tersoff.params.items():
                 self._params[kbody_term] = params
 
+    def __get_powerintm(self, kbody_term):
+        """
+        Return the value of `m` for the corresponding kbody term. Currently, m
+        can be only 1 or 3.
+        """
+        return int(self._params[kbody_term]['m'])
+
     def _get_or_create_variable(self, section, parameter, trainable=False):
         """
         Get or create the variable.
@@ -115,7 +122,6 @@ class Tersoff(BasicNN):
             if element1 < element2:
                 full = f'{element1}{element2}{element2}'
             else:
-                kbody_term = f'{element2}{element1}'
                 full = f'{element2}{element1}{element1}'
         else:
             full = f'{element1}{element2}{element2}'
@@ -280,6 +286,7 @@ class Tersoff(BasicNN):
                                 kbody_term, "D", trainable=False)
                             m = self._get_angular_variable(
                                 kbody_term, "m", trainable=False)
+                            powerintm = self.__get_powerintm(kbody_term)
                         c2 = tf.square(c, name='c2')
                         d2 = tf.square(d, name='d2')
                         masks = tf.squeeze(masks, axis=1, name='masks')
@@ -300,11 +307,18 @@ class Tersoff(BasicNN):
                             gamma, tf.math.add(one, right),
                             name='gtheta')
                         fc = tersoff_cutoff(rik, R, D, name='fc')
-                        l3m = safe_pow(lambda3, m)
                         drijk = tf.math.subtract(rij, rik)
-                        drijkm = safe_pow(drijk, m)
+                        with tf.name_scope("Safe"):
+                            arg = tf.math.multiply(drijk, lambda3)
+                            ub = tf.constant(69.0776 / float(powerintm),
+                                             name='ub', dtype=R.dtype)
+                            lb = tf.negative(ub, name='lb')
+                            arg = tf.clip_by_value(arg, lb, ub, name='arg')
+                            if powerintm == 3:
+                                arg = safe_pow(arg, m)
+                            arg = tf.math.exp(arg)
                         z = tf.math.multiply(fc * gtheta,
-                                             tf.math.exp(l3m * drijkm),
+                                             arg,
                                              name='zeta/single')
                         z = tf.math.multiply(z, masks, name='zeta/masked')
                         z = tf.reduce_sum(
