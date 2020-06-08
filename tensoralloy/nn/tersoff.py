@@ -216,6 +216,45 @@ class Tersoff(BasicNN):
                 [tf.add_n(stacks[el], name=el) for el in self._elements],
                 axis=1, name='sum')
 
+    def _calculate_bij(self, bz, c1, c2, c3, c4, n, one, two):
+        """
+        A safe implementation for computing `bij`.
+        """
+        def func1(x):
+            return tf.math.divide_no_nan(one, tf.sqrt(x), name='y1')
+
+        def func2(x):
+            return tf.math.divide_no_nan(
+                one - tf.pow(x, -n) / (two * n), tf.sqrt(x), name='y2')
+
+        def func3(x):
+            return tf.pow(one + tf.pow(x, n), -one / (two * n), name='y5')
+
+        def func4(x):
+            return tf.math.subtract(one, pow(x, n) / (two * n), name='y4')
+
+        def func5(x):
+            return tf.ones_like(x, dtype=x.dtype, name='y3')
+
+        with tf.name_scope("bij"):
+            idx1 = tf.where(tf.greater(bz, c1), name='idx1')
+            idx2 = tf.where(tf.logical_and(
+                tf.greater(bz, c2), tf.less_equal(bz, c1)), name='idx2')
+            idx3 = tf.where(tf.logical_and(
+                tf.greater(bz, c3), tf.less_equal(bz, c2)), name='idx3')
+            idx4 = tf.where(tf.logical_and(
+                tf.greater(bz, c4), tf.less_equal(bz, c3)), name='idx4')
+            idx5 = tf.where(tf.less_equal(bz, c4), name='idx5')
+            shape = tf.shape(bz, name='bz/shape', out_type=idx1.dtype)
+            values = [
+                tf.scatter_nd(idx1, func1(tf.gather_nd(bz, idx1)), shape),
+                tf.scatter_nd(idx2, func2(tf.gather_nd(bz, idx2)), shape),
+                tf.scatter_nd(idx3, func3(tf.gather_nd(bz, idx3)), shape),
+                tf.scatter_nd(idx4, func4(tf.gather_nd(bz, idx4)), shape),
+                tf.scatter_nd(idx5, func5(tf.gather_nd(bz, idx5)), shape),
+            ]
+            return tf.add_n(values, name='bij')
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -352,6 +391,13 @@ class Tersoff(BasicNN):
                             kbody_term, "lambda2")
                         beta = self._get_radial_variable(kbody_term, "beta")
                         n = self._get_radial_variable(kbody_term, "n")
+                        with tf.name_scope("Safe"):
+                            c0 = tf.constant(1e-8, dtype=R.dtype, name='c0')
+                            c1 = tf.pow(c0 * c0 * two * n, -one / n, name='c1')
+                            c2 = tf.pow(c0 * two * n, -one / n, name='c2')
+                            c3 = tf.math.divide_no_nan(one, c2, name='c3')
+                            c4 = tf.math.divide_no_nan(one, c1, name='c4')
+
                         masks = tf.squeeze(masks, axis=1, name='masks')
                         rij = tf.squeeze(dists[0], axis=1, name='rij')
                         fc = tersoff_cutoff(rij, R, D, name='fc')
@@ -363,10 +409,8 @@ class Tersoff(BasicNN):
                         zeta = tf.add_n(
                             zeta_dict[f'{center}{pair}'], name='zeta')
                         bz = tf.math.multiply(beta, zeta, name='bz')
-                        bzn = safe_pow(bz, n)
-                        coef = tf.math.truediv(one, -two * n, name='2ni')
-                        bij = safe_pow(one + bzn, coef)
-                        bij = tf.identity(bij, name='bij')
+                        bij = self._calculate_bij(
+                            bz, c1, c2, c3, c4, n, one, two)
                         attraction = tf.math.multiply(fc, bij * fa,
                                                       name='attraction')
                         vij = tf.math.add(repulsion, attraction, name='vij')
