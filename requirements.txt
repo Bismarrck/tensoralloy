@@ -1,7 +1,7 @@
 tensorflow>=1.13.2
 scipy>=1.0
 numpy>=1.14
-ase==3.18.*
+ase>=3.18.0
 nose
 joblib>=0.11
 scikit-learn>=0.20.0
