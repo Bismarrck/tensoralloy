@@ -20,7 +20,7 @@ from tensoralloy.transformer.tests.test_behler import get_radial_fingerprints_v1
 from tensoralloy.transformer.tests.test_behler import get_augular_fingerprints_v1
 from tensoralloy.transformer.tests.test_behler import get_radial_fingerprints_v2
 from tensoralloy.transformer.tests.test_behler import legacy_symmetry_function
-from tensoralloy.nn.atomic.sf import SFNN
+from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_equal, Pd3O2
 from tensoralloy.utils import Defaults
@@ -50,8 +50,8 @@ def test_monoatomic_molecule():
     with tf.Graph().as_default():
         clf = UniversalTransformer(['B'], rcut=rc, acut=rc, angular=True,
                                    periodic=False)
-        nn = SFNN(['B'], eta=Defaults.eta, omega=Defaults.omega,
-                  gamma=Defaults.gamma, zeta=Defaults.zeta, beta=Defaults.beta)
+        nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=Defaults.omega,
+                                gamma=Defaults.gamma, zeta=Defaults.zeta, beta=Defaults.beta)
         nn.attach_transformer(clf)
         op = nn.get_symmetry_function_descriptors(
             clf.get_descriptors(
@@ -83,7 +83,7 @@ def test_monoatomic_molecule_with_omega():
         with tf.Graph().as_default():
             clf = UniversalTransformer(['B'], rcut=rc, angular=False,
                                        periodic=False)
-            nn = SFNN(['B'], eta=Defaults.eta, omega=omega)
+            nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=omega)
             nn.attach_transformer(clf)
             op = nn.get_symmetry_function_descriptors(
                 clf.get_descriptors(
@@ -107,7 +107,7 @@ def test_single_structure():
             rc = 6.5
             clf = UniversalTransformer(elements, rcut=rc, angular=True,
                                        periodic=True)
-            nn = SFNN(elements)
+            nn = SymmetryFunctionNN(elements)
             nn.attach_transformer(clf)
             op = nn.get_symmetry_function_descriptors(
                 clf.get_descriptors(

@@ -25,7 +25,10 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class SFNN(AtomicNN):
+class SymmetryFunctionNN(AtomicNN):
+    """
+    Symmetry function based atomistic neural network potential.
+    """
 
     def __init__(self,
                  elements: List[str],
@@ -43,7 +46,7 @@ class SFNN(AtomicNN):
                  gamma=np.asarray([1.0, -1.0]),
                  zeta=np.asarray([1.0, 4.0]),
                  cutoff_function="cosine"):
-        super(SFNN, self).__init__(
+        super(SymmetryFunctionNN, self).__init__(
             elements=elements,
             hidden_sizes=hidden_sizes,
             activation=activation,
