@@ -19,14 +19,13 @@ from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
-from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
 from tensoralloy.transformer import BatchDeePMDTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
@@ -136,7 +135,7 @@ class TrainingManager:
 
     def _get_atomic_nn(self, kwargs: dict):
         """
-        Initialize an `AtomicNN` or one of its variant.
+        Initialize an atomistic neural network potential.
         """
         hidden_sizes = {}
         for element in kwargs['elements']:
@@ -158,8 +157,10 @@ class TrainingManager:
         params.update(kwargs)
 
         if self._reader['pair_style'] == 'atomic/sf':
-            params['minmax_scale'] = configs['minmax_scale']
-            return AtomicNN(**params)
+            for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
+                        'cutoff_function', 'minmax_scale'):
+                params[key] = configs['sf'][key]
+            return SymmetryFunctionNN(**params)
         else:
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
@@ -248,28 +249,24 @@ class TrainingManager:
 
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
+        nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
 
         if pair_style == 'atomic/deepmd':
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
                                          nij_max=nij_max, nnl_max=nnl_max,
                                          use_forces=database.has_forces,
                                          use_stress=database.has_stress)
 
         elif pair_style == 'atomic/sf':
-            if self._reader['nn.atomic.sf.angular']:
+            angular = self._reader['nn.atomic.sf.angular']
+            if angular:
                 nijk_max = database.get_nijk_max(acut, allow_calculation=True)
             else:
                 nijk_max = 0
-            params = self._reader['nn.atomic.sf']
-            clf = BatchSymmetryFunctionTransformer(
-                rc=rcut,
-                max_occurs=max_occurs,
-                nij_max=nij_max,
-                nijk_max=nijk_max,
-                use_stress=database.has_stress,
-                use_forces=database.has_forces,
-                **params)
+            clf = BatchUniversalTransformer(
+                max_occurs=max_occurs, rcut=rcut, acut=acut, angular=angular,
+                nij_max=nij_max, nijk_max=nijk_max, nnl_max=nnl_max,
+                symmetric=True)
         elif pair_style.startswith("eam"):
             nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             if pair_style == 'adp':
@@ -280,7 +277,6 @@ class TrainingManager:
                       nnl_max=nnl_max, use_forces=database.has_forces,
                       use_stress=database.has_stress)
         elif pair_style == "tersoff":
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             nijk_max = database.get_nijk_max(acut, allow_calculation=True,
                                              symmetric=False)
             ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)

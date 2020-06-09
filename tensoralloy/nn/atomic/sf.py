@@ -37,7 +37,9 @@ class SymmetryFunctionNN(AtomicNN):
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces'),
                  kernel_initializer="he_normal",
+                 minmax_scale=False,
                  use_atomic_static_energy=True,
+                 fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
                  use_resnet_dt=True,
                  eta=np.array([0.05, 4.0, 20.0, 80.0]),
@@ -52,8 +54,10 @@ class SymmetryFunctionNN(AtomicNN):
             activation=activation,
             kernel_initializer=kernel_initializer,
             use_atomic_static_energy=use_atomic_static_energy,
+            fixed_atomic_static_energy=fixed_atomic_static_energy,
             atomic_static_energy=atomic_static_energy,
             use_resnet_dt=use_resnet_dt,
+            minmax_scale=minmax_scale,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
@@ -70,7 +74,23 @@ class SymmetryFunctionNN(AtomicNN):
                                                   'zeta': self._zeta,
                                                   'gamma': self._gamma})
 
+    def as_dict(self):
+        """
+        Return a JSON serializable dict representation of this `BasicNN`.
+        """
+        d = super(SymmetryFunctionNN, self).as_dict()
+        d["eta"] = self._eta
+        d["omega"] = self._omega
+        d["gamma"] = self._gamma
+        d["zeta"] = self._zeta
+        d["beta"] = self._beta
+        d["cutoff_function"] = self._cutoff_function
+        return d
+
     def _apply_cutoff(self, x, rc, name=None):
+        """
+        Apply the cutoff function on interatomic distances.
+        """
         if self._cutoff_function == "cosine":
             return cosine_cutoff(x, rc, name=name)
         else:
@@ -186,7 +206,11 @@ class SymmetryFunctionNN(AtomicNN):
 
     def get_symmetry_function_descriptors(self,
                                           dists_and_masks: dict,
-                                          mode: tf_estimator.ModeKeys,):
+                                          mode: tf_estimator.ModeKeys):
+        """
+        Construct the computation graph for calculating symmetry function
+        descriptors.
+        """
         clf = self._transformer
         assert isinstance(clf, UniversalTransformer)
         with tf.name_scope("Radial"):
@@ -220,6 +244,7 @@ class SymmetryFunctionNN(AtomicNN):
                                     mode: tf_estimator.ModeKeys,
                                     collections=None):
         """
+        Apply the min-max normalization to raw symmetry function descriptors.
 
         Parameters
         ----------
@@ -276,7 +301,7 @@ class SymmetryFunctionNN(AtomicNN):
 
     def _get_model_outputs(self,
                            features: dict,
-                           dists_and_masks: dict,
+                           descriptors: dict,
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
@@ -291,9 +316,9 @@ class SymmetryFunctionNN(AtomicNN):
                 * 'mask' of shape `[batch_size, N]`.
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms' of dtype `int64`.'
-        dists_and_masks : Dict
-            A dict of (element, (dists, masks)) where `element` represents the
-            symbol of an element.
+        descriptors : Dict
+            A dict of (element, (dists, masks)) as the universal descriptors.
+            Here `element` represents the symbol of an element.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
@@ -313,7 +338,7 @@ class SymmetryFunctionNN(AtomicNN):
                 activation_fn = get_activation_fn(self._activation)
                 outputs = []
                 descriptors = self.get_symmetry_function_descriptors(
-                    dists_and_masks, mode)
+                    descriptors, mode)
                 for element, x in descriptors.items():
                     if self._use_atomic_static_energy:
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
@@ -323,7 +348,7 @@ class SymmetryFunctionNN(AtomicNN):
                         if self._minmax_scale:
                             x = self._apply_minmax_normalization(
                                 x=x,
-                                mask=dists_and_masks[element][1],
+                                mask=descriptors[element][1],
                                 mode=mode,
                                 collections=collections)
                         if verbose:
