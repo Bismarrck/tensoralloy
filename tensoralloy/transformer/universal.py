@@ -455,13 +455,16 @@ class UniversalTransformer(DescriptorTransformer):
     @staticmethod
     def get_row_split_axis():
         """
-        Return the axis to rowwise split `g`.
+        Return the axis to rowwise split the universal descriptors.
         """
         return 1
 
-    def _split_descriptors(self, features, dists, masks):
+    def _split_descriptors(self,
+                           features,
+                           universal_descriptors,
+                           universal_descriptor_masks):
         """
-        Split the descriptors into `N_element` subsets.
+        Split the universal descriptors into `N_element` subsets.
         """
         with tf.name_scope("Split"):
             split_sizes = self.get_row_split_sizes(features)
@@ -469,12 +472,24 @@ class UniversalTransformer(DescriptorTransformer):
 
             # `axis` should increase by one for `g` because `g` is created by
             # `tf.concat((gr, gx, gy, gz), axis=0, name='g')`
-            dists = tf.split(
-                dists, split_sizes, axis=axis + 1, name='dists')[1:]
+            universal_descriptors = tf.split(
+                universal_descriptors,
+                split_sizes,
+                axis=axis + 1,
+                name='udesriptors')[1:]
 
             # Use the original axis
-            masks = tf.split(masks, split_sizes, axis=axis, name='masks')[1:]
-            return dict(zip(self._elements, zip(dists, masks)))
+            # `dist_masks` refers to the masks for the universal interatomic
+            # distances.
+            universal_descriptor_masks = tf.split(
+                universal_descriptor_masks,
+                split_sizes,
+                axis=axis,
+                name='udescriptor_masks')[1:]
+
+            return dict(zip(self._elements,
+                            zip(universal_descriptors,
+                                universal_descriptor_masks)))
 
     def _check_keys(self, features: dict):
         """
@@ -524,12 +539,15 @@ class UniversalTransformer(DescriptorTransformer):
             gy = tf.expand_dims(tf.scatter_nd(v2g_map, dy, shape), 0, name='gy')
             gz = tf.expand_dims(tf.scatter_nd(v2g_map, dz, shape), 0, name='gz')
 
-            dists = tf.concat((gr, gx, gy, gz), axis=0, name='dists')
+            universal_descriptors = tf.concat(
+                (gr, gx, gy, gz), axis=0, name='udescriptors')
 
             v2g_masks = tf.squeeze(v2g_masks, axis=self.get_row_split_axis())
             masks = tf.scatter_nd(v2g_map, v2g_masks, shape)
-            masks = tf.cast(masks, dtype=rr.dtype, name='masks')
-            return self._split_descriptors(features, dists, masks)
+            universal_descriptor_masks = tf.cast(
+                masks, dtype=rr.dtype, name='udescriptor_masks')
+            return self._split_descriptors(
+                features, universal_descriptors, universal_descriptor_masks)
 
     def build_angular_graph(self, features: dict):
         """
@@ -579,27 +597,38 @@ class UniversalTransformer(DescriptorTransformer):
             gjkx = tf.expand_dims(tf.scatter_nd(v2g_map, jkx, shape), 0, 'gjkx')
             gjky = tf.expand_dims(tf.scatter_nd(v2g_map, jky, shape), 0, 'gjky')
             gjkz = tf.expand_dims(tf.scatter_nd(v2g_map, jkz, shape), 0, 'gjkz')
-            dists = tf.concat((grij, gijx, gijy, gijz,
-                               grik, gikx, giky, gikz,
-                               grjk, gjkx, gjky, gjkz), axis=0, name='dists')
+            universal_descriptors = tf.concat(
+                (grij, gijx, gijy, gijz,
+                 grik, gikx, giky, gikz,
+                 grjk, gjkx, gjky, gjkz), axis=0, name='udescriptors')
 
             v2g_masks = tf.squeeze(v2g_masks, axis=self.get_row_split_axis())
             masks = tf.scatter_nd(v2g_map, v2g_masks, shape)
-            masks = tf.cast(masks, dtype=rij.dtype, name='masks')
-            return self._split_descriptors(features, dists, masks)
+            universal_descriptor_masks = tf.cast(
+                masks, dtype=rij.dtype, name='udescriptor_masks')
+            return self._split_descriptors(
+                features, universal_descriptors, universal_descriptor_masks)
+
+    def _get_atom_masks(self, features: dict):
+        # `atom_masks` indicates whether the corresponding atom is real or
+        # virtual.
+        split_sizes = self.get_row_split_sizes(features)
+        axis = self.get_row_split_axis()
+        atom_masks = tf.split(
+            features['atom_masks'],
+            split_sizes,
+            axis=axis - 1,
+            name='atom_masks')[1:]
+        return dict(zip(self._elements, atom_masks))
 
     def build_graph(self, features: dict):
         """
-        Get the tensorflow based computation graph of the EAM model.
+        Build the graph for computing universal descriptors.
 
         Returns
         -------
         ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict of {element: (descriptor, mask)}.
-
-            * `descriptor`: [4, max_n_terms, n_atoms_plus_virt, nnl_max]
-                Represents th
-
         """
         self._check_keys(features)
 
@@ -609,9 +638,13 @@ class UniversalTransformer(DescriptorTransformer):
                 g4 = self.build_angular_graph(features)
             else:
                 g4 = None
-            return {"radial": g2, "angular": g4}
+            atom_masks = self._get_atom_masks(features)
+            return {"radial": g2, "angular": g4, "atom_masks": atom_masks}
 
     def _initialize_placeholders(self):
+        """
+        Initialize placeholder tensors.
+        """
         with tf.name_scope("Placeholders/"):
             dtype = get_float_dtype()
 
@@ -685,7 +718,8 @@ class UniversalTransformer(DescriptorTransformer):
                     angular_interactions[kbody_term] = i - len(self._elements)
 
         dtype = get_float_dtype().as_numpy_dtype
-        g2, ijn_id_map = get_g2_map(atoms=atoms,
+        g2, ijn_id_map = get_g2_map(
+            atoms=atoms,
             rc=self._rcut,
             interactions=radial_interactions,
             vap=vap,
@@ -858,22 +892,37 @@ class BatchUniversalTransformer(UniversalTransformer,
 
     @property
     def rc(self):
+        """
+        Return the cutoff radius for radial interactions.
+        """
         return self._rcut
 
     @property
     def nij_max(self):
+        """
+        Return the corresponding `nij_max`.
+        """
         return self._nij_max
 
     @property
     def nijk_max(self):
+        """
+        Return the corresponding `nijk_max`.
+        """
         return self._nijk_max
 
     @property
     def nnl_max(self):
+        """
+        Return the corresponding `nnl_max`.
+        """
         return self._nnl_max
 
     @property
     def ij2k_max(self):
+        """
+        Return the corresponding `ij2k_max`.
+        """
         return self._ij2k_max
 
     def as_descriptor_transformer(self) -> UniversalTransformer:

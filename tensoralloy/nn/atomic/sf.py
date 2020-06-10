@@ -222,7 +222,6 @@ class SymmetryFunctionNN(AtomicNN):
                 angular=False,
                 merge_symmetric=False)[0]
             g = self._apply_g2_functions(partitions)
-
         if clf.angular:
             with tf.name_scope("Angular"):
                 partitions = dynamic_partition(
@@ -238,8 +237,8 @@ class SymmetryFunctionNN(AtomicNN):
                 g[e] = tf.concat((g[e], tensor), axis=-1)
         return g
 
-    def _apply_minmax_normalization(self,
-                                    x: tf.Tensor,
+    @staticmethod
+    def _apply_minmax_normalization(x: tf.Tensor,
                                     mask: tf.Tensor,
                                     mode: tf_estimator.ModeKeys,
                                     collections=None):
@@ -305,7 +304,7 @@ class SymmetryFunctionNN(AtomicNN):
                            mode: tf_estimator.ModeKeys,
                            verbose=False):
         """
-        Return raw NN-EAM model outputs.
+        Return the model outputs.
 
         Parameters
         ----------
@@ -337,9 +336,8 @@ class SymmetryFunctionNN(AtomicNN):
             with tf.variable_scope("ANN"):
                 activation_fn = get_activation_fn(self._activation)
                 outputs = []
-                descriptors = self.get_symmetry_function_descriptors(
-                    descriptors, mode)
-                for element, x in descriptors.items():
+                for element, x in self.get_symmetry_function_descriptors(
+                        descriptors, mode).items():
                     if self._use_atomic_static_energy:
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
                     else:
@@ -348,7 +346,7 @@ class SymmetryFunctionNN(AtomicNN):
                         if self._minmax_scale:
                             x = self._apply_minmax_normalization(
                                 x=x,
-                                mask=descriptors[element][1],
+                                mask=descriptors['atom_masks'][element],
                                 mode=mode,
                                 collections=collections)
                         if verbose:
