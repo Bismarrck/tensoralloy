@@ -27,7 +27,8 @@ from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import EAMTransformer
-from tensoralloy.utils import Defaults, set_pulay_stress
+from tensoralloy.utils import Defaults
+from tensoralloy.atoms_utils import set_pulay_stress
 from tensoralloy.test_utils import assert_array_equal, datasets_dir, test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.precision import precision_scope

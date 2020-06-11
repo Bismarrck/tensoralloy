@@ -12,7 +12,8 @@ from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import get_pulay_stress, szudzik_pairing
+from tensoralloy.utils import szudzik_pairing
+from tensoralloy.atoms_utils import get_pulay_stress
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap

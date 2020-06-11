@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 
 from tensoralloy.descriptor.eam import EAM, BatchEAM
-from tensoralloy.utils import get_pulay_stress
+from tensoralloy.atoms_utils import get_pulay_stress
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap

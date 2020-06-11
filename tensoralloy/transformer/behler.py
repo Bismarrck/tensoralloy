@@ -22,7 +22,8 @@ from tensoralloy.transformer.base import bytes_feature
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.utils import Defaults, get_pulay_stress
+from tensoralloy.utils import Defaults
+from tensoralloy.atoms_utils import get_pulay_stress
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

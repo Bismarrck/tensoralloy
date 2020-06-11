@@ -12,7 +12,7 @@ from nose.tools import assert_dict_equal
 from os.path import join
 
 from tensoralloy.io.read import read_file
-from tensoralloy.utils import get_pulay_stress
+from tensoralloy.atoms_utils import get_pulay_stress
 from tensoralloy.test_utils import test_dir
 
 

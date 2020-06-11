@@ -29,7 +29,7 @@ from tensoralloy.io.xyz import read_stepmax_xyz, write_stepmax_xyz
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.transformer import SymmetryFunctionTransformer
 from tensoralloy.analysis.elastic import get_lattice_type
-from tensoralloy.utils import set_pulay_stress
+from tensoralloy.atoms_utils import set_pulay_stress
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
