@@ -545,6 +545,8 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 'atom_masks': tf.io.FixedLenFeature([], tf.string),
                 'compositions': tf.io.FixedLenFeature([], tf.string),
                 'pulay': tf.io.FixedLenFeature([], tf.string),
+                'etemperature': tf.FixedLenFeature([], tf.string),
+                'eentropy': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.io.FixedLenFeature([], tf.string)

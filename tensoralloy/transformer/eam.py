@@ -369,7 +369,9 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'atom_masks': tf.FixedLenFeature([], tf.string),
                 'compositions': tf.FixedLenFeature([], tf.string),
-                'pulay': tf.FixedLenFeature([], tf.string)
+                'pulay': tf.FixedLenFeature([], tf.string),
+                'etemperature': tf.FixedLenFeature([], tf.string),
+                'eentropy': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
                 feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
