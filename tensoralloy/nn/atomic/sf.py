@@ -11,7 +11,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from typing import List
 from sklearn.model_selection import ParameterGrid
 
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
 from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.convolutional import convolution1x1
@@ -205,7 +205,7 @@ class SymmetryFunctionNN(AtomicNN):
             return results
 
     def get_symmetry_function_descriptors(self,
-                                          dists_and_masks: dict,
+                                          universal_descriptors: dict,
                                           mode: tf_estimator.ModeKeys):
         """
         Construct the computation graph for calculating symmetry function
@@ -214,18 +214,18 @@ class SymmetryFunctionNN(AtomicNN):
         clf = self._transformer
         assert isinstance(clf, UniversalTransformer)
         with tf.name_scope("Radial"):
-            partitions = dynamic_partition(
-                dists_and_masks=dists_and_masks['radial'],
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=universal_descriptors['radial'],
                 elements=clf.elements,
                 kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=mode,
                 angular=False,
-                merge_symmetric=False)[0]
+                merge_symmetric=False)
             g = self._apply_g2_functions(partitions)
         if clf.angular:
             with tf.name_scope("Angular"):
                 partitions = dynamic_partition(
-                    dists_and_masks=dists_and_masks['angular'],
+                    dists_and_masks=universal_descriptors['angular'],
                     elements=clf.elements,
                     kbody_terms_for_element=clf.kbody_terms_for_element,
                     mode=mode,
@@ -235,7 +235,7 @@ class SymmetryFunctionNN(AtomicNN):
 
             for e, tensor in g4.items():
                 g[e] = tf.concat((g[e], tensor), axis=-1)
-        return g
+        return g, max_occurs
 
     @staticmethod
     def _apply_minmax_normalization(x: tf.Tensor,
@@ -336,8 +336,9 @@ class SymmetryFunctionNN(AtomicNN):
             with tf.variable_scope("ANN"):
                 activation_fn = get_activation_fn(self._activation)
                 outputs = []
-                for element, x in self.get_symmetry_function_descriptors(
-                        descriptors, mode).items():
+                symmetry_function_descriptors, max_occurs = \
+                    self.get_symmetry_function_descriptors(descriptors, mode)
+                for element, x in symmetry_function_descriptors.items():
                     if self._use_atomic_static_energy:
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
                     else:
@@ -371,3 +372,144 @@ class SymmetryFunctionNN(AtomicNN):
                             log_tensor(yi)
                         outputs.append(yi)
                 return outputs
+
+
+class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):
+    """
+    Temperature-dependent symmetry function atomistic neural network potential.
+    """
+
+    def _get_model_outputs(self,
+                           features: dict,
+                           descriptors: dict,
+                           mode: tf_estimator.ModeKeys,
+                           verbose=False):
+        """
+        Return the temperature-dependent model outputs.
+
+        Parameters
+        ----------
+        features : Dict
+            A dict of tensors, includeing raw properties and the descriptors:
+                * 'positions' of shape `[batch_size, N, 3]`.
+                * 'cell' of shape `[batch_size, 3, 3]`.
+                * 'mask' of shape `[batch_size, N]`.
+                * 'volume' of shape `[batch_size, ]`.
+                * 'n_atoms' of dtype `int64`.'
+        descriptors : Dict
+            A dict of (element, (dists, masks)) as the universal descriptors.
+            Here `element` represents the symbol of an element.
+        mode : tf_estimator.ModeKeys
+            Specifies if this is training, evaluation or prediction.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        Returns
+        -------
+        y : tf.Tensor
+            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
+            energies of atoms. The last axis has the size `max_n_atoms`.
+
+        """
+        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
+            collections = [self.default_collection]
+
+            with tf.variable_scope("ANN"):
+                activation_fn = get_activation_fn(self._activation)
+                outputs = []
+                symmetry_function_descriptors, max_occurs = \
+                    self.get_symmetry_function_descriptors(descriptors, mode)
+                for element, x in symmetry_function_descriptors.items():
+                    if self._use_atomic_static_energy:
+                        bias_mean = self._atomic_static_energy.get(element, 0.0)
+                    else:
+                        bias_mean = 0.0
+                    with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
+                        if self._minmax_scale:
+                            x = self._apply_minmax_normalization(
+                                x=x,
+                                mask=descriptors['atom_masks'][element],
+                                mode=mode,
+                                collections=collections)
+                        if verbose:
+                            log_tensor(x)
+                        hidden_sizes = self._hidden_sizes[element]
+                        with tf.name_scope("etemp"):
+                            if mode == tf_estimator.ModeKeys.PREDICT:
+                                d0 = 1
+                                d1 = max_occurs[element]
+                            else:
+                                d0, d1 = x.shape.as_list()[0: 2]
+                            etemp = tf.reshape(
+                                features['etemperature'], [1, d0],
+                                name='etemp/0')
+                            etemp = tf.transpose(etemp, name='T')
+                            etemp = tf.tile(etemp, [d1, 1], name='tiled')
+                            etemp = tf.reshape(
+                                etemp, [d0, d1, 1], name='etemp')
+                            x = tf.concat((x, etemp), axis=2, name='x')
+                        yi = convolution1x1(
+                            x,
+                            activation_fn=activation_fn,
+                            hidden_sizes=hidden_sizes,
+                            num_out=1,
+                            l2_weight=1.0,
+                            collections=collections,
+                            output_bias=self._use_atomic_static_energy,
+                            output_bias_mean=bias_mean,
+                            fixed_output_bias=self._fixed_atomci_static_energy,
+                            use_resnet_dt=self._use_resnet_dt,
+                            kernel_initializer="he_normal",
+                            variable_scope=None,
+                            verbose=verbose)
+                        yi = tf.squeeze(yi, axis=2, name='atomic')
+                        if verbose:
+                            log_tensor(yi)
+                        outputs.append(yi)
+                return outputs
+
+    def _get_internal_energy_op(self, outputs, features, name='energy',
+                                verbose=True):
+        """
+        The temperature-dependent internal energy expression:
+
+            E = (kT + b) * E(R, T)
+
+        """
+        y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+        ndims = features["atom_masks"].shape.ndims
+        axis = ndims - 1
+        with tf.name_scope("mask"):
+            if ndims == 1:
+                y_atomic = tf.squeeze(y_atomic, axis=0)
+            mask = tf.split(
+                features["atom_masks"], [1, -1], axis=axis, name='split')[1]
+            y_mask = tf.multiply(y_atomic, mask, name='mask')
+            self._y_atomic_op_name = y_mask.name
+        energy = tf.reduce_sum(
+            y_mask, axis=axis, keepdims=False, name=f"{name}/zero")
+        with tf.variable_scope("Temperature"):
+            etemp = features['etemperature']
+            _get_initializer = \
+                lambda val: tf.constant_initializer(val, etemp.dtype)
+            k = tf.get_variable(
+                name="k", dtype=etemp.dtype, shape=(),
+                trainable=True,
+                collections=[
+                    tf.GraphKeys.GLOBAL_VARIABLES,
+                    tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
+                initializer=_get_initializer(6.794449879859483),
+                aggregation=tf.VariableAggregation.MEAN)
+            b = tf.get_variable(
+                name="b", dtype=etemp.dtype, shape=(),
+                trainable=True,
+                collections=[
+                    tf.GraphKeys.GLOBAL_VARIABLES,
+                    tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
+                initializer=_get_initializer(0.9699886786188319),
+                aggregation=tf.VariableAggregation.MEAN)
+            c = tf.add(etemp * k, b, name='coef')
+        energy = tf.multiply(c, energy, name=name)
+        if verbose:
+            log_tensor(energy)
+        return energy

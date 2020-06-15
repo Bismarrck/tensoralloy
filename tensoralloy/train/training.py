@@ -20,6 +20,7 @@ from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.nn.atomic.sf import TemperatureDependentSymmetryFunctionNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
@@ -160,7 +161,11 @@ class TrainingManager:
             for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
                         'cutoff_function', 'minmax_scale'):
                 params[key] = configs['sf'][key]
-            return SymmetryFunctionNN(**params)
+            ft = configs['sf'].pop('finite_temperature')
+            if ft:
+                return TemperatureDependentSymmetryFunctionNN(**params)
+            else:
+                return SymmetryFunctionNN(**params)
         else:
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
