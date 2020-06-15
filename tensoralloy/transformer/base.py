@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.units import GPa
 from ase.calculators.singlepoint import SinglePointCalculator
 
-from tensoralloy.atoms_utils import get_pulay_stress
+from tensoralloy import atoms_utils
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
@@ -408,7 +408,12 @@ class BatchDescriptorTransformer(BaseTransformer):
         y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         compositions = self._get_compositions(atoms)
         mask = vap.atom_masks.astype(np_dtype)
-        pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
+        pulay = np.atleast_1d(
+            atoms_utils.get_pulay_stress(atoms)).astype(np_dtype)
+        etemp = np.atleast_1d(
+            atoms_utils.get_electron_temperature(atoms)).astype(np_dtype)
+        eentropy = np.atleast_1d(
+            atoms_utils.get_electron_entropy(atoms)).astype(np_dtype)
 
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
@@ -419,6 +424,8 @@ class BatchDescriptorTransformer(BaseTransformer):
             'atom_masks': bytes_feature(mask.tostring()),
             'compositions': bytes_feature(compositions.tostring()),
             'pulay': bytes_feature(pulay.tostring()),
+            'eentropy': bytes_feature(eentropy.tostring()),
+            'etemperature': bytes_feature(etemp.tostring())
         }
         if self.use_forces:
             f_true = vap.map_forces(atoms.get_forces()).astype(np_dtype)
@@ -494,6 +501,14 @@ class BatchDescriptorTransformer(BaseTransformer):
         pulay = tf.decode_raw(example['pulay'], float_dtype)
         pulay.set_shape([1])
         decoded["pulay_stress"] = tf.squeeze(pulay, name='pulay_stress')
+
+        etemp = tf.decode_raw(example['etemperature'], float_dtype)
+        etemp.set_shape([1])
+        decoded["etemperature"] = tf.squeeze(etemp, name='etemperature')
+
+        eentropy = tf.decode_raw(example['eentropy'], float_dtype)
+        etemp.set_shape([1])
+        decoded["eentropy"] = tf.squeeze(eentropy, name='eentropy')
 
         if use_forces:
             f_true = tf.decode_raw(example['f_true'], float_dtype)
