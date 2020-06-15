@@ -13,7 +13,7 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import szudzik_pairing
-from tensoralloy.atoms_utils import get_pulay_stress
+from tensoralloy import atoms_utils
 from tensoralloy.transformer.indexed_slices import G2IndexedSlices
 from tensoralloy.transformer.indexed_slices import G4IndexedSlices
 from tensoralloy.transformer.vap import VirtualAtomMap
@@ -661,6 +661,10 @@ class UniversalTransformer(DescriptorTransformer):
                 dtype=dtype, name='atom_masks')
             self._placeholders["pulay_stress"] = self._create_float(
                 dtype=dtype, name='pulay_stress')
+            self._placeholders["etemperature"] = self._create_float(
+                dtype=dtype, name='etemperature')
+            self._placeholders["eentropy"] = self._create_float(
+                dtype=dtype, name='eentropy')
             self._placeholders["row_splits"] = self._create_int_1d(
                 name='row_splits', d0=self.n_elements + 1)
             self._placeholders["compositions"] = self._create_float_1d(
@@ -765,7 +769,9 @@ class UniversalTransformer(DescriptorTransformer):
         cell = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         atom_masks = vap.atom_masks.astype(np_dtype)
-        pulay_stress = get_pulay_stress(atoms)
+        pulay_stress = atoms_utils.get_pulay_stress(atoms)
+        eentropy = atoms_utils.get_electron_entropy(atoms)
+        etemp = atoms_utils.get_electron_temperature(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
         compositions = self._get_compositions(atoms)
 
@@ -778,6 +784,8 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
+        feed_dict["etemperature"] = np_dtype(etemp)
+        feed_dict["eentropy"] = np_dtype(eentropy)
         feed_dict["compositions"] = compositions.astype(np_dtype)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(g2.as_dict())

@@ -493,7 +493,7 @@ class Dataset:
                 dataset = dataset.repeat(count=num_epochs)
 
             # Setup the batch
-            dataset = dataset.batch(batch_size)
+            dataset = dataset.batch(batch_size, drop_remainder=True)
             dataset = dataset.prefetch(buffer_size=1)
 
             # Return the iterator

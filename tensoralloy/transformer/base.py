@@ -507,7 +507,7 @@ class BatchDescriptorTransformer(BaseTransformer):
         decoded["etemperature"] = tf.squeeze(etemp, name='etemperature')
 
         eentropy = tf.decode_raw(example['eentropy'], float_dtype)
-        etemp.set_shape([1])
+        eentropy.set_shape([1])
         decoded["eentropy"] = tf.squeeze(eentropy, name='eentropy')
 
         if use_forces:
