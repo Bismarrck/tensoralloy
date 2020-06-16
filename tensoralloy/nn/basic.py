@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module defines the basic neural network for this project.
 """
@@ -28,7 +28,6 @@ from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
-from tensoralloy.nn.constraint import ediff as ediff_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -75,7 +74,6 @@ all_properties = (
     StructuralProperty(name='hessian', minimizable=False),
     StructuralProperty(name='elastic'),
     StructuralProperty(name='rose', exportable=False),
-    StructuralProperty(name='ediff', exportable=False)
 )
 
 exportable_properties = [
@@ -572,14 +570,6 @@ class BasicNN:
                         base_nn=self,
                         options=loss_parameters.rose,
                         verbose=verbose)
-
-            if 'ediff' in self._minimize_properties:
-                if loss_parameters.ediff.references:
-                    losses['ediff'] = \
-                        ediff_ops.get_energy_difference_constraint_loss(
-                            base_nn=self,
-                            options=loss_parameters.ediff,
-                            verbose=verbose)
 
             for tensor in losses.values():
                 tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)

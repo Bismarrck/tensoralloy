@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module defines the 1x1 convolutional Op for `tensoralloy`.
 """
@@ -178,6 +178,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
     output_bias_mean : float
         The bias unit of the output layer will be initialized with
         `constant_initializer`. This defines the initial value.
+    fixed_output_bias : bool
+        Set the bias unit of the output layer to be fixed if True.
     use_resnet_dt : bool
         Use ResNet block (x = sigma(wx + b) + x) if True.
     collections : List[str] or None

@@ -20,14 +20,12 @@ from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.atomic import AtomicNN
-from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
-from tensoralloy.transformer import BatchDeePMDTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
@@ -152,15 +150,10 @@ class TrainingManager:
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
             'use_resnet_dt': configs['use_resnet_dt'],
+            'minmax_scale': configs['minmax_scale'],
         }
         params.update(kwargs)
-
-        if self._reader['pair_style'] == 'atomic/sf':
-            params['minmax_scale'] = configs['minmax_scale']
-            return AtomicNN(**params)
-        else:
-            params.update(configs['deepmd'])
-            return DeepPotSE(**params)
+        return AtomicNN(**params)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN, AdpNN]:
         """
@@ -231,18 +224,10 @@ class TrainingManager:
 
         pair_style = self._reader['pair_style']
         rcut = self._reader['rcut']
-
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
 
-        if pair_style == 'atomic/deepmd':
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-            clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
-                                         nij_max=nij_max, nnl_max=nnl_max,
-                                         use_forces=database.has_forces,
-                                         use_stress=database.has_stress)
-
-        elif pair_style == 'atomic/sf':
+        if pair_style == 'atomic/sf':
             if self._reader['nn.atomic.sf.angular']:
                 nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
             else:

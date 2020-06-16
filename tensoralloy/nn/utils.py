@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module defines tensorflow-graph related utility functions.
 """

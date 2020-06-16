@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module defines the fixed transformer for EAM.
 """

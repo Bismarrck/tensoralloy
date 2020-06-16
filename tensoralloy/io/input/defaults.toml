@@ -15,7 +15,7 @@ serial = false
 
 [nn]
 minimize = ['energy', 'forces']
-export = ['energy', 'forces', 'hessian']
+export = ['energy', 'forces']
 
 [nn.loss]
 
@@ -30,14 +30,6 @@ crystals = []
 beta = []
 dx = 0.10
 delta = 0.01
-
-[nn.loss.ediff]
-references = []
-crystals = []
-diff = []
-weight = 1.0
-forces_weight = 1.0
-method = "mae"
 
 [nn.loss.forces]
 weight = 1.0
@@ -73,13 +65,6 @@ use_resnet_dt = false
 use_atomic_static_energy = true
 fixed_atomic_static_energy = false
 minmax_scale = false
-
-[nn.atomic.deepmd]
-rcs = 4.0
-m1 = 100
-m2 = 4
-embedding_sizes = [20, 40, 80]
-embedding_activation = 'tanh'
 
 [nn.atomic.sf]
 angular = false

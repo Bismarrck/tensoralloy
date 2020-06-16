@@ -149,8 +149,7 @@ class AdpNN(EamAlloyNN):
         Return the pairwise dipole function of `name` for the given k-body
         term.
         """
-        name = self._may_insert_spline_fn(
-            self._potentials[kbody_term]['dipole'])
+        name = self._potentials[kbody_term]['dipole']
         if name == 'nn':
             return self._get_nn_fn(
                 section=kbody_term,
@@ -171,8 +170,7 @@ class AdpNN(EamAlloyNN):
         Return the pairwise quadrupole function of `name` for the given k-body
         term.
         """
-        name = self._may_insert_spline_fn(
-            self._potentials[kbody_term]['quadrupole'])
+        name = self._potentials[kbody_term]['quadrupole']
         if name == 'nn':
             return self._get_nn_fn(
                 section=kbody_term,

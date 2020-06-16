@@ -58,12 +58,12 @@ def nested_dataclass(*args, **kwargs):
         cls = dataclass(cls, **kwargs)
         original_init = cls.__init__
 
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **_kwargs):
             for name, value in kwargs.items():
                 field_type = cls.__annotations__.get(name, None)
                 if is_dataclass(field_type) and isinstance(value, dict):
-                     new_obj = field_type(**value)
-                     kwargs[name] = new_obj
+                    new_obj = field_type(**value)
+                    kwargs[name] = new_obj
             original_init(self, *args, **kwargs)
         cls.__init__ = __init__
         return cls

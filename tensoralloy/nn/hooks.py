@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module defines custom session hooks for this project.
 """
