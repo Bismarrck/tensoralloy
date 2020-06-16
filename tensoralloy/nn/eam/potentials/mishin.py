@@ -6,17 +6,12 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from os.path import join
-
 from tensoralloy.nn.eam.potentials.generic import mishin_cutoff, mishin_polar
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.extension.grad_ops import safe_pow
-from tensoralloy.extension.interp.cubic import CubicInterpolator
-from tensoralloy.test_utils import test_dir
-from tensoralloy.io.lammps import read_adp_setfl
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -75,11 +70,8 @@ class MishinH(EamAlloyPotential):
                 "h": 6.202, "rc": 5.055
             }
         }
-        params['PuPu'] = params['FeFe'].copy()
         params['MoMo'] = params['NiNi'].copy()
         params['MoNi'] = params['NiNi'].copy()
-        params['VV'] = params['MoMo'].copy()
-        params['NbNb'] = params['NbNb'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
@@ -95,6 +87,8 @@ class MishinH(EamAlloyPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -163,6 +157,8 @@ class MishinH(EamAlloyPotential):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -215,6 +211,8 @@ class MishinH(EamAlloyPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -365,6 +363,8 @@ class MishinTa(EamAlloyPotential):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -412,6 +412,8 @@ class MishinTa(EamAlloyPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -421,71 +423,7 @@ class MishinTa(EamAlloyPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
-        dtype = rho.dtype
-
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-
-            pass
-
-
-class AlCuSplineAdp(EamAlloyPotential):
-    """
-    The Cubic Spline form of the Al-Cu ADP potential.
-
-    References
-    ----------
-    PHYSICAL REVIEW B 83, 054116 (2011)
-
-    """
-
-    def __init__(self, interval=1):
-        """
-        Initialization method.
-        """
-        super(AlCuSplineAdp, self).__init__()
-
-        filename = join(test_dir(), 'lammps', 'AlCu.adp')
-        self._adpfl = read_adp_setfl(filename)
-        self._name = "AlCuAdp"
-        self._interval = interval
-
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            fixed=False, verbose=False):
-        """
-        The electron density function.
-        """
-        with tf.name_scope(f"{self._name}/Rho/{element}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.rho[element][0][0:nr:self._interval]
-            y = self._adpfl.rho[element][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            rho = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            rho = tf.reshape(rho, shape, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
-    def embed(self,
-              rho: tf.Tensor,
-              element: str,
-              variable_scope: str,
-              fixed=False,
-              verbose=False):
-        """
-        The embedding function.
-        """
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-            nrho = self._adpfl.nrho
-            x = self._adpfl.embed[element][0][0:nrho:self._interval]
-            y = self._adpfl.embed[element][1][0:nrho:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(rho, name='shape')
-            frho = f.evaluate(tf.reshape(rho, (-1,), name='rho/flat'))
-            frho = tf.reshape(frho, shape, name='frho')
-            if verbose:
-                log_tensor(frho)
-            return frho
+        raise NotImplementedError("This function is not implemented")
 
     def phi(self,
             r: tf.Tensor,
@@ -493,20 +431,8 @@ class AlCuSplineAdp(EamAlloyPotential):
             variable_scope: str,
             fixed=False,
             verbose=False):
-        """
-        The pairwise interaction function.
-        """
-        with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.phi[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.phi[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            phi = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            phi = tf.reshape(phi, shape, name='phi')
-            if verbose:
-                log_tensor(phi)
-            return phi
+        """ The pairwise interaction function. """
+        raise NotImplementedError("This function is not implemented")
 
     def dipole(self,
                r: tf.Tensor,
@@ -514,20 +440,8 @@ class AlCuSplineAdp(EamAlloyPotential):
                variable_scope: str,
                fixed=False,
                verbose=False):
-        """
-        The dipole function.
-        """
-        with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.dipole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.dipole[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            dipole = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            dipole = tf.reshape(dipole, shape, name='dipole')
-            if verbose:
-                log_tensor(dipole)
-            return dipole
+        """ The dipole function. """
+        raise NotImplementedError("This function is not implemented")
 
     def quadrupole(self,
                    r: tf.Tensor,
@@ -535,17 +449,5 @@ class AlCuSplineAdp(EamAlloyPotential):
                    variable_scope: str,
                    fixed=False,
                    verbose=False):
-        """
-        The quadrupole function.
-        """
-        with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.quadrupole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.quadrupole[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            quadrupole = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            quadrupole = tf.reshape(quadrupole, shape, name='quadrupole')
-            if verbose:
-                log_tensor(quadrupole)
-            return quadrupole
+        """ The quadrupole function. """
+        raise NotImplementedError("This function is not implemented")
