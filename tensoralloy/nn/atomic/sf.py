@@ -498,7 +498,7 @@ class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):
                 collections=[
                     tf.GraphKeys.GLOBAL_VARIABLES,
                     tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
-                initializer=_get_initializer(6.794449879859483),
+                initializer=_get_initializer(0.0),
                 aggregation=tf.VariableAggregation.MEAN)
             b = tf.get_variable(
                 name="b", dtype=etemp.dtype, shape=(),
@@ -506,7 +506,7 @@ class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):
                 collections=[
                     tf.GraphKeys.GLOBAL_VARIABLES,
                     tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
-                initializer=_get_initializer(0.9699886786188319),
+                initializer=_get_initializer(1.0),
                 aggregation=tf.VariableAggregation.MEAN)
             c = tf.add(etemp * k, b, name='coef')
         energy = tf.multiply(c, energy, name=name)

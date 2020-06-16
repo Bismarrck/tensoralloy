@@ -204,6 +204,7 @@ class EthanolTest(DatasetTest):
                     assert_less(np.abs(result["f_true"][1] - forces).max(), eps)
                     assert_less(float(result["y_true"][1] - energy), eps)
 
+
 class NickelTest(DatasetTest):
 
     def __init__(self, *args, **kwargs):
