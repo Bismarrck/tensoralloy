@@ -1,0 +1,9 @@
+name = "Mo"
+file = "Mo.dft.cif"
+format = "cif"
+phase = 'bcc'
+bulk_modulus = 263.0
+
+c11 = 472
+c12 = 158
+c44 = 106

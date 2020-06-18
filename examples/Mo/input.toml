@@ -1,0 +1,81 @@
+precision = 'medium'
+pair_style = "eam/adp"
+rcut = 6.5
+
+[dataset]
+sqlite3 = "../../tensoralloy/data/datasets/snap-Mo.db"
+name = "Mo"
+test_size = 34
+
+[nn]
+minimize = ['energy', 'forces', 'rose', 'elastic']
+export = ['energy', 'forces', 'stress']
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+method = 'rmse'
+
+[nn.loss.forces]
+weight = 3.0
+method = 'rmse'
+
+[nn.loss.total_pressure]
+weight = 1.0
+method = 'rmse'
+
+[nn.loss.rose]
+crystals = ['Mo.dft.toml']
+beta = [0.008]
+weight = 10.0
+
+[nn.loss.elastic]
+weight = 0.01
+crystals = ['Mo.dft.toml']
+
+[nn.loss.elastic.constraint]
+use_kbar = true
+forces_weight = 1.0
+stress_weight = 0.01
+tau = 2.0
+
+[nn.eam]
+fixed_functions = []
+
+[nn.eam.rho]
+Mo = "zjw04xc"
+
+[nn.eam.embed]
+Mo = "zjw04xc"
+
+[nn.eam.phi]
+MoMo = "zjw04xc"
+
+[nn.eam.dipole]
+MoMo = "mishinh"
+
+[nn.eam.quadrupole]
+MoMo = "mishinh"
+
+[opt]
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.98
+decay_steps = 5000
+
+[train]
+reset_global_step = true
+batch_size = 20
+shuffle = true
+model_dir = "train"
+train_steps = 100000
+max_checkpoints_to_keep = 100
+eval_steps = 5000
+summary_steps = 100
+log_steps = 50
+profile_steps = 0
+
+[train.ckpt]
+checkpoint_filename = false
+use_ema_variables = true
+restore_all_variables = true

@@ -1,0 +1,93 @@
+precision = "medium"
+pair_style = "eam/adp"
+rcut = 6.5
+
+[dataset]
+sqlite3 = "../../../tensoralloy/data/datasets/snap.db"
+name = "snap"
+descriptor = "eam"
+test_size = 300
+
+[nn]
+minimize = ['energy', 'forces', 'rose', 'elastic']
+export = ['energy', 'forces', 'stress']
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+method = "rmse"
+
+[nn.loss.forces]
+weight = 3.0
+method = "rmse"
+
+[nn.loss.elastic]
+weight = 0.01
+crystals = ['Ni', '../Mo/Mo.dft.toml']
+
+[nn.loss.elastic.constraint]
+tau = 1.0
+forces_weight = 1.0
+stress_weight = 0.005
+use_kbar = true
+
+[nn.loss.rose]
+crystals = ['Ni', '../Mo/Mo.dft.toml']
+beta = [0.005, 0.008]
+weight = 1.0
+
+[nn.eam.rho]
+Ni = "zjw04xcp"
+Mo = "zjw04xcp"
+
+[nn.eam.embed]
+Ni = "zjw04xcp"
+Mo = "zjw04xcp"
+
+[nn.eam.phi]
+NiNi = "zjw04xcp"
+MoMo = "zjw04xcp"
+MoNi = "zjw04xcp"
+
+[nn.eam.dipole]
+NiNi = "mishinh"
+MoMo = "mishinh"
+MoNi = "mishinh"
+
+[nn.eam.quadrupole]
+NiNi = "mishinh"
+MoMo = "mishinh"
+MoNi = "mishinh"
+
+[nn.eam.setfl]
+nr = 10000
+dr = 0.00065
+nrho = 10000
+drho = 0.01
+
+[opt]
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.97
+decay_steps = 2000
+method = "adam"
+
+[train]
+reset_global_step = true
+batch_size = 50
+shuffle = true
+model_dir = "nov28"
+train_steps = 100000
+max_checkpoints_to_keep = 100
+eval_steps = 4000
+summary_steps = 200
+log_steps = 50
+profile_steps = 0
+
+[debug]
+allow_gpu_growth = false
+
+[train.ckpt]
+checkpoint_filename = false
+restore_all_variables = true
+use_ema_variables = true
