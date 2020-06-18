@@ -4,7 +4,6 @@ precision = 'high'
 seed = 611
 pair_style = "required"
 rcut = 6.5
-acut = 4.0
 
 [dataset]
 sqlite3 = "required"

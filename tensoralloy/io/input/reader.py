@@ -140,7 +140,6 @@ class InputReader:
         _safe_update('seed')
         _safe_update('pair_style')
         _safe_update('rcut')
-        _safe_update('acut')
 
         for key, val in defaults['dataset'].items():
             if isinstance(val, dict):
