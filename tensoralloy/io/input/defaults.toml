@@ -60,7 +60,6 @@ tau = 1.0
 
 [nn.atomic]
 kernel_initializer = 'he_normal'
-use_resnet_dt = false
 use_atomic_static_energy = true
 fixed_atomic_static_energy = false
 minmax_scale = false
@@ -68,7 +67,6 @@ minmax_scale = false
 [nn.atomic.sf]
 angular = false
 cutoff_function = 'cosine'
-trainable = false
 eta = [0.01, 0.1, 0.5, 1.0, 4.0]
 omega = [0.0]
 beta = [0.005]
