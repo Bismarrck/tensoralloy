@@ -1,4 +1,7 @@
 #!coding=utf-8
+"""
+The universal transformer.
+"""
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
@@ -294,13 +297,24 @@ class UniversalTransformer(DescriptorTransformer):
         """
         Return a JSON serializable dict representation of this transformer.
         """
-        return {'class': self.__class__.__name__, 'rcut': self._rcut,
-                'acut': self._acut, 'angular': self._angular,
-                'periodic': self._periodic, 'symmetric': self._symmetric}
+        return {'class': self.__class__.__name__, 'elements': self._elements,
+                'rcut': self._rcut, 'acut': self._acut,
+                'angular': self._angular, 'periodic': self._periodic,
+                'symmetric': self._symmetric}
 
     @property
     def descriptor(self):
+        """
+        Return the descriptor name. This property will be removed soon.
+        """
         return "universal"
+
+    @property
+    def rc(self):
+        """
+        Return the cutoff radius. This property will be removed soon.
+        """
+        return self._rcut
 
     @property
     def rcut(self) -> float:
