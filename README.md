@@ -109,7 +109,7 @@ Options marked **[required]** must be set manually in the input file.
 
 * `precision`: `medium` (float32) or `high` (float64). Default is `medium`.
 * `seed`: the global seed, default is 611.
-* `pair_style` [required]: the potential style to use:
+* `pair_style` **[required]**: the potential style to use:
     - eam/alloy: [embedded-atom method](https://doi.org/10.1103/PhysRevB.69.144113)
     - eam/adp: [angular-dependent potential](https://doi.org/10.1016/j.actamat.2005.05.001)
     - atomic/sf: [symmetry function based atomistic neural network potential](https://doi.org/10.1016/j.cpc.2019.107057)
@@ -129,16 +129,68 @@ parallel. For some old Linux systems or debugging, this can be set to `true`.
 
 ### 5.3 NN
 
-#### 5.3.1 General options
+This section defines the potential model parameters.
 
-* `nn.activation`: a string, the activation function to use. Options are:
-`elu`, `leaky_relu`, `softplus`, `softsign`, `tanh`, `sigmoid`.
+#### General options
+
 * `nn.minimize`: a list of string, the properties to minimize. Some examples: 
 `["energy", "forces"]`, `["energy", "stress"]`
 * `nn.export`: a list of string, the properties that the exported model should 
 predict. This option has the same format with `nn.minimize`.
 
+#### 5.3.1 Atomic
+
+This section defines parameters for pair style `atomic/sf`.
+
+* `nn.atomic.kernel_initializer`: a string, the initialization method.
+* `nn.atomic.use_atomic_static_energy`: a boolean. If True, a bias unit will 
+be added to the output layer acting as the elemental static energy. 
+Section 3.7 of [tensoralloy](https://doi.org/10.1016/j.cpc.2019.107057) paper 
+describes this potential model in detail.
+* `nn.atomic.fixed_atomic_static_energy`: a boolean. If True, the elementary 
+static energy parameters will be kept fixed.
+* `nn.atomic.minmax_scale`: a boolean. If True, min-max normalization (
+section 3.6 of [tensoralloy](https://doi.org/10.1016/j.cpc.2019.107057)) will
+be applied to the descriptors.
+
+* `nn.activation`: a string, the activation function to use. Options are:
+`elu`, `leaky_relu`, `softplus`, `softsign`, `tanh`, `sigmoid`.
+
+##### Hidden layers
+
+The following section demonstrates how to setup the hidden layers of the 
+atomistic neural network for elements **Ni** and **Mo**. This block is optional. 
+The default setting for arbitrary type of element is `[64, 32]`.
+
+```toml
+[nn.atomic.layers]
+Mo = [128, 64, 32]
+Ni = [64, 64]
+``` 
+
+##### Symmetry function atomistic neural network parameters
+
+This section describes the specific parameters for the symmetry function based
+atomistic neural network potential.
+
+* `nn.atomic.sf.eta`: a list of float, the eta values for radial symmetry 
+functions. Default is `[0.01, 0.1, 0.5, 1.0, 4.0]`.
+* `nn.atomic.sf.omega`: a list of float, the omega values for radial symmetry 
+functions. Default is `[0.0]`.
+* `nn.atomic.sf.beta`: a list of float, the beta values for angular symmetry 
+functions. Defaults is `[0.005]`.
+* `nn.atomic.sf.gamma`: a list of float, the gamma values for angular 
+symmetry functions. Default is `[1.0, -1.0]`.
+* `nn.atomic.sf.zeta`: a list of float, the zeta values for angular symmetry 
+functions. Default is `[1.0, 4.0]`.
+* `nn.atomic.sf.angular`: a boolean. If true, angular symmetry functions 
+will be used. Otherwise `gamma`, `zeta` and `beta` will be ignored.
+* `nn.atomic.sf.cutoff_function`: a string selecting the cutoff function to 
+use, `cosine` (default) or `polynomial`.
+
 #### 5.3.2 Loss options
+
+This section describes the options for computing the total loss.
 
 ##### Energy
 * `nn.loss.energy.weight`: a float, the weight of the energy loss. Default is 1.
@@ -164,44 +216,11 @@ be used. Default is false.
 
 ##### Rose EOS
 
+This section defines parameters of the Rose constraint.
+
 ##### Elastic Tensor
 
-#### 5.3.3 Neural network options
-
-* `nn.atomic.arch`: a string, the architecture of the atomistic neural networks.
-There two options in this package: `"AtomicNN"` or `"AtomicResNN"`. The former 
-is the traditional type and later is the modified version proposed by the 
-TensorAlloy paper.
-* `nn.atomic.kernel_initializer`: a string, the initialization method.
-* `nn.atomic.minmax_scale`: a boolean. If True, the min-max normalization of the 
-input features will be enabled. Default is true.
-
-* `nn.atomic.resnet.fixed_static_energy`: a boolean. If `nn.atomic.arch` is 
-`AtomicResNet` and this is true, the static energy parameters will be fixed. 
-
-* `nn.atomic.behler.eta`: a list of float, the eta values for radial symmetry 
-functions.
-* `nn.atomic.behler.omega`: a list of float, the omega values for radial symmetry 
-functions.
-* `nn.atomic.behler.beta`: a list of float, the beta values for angular symmetry 
-functions.
-* `nn.atomic.behler.gamma`: a list of float, the gamma values for angular 
-symmetry functions.
-* `nn.atomic.behler.zeta`: a list of float, the zeta values for angular symmetry 
-functions.
-* `nn.atomic.behler.angular`: a boolean. If true, angular symmetry functions 
-will be used. Otherwise `gamma`, `zeta` and `beta` will be ignored.
-
-#### 5.3.4 Layers
-
-The following section demonstrates how to setup the hidden layers of the 
-atomistic neural network for element **C**. This block is optional. The default
-setting is `[64, 32]`.
-
-```toml
-[nn.atomic.layers]
-C = [128, 64, 32]
-``` 
+This section defines parameters of the elastic tensor constraint.
 
 ### 5.4 Opt
 
@@ -224,6 +243,8 @@ to `false`.
 * `train.shuffle`: a boolean. If True, the input dataset will be shuffled. In 
 most cases this should be true.
 * `train.model_dir`: a string, the working directory for this experiment.
+* `train.max_checkpoints_to_keep`: an integer, the maximum number of 
+checkpoint files to keep in the model dir.
 * `train.train_steps`: an integer, the maximum training steps.
 * `train.eval_steps`: an integer, the intervals between two evaluations.
 * `train.summary_steps`: an integer, the intervals between two writing summary 
