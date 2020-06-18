@@ -1,0 +1,66 @@
+precision = 'medium'
+pair_style = 'eam/alloy'
+rcut = 6.5
+
+[dataset]
+sqlite3 = "../../tensoralloy/data/datasets/snap-Ni.db"
+name = "Ni"
+test_size = 61
+
+[nn]
+minimize = ['energy', 'forces', 'elastic', 'rose']
+export = ['energy', 'forces', 'stress']
+
+[nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+method = 'rmse'
+
+[nn.loss.forces]
+weight = 1.0
+method = 'rmse'
+
+[nn.loss.elastic]
+weight = 0.05
+crystals = ['Ni']
+
+[nn.loss.elastic.constraint]
+use_kbar = true
+forces_weight = 1.0
+stress_weight = 1.0
+tau = 2.0
+
+[nn.loss.rose]
+crystals = ['Ni']
+weight = 3.0
+beta = [0.005]
+
+[nn.eam]
+arch = "EamAlloyNN"
+
+[nn.eam.rho]
+Ni = "zjw04uxc"
+
+[nn.eam.embed]
+Ni = "zjw04uxc"
+
+[nn.eam.phi]
+NiNi = "zjw04uxc"
+
+[opt]
+learning_rate = 0.01
+decay_function = "exponential"
+decay_rate = 0.96
+decay_steps = 2000
+
+[train]
+reset_global_step = true
+batch_size = 50
+shuffle = true
+model_dir = "train"
+train_steps = 100000
+max_checkpoints_to_keep = 100
+eval_steps = 2500
+summary_steps = 100
+log_steps = 100
+profile_steps = 0
