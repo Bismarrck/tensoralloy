@@ -164,8 +164,7 @@ class EamNN(BasicNN):
         """
         name = name.lower()
         if name == "nn" or \
-                name in available_potentials or \
-                name.startswith("spline@"):
+                name in available_potentials:
             return True
         else:
             return False
