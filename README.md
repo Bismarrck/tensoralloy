@@ -1,9 +1,6 @@
 # TensorAlloy
 
-**TensorAlloy** is a TensorFlow based machine learning framework for metal 
-alloys. **TensorAlloy** builds direct computation graph from atomic positions 
-to total energy. Thus, atomic forces and the virial stress tensor can be derived 
-by the **AutoGrad** module of TensorFlow directly.
+**TensorAlloy** is a TensorFlow based machine learning framework for alloys. 
 
 ## 1. Requirements
 
@@ -105,6 +102,24 @@ print(atoms.get_stress() / GPa)
 In this section we will introduce the options and values of the input toml file.
 Options marked **[required]** must be set manually in the input file.
 
+##### TOML
+
+In the toml file, there are two ways to express a nested key `A.B.C=x`:
+
+```toml
+[A.B]
+C=X
+```
+
+or
+
+```toml
+A.B.C=x
+```
+
+In this guide, all options are expressed in the second style for simplicity. But
+in the input file, either can be used.
+
 ### 5.1 Root
 
 * `precision`: `medium` (float32) or `high` (float64). Default is `medium`.
@@ -188,7 +203,50 @@ will be used. Otherwise `gamma`, `zeta` and `beta` will be ignored.
 * `nn.atomic.sf.cutoff_function`: a string selecting the cutoff function to 
 use, `cosine` (default) or `polynomial`.
 
-#### 5.3.2 Loss options
+#### 5.3.2 EAM/ADP
+
+This section describes the options for pair styles under `eam`.
+
+##### Functions
+
+`rho`, `phi`, `embed`, `dipole` and `quadrupole` functions are all defined in 
+the similar way.
+
+```toml
+[nn.eam.rho]
+Ni = "zjw04xc"
+
+[nn.eam.dipole]
+NiNi = "mishinh"
+```
+
+The block above sets the rho function of __Ni__ to 
+[`zjw04xc`](tensoralloy/nn/eam/potentials/zjw04.py) and the dipole function of 
+__Ni-Ni__ to [`mishinh`](tensoralloy/nn/eam/potentials/mishin.py).
+
+Built-in functions can be found in this 
+[file](tensoralloy/nn/eam/potentials/__init__.py).
+
+##### SetFL
+
+EAM and ADP will be exported to LAMMPS SetFL potential files. This block defines
+the related parameters.
+
+```toml
+[nn.eam.setfl]
+nr = 10000
+dr = 0.00065
+nrho = 10000
+drho = 0.01
+```
+
+`nrho` and `nr` are the number of tabulated values in the subsequent arrays,
+`drho` and `dr` are the spacing in density and distance space for the values in 
+those arrays. See the 
+[Lammps manual](https://lammps.sandia.gov/doc/pair_eam.html) for more 
+information.
+
+#### 5.3.3 Loss options
 
 This section describes the options for computing the total loss.
 
@@ -214,13 +272,67 @@ be used. Default is false.
 * `nn.loss.l2.decay_rate`: a float controls the decay rate.
 * `nn.loss.l2.decay_steps`: an integer.
 
+##### Structural toml file
+
+[Mo.dft.toml](examples/Mo/Mo.dft.toml) is a structural toml file defining 
+essential parameters for physical constraints.
+
+```toml
+name = "Mo"
+file = "Mo.dft.cif"
+format = "cif"
+phase = 'bcc'
+bulk_modulus = 263.0
+
+c11 = 472
+c12 = 158
+c44 = 106
+```
+
+* `name`: a string, the name of this material.
+* `file`: a string, the structure file.
+* `format`: the format of this file, must be recognized by `ase.io.read`. 
+Generally, __cif__ and __extxyz__ are recommended.
+* `phase`: a string, the phase of this structure.
+* `bulk_modulus`: a float, the bulk modulus (GPa) of this material.
+* `c11, c12, c44, ...`: float numbers, the elastic constants (GPa).
+
+##### Built-in crystals
+
+TensorAlloy has several built-in crystals (Ni, Mo, etc). See this 
+[file](tensoralloy/nn/constraint/data.py) for more information.
+
 ##### Rose EOS
 
 This section defines parameters of the Rose constraint.
 
+* `nn.loss.rose.crystals`: a list of string, the names or files of crystals for 
+constructing Rose EOS constraints. As an example, `["Ni", "Mo.dft.toml"]` means
+the built-in crystal `Ni` and the crystal specified in `Mo.dft.toml` will be 
+used.
+* `nn.loss.rose.weight`: a float, the weight of Rose constraints.
+* `nn.loss.rose.beta`: a list of float, the beta values for each crystal. The 
+size of this list must be equal to the size of `nn.loss.rose.crystals`.
+
+`nn.loss.rose.dx` and `nn.loss.rose.delta` controls the number of points to fit
+EOS curves. `nn.loss.rose.delta` is the limit of the isotropic scaling factor.
+
 ##### Elastic Tensor
 
 This section defines parameters of the elastic tensor constraint.
+
+* `nn.loss.elastic.crystals`: a list of string, the names or files of crystals to 
+use.
+* `nn.loss.elasitc.weight`: a float, the weight of elastic constraints.
+
+When computing the elastic constants, the crystals should be close to their 
+equilibrium structure. In other words, the norms of forces and stress tensor 
+should be close to zero. `nn.loss.elastic.constraint.forces_weight` and 
+`nn.loss.elastic.constraint.stress_weight` are used to define the weights of the
+norms of forces and stress tensor.
+
+`nn.loss.elastic.constraint.tau` corresponds to the tau value (unit is GPa) of 
+equation 32 in the paper.
 
 ### 5.4 Opt
 
@@ -231,7 +343,7 @@ This section defines parameters of the elastic tensor constraint.
 `exponential`, `inverse_time`, `natural_exp`. Default is `false` which means 
 learning rate decay is disabled.
 * `opt.decay_rate`: a float, the decay rate.
-* `opt.decay_steps`: an integer.
+* `opt.decay_steps`: an integer, the decay step.
 * `opt.staircase`: a boolean.
 
 ### 5.5 Train
