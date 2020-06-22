@@ -18,6 +18,7 @@ from ase.units import GPa
 from ase.io import read
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
+from tensorflow.python import debug as tf_debug
 from typing import List, Tuple
 from collections import namedtuple
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -654,7 +655,8 @@ class TensorAlloyCalculator(Calculator):
         else:
             plot.show()
 
-    def calculate(self, atoms=None, properties=('energy', 'forces'), *args):
+    def calculate(self, atoms=None, properties=('energy', 'forces'),
+                  debug_mode=False, *args):
         """
         Calculate the total energy and other properties (1body, kbody, atomic).
 
@@ -665,13 +667,20 @@ class TensorAlloyCalculator(Calculator):
         properties : Tuple[str]
             A list of str as the properties to calculate. Available options
             are: 'energy', 'atomic', '1body' and 'kbody'.
+        debug_mode : bool
+            Use the debug mode if True.
 
         """
         Calculator.calculate(self, atoms, properties, *args)
         with precision_scope(self._fp_precision):
             with self._graph.as_default():
                 ops = {target: self._ops[target] for target in properties}
-                self.results = self._sess.run(
+                if debug_mode:
+                    sess = tf_debug.LocalCLIDebugWrapperSession(
+                        self._sess, ui_type="readline")
+                else:
+                    sess = self._sess
+                self.results = sess.run(
                     ops, feed_dict=self._transformer.get_feed_dict(atoms))
                 self._ncalls += 1
 
