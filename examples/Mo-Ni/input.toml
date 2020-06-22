@@ -3,7 +3,7 @@ pair_style = "eam/adp"
 rcut = 6.5
 
 [dataset]
-sqlite3 = "../../../tensoralloy/data/datasets/snap.db"
+sqlite3 = "../../tensoralloy/data/datasets/snap.db"
 name = "snap"
 descriptor = "eam"
 test_size = 300
