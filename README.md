@@ -89,7 +89,7 @@ from tensoralloy.calculator import TensorAlloyCalculator
 from ase.build import bulk
 from ase.units import GPa
 
-calc = TensorAlloyCalculator("examples/Ni/Ni.eam.alloy.pb")
+calc = TensorAlloyCalculator("examples/Ni/Ni.pb")
 atoms = bulk("Ni", cubic=True)
 atoms.calc = calc
 print(atoms.get_total_energy())
@@ -99,22 +99,25 @@ print(atoms.get_stress() / GPa)
 
 ## 5. Input
 
-In this section we will introduce the options and values of the input toml file.
+In this section we will introduce the options and values of the input file.
 Options marked **[required]** must be set manually in the input file.
+
+**TensorAlloy** uses [TOML](https://github.com/toml-lang/toml) files as inputs.
+The following section demonstrates how to write a toml file.
 
 ##### TOML
 
-In the toml file, there are two ways to express a nested key `A.B.C=x`:
+In the toml file, there are two ways to set a nested key-value pair `A.B.C="x"`:
 
 ```toml
 [A.B]
-C=X
+C="X"
 ```
 
 or
 
 ```toml
-A.B.C=x
+A.B.C="x"
 ```
 
 In this guide, all options are expressed in the second style for simplicity. But
@@ -226,7 +229,7 @@ __Ni-Ni__ to [`mishinh`](tensoralloy/nn/eam/potentials/mishin.py).
 
 Built-in functions: 
 
-```python
+```text
 available_potentials = {
     'sutton90': AgSutton90,
     'zjw04': Zjw04,
@@ -237,6 +240,15 @@ available_potentials = {
     "mishinh": MishinH,
 }
 ```
+
+##### Customized functions
+
+``zjw04`` represents the original functions proposed by Zhou, Johnson and Wadley 
+in [2004](https://doi.org/10.1103/PhysRevB.69.144113). `zjw04xc`, `zjw04uxc` and 
+`zjw04xcp` are all customized implementations. 
+
+The dict [``available_potentials``](tensoralloy/nn/eam/potentials/__init__.py) 
+must be set in order to make customized functions usable.
 
 ##### SetFL
 
@@ -292,7 +304,7 @@ essential parameters for physical constraints.
 name = "Mo"
 file = "Mo.dft.cif"
 format = "cif"
-phase = 'bcc'
+phase = "bcc"
 bulk_modulus = 263.0
 
 c11 = 472
@@ -327,6 +339,12 @@ size of this list must be equal to the size of `nn.loss.rose.crystals`.
 
 `nn.loss.rose.dx` and `nn.loss.rose.delta` controls the number of points to fit
 EOS curves. `nn.loss.rose.delta` is the limit of the isotropic scaling factor.
+The volume will range from `(1 - delta)**3` to `(1 + delta)**3` of the 
+equilibrium volume.
+
+![EOS](examples/Ni/Ni_eos.png)
+
+The figure above shows the fitted EOS of fcc Ni.
 
 ##### Elastic Tensor
 
@@ -394,23 +412,6 @@ the checkpoint values as initial guesses, this option shall be false.
 
 This TensorAlloy program is licensed under GNU Lesser General Public License 
 v3.0. For more information please read [LICENSE](LICENSE).
-
-### QM7
-
-The extxyz file shipped with this program is created from the MATLAB data file 
-downloaded from [quantum-machine.org](http://quantum-machine.org/datasets/#qm7).
-The QM7 dataset is a subset of GDB-13 (a database of nearly 1 billion stable and 
-synthetically accessible organic molecules) composed of all molecules of up to 
-23 atoms (including 7 heavy atoms C, N, O, and S), totalling 7165 molecules.
-
-For more information, please read:
-
-1. L. C. Blum, J.-L. Reymond, 970 Million Druglike Small Molecules for Virtual 
-Screening in the Chemical Universe Database GDB-13, J. Am. Chem. Soc., 131:8732, 
-2009
-2. M. Rupp, A. Tkatchenko, K.-R. Müller, O. A. von Lilienfeld: Fast and Accurate 
-Modeling of Molecular Atomization Energies with Machine Learning, Physical 
-Review Letters, 108(5):058301, 2012
 
 ### SNAP
 
