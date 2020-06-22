@@ -379,6 +379,12 @@ class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):
     Temperature-dependent symmetry function atomistic neural network potential.
     """
 
+    def __init__(self, *args, **kwargs):
+        """ Initialization method. """
+        super(TemperatureDependentSymmetryFunctionNN, self).__init__(
+            *args, **kwargs)
+        self._nn_scope = "Atomic/TDSF"
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
