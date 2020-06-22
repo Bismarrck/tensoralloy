@@ -132,10 +132,10 @@ in the input file, either can be used.
 
 ### 5.2 Dataset
 
-* `dataset.sqlite3`: a string, the 
+* `dataset.sqlite3` **[required]**: a string, the 
 [ASE Sqlite3 Database](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#module-ase.db) 
 to use.
-* `dataset.name`: a string, the name of this experiment.
+* `dataset.name` **[required]**: a string, the name of this experiment.
 * `dataset.tfrecords_dir`: a string, the directory to save/load tfrecords files.
 * `dataset.test_size`: an integer, the number of examples for evaluation.
 * `dataset.serial`: a boolean. Default is `false`. Typically this should be 
@@ -161,7 +161,7 @@ This section defines parameters for pair style `atomic/sf`.
 * `nn.atomic.use_atomic_static_energy`: a boolean. If True, a bias unit will 
 be added to the output layer acting as the elemental static energy. 
 Section 3.7 of [tensoralloy](https://doi.org/10.1016/j.cpc.2019.107057) paper 
-describes this potential model in detail.
+describes this residual model in detail.
 * `nn.atomic.fixed_atomic_static_energy`: a boolean. If True, the elementary 
 static energy parameters will be kept fixed.
 * `nn.atomic.minmax_scale`: a boolean. If True, min-max normalization (
@@ -169,13 +169,13 @@ section 3.6 of [tensoralloy](https://doi.org/10.1016/j.cpc.2019.107057)) will
 be applied to the descriptors.
 
 * `nn.activation`: a string, the activation function to use. Options are:
-`elu`, `leaky_relu`, `softplus`, `softsign`, `tanh`, `sigmoid`.
+`elu`, `leaky_relu`, `softplus`, `softsign`, `tanh`, `sigmoid`. Default is 
+`softplus`.
 
 ##### Hidden layers
 
-The following section demonstrates how to setup the hidden layers of the 
-atomistic neural network for elements **Ni** and **Mo**. This block is optional. 
-The default setting for arbitrary type of element is `[64, 32]`.
+Neural network hidden layers are set under scope `nn.atomic.layers`. This block 
+is optional. The default setting for arbitrary type of element is `[64, 32]`.
 
 ```toml
 [nn.atomic.layers]
@@ -224,8 +224,19 @@ The block above sets the rho function of __Ni__ to
 [`zjw04xc`](tensoralloy/nn/eam/potentials/zjw04.py) and the dipole function of 
 __Ni-Ni__ to [`mishinh`](tensoralloy/nn/eam/potentials/mishin.py).
 
-Built-in functions can be found in this 
-[file](tensoralloy/nn/eam/potentials/__init__.py).
+Built-in functions: 
+
+```python
+available_potentials = {
+    'sutton90': AgSutton90,
+    'zjw04': Zjw04,
+    'zjw04xc': Zjw04xc,
+    'zjw04uxc': Zjw04uxc,
+    'zjw04xcp': Zjw04xcp,
+    'msah11': AlFeMsah11,
+    "mishinh": MishinH,
+}
+```
 
 ##### SetFL
 
@@ -242,7 +253,7 @@ drho = 0.01
 
 `nrho` and `nr` are the number of tabulated values in the subsequent arrays,
 `drho` and `dr` are the spacing in density and distance space for the values in 
-those arrays. See the 
+those arrays. See 
 [Lammps manual](https://lammps.sandia.gov/doc/pair_eam.html) for more 
 information.
 
