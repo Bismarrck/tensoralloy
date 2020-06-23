@@ -16,9 +16,10 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.units import GPa
 from ase.io import read
+from ase.calculators.calculator import all_changes
+from tensorflow.python import debug as tf_debug
 from tensorflow.core.framework import graph_pb2
 from tensorflow.python.framework import importer
-from tensorflow.python import debug as tf_debug
 from typing import List, Tuple
 from collections import namedtuple
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -656,7 +657,7 @@ class TensorAlloyCalculator(Calculator):
             plot.show()
 
     def calculate(self, atoms=None, properties=('energy', 'forces'),
-                  debug_mode=False, *args):
+                  system_changes=all_changes, debug_mode=False):
         """
         Calculate the total energy and other properties (1body, kbody, atomic).
 
@@ -667,11 +668,15 @@ class TensorAlloyCalculator(Calculator):
         properties : Tuple[str]
             A list of str as the properties to calculate. Available options
             are: 'energy', 'atomic', '1body' and 'kbody'.
+        system_changes: List[str]
+            List of what has changed since last calculation.  Can be
+            any combination of these six: 'positions', 'numbers', 'cell',
+            'pbc', 'initial_charges' and 'initial_magmoms'.
         debug_mode : bool
             Use the debug mode if True.
 
         """
-        Calculator.calculate(self, atoms, properties, *args)
+        Calculator.calculate(self, atoms, properties, system_changes)
         with precision_scope(self._fp_precision):
             with self._graph.as_default():
                 ops = {target: self._ops[target] for target in properties}
