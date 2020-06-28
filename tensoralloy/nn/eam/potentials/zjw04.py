@@ -151,10 +151,6 @@ zjw04_defaults = {
     },
 }
 
-# Additional initial parameters
-zjw04_defaults['Nb'] = zjw04_defaults['Mo']
-zjw04_defaults['V'] = zjw04_defaults['Mo']
-
 
 class Zjw04(EamAlloyPotential):
     """
@@ -438,7 +434,6 @@ class Zjw04xc(Zjw04):
         The default parameters of Zjw04xc.
         """
         params = zjw04_defaults.copy()
-        params['Pu'] = zjw04_defaults['Zr'].copy()
         return params
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
