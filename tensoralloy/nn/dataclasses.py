@@ -58,7 +58,7 @@ def nested_dataclass(*args, **kwargs):
         cls = dataclass(cls, **kwargs)
         original_init = cls.__init__
 
-        def __init__(self, *args, **_kwargs):
+        def __init__(self, *args, **kwargs):
             for name, value in kwargs.items():
                 field_type = cls.__annotations__.get(name, None)
                 if is_dataclass(field_type) and isinstance(value, dict):
