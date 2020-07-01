@@ -450,7 +450,7 @@ class TrainingManager:
                     estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None, use_ema_variables=True,
-               **kwargs):
+               export_lammps_mpi_pb=False, **kwargs):
         """
         Export the trained model.
         """
@@ -460,17 +460,22 @@ class TrainingManager:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)
 
-            if tag is not None:
-                graph_name = f'{self._dataset.name}.{tag}.pb'
+            if export_lammps_mpi_pb:
+                pb_ext = "lmpb"
             else:
-                graph_name = f'{self._dataset.name}.pb'
+                pb_ext = "pb"
+            if tag is not None:
+                graph_name = f'{self._dataset.name}.{tag}.{pb_ext}'
+            else:
+                graph_name = f'{self._dataset.name}.{pb_ext}'
+            graph_path = join(self._hparams.train.model_dir, graph_name)
 
             self._nn.export(
-                output_graph_path=join(self._hparams.train.model_dir,
-                                       graph_name),
+                output_graph_path=graph_path,
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
-                keep_tmp_files=False)
+                keep_tmp_files=False,
+                export_partial_forces_model=export_lammps_mpi_pb)
 
             if isinstance(self._nn, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']

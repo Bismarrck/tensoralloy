@@ -59,6 +59,12 @@ class ExportModelProgram(CLIProgram):
             default=False,
             help="If this flag is given, EMA variables will be disabled."
         )
+        subparser.add_argument(
+            '--lammps',
+            action='store_true',
+            default=False,
+            help="Export Lammps/MPI compatible model with partial forces ops."
+        )
 
         group = subparser.add_argument_group("EAM")
 
@@ -139,5 +145,6 @@ class ExportModelProgram(CLIProgram):
             manager.export(ckpt,
                            tag=step_tag,
                            use_ema_variables=(not args.no_ema),
+                           export_lammps_mpi_pb=args.lammps,
                            **kwargs)
         return func
