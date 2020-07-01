@@ -55,7 +55,7 @@ def get_g2_map(atoms: Atoms,
     """
     Build the base `v2g_map`.
     """
-    ilist, jlist, n1 = neighbor_list('ijS', atoms, rc)
+    ilist, jlist, n1, rij, dij = neighbor_list('ijSdD', atoms, rc)
     nij = len(ilist)
     if nij_max is None:
         nij_max = nij
@@ -105,7 +105,8 @@ def get_g2_map(atoms: Atoms,
         # The mask
         g2_map[index, iaxis + 4] = ilist[index] > 0
 
-    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
+                         rij=rij, dij=dij)
     return g2, ijn_id_map
 
 
@@ -229,9 +230,9 @@ class UniversalTransformer(DescriptorTransformer):
     gather_fn = staticmethod(tf.gather)
 
     def __init__(self, elements: List[str], rcut, acut=None, angular=False,
-                 periodic=True, symmetric=True):
+                 periodic=True, symmetric=True, use_computed_dists=True):
         """
-        The initialization metho.d
+        The initialization method
 
         Parameters
         ----------
@@ -245,8 +246,22 @@ class UniversalTransformer(DescriptorTransformer):
             A boolean indicating whether angular interactions shall be included
             or not. Defaults to False.
         periodic : bool
-
+            A boolean. If True, the periodic interatomic distance equation will
+            be used.
         symmetric : bool
+            A boolean. If True, symmetricity will be considered in building
+            angular interactions.
+        use_computed_dists : bool
+            A boolean.
+
+            If True, interatomic distance related variables (`rij`, `dij`)
+            should be computed.
+
+            If False, these should be provided by the input `features`. At this
+            time, dE/dh and dE/dR can not be evaluated directly since the
+            positions tensor and the cell tensor will not be include in the
+            computation graph. For exporting Lammps/MPI-compatible models, this
+            should be False.
 
         """
         DescriptorTransformer.__init__(self)
@@ -292,6 +307,7 @@ class UniversalTransformer(DescriptorTransformer):
         self._periodic = periodic
         self._angular = angular
         self._symmetric = symmetric
+        self._use_computed_dists = use_computed_dists
 
     def as_dict(self) -> Dict:
         """
@@ -300,7 +316,8 @@ class UniversalTransformer(DescriptorTransformer):
         return {'class': self.__class__.__name__, 'elements': self._elements,
                 'rcut': self._rcut, 'acut': self._acut,
                 'angular': self._angular, 'periodic': self._periodic,
-                'symmetric': self._symmetric}
+                'symmetric': self._symmetric,
+                'use_computed_dists': self._use_computed_dists}
 
     @property
     def descriptor(self):
@@ -367,6 +384,18 @@ class UniversalTransformer(DescriptorTransformer):
         return self._angular
 
     @property
+    def use_computed_dists(self):
+        """
+        Return True if interatomic distances shall be computed or given
+        directly.
+        """
+        return self._use_computed_dists
+
+    @use_computed_dists.setter
+    def use_computed_dists(self, flag: bool):
+        self._use_computed_dists = flag
+
+    @property
     def all_kbody_terms(self):
         """
         A list of str as the ordered k-body terms.
@@ -405,7 +434,7 @@ class UniversalTransformer(DescriptorTransformer):
         """
         return tf.matmul(shift, cell, name='displacements')
 
-    def get_rij(self, R, cell, ilist, jlist, shift, name):
+    def calculate_rij(self, R, cell, ilist, jlist, shift, name):
         """
         Return the interatomic distances array, `rij`, and the corresponding
         differences.
@@ -516,32 +545,46 @@ class UniversalTransformer(DescriptorTransformer):
         assert 'n_atoms_vap' in features
         assert 'nnl_max' in features
         assert 'row_splits' in features
-        assert 'g2.ilist' in features
-        assert 'g2.jlist' in features
-        assert 'g2.n1' in features
         assert 'g2.v2g_map' in features
+
+        if not self._use_computed_dists:
+            assert 'g2.rij' in features
+            assert 'g2.dij' in features
+        else:
+            assert 'g2.ilist' in features
+            assert 'g2.jlist' in features
+            assert 'g2.n1' in features
 
         if self._angular:
             assert 'ij2k_max' in features
-            assert 'g4.ilist' in features
-            assert 'g4.jlist' in features
-            assert 'g4.klist' in features
-            assert 'g4.n1' in features
-            assert 'g4.n2' in features
-            assert 'g4.n3' in features
             assert 'g4.v2g_map' in features
+
+            if not self._use_computed_dists:
+                assert 'g4.rijk' in features
+                assert 'g4.dijk' in features
+            else:
+                assert 'g4.ilist' in features
+                assert 'g4.jlist' in features
+                assert 'g4.klist' in features
+                assert 'g4.n1' in features
+                assert 'g4.n2' in features
+                assert 'g4.n3' in features
 
     def build_radial_graph(self, features: dict):
         """
         Build the computation graph for calculating radial descriptors.
         """
         with tf.name_scope("Radial"):
-            rr, dij = self.get_rij(features["positions"],
-                                   features["cell"],
-                                   features["g2.ilist"],
-                                   features["g2.jlist"],
-                                   features["g2.n1"],
-                                   name='rij')
+            if not self._use_computed_dists:
+                rr = features['g2.rij']
+                dij = features['g2.dij']
+            else:
+                rr, dij = self.calculate_rij(features["positions"],
+                                             features["cell"],
+                                             features["g2.ilist"],
+                                             features["g2.jlist"],
+                                             features["g2.n1"],
+                                             name='rij')
             shape = self.get_g_shape(features, angular=False)
             v2g_map, v2g_masks = self.get_v2g_map(features)
 
@@ -569,24 +612,33 @@ class UniversalTransformer(DescriptorTransformer):
         Build the computation graph for calculating angular descriptors.
         """
         with tf.name_scope("Angular"):
-            rij, dij = self.get_rij(features['positions'],
-                                    features['cell'],
-                                    features['g4.ilist'],
-                                    features['g4.jlist'],
-                                    features['g4.n1'],
-                                    name='rij')
-            rik, dik = self.get_rij(features['positions'],
-                                    features['cell'],
-                                    features['g4.ilist'],
-                                    features['g4.klist'],
-                                    features['g4.n2'],
-                                    name='rik')
-            rjk, djk = self.get_rij(features['positions'],
-                                    features['cell'],
-                                    features['g4.jlist'],
-                                    features['g4.klist'],
-                                    features['g4.n3'],
-                                    name='rjk')
+            if not self._use_computed_dists:
+                rij = features['g4.rijk'][0]
+                rik = features['g4.rijk'][1]
+                rjk = features['g4.rijk'][2]
+                dij = features['g4.dijk'][0]
+                dik = features['g4.dijk'][1]
+                djk = features['g4.dijk'][2]
+            else:
+                rij, dij = self.calculate_rij(features['positions'],
+                                              features['cell'],
+                                              features['g4.ilist'],
+                                              features['g4.jlist'],
+                                              features['g4.n1'],
+                                              name='rij')
+                rik, dik = self.calculate_rij(features['positions'],
+                                              features['cell'],
+                                              features['g4.ilist'],
+                                              features['g4.klist'],
+                                              features['g4.n2'],
+                                              name='rik')
+                rjk, djk = self.calculate_rij(features['positions'],
+                                              features['cell'],
+                                              features['g4.jlist'],
+                                              features['g4.klist'],
+                                              features['g4.n3'],
+                                              name='rjk')
+
             shape = self.get_g_shape(features, angular=True)
             v2g_map, v2g_masks = self.get_v2g_map(features, angular=True)
 
@@ -683,10 +735,19 @@ class UniversalTransformer(DescriptorTransformer):
                 name='row_splits', d0=self.n_elements + 1)
             self._placeholders["compositions"] = self._create_float_1d(
                 dtype=dtype, name='compositions')
-            self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
-            self._placeholders["g2.jlist"] = self._create_int_1d('g2.jlist')
-            self._placeholders["g2.n1"] = self._create_float_2d(
-                dtype=dtype, d0=None, d1=3, name='g2.n1')
+
+            if not self._use_computed_dists:
+                self._placeholders["g2.rij"] = self._create_float_1d(
+                    dtype=dtype, name="g2.rij")
+                self._placeholders["g2.dij"] = self._create_float_2d(
+                    dtype=dtype, d1=3, name="g2.dij")
+            else:
+                self._placeholders["g2.ilist"] = self._create_int_1d(
+                    name='g2.ilist')
+                self._placeholders["g2.jlist"] = self._create_int_1d(
+                    name='g2.jlist')
+                self._placeholders["g2.n1"] = self._create_float_2d(
+                    dtype=dtype, d0=None, d1=3, name='g2.n1')
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
                 d0=None, d1=5, name='g2.v2g_map')
 
@@ -802,7 +863,8 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict["eentropy"] = np_dtype(eentropy)
         feed_dict["compositions"] = compositions.astype(np_dtype)
         feed_dict["row_splits"] = np.int32(splits)
-        feed_dict.update(g2.as_dict())
+        feed_dict.update(
+            g2.as_dict(use_computed_dists=self._use_computed_dists))
 
         if self._angular:
             feed_dict['ij2k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
@@ -855,7 +917,7 @@ class BatchUniversalTransformer(UniversalTransformer,
 
         UniversalTransformer.__init__(
             self, elements=elements, rcut=rcut, acut=acut, angular=angular,
-            periodic=periodic, symmetric=symmetric)
+            periodic=periodic, symmetric=symmetric, use_computed_dists=True)
 
         BatchDescriptorTransformer.__init__(self, use_forces=use_forces,
                                             use_stress=use_stress)
@@ -1150,7 +1212,7 @@ class BatchUniversalTransformer(UniversalTransformer,
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, shift)
+            return G2IndexedSlices(v2g_map, ilist, jlist, shift, None, None)
 
     def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """

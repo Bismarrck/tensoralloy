@@ -31,6 +31,7 @@ from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -69,6 +70,8 @@ all_properties = (
     StructuralProperty(name='energy'),
     StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
+    StructuralProperty(name="partial_forces", exportable=True,
+                       minimizable=False),
     StructuralProperty(name='stress'),
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
@@ -311,6 +314,22 @@ class BasicNN:
         if verbose:
             log_tensor(forces)
         return forces
+
+    @staticmethod
+    def _get_partial_forces_ops(energy, rij, rijk, verbose=True):
+        """
+        Return the Ops for computing partial forces.
+        """
+        ops = {}
+        dEdrij = tf.gradients(energy, rij, name='dEdrij')[0]
+        ops["dEdrij"] = tf.identity(dEdrij, name='dE/drij')
+        if rijk is not None:
+            dEdrijk = tf.gradients(energy, rijk, name='dEdrijk')[0]
+            ops["dEdrijk"] = tf.identity(dEdrijk, name='dE/drijk')
+        if verbose:
+            for tensor in ops.values():
+                log_tensor(tensor)
+        return ops
 
     @staticmethod
     def _get_reduced_full_stress_tensor(energy: tf.Tensor, cell, volume,
@@ -684,8 +703,14 @@ class BasicNN:
             mode=mode,
             verbose=verbose)
 
+        export_partial_forces = False
         if mode == tf_estimator.ModeKeys.PREDICT:
-            properties = self._export_properties
+            if isinstance(self._transformer, UniversalTransformer) \
+                    and not self._transformer.use_computed_dists:
+                export_partial_forces = True
+                properties = ["energy", "partial_forces"]
+            else:
+                properties = self._export_properties
         else:
             properties = self._minimize_properties
 
@@ -709,6 +734,14 @@ class BasicNN:
                         name='forces',
                         verbose=verbose)
 
+            if export_partial_forces:
+                with tf.name_scope("PartialForces"):
+                    predictions.update(
+                        self._get_partial_forces_ops(
+                            energy,
+                            rij=features["g2.rij"],
+                            rijk=features.get("g4.rijk", None)))
+
             if 'stress' in properties:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
@@ -731,8 +764,8 @@ class BasicNN:
                         predictions["energy"], features["positions"],
                         name='hessian', verbose=verbose)
 
-            if mode == tf_estimator.ModeKeys.PREDICT and \
-                    'elastic' in properties:
+            if mode == tf_estimator.ModeKeys.PREDICT \
+                    and 'elastic' in properties:
                 with tf.name_scope("Elastic"):
                     predictions["elastic"] = \
                         elastic_ops.get_elastic_constat_tensor_op(
@@ -843,7 +876,8 @@ class BasicNN:
                                           evaluation_hooks=evaluation_hooks)
 
     def export(self, output_graph_path: str, checkpoint=None,
-               keep_tmp_files=False, use_ema_variables=True):
+               keep_tmp_files=False, use_ema_variables=True,
+               export_partial_forces_model=False):
         """
         Freeze the graph and export the model to a pb file.
 
@@ -857,6 +891,9 @@ class BasicNN:
             If False, the intermediate files will be deleted.
         use_ema_variables : bool
             If True, exponentially moving averaged variables will be used.
+        export_partial_forces_model : bool
+            A boolean. If True, tensoralloy will try to export a model with
+            partial forces ops.
 
         """
 
@@ -882,11 +919,17 @@ class BasicNN:
                 if 'class' in serialized:
                     serialized.pop('class')
                 clf = self._transformer.__class__(**serialized)
+            else:
+                raise ValueError(f"Unknown transformer: {self._transformer}")
 
             configs = self.as_dict()
             configs.pop('class')
-
             nn = self.__class__(**configs)
+
+            if export_partial_forces_model \
+                    and isinstance(clf, UniversalTransformer):
+                clf.use_computed_dists = False
+
             nn.attach_transformer(clf)
             predictions = nn.build(clf.get_placeholder_features(),
                                    mode=tf_estimator.ModeKeys.PREDICT,
@@ -894,17 +937,21 @@ class BasicNN:
 
             # Encode the JSON dict of the serialized transformer into the graph.
             with tf.name_scope("Transformer/"):
-                transformer_params = tf.constant(
+                params_node = tf.constant(
                     json.dumps(clf.as_dict()), name='params')
 
             # Add a timestamp to the graph
             with tf.name_scope("Metadata/"):
-                timestamp = tf.constant(str(datetime.today()), name='timestamp')
-                y_atomic = tf.constant(nn._get_atomic_energy_tensor_name(),
-                                       name="y_atomic")
-                fp_prec = get_float_precision()
-                fp_prec_op = tf.constant(fp_prec.name, name='precision')
-                tf_version_op = tf.constant(tf.__version__, name='tf_version')
+                timestamp_node = tf.constant(
+                    str(datetime.today()), name='timestamp')
+                y_atomic_node = tf.constant(nn._get_atomic_energy_tensor_name(),
+                                            name="y_atomic")
+                fp_prec_node = tf.constant(
+                    get_float_precision().name, name='precision')
+                tf_version_node = tf.constant(tf.__version__, name='tf_version')
+
+                ops = {key: tensor.name for key, tensor in predictions.items()}
+                ops_node = tf.constant(json.dumps(ops), name='ops')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -936,11 +983,12 @@ class BasicNN:
             input_meta_graph = saved_model_meta
 
             output_node_names = [
-                transformer_params.op.name,
-                timestamp.op.name,
-                y_atomic.op.name,
-                fp_prec_op.op.name,
-                tf_version_op.op.name,
+                params_node.op.name,
+                timestamp_node.op.name,
+                y_atomic_node.op.name,
+                fp_prec_node.op.name,
+                tf_version_node.op.name,
+                ops_node.op.name,
             ]
 
             for tensor in predictions.values():

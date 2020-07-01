@@ -18,7 +18,8 @@ __all__ = ["G2IndexedSlices", "G4IndexedSlices"]
 
 # noinspection PyTypeChecker,PyArgumentList
 class G2IndexedSlices(namedtuple('G2IndexedSlices',
-                                 ('v2g_map', 'ilist', 'jlist', 'n1'))):
+                                 ('v2g_map', 'ilist', 'jlist', 'n1',
+                                  'rij', 'dij'))):
     """
     A `dataclass` contains indexed slices for the atom-atom interactions.
 
@@ -32,6 +33,10 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
         A list of second atom indices.
     'n1' : array_like
         The cell boundary shift vectors, `shift[k] = Slist[k] @ cell`.
+    'rij' : array_like or None
+        The interatomic distances.
+    'dij' : array_like or None
+        The components of the interatomic distances.
 
     """
 
@@ -39,18 +44,30 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
                 v2g_map: Union[tf.Tensor, np.ndarray],
                 ilist: Union[tf.Tensor, np.ndarray],
                 jlist: Union[tf.Tensor, np.ndarray],
-                n1: Union[tf.Tensor, np.ndarray]):
+                n1: Union[tf.Tensor, np.ndarray],
+                rij: Union[tf.Tensor, np.ndarray, None],
+                dij: Union[tf.Tensor, np.ndarray, None],):
         return super(G2IndexedSlices, cls).__new__(
-            cls, v2g_map, ilist, jlist, n1)
+            cls, v2g_map, ilist, jlist, n1, rij, dij)
 
-    def as_dict(self):
+    def as_dict(self, use_computed_dists=True):
         """
         Return a dict representation.
         """
-        return {"g2.v2g_map": self.v2g_map,
-                "g2.ilist": self.ilist,
-                "g2.jlist": self.jlist,
-                "g2.n1": self.n1}
+        adict = {"g2.v2g_map": self.v2g_map,
+                 "g2.ilist": self.ilist,
+                 "g2.jlist": self.jlist,
+                 "g2.n1": self.n1,
+                 "g2.rij": self.rij,
+                 "g2.dij": self.dij}
+        if use_computed_dists:
+            adict.pop("g2.ilist")
+            adict.pop("g2.jlist")
+            adict.pop("g2.n1")
+        else:
+            adict.pop("g2.rij")
+            adict.pop("g2.dij")
+        return adict
 
 
 # noinspection PyTypeChecker,PyArgumentList
