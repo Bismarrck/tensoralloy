@@ -74,7 +74,8 @@ def get_g2_map(atoms: Atoms,
     g2_map[:, iaxis + 1] = offsets[tlist]
     ilist = ilist.astype(np.int32)
     jlist = jlist.astype(np.int32)
-    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
+                           rij=None, dij=None)
 
 
 def get_g4_map(atoms: Atoms,
@@ -292,7 +293,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict["compositions"] = compositions
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["row_splits"] = np.int32(splits)
-        feed_dict.update(g2.as_dict())
+        feed_dict.update(g2.as_dict(use_computed_dists=True))
 
         if self._angular:
             g4 = self._get_g4_indexed_slices(atoms, g2, vap)
@@ -481,7 +482,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             n1.set_shape([self._nij_max * 3])
             n1 = tf.reshape(n1, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, n1)
+            return G2IndexedSlices(v2g_map, ilist, jlist, n1, None, None)
 
     def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """

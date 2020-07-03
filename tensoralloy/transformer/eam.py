@@ -42,8 +42,9 @@ def get_g2_map(atoms: Atoms,
     else:
         iaxis = 1
 
-    ilist, jlist, n1 = neighbor_list('ijS', atoms, rc)
+    ilist, jlist, n1, rij, dij = neighbor_list('ijSdD', atoms, rc)
     nij = len(ilist)
+
     if nij_max is None:
         nij_max = nij
 
@@ -84,7 +85,8 @@ def get_g2_map(atoms: Atoms,
     # The mask
     g2_map[:, iaxis + 3] = ilist > 0
 
-    return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    return {"g2": g2, "rij": rij, "dij": dij}
 
 
 class EAMTransformer(EAM, DescriptorTransformer):
@@ -92,11 +94,12 @@ class EAMTransformer(EAM, DescriptorTransformer):
     The feature transformer for the EAM potential.
     """
 
-    def __init__(self, rc: float, elements: List[str]):
+    def __init__(self, rc: float, elements: List[str], use_direct_rij=False):
         """
         Initialization method.
         """
-        EAM.__init__(self, rc=rc, elements=elements)
+        EAM.__init__(self, rc=rc, elements=elements,
+                     use_direct_rij=use_direct_rij)
         DescriptorTransformer.__init__(self)
 
     def as_dict(self):
@@ -105,7 +108,8 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         d = {'class': self.__class__.__name__,
              'rc': self._rc,
-             'elements': self._elements}
+             'elements': self._elements,
+             'use_direct_rij': self._use_direct_rij}
         return d
 
     def _initialize_placeholders(self):
@@ -136,10 +140,16 @@ class EAMTransformer(EAM, DescriptorTransformer):
                 dtype=dtype, name='pulay_stress')
             self._placeholders["row_splits"] = self._create_int_1d(
                 'row_splits', d0=self._n_elements + 1)
-            self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
-            self._placeholders["g2.jlist"] = self._create_int_1d('g2.jlist')
-            self._placeholders["g2.n1"] = self._create_float_2d(
-                dtype=dtype, d0=None, d1=3, name='g2.n1')
+            if not self._use_direct_rij:
+                self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
+                self._placeholders["g2.jlist"] = self._create_int_1d('g2.jlist')
+                self._placeholders["g2.n1"] = self._create_float_2d(
+                    dtype=dtype, d0=None, d1=3, name='g2.n1')
+            else:
+                self._placeholders["rij"] = self._create_float_1d(
+                    dtype=dtype, name='rij')
+                self._placeholders["dij"] = self._create_float_2d(
+                    dtype=dtype, d1=3, name='dij')
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
                 d0=None, d1=4, name='g2.v2g_map')
             self._placeholders["is_constant"] = False
@@ -159,7 +169,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
 
         Returns
         -------
-        g2 : G2IndexedSlices
+        g2_dict : dict
             The indexed slices for the target `Atoms` object.
 
         """
@@ -178,7 +188,8 @@ class EAMTransformer(EAM, DescriptorTransformer):
         np_dtype = get_float_dtype().as_numpy_dtype
 
         vap = self.get_vap_transformer(atoms)
-        g2 = self._get_indexed_slices(atoms, vap)
+        g2_dict = self._get_indexed_slices(atoms, vap)
+        g2 = g2_dict["g2"]
         nnl_max = g2.v2g_map[:, 2].max() + 1
 
         positions = vap.map_positions(atoms.positions)
@@ -205,6 +216,10 @@ class EAMTransformer(EAM, DescriptorTransformer):
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(g2.as_dict())
 
+        if self._use_direct_rij:
+            feed_dict["rij"] = g2_dict["rij"].astype(np_dtype)
+            feed_dict["dij"] = g2_dict["dij"].astype(np_dtype)
+
         return feed_dict
 
     def get_feed_dict(self, atoms: Atoms):
@@ -218,6 +233,9 @@ class EAMTransformer(EAM, DescriptorTransformer):
         placeholders = self._placeholders
 
         for key, value in self._get_np_features(atoms).items():
+            if self._use_direct_rij \
+                    and key in ("g2.ilist", "g2.jlist", "g2.n1"):
+                continue
             feed_dict[placeholders[key]] = value
 
         return feed_dict
@@ -312,7 +330,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         Encode the `Atoms` object and return a `tf.train.Example`.
         """
         feature_list = self._encode_atoms(atoms)
-        g2 = self.get_indexed_slices(atoms)
+        g2 = self.get_indexed_slices(atoms)["g2"]
         feature_list.update(self._encode_g2_indexed_slices(g2))
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))

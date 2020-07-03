@@ -26,7 +26,7 @@ class EAM(AtomicDescriptor):
 
     gather_fn = staticmethod(tf.gather)
 
-    def __init__(self, rc: float, elements: List[str]):
+    def __init__(self, rc: float, elements: List[str], use_direct_rij=False):
         """
         Initialization method.
 
@@ -36,6 +36,8 @@ class EAM(AtomicDescriptor):
             The cutoff radius.
         elements : List[str]
             A list of str as the ordered elements.
+        use_direct_rij : bool
+            If True, pre-computed `rij` should be used.
 
         """
         super(EAM, self).__init__(rc, elements, angular=False, periodic=True)
@@ -49,6 +51,7 @@ class EAM(AtomicDescriptor):
         self._max_n_terms = max(map(len, self._kbody_terms.values()))
         self._kbody_index = kbody_index
         self._graph_scope_name = "EAM"
+        self._use_direct_rij = use_direct_rij
 
     def get_g_shape(self, features: dict):
         """
@@ -100,15 +103,19 @@ class EAM(AtomicDescriptor):
         """
         Make sure `placeholders` contains enough keys.
         """
-        assert 'positions' in features
-        assert 'cell' in features
+        if self._use_direct_rij:
+            assert 'rij' in features
+            assert 'dij' in features
+        else:
+            assert 'positions' in features
+            assert 'cell' in features
+            assert 'g2.ilist' in features
+            assert 'g2.jlist' in features
+            assert 'g2.n1' in features
         assert 'volume' in features
         assert 'n_atoms_vap' in features
         assert 'nnl_max' in features
         assert 'row_splits' in features
-        assert 'g2.ilist' in features
-        assert 'g2.jlist' in features
-        assert 'g2.n1' in features
         assert 'g2.v2g_map' in features
 
     def build_graph(self, features: dict):
@@ -127,12 +134,16 @@ class EAM(AtomicDescriptor):
         self._check_keys(features)
 
         with tf.name_scope(f"{self._graph_scope_name}"):
-            rr, dij = self.get_rij(features["positions"],
-                                   features["cell"],
-                                   features["g2.ilist"],
-                                   features["g2.jlist"],
-                                   features["g2.n1"],
-                                   name='rij')
+            if self._use_direct_rij:
+                rr = features["rij"]
+                dij = features["dij"]
+            else:
+                rr, dij = self.get_rij(features["positions"],
+                                       features["cell"],
+                                       features["g2.ilist"],
+                                       features["g2.jlist"],
+                                       features["g2.n1"],
+                                       name='rij')
             shape = self.get_g_shape(features)
             v2g_map, v2g_mask = self.get_v2g_map(features)
 
