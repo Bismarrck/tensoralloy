@@ -60,7 +60,7 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
                  "g2.n1": self.n1,
                  "g2.rij": self.rij,
                  "g2.dij": self.dij}
-        if use_computed_dists:
+        if not use_computed_dists:
             adict.pop("g2.ilist")
             adict.pop("g2.jlist")
             adict.pop("g2.n1")
