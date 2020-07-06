@@ -61,17 +61,6 @@ class BaseTransformer:
         """
         pass
 
-    def _get_compositions(self, atoms) -> np.ndarray:
-        """
-        Return a vector as the compositions of the `Atoms`.
-        """
-        n_elements = len(self.elements)
-        dtype = get_float_dtype().as_numpy_dtype
-        compositions = np.zeros(n_elements, dtype=dtype)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            compositions[self.elements.index(element)] = float(count)
-        return compositions
-
     @abc.abstractmethod
     def as_dict(self) -> Dict:
         """

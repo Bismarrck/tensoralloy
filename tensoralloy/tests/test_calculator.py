@@ -43,7 +43,7 @@ class ModelTimeStampTest(unittest.TestCase):
         """
         Setup this test case.
         """
-        self.pb_file = 'Ni.test.pb'
+        self.pb_file = join(test_dir(), 'Ni.test.pb')
 
     def test_get_model_timestamp(self):
         """

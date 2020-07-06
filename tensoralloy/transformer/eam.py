@@ -134,8 +134,6 @@ class EAMTransformer(EAM, DescriptorTransformer):
                 dtype=dtype, name='volume')
             self._placeholders["atom_masks"] = self._create_float_1d(
                 dtype=dtype, name='atom_masks')
-            self._placeholders["compositions"] = self._create_float_1d(
-                dtype=dtype, name='compositions')
             self._placeholders["nnl_max"] = self._create_int('nnl_max')
             self._placeholders["pulay_stress"] = self._create_float(
                 dtype=dtype, name='pulay_stress')

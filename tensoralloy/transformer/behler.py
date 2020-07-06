@@ -205,8 +205,6 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
                 dtype=dtype, name='atom_masks')
             self._placeholders["pulay_stress"] = self._create_float(
                 dtype=dtype, name='pulay_stress')
-            self._placeholders["compositions"] = self._create_float_1d(
-                dtype=dtype, name='compositions')
             self._placeholders["row_splits"] = self._create_int_1d(
                 name='row_splits', d0=self.n_elements + 1)
             self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
