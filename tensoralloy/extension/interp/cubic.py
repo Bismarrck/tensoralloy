@@ -38,10 +38,10 @@ class CubicInterpolator(object):
 
         Parameters
         ----------
-        x : tf.Tensor
+        x : tf.Tensor or array_like
             The independent coordinates of the training points. The shape should
             be `[..., N]`.
-        y : tf.Tensor
+        y : tf.Tensor or array_like
             The dependent coordinates of the training points. This must be the
             same shape as ``x`` and the interpolation is always performed along
             the last axis. The shape should be `[..., N]`.

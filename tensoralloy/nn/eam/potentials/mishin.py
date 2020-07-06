@@ -311,109 +311,6 @@ class MishinH(EamAlloyPotential):
             return quadrupole
 
 
-class MishinTa(EamAlloyPotential):
-    """
-    The ADP potential functions of the Mishin Ta-style.
-
-    References
-    ----------
-    Y. Mishin and A.Y. Lozovoi, Acta Materialia 54 (2006) 5013–5026
-
-    """
-
-    def __init__(self):
-        """
-        Initialization method.
-        """
-        super(MishinTa, self).__init__()
-
-        self._name = 'MishinTa'
-        self._implemented_potentials = ('rho', 'phi', 'embed', 'dipole',
-                                        'quadrupole')
-
-    @property
-    def defaults(self):
-        """
-        Return the default parameters.
-        """
-        return {}
-
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
-        """
-        The electron density function rho(r).
-
-        Parameters
-        ----------
-        r : tf.Tensor
-            A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
-        element : str
-            The corresponding element.
-        variable_scope : str
-            The scope for variables of this potential function.
-        verbose : bool
-            A bool. If True, key tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_elements]`.
-
-        """
-        with tf.name_scope(f"{self._name}/Rho/{element}"):
-            A0 = self._get_shared_variable('A0', r.dtype, element)
-            B0 = self._get_shared_variable('B0', r.dtype, element)
-            C0 = self._get_shared_variable('B0', r.dtype, element)
-            rc = self._get_shared_variable('rc', r.dtype, element)
-            r0 = self._get_shared_variable('r0', r.dtype, element)
-            y = self._get_shared_variable('y', r.dtype, element)
-            gamma = self._get_shared_variable('gamma', r.dtype, element)
-            h = self._get_shared_variable('h', r.dtype, element)
-            one = tf.constant(1.0, dtype=r.dtype, name='one')
-
-            dr = tf.subtract(r, rc, name='dr')
-            drh = tf.math.truediv(dr, h, name='drh')
-            psi = mishin_cutoff(drh)
-
-            z = tf.math.subtract(r, r0, name='z')
-            egz = tf.exp(-gamma * z)
-            c = tf.add((one + B0 * egz) * A0 * egz * safe_pow(z, y), C0, name='c')
-
-            rho = tf.multiply(c, psi, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
-    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
-        """
-        The embedding energy function F(rho).
-
-        Parameters
-        ----------
-        rho : tf.Tensor
-            A 3D tensor of shape `[batch_size, max_n_element, 1]` where
-            `max_n_element` is the maximum occurs of `element`.
-        element : str
-            An element symbol.
-        variable_scope : str
-            The scope for variables of this potential function.
-        verbose : bool
-            A bool. If True, key tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_elements]`.
-
-        """
-        dtype = rho.dtype
-
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-
-            pass
-
-
 class AlCuSplineAdp(EamAlloyPotential):
     """
     The Cubic Spline form of the Al-Cu ADP potential.
@@ -442,8 +339,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Rho/{element}"):
             nr = self._adpfl.nr
-            x = self._adpfl.rho[element][0][0:nr:self._interval]
-            y = self._adpfl.rho[element][1][0:nr:self._interval]
+            x = self._adpfl.rho[element].x[0:nr:self._interval]
+            y = self._adpfl.rho[element].y[0:nr:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(r, name='shape')
             rho = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
@@ -462,8 +359,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Embed/{element}"):
             nrho = self._adpfl.nrho
-            x = self._adpfl.embed[element][0][0:nrho:self._interval]
-            y = self._adpfl.embed[element][1][0:nrho:self._interval]
+            x = self._adpfl.embed[element].x[0:nrho:self._interval]
+            y = self._adpfl.embed[element].y[0:nrho:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(rho, name='shape')
             frho = f.evaluate(tf.reshape(rho, (-1,), name='rho/flat'))
@@ -482,8 +379,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
             nr = self._adpfl.nr
-            x = self._adpfl.phi[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.phi[kbody_term][1][0:nr:self._interval]
+            x = self._adpfl.phi[kbody_term].x[0:nr:self._interval]
+            y = self._adpfl.phi[kbody_term].y[0:nr:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(r, name='shape')
             phi = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
@@ -502,8 +399,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
             nr = self._adpfl.nr
-            x = self._adpfl.dipole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.dipole[kbody_term][1][0:nr:self._interval]
+            x = self._adpfl.dipole[kbody_term].x[0:nr:self._interval]
+            y = self._adpfl.dipole[kbody_term].y[0:nr:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(r, name='shape')
             dipole = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
@@ -522,8 +419,8 @@ class AlCuSplineAdp(EamAlloyPotential):
         """
         with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
             nr = self._adpfl.nr
-            x = self._adpfl.quadrupole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.quadrupole[kbody_term][1][0:nr:self._interval]
+            x = self._adpfl.quadrupole[kbody_term].x[0:nr:self._interval]
+            y = self._adpfl.quadrupole[kbody_term].y[0:nr:self._interval]
             f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
             shape = tf.shape(r, name='shape')
             quadrupole = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))

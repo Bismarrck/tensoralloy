@@ -86,49 +86,49 @@ def test_reconstruct_lammps_adp():
 
             with tf.name_scope("Dipole"):
                 rlist = tf.convert_to_tensor(
-                    adpfl.dipole['AlCu'][0], name='rlist', dtype=dtype)
-                ux = adpfl.dipole['AlCu'][0]
-                uy = adpfl.dipole['AlCu'][1]
+                    adpfl.dipole['AlCu'].x, name='rlist', dtype=dtype)
+                ux = adpfl.dipole['AlCu'].x
+                uy = adpfl.dipole['AlCu'].y
                 func = CubicInterpolator(ux, uy, natural_boundary=True)
                 u_op = func.evaluate(rlist, name='Dipole')
 
             with tf.name_scope("Quadrupole"):
                 rlist = tf.convert_to_tensor(
-                    adpfl.quadrupole['AlCu'][0], name='rlist', dtype=dtype)
-                qx = adpfl.quadrupole['AlCu'][0]
-                qy = adpfl.quadrupole['AlCu'][1]
+                    adpfl.quadrupole['AlCu'].x, name='rlist', dtype=dtype)
+                qx = adpfl.quadrupole['AlCu'].x
+                qy = adpfl.quadrupole['AlCu'].y
                 func = CubicInterpolator(qx, qy, natural_boundary=True)
                 q_op = func.evaluate(rlist, name='Quadrupole')
 
             with tf.name_scope("Rho"):
                 rlist = tf.convert_to_tensor(
-                    adpfl.rho['Al'][0], name='rlist', dtype=dtype)
-                rhox = adpfl.rho['Al'][0][0:-1:25]
-                rhoy = adpfl.rho['Al'][1][0:-1:25]
+                    adpfl.rho['Al'].x, name='rlist', dtype=dtype)
+                rhox = adpfl.rho['Al'].x
+                rhoy = adpfl.rho['Al'].y
                 func = CubicInterpolator(rhox, rhoy, natural_boundary=True)
                 rho_op = func.evaluate(rlist, name='Rho')
 
             with tf.name_scope("Frho"):
                 rholist = tf.convert_to_tensor(
-                    adpfl.embed['Al'][0][1:], name='rholist', dtype=dtype)
-                frhox = adpfl.embed['Al'][0][1:]
-                frhoy = adpfl.embed['Al'][1][1:]
+                    adpfl.embed['Al'].x[1:], name='rholist', dtype=dtype)
+                frhox = adpfl.embed['Al'].x[1:]
+                frhoy = adpfl.embed['Al'].y[1:]
                 func = CubicInterpolator(frhox, frhoy, natural_boundary=True)
                 frho_op = func.evaluate(rholist, name='Frho')
 
             with tf.name_scope("Phi/AlAl"):
                 rlist = tf.convert_to_tensor(
-                    adpfl.phi['AlAl'][0][1:], name='rlist', dtype=dtype)
-                phix = adpfl.phi['AlAl'][0][1:]
-                phiy = adpfl.phi['AlAl'][1][1:]
+                    adpfl.phi['AlAl'].x[1:], name='rlist', dtype=dtype)
+                phix = adpfl.phi['AlAl'].x[1:]
+                phiy = adpfl.phi['AlAl'].y[1:]
                 func = CubicInterpolator(phix, phiy, natural_boundary=True)
                 phi_alal_op = func.evaluate(rlist, name='Phi')
 
             with tf.name_scope("Phi/AlCu"):
                 rlist = tf.convert_to_tensor(
-                    adpfl.phi['AlCu'][0][1:], name='rlist', dtype=dtype)
-                phix = adpfl.phi['AlCu'][0][1:]
-                phiy = adpfl.phi['AlCu'][1][1:]
+                    adpfl.phi['AlCu'].x[1:], name='rlist', dtype=dtype)
+                phix = adpfl.phi['AlCu'].x[1:]
+                phiy = adpfl.phi['AlCu'].y[1:]
                 func = CubicInterpolator(phix, phiy, natural_boundary=True)
                 phi_alcu_op = func.evaluate(rlist, name='Phi')
 
@@ -136,17 +136,17 @@ def test_reconstruct_lammps_adp():
                 reconstructs = sess.run(
                     [u_op, q_op, rho_op, frho_op, phi_alal_op, phi_alcu_op])
                 assert_array_almost_equal(
-                    reconstructs[0], adpfl.dipole['AlCu'][1], delta=1e-5)
+                    reconstructs[0], adpfl.dipole['AlCu'].y, delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[1], adpfl.quadrupole['AlCu'][1], delta=1e-5)
+                    reconstructs[1], adpfl.quadrupole['AlCu'].y, delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[2], adpfl.rho['Al'][1], delta=1e-5)
+                    reconstructs[2], adpfl.rho['Al'].y, delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[3], adpfl.embed['Al'][1][1:], delta=1e-5)
+                    reconstructs[3], adpfl.embed['Al'].y[1:], delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[4], adpfl.phi['AlAl'][1][1:], delta=1e-5)
+                    reconstructs[4], adpfl.phi['AlAl'].y[1:], delta=1e-5)
                 assert_array_almost_equal(
-                    reconstructs[5], adpfl.phi['AlCu'][1][1:], delta=1e-5)
+                    reconstructs[5], adpfl.phi['AlCu'].y[1:], delta=1e-5)
 
 
 if __name__ == "__main__":

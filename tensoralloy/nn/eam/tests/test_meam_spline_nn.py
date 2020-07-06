@@ -75,7 +75,7 @@ class MeamSplineTest(unittest.TestCase):
         """
         Test the meam/spline implementation with the Ti system.
         """
-        atoms = bulk('Ti', cubic=True)
+        atoms = bulk('Ti')
         delta = np.random.uniform(-0.05, 0.05, size=(len(atoms), 3))
         atoms.set_positions(atoms.positions + delta)
         elements = ['Ti']
