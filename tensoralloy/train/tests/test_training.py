@@ -20,9 +20,9 @@ from nose.tools import with_setup, assert_dict_equal, assert_true
 from tensoralloy.io.read import read_file
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
-from tensoralloy.nn import AtomicNN
+from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -63,12 +63,11 @@ class InitializationTest(unittest.TestCase):
         hparams = manager.hparams
         nn = manager.nn
 
-        assert_equal(manager.dataset.transformer.descriptor, 'behler')
+        assert_equal(manager.dataset.transformer.descriptor, 'universal')
         assert_equal(manager.dataset.test_size, 1)
         assert_equal(manager.dataset.transformer.rc, 6.0)
 
-        assert isinstance(transformer, BatchSymmetryFunctionTransformer)
-        assert_equal(transformer.trainable, True)
+        assert isinstance(transformer, BatchUniversalTransformer)
 
         assert_equal(hparams.opt.method, 'sgd')
         assert_equal(hparams.opt.learning_rate, 0.01)
@@ -78,7 +77,7 @@ class InitializationTest(unittest.TestCase):
         assert_dict_equal(hparams.opt.additional_kwargs,
                           {'use_nesterov': True, 'momentum': 0.8})
 
-        assert_true(isinstance(nn, AtomicNN))
+        assert_true(isinstance(nn, SymmetryFunctionNN))
         assert_equal(getattr(nn, "_kernel_initializer"), "he_uniform")
 
 

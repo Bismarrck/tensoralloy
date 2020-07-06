@@ -610,7 +610,7 @@ def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
     nij_max = 0
     nijk_max = 0
     for atoms in trajectory:
-        size = find_neighbor_size_of_atoms(atoms, rc, angular=(k_max == 3))
+        size = find_neighbor_size_of_atoms(atoms, rc, find_nijk=(k_max == 3))
         nij_max = max(nij_max, size.nij)
         nijk_max = max(size.nijk, nijk_max)
     return nij_max, nijk_max

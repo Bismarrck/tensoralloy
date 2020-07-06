@@ -131,7 +131,7 @@ class Qm7mTest(DatasetTest):
                     res = sess.run(next_batch)
                     eps = 1e-8
 
-                    assert_equal(len(res.keys()), 13)
+                    assert_equal(len(res.keys()), 15)
                     assert_less(
                         np.abs(res["positions"][0] - ref["positions"][0]).max(),
                         eps)
