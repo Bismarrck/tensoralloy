@@ -200,6 +200,11 @@ def read_vasp_xml(filename='vasprun.xml',
         eentropy = (float(lastscf.find('i[@name="e_fr_energy"]').text) -
                     float(lastscf.find('i[@name="e_wo_entrp"]').text))
 
+        if sigma is None or np.abs(sigma) < 1e-6:
+            eentropy = 0
+        else:
+            eentropy = -eentropy / sigma
+
         free_energy = float(step.find('energy/i[@name="e_fr_energy"]').text)
         energy = free_energy + de
 

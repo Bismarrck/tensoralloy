@@ -106,7 +106,7 @@ def test_read_electron_temperature_and_entropy():
     etemp = atoms_utils.get_electron_temperature(atoms)
     eentropy = atoms_utils.get_electron_entropy(atoms)
     assert_almost_equal(etemp, 0.34469373, delta=1e-6)
-    assert_almost_equal(eentropy, -5.149663, delta=1e-6)
+    assert_almost_equal(eentropy, 14.939843166274024, delta=1e-6)
 
 
 if __name__ == '__main__':
