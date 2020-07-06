@@ -11,7 +11,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from typing import List
 from sklearn.model_selection import ParameterGrid
 
-from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
+from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.convolutional import convolution1x1
@@ -473,49 +473,3 @@ class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):
                             log_tensor(yi)
                         outputs.append(yi)
                 return outputs
-
-    def _get_internal_energy_op(self, outputs, features, name='energy',
-                                verbose=True):
-        """
-        The temperature-dependent internal energy expression:
-
-            E = (kT + b) * E(R, T)
-
-        """
-        y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
-        ndims = features["atom_masks"].shape.ndims
-        axis = ndims - 1
-        with tf.name_scope("mask"):
-            if ndims == 1:
-                y_atomic = tf.squeeze(y_atomic, axis=0)
-            mask = tf.split(
-                features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-            y_mask = tf.multiply(y_atomic, mask, name='mask')
-            self._y_atomic_op_name = y_mask.name
-        energy = tf.reduce_sum(
-            y_mask, axis=axis, keepdims=False, name=f"{name}/zero")
-        with tf.variable_scope("Temperature"):
-            etemp = features['etemperature']
-            _get_initializer = \
-                lambda val: tf.constant_initializer(val, etemp.dtype)
-            k = tf.get_variable(
-                name="k", dtype=etemp.dtype, shape=(),
-                trainable=True,
-                collections=[
-                    tf.GraphKeys.GLOBAL_VARIABLES,
-                    tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
-                initializer=_get_initializer(0.0),
-                aggregation=tf.VariableAggregation.MEAN)
-            b = tf.get_variable(
-                name="b", dtype=etemp.dtype, shape=(),
-                trainable=True,
-                collections=[
-                    tf.GraphKeys.GLOBAL_VARIABLES,
-                    tf.GraphKeys.MODEL_VARIABLES, GraphKeys.TRAIN_METRICS],
-                initializer=_get_initializer(1.0),
-                aggregation=tf.VariableAggregation.MEAN)
-            c = tf.add(etemp * k, b, name='coef')
-        energy = tf.multiply(c, energy, name=name)
-        if verbose:
-            log_tensor(energy)
-        return energy

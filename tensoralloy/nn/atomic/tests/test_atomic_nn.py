@@ -133,10 +133,10 @@ def test_inference():
             descriptors=descriptors,
             mode=tf_estimator.ModeKeys.TRAIN,
             verbose=True)
-        energy, enthalpy = nn._get_total_energy_op(
+        ops = nn._get_energy_ops(
             outputs, features, verbose=False)
 
-        assert_equal(energy.shape.as_list(), [batch_size, ])
+        assert_equal(ops.energy.shape.as_list(), [batch_size, ])
 
         collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
         assert_equal(len(collection), 6)

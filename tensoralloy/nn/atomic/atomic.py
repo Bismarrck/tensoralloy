@@ -10,6 +10,7 @@ from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
+from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
@@ -49,7 +50,7 @@ class AtomicNN(BasicNN):
 
         self._kernel_initializer = kernel_initializer
         self._minmax_scale = minmax_scale
-        self._use_resnet_dt=use_resnet_dt
+        self._use_resnet_dt = use_resnet_dt
         self._atomic_static_energy = atomic_static_energy or {}
         self._use_atomic_static_energy = use_atomic_static_energy
         self._fixed_atomci_static_energy = fixed_atomic_static_energy
@@ -182,8 +183,7 @@ class AtomicNN(BasicNN):
                     outputs.append(yi)
             return outputs
 
-    def _get_internal_energy_op(self, outputs, features, name='energy',
-                                verbose=True):
+    def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
         """
         Return the Op to compute internal energy E.
 
@@ -200,22 +200,24 @@ class AtomicNN(BasicNN):
 
         Returns
         -------
-        energy : tf.Tensor
-            The total energy tensor.
+        ops : EnergyOps
+            The energy tensors.
 
         """
-        y_atomic = tf.concat(outputs, axis=1, name='y_atomic')
+        y_atomic = tf.concat(outputs, axis=1, name='atomic/raw')
         ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
-        with tf.name_scope("mask"):
+        with tf.name_scope("Mask"):
             if ndims == 1:
                 y_atomic = tf.squeeze(y_atomic, axis=0)
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
             y_mask = tf.multiply(y_atomic, mask, name='mask')
-            self._y_atomic_op_name = y_mask.name
+        y_atomic = tf.identity(y_mask, name='atomic')
         energy = tf.reduce_sum(
-            y_mask, axis=axis, keepdims=False, name=name)
+            y_atomic, axis=axis, keepdims=False, name='energy')
+        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
-        return energy
+            log_tensor(enthalpy)
+        return EnergyOps(energy, tf.no_op('eentropy'), enthalpy, energy)

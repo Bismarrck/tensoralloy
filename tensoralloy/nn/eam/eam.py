@@ -16,6 +16,7 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.convolutional import convolution1x1
+from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.eam.potentials import available_potentials
@@ -276,8 +277,7 @@ class EamNN(BasicNN):
                            variable_scope=variable_scope,
                            verbose=verbose)
 
-    def _get_internal_energy_op(self, outputs: tf.Tensor, features: dict,
-                                name='energy', verbose=True):
+    def _get_energy_ops(self, outputs: tf.Tensor, features: dict, verbose=True):
         """
         Return the Op to compute internal energy E.
 
@@ -295,8 +295,8 @@ class EamNN(BasicNN):
 
         Returns
         -------
-        energy : tf.Tensor
-            The total energy tensor.
+        ops : EnergyOps
+            The energy tensors.
 
         """
         y_atomic = tf.identity(outputs, name='y_atomic')
@@ -308,10 +308,12 @@ class EamNN(BasicNN):
             y_mask = tf.multiply(y_atomic, mask, name='mask')
             self._y_atomic_op_name = y_mask.name
         energy = tf.reduce_sum(
-            y_mask, axis=axis, keepdims=False, name=name)
+            y_mask, axis=axis, keepdims=False, name='energy')
+        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
-        return energy
+            log_tensor(enthalpy)
+        return EnergyOps(energy, tf.no_op(name='eentropy'), enthalpy, energy)
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
                       mode: tf_estimator.ModeKeys, verbose=False):

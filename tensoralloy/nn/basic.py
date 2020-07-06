@@ -209,7 +209,7 @@ class BasicNN:
 
     def attach_transformer(self, clf: BaseTransformer):
         """
-        Attach a descriptor transformer to this NN.
+        Attach a descriptor transformer to this potential.
         """
         self._transformer = clf
 
@@ -435,7 +435,7 @@ class BasicNN:
             hessian = d^2E / dR^2 = d(dE / dR) / dR
 
         """
-        hessian = tf.identity(tf.hessians(energy, positions)[0], name=name)
+        hessian = tf.identity(tf.hessians(energy, positions)[0], name='hessian')
         if verbose:
             log_tensor(hessian)
         return hessian

@@ -14,6 +14,7 @@ from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
 from tensoralloy.descriptor.cutoff import tersoff_cutoff
 from tensoralloy.io.lammps import read_tersoff_file
+from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.utils import log_tensor
@@ -158,6 +159,15 @@ class Tersoff(BasicNN):
             return var
 
     def attach_transformer(self, clf: UniversalTransformer):
+        """
+        Attach an `UniversalTransformer` to this potential.
+
+        Additional Tersoff checks:
+            1. rcut >= max(R + D)
+            2. rcut == acut
+
+        """
+        assert isinstance(clf, UniversalTransformer)
         rmax = 0.0
         dmax = 0.0
         for kbody_term, params in self._params.items():
@@ -166,9 +176,9 @@ class Tersoff(BasicNN):
         rdmax = rmax + dmax
         rcut = clf.rcut
         if rcut < rdmax:
-            raise ValueError(f"The rcut {rcut:.2f} < max(R + D) = {rdmax:.2f}")
+            raise ValueError(f"The rcut {rcut:.1f} < max(R + D) = {rdmax:.1f}")
         if clf.rcut != clf.acut:
-            raise ValueError(f"rcut {rcut:.2f} != acut {clf.acut}")
+            raise ValueError(f"rcut {rcut:.1f} != acut {clf.acut:.1f}")
 
         super(Tersoff, self).attach_transformer(clf)
 
@@ -216,24 +226,31 @@ class Tersoff(BasicNN):
                 [tf.add_n(stacks[el], name=el) for el in self._elements],
                 axis=1, name='sum')
 
-    def _calculate_bij(self, bz, c1, c2, c3, c4, n, one, two):
+    @staticmethod
+    def _calculate_bij(bz, c1, c2, c3, c4, n, one, two):
         """
-        A safe implementation for computing `bij`.
+        A safe implementation for computing `bij` based on the Lammps
+        implementation.
         """
         def func1(x):
+            """ Segment 1: bz > c1 """
             return tf.math.divide_no_nan(one, tf.sqrt(x), name='y1')
 
         def func2(x):
+            """ Segment 2: c1 >= bz > c2 """
             return tf.math.divide_no_nan(
                 one - tf.pow(x, -n) / (two * n), tf.sqrt(x), name='y2')
 
         def func3(x):
+            """ Segment 2: c2 >= bz > c3 """
             return tf.pow(one + tf.pow(x, n), -one / (two * n), name='y5')
 
         def func4(x):
+            """ Segment 2: c3 >= bz > c4 """
             return tf.math.subtract(one, pow(x, n) / (two * n), name='y4')
 
         def func5(x):
+            """ Segment 2: c4 >= bz """
             return tf.ones_like(x, dtype=x.dtype, name='y3')
 
         with tf.name_scope("bij"):
@@ -424,8 +441,7 @@ class Tersoff(BasicNN):
                 y_atomic = tf.squeeze(y_atomic, name='atomic/squeeze')
             return y_atomic
 
-    def _get_internal_energy_op(self, outputs: tf.Tensor, features: dict,
-                                name='energy', verbose=True):
+    def _get_energy_ops(self, outputs: tf.Tensor, features: dict, verbose=True):
         """
         Return the Op to compute internal energy E.
 
@@ -443,8 +459,8 @@ class Tersoff(BasicNN):
 
         Returns
         -------
-        energy : tf.Tensor
-            The total energy tensor.
+        ops : tf.Tensor
+            The energy tensors.
 
         """
         y_atomic = tf.identity(outputs, name='y_atomic')
@@ -457,6 +473,8 @@ class Tersoff(BasicNN):
             self._y_atomic_op_name = y_mask.name
         energy = tf.reduce_sum(
             y_mask, axis=axis, keepdims=False, name=name)
+        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
-        return energy
+            log_tensor(enthalpy)
+        return EnergyOps(energy, tf.no_op('eentropy'), enthalpy, energy)
