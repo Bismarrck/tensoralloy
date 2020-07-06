@@ -747,12 +747,8 @@ class UniversalTransformer(DescriptorTransformer):
                 dtype=dtype, name='pulay_stress')
             self._placeholders["etemperature"] = self._create_float(
                 dtype=dtype, name='etemperature')
-            self._placeholders["eentropy"] = self._create_float(
-                dtype=dtype, name='eentropy')
             self._placeholders["row_splits"] = self._create_int_1d(
                 name='row_splits', d0=self.n_elements + 1)
-            self._placeholders["compositions"] = self._create_float_1d(
-                dtype=dtype, name='compositions')
 
             if self._use_computed_dists:
                 self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
@@ -870,7 +866,6 @@ class UniversalTransformer(DescriptorTransformer):
         eentropy = atoms_utils.get_electron_entropy(atoms)
         etemp = atoms_utils.get_electron_temperature(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
-        compositions = self._get_compositions(atoms)
 
         feed_dict = dict()
 
@@ -883,7 +878,6 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["etemperature"] = np_dtype(etemp)
         feed_dict["eentropy"] = np_dtype(eentropy)
-        feed_dict["compositions"] = compositions.astype(np_dtype)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(
             g2.as_dict(use_computed_dists=self._use_computed_dists))
@@ -1275,7 +1269,6 @@ class BatchUniversalTransformer(UniversalTransformer,
         decoded = self._decode_atoms(
             example,
             max_n_atoms=self._max_n_atoms,
-            n_elements=self._n_elements,
             use_forces=self._use_forces,
             use_stress=self._use_stress
         )
@@ -1284,7 +1277,6 @@ class BatchUniversalTransformer(UniversalTransformer,
         if self._angular:
             g4 = self._decode_g4_indexed_slices(example)
             decoded.update(g4.as_dict())
-        decoded["n_atoms_vap"] = decoded["n_atoms"]
         return decoded
 
     def decode_protobuf(self, example_proto: tf.Tensor):
@@ -1296,20 +1288,20 @@ class BatchUniversalTransformer(UniversalTransformer,
 
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
-                'n_atoms': tf.FixedLenFeature([], tf.int64),
+                'n_atoms_vap': tf.FixedLenFeature([], tf.int64),
                 'cell': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
-                'y_true': tf.FixedLenFeature([], tf.string),
-                'g2.indices': tf.FixedLenFeature([], tf.string),
-                'g2.shifts': tf.FixedLenFeature([], tf.string),
+                'energy': tf.FixedLenFeature([], tf.string),
+                'free_energy': tf.FixedLenFeature([], tf.string),
                 'atom_masks': tf.FixedLenFeature([], tf.string),
-                'compositions': tf.FixedLenFeature([], tf.string),
-                'pulay': tf.FixedLenFeature([], tf.string),
+                'pulay_stress': tf.FixedLenFeature([], tf.string),
                 'etemperature': tf.FixedLenFeature([], tf.string),
-                'eentropy': tf.FixedLenFeature([], tf.string)
+                'eentropy': tf.FixedLenFeature([], tf.string),
+                'g2.indices': tf.FixedLenFeature([], tf.string),
+                'g2.shifts': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
-                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+                feature_list['forces'] = tf.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
@@ -1367,9 +1359,11 @@ class BatchUniversalTransformer(UniversalTransformer,
             * 'cell': float64 or float32, [batch_size, 3, 3]
             * 'volume': float64 or float32, [batch_size, ]
             * 'n_atoms': int64, [batch_size, ]
-            * 'y_true': float64, [batch_size, ]
-            * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
-            * 'compositions': float64, [batch_size, n_elements]
+            * 'energy': float64, [batch_size, ]
+            * 'free_energy': float64, [batch_size, ]
+            * 'eentropy': float64, [batch_size, ]
+            * 'etemperature': float64, [batch_size, ]
+            * 'forces': float64, [batch_size, max_n_atoms + 1, 3]
             * 'atom_masks': float64, [batch_size, max_n_atoms + 1]
             * 'g2.ilist': int32, [batch_size, nij_max]
             * 'g2.jlist': int32, [batch_size, nij_max]

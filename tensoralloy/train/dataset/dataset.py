@@ -436,10 +436,12 @@ class Dataset:
                     shape = tensor.shape.as_list()
                     if shape[0] is None:
                         tensor.set_shape([batch_size] + shape[1:])
-                labels = dict(energy=features.pop('y_true'))
+                labels = dict(energy=features.pop('energy'),
+                              eentropy=features.pop('eentropy'),
+                              free_energy=features.pop('free_energy'))
 
                 if self._database.has_forces:
-                    labels['forces'] = features.pop('f_true')
+                    labels['forces'] = features.pop('forces')
                 if self._database.has_stress:
                     labels['stress'] = features.pop('stress')
 

@@ -226,8 +226,8 @@ def test_build_nn_with_properties():
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = dict(energy=batch.pop('y_true'))
-            labels['forces'] = batch.pop('f_true')
+            labels = dict(energy=batch.pop('energy'))
+            labels['forces'] = batch.pop('forces')
             labels['stress'] = batch.pop('stress')
             labels['total_pressure'] = batch.pop('total_pressure')
 
@@ -250,7 +250,7 @@ def test_build_nn_with_properties():
             try:
                 nn.get_total_loss(predictions=predictions,
                                   labels=labels,
-                                  n_atoms=batch["n_atoms"],
+                                  n_atoms=batch["n_atoms_vap"],
                                   atom_masks=batch["atom_masks"],
                                   loss_parameters=loss_parameters,
                                   mode=mode)

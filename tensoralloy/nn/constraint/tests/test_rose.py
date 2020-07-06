@@ -93,7 +93,7 @@ def test_rose_eos_constraint():
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = dict(energy=batch.pop('y_true'))
+            labels = dict(energy=batch.pop('energy'))
 
             train_params = TrainParameters()
             train_params.profile_steps = 0

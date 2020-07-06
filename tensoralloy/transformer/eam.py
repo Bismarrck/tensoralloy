@@ -202,7 +202,6 @@ class EAMTransformer(EAM, DescriptorTransformer):
         atom_masks = vap.atom_masks.astype(np_dtype)
         pulay_stress = get_pulay_stress(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
-        compositions = self._get_compositions(atoms)
 
         feed_dict = dict()
 
@@ -213,7 +212,6 @@ class EAMTransformer(EAM, DescriptorTransformer):
         feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
-        feed_dict["compositions"] = compositions.astype(np_dtype)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(g2.as_dict())
 
@@ -363,7 +361,6 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
         decoded = self._decode_atoms(
             example,
             max_n_atoms=self._max_n_atoms,
-            n_elements=self._n_elements,
             use_forces=self._use_forces,
             use_stress=self._use_stress
         )
@@ -380,20 +377,20 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
 
             feature_list = {
                 'positions': tf.FixedLenFeature([], tf.string),
-                'n_atoms': tf.FixedLenFeature([], tf.int64),
+                'n_atoms_vap': tf.FixedLenFeature([], tf.int64),
                 'cell': tf.FixedLenFeature([], tf.string),
                 'volume': tf.FixedLenFeature([], tf.string),
-                'y_true': tf.FixedLenFeature([], tf.string),
+                'energy': tf.FixedLenFeature([], tf.string),
+                'free_energy': tf.FixedLenFeature([], tf.string),
                 'g2.indices': tf.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.FixedLenFeature([], tf.string),
                 'atom_masks': tf.FixedLenFeature([], tf.string),
-                'compositions': tf.FixedLenFeature([], tf.string),
-                'pulay': tf.FixedLenFeature([], tf.string),
+                'pulay_stress': tf.FixedLenFeature([], tf.string),
                 'etemperature': tf.FixedLenFeature([], tf.string),
                 'eentropy': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
-                feature_list['f_true'] = tf.FixedLenFeature([], tf.string)
+                feature_list['forces'] = tf.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \
@@ -423,11 +420,13 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             * 'positions': float64 or float32, [batch_size, max_n_atoms + 1, 3]
             * 'cell': float64 or float32, [batch_size, 3, 3]
             * 'volume': float64 or float32, [batch_size, ]
-            * 'n_atoms': int64, [batch_size, ]
-            * 'y_true': float64, [batch_size, ]
-            * 'f_true': float64, [batch_size, max_n_atoms + 1, 3]
-            * 'compositions': float64, [batch_size, n_elements]
+            * 'n_atoms_vap': int64, [batch_size, ]
             * 'atom_masks': float64, [batch_size, max_n_atoms + 1]
+            * 'energy': float64, [batch_size, ]
+            * 'free_energy': float64, [batch_size, ]
+            * 'eentropy': float64, [batch_size, ]
+            * 'etemperature': float64, [batch_size, ]
+            * 'forces': float64, [batch_size, max_n_atoms + 1, 3]
             * 'g2.ilist': int32, [batch_size, nij_max]
             * 'g2.jlist': int32, [batch_size, nij_max]
             * 'g2.n1': float64, [batch_size, nij_max, 3]

@@ -201,8 +201,8 @@ class EthanolTest(DatasetTest):
                     eps = 1e-8
                     assert_less(
                         np.abs(result["positions"][1] - positions).max(), eps)
-                    assert_less(np.abs(result["f_true"][1] - forces).max(), eps)
-                    assert_less(float(result["y_true"][1] - energy), eps)
+                    assert_less(np.abs(result["forces"][1] - forces).max(), eps)
+                    assert_less(float(result["energy"][1] - energy), eps)
 
 
 class NickelTest(DatasetTest):

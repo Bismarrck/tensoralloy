@@ -73,7 +73,7 @@ def run_case(trainable=False):
     total_loss, losses = nn.get_total_loss(
         predictions=predictions,
         labels=labels,
-        n_atoms=features["n_atoms"],
+        n_atoms=features["n_atoms_vap"],
         atom_masks=features["atom_masks"],
         loss_parameters=loss_parameters)
 

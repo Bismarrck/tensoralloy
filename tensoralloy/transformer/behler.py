@@ -282,7 +282,6 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         volume = atoms.get_volume()
         atom_masks = vap.atom_masks
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
-        compositions = self._get_compositions(atoms)
         pulay_stress = get_pulay_stress(atoms)
 
         feed_dict["positions"] = positions.astype(np_dtype)
@@ -290,7 +289,6 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
         feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
-        feed_dict["compositions"] = compositions
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(g2.as_dict(use_computed_dists=True))
@@ -515,7 +513,6 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
         decoded = self._decode_atoms(
             example,
             max_n_atoms=self._max_n_atoms,
-            n_elements=self.n_elements,
             use_forces=self._use_forces,
             use_stress=self._use_stress)
 
@@ -537,20 +534,20 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
 
             feature_list = {
                 'positions': tf.io.FixedLenFeature([], tf.string),
-                'n_atoms': tf.io.FixedLenFeature([], tf.int64),
+                'n_atoms_vap': tf.io.FixedLenFeature([], tf.int64),
                 'cell': tf.io.FixedLenFeature([], tf.string),
                 'volume': tf.io.FixedLenFeature([], tf.string),
-                'y_true': tf.io.FixedLenFeature([], tf.string),
+                'energy': tf.io.FixedLenFeature([], tf.string),
+                'free_energy': tf.io.FixedLenFeature([], tf.string),
                 'g2.indices': tf.io.FixedLenFeature([], tf.string),
                 'g2.shifts': tf.io.FixedLenFeature([], tf.string),
                 'atom_masks': tf.io.FixedLenFeature([], tf.string),
-                'compositions': tf.io.FixedLenFeature([], tf.string),
-                'pulay': tf.io.FixedLenFeature([], tf.string),
+                'pulay_stress': tf.io.FixedLenFeature([], tf.string),
                 'etemperature': tf.FixedLenFeature([], tf.string),
                 'eentropy': tf.FixedLenFeature([], tf.string)
             }
             if self._use_forces:
-                feature_list['f_true'] = tf.io.FixedLenFeature([], tf.string)
+                feature_list['forces'] = tf.io.FixedLenFeature([], tf.string)
 
             if self._use_stress:
                 feature_list['stress'] = \

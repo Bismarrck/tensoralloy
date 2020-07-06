@@ -235,9 +235,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`.
                 * 'pulay_stress' of dtype `float32` or `float64`.
         name : str
             The name of the output potential energy tensor.
@@ -615,9 +615,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
+                * 'etemperature' of dtype `float32` or `float64`
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
         descriptors : dict
             A dict of Ops to get atomic descriptors. This should be produced by
@@ -660,9 +660,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`
                 * 'pulay_stress' of dtype `float32` or `float64`.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
@@ -795,9 +795,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`.
                 * 'pulay_stress' of dtype `float32` or `float64`.
         labels : dict
             A dict of reference tensors.
@@ -841,7 +841,7 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(
             predictions=predictions,
             labels=labels,
-            n_atoms=features["n_atoms"],
+            n_atoms=features["n_atoms_vap"],
             atom_masks=features["atom_masks"],
             loss_parameters=params.loss,
             mode=mode)
@@ -864,7 +864,7 @@ class BasicNN:
             eval_properties=self._minimize_properties,
             predictions=predictions,
             labels=labels,
-            n_atoms=features["n_atoms"],
+            n_atoms=features["n_atoms_vap"],
             atom_masks=features["atom_masks"],
         )
         evaluation_hooks = get_evaluation_hooks(

@@ -94,9 +94,8 @@ class EamSutton90Test(unittest.TestCase):
 
             descriptors = clf.get_descriptors(batch)
             features = dict(positions=batch["positions"],
-                            n_atoms=batch["n_atoms"],
+                            n_atoms=batch["n_atoms_vap"],
                             cell=batch["cell"],
-                            compositions=batch["compositions"],
                             atom_masks=batch["atom_masks"],
                             volume=batch["volume"])
 
