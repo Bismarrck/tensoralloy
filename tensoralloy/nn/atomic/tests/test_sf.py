@@ -8,10 +8,8 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from unittest import skip
 from tensorflow_estimator import estimator as tf_estimator
 from ase.io import read
-from nose.tools import assert_less
 from os.path import join
 from sklearn.metrics import pairwise_distances
 
@@ -29,7 +27,6 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-@skip
 def test_monoatomic_molecule():
     """
     Test computing descriptors of a single mono-atomic molecule.
@@ -56,14 +53,13 @@ def test_monoatomic_molecule():
         op = nn.get_symmetry_function_descriptors(
             clf.get_descriptors(
                 clf.get_constant_features(atoms)),
-            mode=tf_estimator.ModeKeys.PREDICT)
+            mode=tf_estimator.ModeKeys.PREDICT)[0]
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             g_new = sess.run(op)
             assert_array_equal(g_old, g_new['B'])
 
 
-@skip
 def test_monoatomic_molecule_with_omega():
     """
     Test computing descriptors (eta and omega) of a single mono-atomic molecule.
@@ -88,7 +84,7 @@ def test_monoatomic_molecule_with_omega():
             op = nn.get_symmetry_function_descriptors(
                 clf.get_descriptors(
                     clf.get_constant_features(atoms)),
-                mode=tf_estimator.ModeKeys.PREDICT)
+                mode=tf_estimator.ModeKeys.PREDICT)[0]
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 assert_array_equal(sess.run(op)['B'], z)
@@ -112,7 +108,7 @@ def test_single_structure():
             op = nn.get_symmetry_function_descriptors(
                 clf.get_descriptors(
                     clf.get_constant_features(Pd3O2)),
-                mode=tf_estimator.ModeKeys.PREDICT)
+                mode=tf_estimator.ModeKeys.PREDICT)[0]
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 g_new = sess.run(op)
