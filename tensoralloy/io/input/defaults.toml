@@ -77,7 +77,6 @@ embedding_activation = 'tanh'
 minmax_scale = false
 angular = false
 cutoff_function = 'cosine'
-trainable = false
 eta = [0.01, 0.1, 0.5, 1.0, 4.0]
 omega = [0.0]
 beta = [0.005]
