@@ -85,7 +85,8 @@ def get_g2_map(atoms: Atoms,
     # The mask
     g2_map[:, iaxis + 3] = ilist > 0
 
-    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1)
+    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
+                         rij=None)
     return {"g2": g2, "rij": rij, "dij": dij}
 
 
@@ -353,7 +354,7 @@ class BatchEAMTransformer(BatchEAM, BatchDescriptorTransformer):
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, shift)
+            return G2IndexedSlices(v2g_map, ilist, jlist, shift, None)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]):
         """

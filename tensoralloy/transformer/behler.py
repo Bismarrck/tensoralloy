@@ -75,7 +75,7 @@ def get_g2_map(atoms: Atoms,
     ilist = ilist.astype(np.int32)
     jlist = jlist.astype(np.int32)
     return G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
-                           rij=None, dij=None)
+                           rij=None)
 
 
 def get_g4_map(atoms: Atoms,
@@ -146,7 +146,7 @@ def get_g4_map(atoms: Atoms,
                 g4_map[count, iaxis + 0] = atom_gsl_i
                 g4_map[count, iaxis + 1] = offsets[index]
                 count += 1
-    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
+    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3, None)
 
 
 class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
@@ -482,7 +482,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
             n1.set_shape([self._nij_max * 3])
             n1 = tf.reshape(n1, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, n1, None, None)
+            return G2IndexedSlices(v2g_map, ilist, jlist, n1, None)
 
     def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
@@ -506,7 +506,7 @@ class BatchSymmetryFunctionTransformer(BatchSymmetryFunction,
                 shifts, [self._nijk_max, 9], name='g4.shifts')
             n1, n2, n3 = tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
-        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3)
+        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3, None)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]) -> dict:
         """
