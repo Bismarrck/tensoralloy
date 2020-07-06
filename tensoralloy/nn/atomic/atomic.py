@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import List, Dict
+from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys
@@ -37,6 +38,9 @@ class AtomicNN(BasicNN):
                  atomic_static_energy=None,
                  use_atomic_static_energy=True,
                  fixed_atomic_static_energy=False,
+                 temperature_dependent=False,
+                 temperature_layers=(128, 128),
+                 temperature_activation='softplus',
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -55,6 +59,9 @@ class AtomicNN(BasicNN):
         self._atomic_static_energy = atomic_static_energy or {}
         self._use_atomic_static_energy = use_atomic_static_energy
         self._fixed_atomci_static_energy = fixed_atomic_static_energy
+        self._temperature_dependent = temperature_dependent
+        self._temperature_layers = temperature_layers
+        self._temperature_activation = temperature_activation
 
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
@@ -77,6 +84,9 @@ class AtomicNN(BasicNN):
                 'use_atomic_static_energy': self._use_atomic_static_energy,
                 'fixed_atomic_static_energy': self._fixed_atomci_static_energy,
                 'atomic_static_energy': self._atomic_static_energy,
+                'temperature_dependent': self._temperature_dependent,
+                'temperature_layers': self._temperature_layers,
+                'temperature_activation': self._temperature_activation,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -151,6 +161,30 @@ class AtomicNN(BasicNN):
             with tf.control_dependencies(update_ops):
                 return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
 
+    @staticmethod
+    def _add_electron_temperature(x: tf.Tensor,
+                                  etemperature: tf.Tensor,
+                                  element: str,
+                                  mode: tf_estimator.ModeKeys,
+                                  max_occurs: Counter):
+        """
+        Add electron temperature to the atomic descriptor tensor for element.
+        """
+        with tf.name_scope("Temperature"):
+            if mode == tf_estimator.ModeKeys.PREDICT:
+                d0 = 1
+                d1 = max_occurs[element]
+            else:
+                d0, d1 = x.shape.as_list()[0: 2]
+            etemp = tf.reshape(
+                etemperature, [1, d0], name='etemp/0')
+            etemp = tf.transpose(etemp, name='T')
+            etemp = tf.tile(etemp, [d1, 1], name='tiled')
+            etemp = tf.reshape(
+                etemp, [d0, d1, 1], name='etemp')
+            x = tf.concat((x, etemp), axis=2, name='x')
+        return x
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -180,10 +214,29 @@ class AtomicNN(BasicNN):
 
         """
         collections = [self.default_collection]
+        activation_fn = get_activation_fn(self._activation)
+
+        def _build_ann(val, symbol, variable_scope, output_name):
+            conv = convolution1x1(
+                val,
+                activation_fn=activation_fn,
+                hidden_sizes=self._hidden_sizes[symbol],
+                num_out=1,
+                l2_weight=1.0,
+                collections=collections,
+                output_bias=self._use_atomic_static_energy,
+                output_bias_mean=bias_mean,
+                fixed_output_bias=self._fixed_atomci_static_energy,
+                use_resnet_dt=self._use_resnet_dt,
+                kernel_initializer=self._kernel_initializer,
+                variable_scope=variable_scope,
+                verbose=verbose)
+            return tf.squeeze(conv, axis=2, name=output_name)
+
 
         with tf.variable_scope("ANN"):
-            activation_fn = get_activation_fn(self._activation)
-            outputs = []
+
+            outputs = {'energy': [], 'eentropy': [], 'free_energy': []}
             atomic_descriptors = self._get_atomic_descriptors(
                 universal_descriptors=descriptors,
                 mode=mode)
@@ -194,33 +247,53 @@ class AtomicNN(BasicNN):
                     else:
                         bias_mean = 0.0
                     with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
+                        if verbose:
+                            log_tensor(x)
                         if self._minmax_scale:
                             x = self._apply_minmax_normalization(
                                 x=x,
                                 mask=descriptors['atom_masks'][element],
                                 mode=mode,
                                 collections=collections)
-                        if verbose:
-                            log_tensor(x)
-                        hidden_sizes = self._hidden_sizes[element]
-                        yi = convolution1x1(
-                            x,
-                            activation_fn=activation_fn,
-                            hidden_sizes=hidden_sizes,
-                            num_out=1,
-                            l2_weight=1.0,
-                            collections=collections,
-                            output_bias=self._use_atomic_static_energy,
-                            output_bias_mean=bias_mean,
-                            fixed_output_bias=self._fixed_atomci_static_energy,
-                            use_resnet_dt=self._use_resnet_dt,
-                            kernel_initializer="he_normal",
-                            variable_scope=None,
-                            verbose=verbose)
-                        yi = tf.squeeze(yi, axis=2, name='atomic')
-                        if verbose:
-                            log_tensor(yi)
-                        outputs.append(yi)
+                            if verbose:
+                                log_tensor(x)
+                        if self._temperature_dependent:
+                            x = self._add_electron_temperature(
+                                x=x,
+                                etemperature=features["etemperature"],
+                                element=element,
+                                mode=mode,
+                                max_occurs=atomic_descriptors.max_occurs)
+                            if verbose:
+                                log_tensor(x)
+                            etemp_fn = get_activation_fn(
+                                self._temperature_activation)
+                            h = convolution1x1(
+                                x,
+                                activation_fn=etemp_fn,
+                                hidden_sizes=self._temperature_layers[:-1],
+                                num_out=self._temperature_layers[-1],
+                                l2_weight=1.0,
+                                collections=collections,
+                                kernel_initializer=self._kernel_initializer,
+                                output_bias=True,
+                                use_resnet_dt=self._use_resnet_dt,
+                                variable_scope="T",
+                                verbose=verbose)
+
+                            u = _build_ann(h, element, "U", "U/atomic")
+                            s = _build_ann(h, element, "S", "S/atomic")
+                            ts = tf.multiply(
+                                features["etemperature"], s, name='TS')
+                            y = tf.math.subtract(u, ts, name="F")
+                            outputs['energy'].append(u)
+                            outputs['eentropy'].append(s)
+                            outputs['free_energy'].append(y)
+                        else:
+                            y = _build_ann(x, element, None, 'U')
+                            if verbose:
+                                log_tensor(y)
+                            outputs['energy'].append(y)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:

@@ -1,7 +1,10 @@
 # This toml file defines the default values of the options.
 
 precision = ['high', 'medium']
-pair_style = ['eam/alloy', 'eam/fs', 'eam/adp', 'atomic/deepmd', 'atomic/sf', 'tersoff']
+pair_style = [
+    'eam/alloy', 'eam/fs', 'eam/adp', 'tersoff',
+    'atomic/deepmd', 'atomic/sf'
+]
 
 [nn.atomic]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
