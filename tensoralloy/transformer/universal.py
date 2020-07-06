@@ -54,6 +54,8 @@ def get_g2_map(atoms: Atoms,
                dtype=np.float32):
     """
     Build the base `v2g_map`.
+
+    # TODO: improve the memory layout of interatomic distances
     """
     ilist, jlist, n1, rij, dij = neighbor_list('ijSdD', atoms, rc)
     nij = len(ilist)
@@ -105,8 +107,10 @@ def get_g2_map(atoms: Atoms,
         # The mask
         g2_map[index, iaxis + 4] = ilist[index] > 0
 
+    rij = np.concatenate(
+        (rij.astype(dtype).reshape((-1, 1)), dij.astype(dtype)), axis=1).T
     g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
-                         rij=rij, dij=dij)
+                         rij=rij)
     return g2, ijn_id_map
 
 
@@ -134,14 +138,17 @@ def get_g4_map(atoms: Atoms,
             dtype=dtype)
     indices = {}
     vectors = {}
+    ijdists = {}
     for i, atom_vap_i in enumerate(g2.ilist):
         if atom_vap_i == 0:
             break
         if atom_vap_i not in indices:
             indices[atom_vap_i] = []
             vectors[atom_vap_i] = []
+            ijdists[atom_vap_i] = []
         indices[atom_vap_i].append(g2.jlist[i])
         vectors[atom_vap_i].append(g2.n1[i])
+        ijdists[atom_vap_i].append(g2.rij[:, i])
 
     if nijk_max is None:
         nijk = 0
@@ -163,6 +170,7 @@ def get_g4_map(atoms: Atoms,
     n1 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
     n2 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
     n3 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
+    rijk = np.zeros((12, nijk_max), dtype=dtype)
     symbols = atoms.get_chemical_symbols()
     counters = {}
 
@@ -205,6 +213,11 @@ def get_g4_map(atoms: Atoms,
                 n1[count] = vectors[atom_vap_i][j]
                 n2[count] = vectors[atom_vap_i][k]
                 n3[count] = vectors[atom_vap_i][k] - vectors[atom_vap_i][j]
+                rijk[0: 4, count] = ijdists[atom_vap_i][j]
+                rijk[4: 8, count] = ijdists[atom_vap_i][k]
+                djk = rijk[5: 8, count] - rijk[1: 4, count]
+                rijk[8, count] = np.linalg.norm(djk)
+                rijk[9: 12, count] = djk
                 index = angular_interactions[interaction]
                 if atom_vap_i not in counters:
                     counters[atom_vap_i] = {}
@@ -219,7 +232,7 @@ def get_g4_map(atoms: Atoms,
                 g4_map[count, iaxis + 4] = 1
                 counters[atom_vap_i][index][ijn_id] += 1
                 count += 1
-    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3)
+    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3, rijk=rijk)
 
 
 class UniversalTransformer(DescriptorTransformer):
@@ -547,55 +560,55 @@ class UniversalTransformer(DescriptorTransformer):
         assert 'row_splits' in features
         assert 'g2.v2g_map' in features
 
-        if not self._use_computed_dists:
-            assert 'g2.rij' in features
-            assert 'g2.dij' in features
-        else:
+        if self._use_computed_dists:
             assert 'g2.ilist' in features
             assert 'g2.jlist' in features
             assert 'g2.n1' in features
+        else:
+            assert 'g2.rij' in features
 
         if self._angular:
             assert 'ij2k_max' in features
             assert 'g4.v2g_map' in features
 
-            if not self._use_computed_dists:
-                assert 'g4.rijk' in features
-                assert 'g4.dijk' in features
-            else:
+            if self._use_computed_dists:
                 assert 'g4.ilist' in features
                 assert 'g4.jlist' in features
                 assert 'g4.klist' in features
                 assert 'g4.n1' in features
                 assert 'g4.n2' in features
                 assert 'g4.n3' in features
+            else:
+                assert 'g4.rijk' in features
 
     def build_radial_graph(self, features: dict):
         """
         Build the computation graph for calculating radial descriptors.
         """
         with tf.name_scope("Radial"):
-            if not self._use_computed_dists:
-                rr = features['g2.rij']
-                dij = features['g2.dij']
-            else:
-                rr, dij = self.calculate_rij(features["positions"],
-                                             features["cell"],
-                                             features["g2.ilist"],
-                                             features["g2.jlist"],
-                                             features["g2.n1"],
-                                             name='rij')
             shape = self.get_g_shape(features, angular=False)
             v2g_map, v2g_masks = self.get_v2g_map(features)
 
-            dx = tf.identity(dij[..., 0], name='dijx')
-            dy = tf.identity(dij[..., 1], name='dijy')
-            dz = tf.identity(dij[..., 2], name='dijz')
+            if self._use_computed_dists:
+                rij, dij = self.calculate_rij(features["positions"],
+                                              features["cell"],
+                                              features["g2.ilist"],
+                                              features["g2.jlist"],
+                                              features["g2.n1"],
+                                              name='rij')
+                ijx = tf.identity(dij[..., 0], name='dijx')
+                ijy = tf.identity(dij[..., 1], name='dijy')
+                ijz = tf.identity(dij[..., 2], name='dijz')
+            else:
+                rij = tf.identity(features['g2.rij'][0], name='g2.rij')
+                ijx = tf.identity(features['g2.rij'][1], name='dijx')
+                ijy = tf.identity(features['g2.rij'][2], name='dijy')
+                ijz = tf.identity(features['g2.rij'][3], name='dijz')
 
-            gr = tf.expand_dims(tf.scatter_nd(v2g_map, rr, shape), 0, name='gr')
-            gx = tf.expand_dims(tf.scatter_nd(v2g_map, dx, shape), 0, name='gx')
-            gy = tf.expand_dims(tf.scatter_nd(v2g_map, dy, shape), 0, name='gy')
-            gz = tf.expand_dims(tf.scatter_nd(v2g_map, dz, shape), 0, name='gz')
+            gr = tf.expand_dims(tf.scatter_nd(v2g_map, rij, shape), 0, 'gr')
+            gx = tf.expand_dims(tf.scatter_nd(v2g_map, ijx, shape), 0, 'gx')
+            gy = tf.expand_dims(tf.scatter_nd(v2g_map, ijy, shape), 0, 'gy')
+            gz = tf.expand_dims(tf.scatter_nd(v2g_map, ijz, shape), 0, 'gz')
 
             universal_descriptors = tf.concat(
                 (gr, gx, gy, gz), axis=0, name='udescriptors')
@@ -603,7 +616,7 @@ class UniversalTransformer(DescriptorTransformer):
             v2g_masks = tf.squeeze(v2g_masks, axis=self.get_row_split_axis())
             masks = tf.scatter_nd(v2g_map, v2g_masks, shape)
             universal_descriptor_masks = tf.cast(
-                masks, dtype=rr.dtype, name='udescriptor_masks')
+                masks, dtype=rij.dtype, name='udescriptor_masks')
             return self._split_descriptors(
                 features, universal_descriptors, universal_descriptor_masks)
 
@@ -612,14 +625,7 @@ class UniversalTransformer(DescriptorTransformer):
         Build the computation graph for calculating angular descriptors.
         """
         with tf.name_scope("Angular"):
-            if not self._use_computed_dists:
-                rij = features['g4.rijk'][0]
-                rik = features['g4.rijk'][1]
-                rjk = features['g4.rijk'][2]
-                dij = features['g4.dijk'][0]
-                dik = features['g4.dijk'][1]
-                djk = features['g4.dijk'][2]
-            else:
+            if self._use_computed_dists:
                 rij, dij = self.calculate_rij(features['positions'],
                                               features['cell'],
                                               features['g4.ilist'],
@@ -638,19 +644,31 @@ class UniversalTransformer(DescriptorTransformer):
                                               features['g4.klist'],
                                               features['g4.n3'],
                                               name='rjk')
+                ijx = tf.identity(dij[..., 0], name='dijx')
+                ijy = tf.identity(dij[..., 1], name='dijy')
+                ijz = tf.identity(dij[..., 2], name='dijz')
+                ikx = tf.identity(dik[..., 0], name='dikx')
+                iky = tf.identity(dik[..., 1], name='diky')
+                ikz = tf.identity(dik[..., 2], name='dikz')
+                jkx = tf.identity(djk[..., 0], name='djkx')
+                jky = tf.identity(djk[..., 1], name='djky')
+                jkz = tf.identity(djk[..., 2], name='djkz')
+            else:
+                rij = tf.identity(features['g4.rijk'][0], name='g4.rij')
+                ijx = tf.identity(features['g4.rijk'][1], name='dijx')
+                ijy = tf.identity(features['g4.rijk'][2], name='dijy')
+                ijz = tf.identity(features['g4.rijk'][3], name='dijz')
+                rik = tf.identity(features['g4.rijk'][4], name='g4.rik')
+                ikx = tf.identity(features['g4.rijk'][5], name='dikx')
+                iky = tf.identity(features['g4.rijk'][6], name='diky')
+                ikz = tf.identity(features['g4.rijk'][7], name='dikz')
+                rjk = tf.identity(features['g4.rijk'][8], name='g4.dik')
+                jkx = tf.identity(features['g4.rijk'][9], name='djkx')
+                jky = tf.identity(features['g4.rijk'][10], name='djky')
+                jkz = tf.identity(features['g4.rijk'][11], name='djkz')
 
             shape = self.get_g_shape(features, angular=True)
             v2g_map, v2g_masks = self.get_v2g_map(features, angular=True)
-
-            ijx = tf.identity(dij[..., 0], name='dijx')
-            ijy = tf.identity(dij[..., 1], name='dijy')
-            ijz = tf.identity(dij[..., 2], name='dijz')
-            ikx = tf.identity(dik[..., 0], name='dikx')
-            iky = tf.identity(dik[..., 1], name='diky')
-            ikz = tf.identity(dik[..., 2], name='dikz')
-            jkx = tf.identity(djk[..., 0], name='djkx')
-            jky = tf.identity(djk[..., 1], name='djky')
-            jkz = tf.identity(djk[..., 2], name='djkz')
 
             grij = tf.expand_dims(tf.scatter_nd(v2g_map, rij, shape), 0, 'grij')
             gijx = tf.expand_dims(tf.scatter_nd(v2g_map, ijx, shape), 0, 'gijx')
@@ -736,18 +754,14 @@ class UniversalTransformer(DescriptorTransformer):
             self._placeholders["compositions"] = self._create_float_1d(
                 dtype=dtype, name='compositions')
 
-            if not self._use_computed_dists:
-                self._placeholders["g2.rij"] = self._create_float_1d(
-                    dtype=dtype, name="g2.rij")
-                self._placeholders["g2.dij"] = self._create_float_2d(
-                    dtype=dtype, d1=3, name="g2.dij")
-            else:
-                self._placeholders["g2.ilist"] = self._create_int_1d(
-                    name='g2.ilist')
-                self._placeholders["g2.jlist"] = self._create_int_1d(
-                    name='g2.jlist')
+            if self._use_computed_dists:
+                self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
+                self._placeholders["g2.jlist"] = self._create_int_1d('g2.jlist')
                 self._placeholders["g2.n1"] = self._create_float_2d(
                     dtype=dtype, d0=None, d1=3, name='g2.n1')
+            else:
+                self._placeholders["g2.rij"] = self._create_float_2d(
+                    d0=4, d1=None, dtype=dtype, name="g2.rij")
             self._placeholders["g2.v2g_map"] = self._create_int_2d(
                 d0=None, d1=5, name='g2.v2g_map')
 
@@ -755,19 +769,27 @@ class UniversalTransformer(DescriptorTransformer):
                 self._placeholders["ij2k_max"] = self._create_int('ij2k_max')
                 self._placeholders["g4.v2g_map"] = self._create_int_2d(
                     d0=None, d1=5, name='g4.v2g_map')
-                self._placeholders["g4.ilist"] = self._create_int_1d('g4.ilist')
-                self._placeholders["g4.jlist"] = self._create_int_1d('g4.jlist')
-                self._placeholders["g4.klist"] = self._create_int_1d('g4.klist')
-                self._placeholders["g4.n1"] = self._create_float_2d(
-                    dtype=dtype, d0=None, d1=3, name='g4.n1')
-                self._placeholders["g4.n2"] = self._create_float_2d(
-                    dtype=dtype, d0=None, d1=3, name='g4.n2')
-                self._placeholders["g4.n3"] = self._create_float_2d(
-                    dtype=dtype, d0=None, d1=3, name='g4.n3')
+
+                if self._use_computed_dists:
+                    self._placeholders["g4.ilist"] = \
+                        self._create_int_1d('g4.ilist')
+                    self._placeholders["g4.jlist"] = \
+                        self._create_int_1d('g4.jlist')
+                    self._placeholders["g4.klist"] = \
+                        self._create_int_1d('g4.klist')
+                    self._placeholders["g4.n1"] = self._create_float_2d(
+                        dtype=dtype, d0=None, d1=3, name='g4.n1')
+                    self._placeholders["g4.n2"] = self._create_float_2d(
+                        dtype=dtype, d0=None, d1=3, name='g4.n2')
+                    self._placeholders["g4.n3"] = self._create_float_2d(
+                        dtype=dtype, d0=None, d1=3, name='g4.n3')
+                else:
+                    self._placeholders["g4.rijk"] = self._create_float_2d(
+                        d0=12, d1=None, dtype=dtype, name="g4.rijk")
 
         return self._placeholders
 
-    def _get_indexed_slices(self, atoms, vap: VirtualAtomMap):
+    def get_indexed_slices(self, atoms, vap: VirtualAtomMap):
         """
         Return the corresponding indexed slices.
 
@@ -828,14 +850,14 @@ class UniversalTransformer(DescriptorTransformer):
             g4 = None
         return g2, g4
 
-    def _get_np_features(self, atoms: Atoms):
+    def get_np_features(self, atoms: Atoms):
         """
         Return a dict of features (Numpy or Python objects).
         """
         np_dtype = get_float_dtype().as_numpy_dtype
 
         vap = self.get_vap_transformer(atoms)
-        g2, g4 = self._get_indexed_slices(atoms, vap)
+        g2, g4 = self.get_indexed_slices(atoms, vap)
 
         positions = vap.map_positions(atoms.positions)
 
@@ -868,7 +890,8 @@ class UniversalTransformer(DescriptorTransformer):
 
         if self._angular:
             feed_dict['ij2k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
-            feed_dict.update(g4.as_dict())
+            feed_dict.update(
+                g4.as_dict(use_computed_dists=self._use_computed_dists))
 
         return feed_dict
 
@@ -882,7 +905,7 @@ class UniversalTransformer(DescriptorTransformer):
             self._initialize_placeholders()
         placeholders = self._placeholders
 
-        for key, value in self._get_np_features(atoms).items():
+        for key, value in self.get_np_features(atoms).items():
             feed_dict[placeholders[key]] = value
 
         return feed_dict
@@ -893,7 +916,7 @@ class UniversalTransformer(DescriptorTransformer):
         """
         feed_dict = dict()
         with tf.name_scope("Constants"):
-            for key, val in self._get_np_features(atoms).items():
+            for key, val in self.get_np_features(atoms).items():
                 feed_dict[key] = tf.convert_to_tensor(val, name=key)
         return feed_dict
 
@@ -1020,7 +1043,7 @@ class BatchUniversalTransformer(UniversalTransformer,
                                     periodic=self._periodic,
                                     symmetric=self._symmetric)
 
-    def _get_indexed_slices(self, atoms, vap: VirtualAtomMap):
+    def get_indexed_slices(self, atoms, vap: VirtualAtomMap):
         """
         Return indexed slices.
         """
@@ -1101,9 +1124,16 @@ class BatchUniversalTransformer(UniversalTransformer,
 
     @staticmethod
     def get_row_split_axis():
+        """
+        Return the axis to split raw universal descriptors into elementary
+        subsets.
+        """
         return 2
 
     def get_row_split_sizes(self, _):
+        """
+        Return the sizes of elementary subsets.
+        """
         row_splits = [1, ]
         for i, element in enumerate(self._elements):
             row_splits.append(self._max_occurs[element])
@@ -1187,7 +1217,7 @@ class BatchUniversalTransformer(UniversalTransformer,
         """
         feature_list = self._encode_atoms(atoms)
         vap = self.get_vap_transformer(atoms)
-        g2, g4 = self._get_indexed_slices(atoms, vap=vap)
+        g2, g4 = self.get_indexed_slices(atoms, vap=vap)
         feature_list.update(self._encode_g2_indexed_slices(g2))
         if isinstance(g4, G4IndexedSlices):
             feature_list.update(self._encode_g4_indexed_slices(g4))
@@ -1212,7 +1242,7 @@ class BatchUniversalTransformer(UniversalTransformer,
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, shift, None, None)
+            return G2IndexedSlices(v2g_map, ilist, jlist, shift, None)
 
     def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
         """
@@ -1236,7 +1266,7 @@ class BatchUniversalTransformer(UniversalTransformer,
                 shifts, [self._nijk_max, 9], name='g4.shifts')
             n1, n2, n3 = tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
-        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3)
+        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3, None)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]):
         """
