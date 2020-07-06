@@ -12,10 +12,11 @@ from typing import List
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.utils import get_elements_from_kbody_term
-from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.partition import dynamic_partition
+from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.extension.grad_ops import safe_pow
 from tensoralloy.precision import get_float_dtype
@@ -237,141 +238,16 @@ class SymmetryFunctionNN(AtomicNN):
                 g[e] = tf.concat((g[e], tensor), axis=-1)
         return g, max_occurs
 
-    @staticmethod
-    def _apply_minmax_normalization(x: tf.Tensor,
-                                    mask: tf.Tensor,
-                                    mode: tf_estimator.ModeKeys,
-                                    collections=None):
+    def _get_atomic_descriptors(self,
+                                universal_descriptors,
+                                mode: tf_estimator.ModeKeys,
+                                verbose=True):
         """
-        Apply the min-max normalization to raw symmetry function descriptors.
-
-        Parameters
-        ----------
-        x : tf.Tensor
-            The input tensor.
-        mask : tf.Tensor
-            The atom mask.
-        mode : tf_estimator.ModeKeys
-
-        collections : List[str]
-            Additional collections to place the variables.
-
-        Returns
-        -------
-        x : tf.Tensor
-            Dynamically normalized input tensor.
-
+        A wrapper.
         """
-        with tf.name_scope("MinMax"):
-            _collections = [
-                tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.MODEL_VARIABLES
-            ]
-            if collections is not None:
-                _collections += collections
-            _shape = [1, 1, x.shape[-1]]
-            _dtype = x.dtype
-            _get_initializer = \
-                lambda val: tf.constant_initializer(val, _dtype)
-
-            xlo = tf.get_variable(
-                name="xlo", shape=_shape, dtype=_dtype,
-                trainable=False, collections=_collections,
-                initializer=_get_initializer(1000.0),
-                aggregation=tf.VariableAggregation.MEAN)
-            xhi = tf.get_variable(
-                name="xhi", shape=_shape, dtype=_dtype,
-                trainable=False, collections=_collections,
-                initializer=_get_initializer(0.0),
-                aggregation=tf.VariableAggregation.MEAN)
-
-            if mode == tf_estimator.ModeKeys.TRAIN:
-                xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
-                xmin = tf.reshape(
-                    tf.reduce_min(
-                        tf.boolean_mask(x, mask), axis=0),
-                    xmax.shape, name='xmin')
-                xlo_op = tf.assign(xlo, tf.minimum(xmin, xlo))
-                xhi_op = tf.assign(xhi, tf.maximum(xmax, xhi))
-                update_ops = [xlo_op, xhi_op]
-            else:
-                update_ops = []
-            with tf.control_dependencies(update_ops):
-                return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
-
-    def _get_model_outputs(self,
-                           features: dict,
-                           descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
-                           verbose=False):
-        """
-        Return the model outputs.
-
-        Parameters
-        ----------
-        features : Dict
-            A dict of tensors, includeing raw properties and the descriptors:
-                * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cell' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
-                * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
-        descriptors : Dict
-            A dict of (element, (dists, masks)) as the universal descriptors.
-            Here `element` represents the symbol of an element.
-        mode : tf_estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
-            energies of atoms. The last axis has the size `max_n_atoms`.
-
-        """
-        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
-            collections = [self.default_collection]
-
-            with tf.variable_scope("ANN"):
-                activation_fn = get_activation_fn(self._activation)
-                outputs = []
-                symmetry_function_descriptors, max_occurs = \
-                    self.get_symmetry_function_descriptors(descriptors, mode)
-                for element, x in symmetry_function_descriptors.items():
-                    if self._use_atomic_static_energy:
-                        bias_mean = self._atomic_static_energy.get(element, 0.0)
-                    else:
-                        bias_mean = 0.0
-                    with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
-                        if self._minmax_scale:
-                            x = self._apply_minmax_normalization(
-                                x=x,
-                                mask=descriptors['atom_masks'][element],
-                                mode=mode,
-                                collections=collections)
-                        if verbose:
-                            log_tensor(x)
-                        hidden_sizes = self._hidden_sizes[element]
-                        yi = convolution1x1(
-                            x,
-                            activation_fn=activation_fn,
-                            hidden_sizes=hidden_sizes,
-                            num_out=1,
-                            l2_weight=1.0,
-                            collections=collections,
-                            output_bias=self._use_atomic_static_energy,
-                            output_bias_mean=bias_mean,
-                            fixed_output_bias=self._fixed_atomci_static_energy,
-                            use_resnet_dt=self._use_resnet_dt,
-                            kernel_initializer="he_normal",
-                            variable_scope=None,
-                            verbose=verbose)
-                        yi = tf.squeeze(yi, axis=2, name='atomic')
-                        if verbose:
-                            log_tensor(yi)
-                        outputs.append(yi)
-                return outputs
+        descriptors, max_occurs = self.get_symmetry_function_descriptors(
+            universal_descriptors, mode)
+        return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)
 
 
 class TemperatureDependentSymmetryFunctionNN(SymmetryFunctionNN):

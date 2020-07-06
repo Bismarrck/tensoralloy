@@ -14,8 +14,9 @@ from tensoralloy.descriptor.cutoff import deepmd_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor, get_activation_fn
-from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.convolutional import convolution1x1
+from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -299,80 +300,19 @@ class DeepPotSE(AtomicNN):
                     stacks[element], axis=-1, name=element)
             return results
 
-    def _get_model_outputs(self,
-                           features: dict,
-                           descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
-                           verbose=False):
+    def _get_atomic_descriptors(self,
+                                universal_descriptors,
+                                mode: tf_estimator.ModeKeys,
+                                verbose=True):
         """
-        Return raw NN-EAM model outputs.
-
-        Parameters
-        ----------
-        features : Dict
-            A dict of tensors, includeing raw properties and the descriptors:
-                * 'positions' of shape `[batch_size, N, 3]`.
-                * 'cell' of shape `[batch_size, 3, 3]`.
-                * 'mask' of shape `[batch_size, N]`.
-                * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
-        descriptors : Dict
-            A dict of (element, (value, mask)) where `element` represents the
-            symbol of an element, `value` is the descriptors of `element` and
-            `mask` is the mask of `value`.
-        mode : tf_estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 1D (PREDICT) or 2D (TRAIN or EVAL) tensor as the unmasked atomic
-            energies of atoms. The last axis has the size `max_n_atoms`.
-
+        A wrapper function.
         """
-        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
-            collections = [self.default_collection]
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=descriptors,
-                mode=mode,
-                merge_symmetric=False)
-
-            embeddings = self._build_embedding_nn(
-                partitions=partitions,
-                max_occurs=max_occurs,
-                verbose=verbose)
-
-            with tf.variable_scope("ANN"):
-                activation_fn = get_activation_fn(self._activation)
-                outputs = []
-                for element, (_, atom_mask) in descriptors.items():
-                    if self._use_atomic_static_energy:
-                        bias_mean = self._atomic_static_energy.get(element, 0.0)
-                    else:
-                        bias_mean = 0.0
-                    with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
-                        x = embeddings[element]
-                        if verbose:
-                            log_tensor(x)
-                        hidden_sizes = self._hidden_sizes[element]
-                        yi = convolution1x1(
-                            x,
-                            activation_fn=activation_fn,
-                            hidden_sizes=hidden_sizes,
-                            num_out=1,
-                            l2_weight=1.0,
-                            collections=collections,
-                            output_bias=self._use_atomic_static_energy,
-                            output_bias_mean=bias_mean,
-                            fixed_output_bias=self._fixed_atomci_static_energy,
-                            use_resnet_dt=self._use_resnet_dt,
-                            kernel_initializer="he_normal",
-                            variable_scope=None,
-                            verbose=verbose)
-                        yi = tf.squeeze(yi, axis=2, name='atomic')
-                        if verbose:
-                            log_tensor(yi)
-                        outputs.append(yi)
-                return outputs
+        partitions, max_occurs = self._dynamic_partition(
+            descriptors=universal_descriptors,
+            mode=mode,
+            merge_symmetric=False)
+        embeddings = self._build_embedding_nn(
+            partitions=partitions,
+            max_occurs=max_occurs,
+            verbose=verbose)
+        return AtomicDescriptors(embeddings, max_occurs)

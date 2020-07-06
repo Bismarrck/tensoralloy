@@ -9,11 +9,12 @@ import tensorflow as tf
 from typing import List, Dict
 from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.dataclasses import EnergyOps
-from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
+from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -79,6 +80,77 @@ class AtomicNN(BasicNN):
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
+    def _get_atomic_descriptors(self,
+                                universal_descriptors,
+                                mode: tf_estimator.ModeKeys,
+                                verbose=True) -> AtomicDescriptors:
+        """
+        Return the atomic descriptors calaculated based on the universal
+        descriptors.
+        """
+        raise NotImplementedError("")
+
+    @staticmethod
+    def _apply_minmax_normalization(x: tf.Tensor,
+                                    mask: tf.Tensor,
+                                    mode: tf_estimator.ModeKeys,
+                                    collections=None):
+        """
+        Apply the min-max normalization to raw symmetry function descriptors.
+
+        Parameters
+        ----------
+        x : tf.Tensor
+            The input tensor.
+        mask : tf.Tensor
+            The atom mask.
+        mode : tf_estimator.ModeKeys
+
+        collections : List[str]
+            Additional collections to place the variables.
+
+        Returns
+        -------
+        x : tf.Tensor
+            Dynamically normalized input tensor.
+
+        """
+        with tf.name_scope("MinMax"):
+            _collections = [
+                tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.MODEL_VARIABLES
+            ]
+            if collections is not None:
+                _collections += collections
+            _shape = [1, 1, x.shape[-1]]
+            _dtype = x.dtype
+            _get_initializer = \
+                lambda val: tf.constant_initializer(val, _dtype)
+
+            xlo = tf.get_variable(
+                name="xlo", shape=_shape, dtype=_dtype,
+                trainable=False, collections=_collections,
+                initializer=_get_initializer(1000.0),
+                aggregation=tf.VariableAggregation.MEAN)
+            xhi = tf.get_variable(
+                name="xhi", shape=_shape, dtype=_dtype,
+                trainable=False, collections=_collections,
+                initializer=_get_initializer(0.0),
+                aggregation=tf.VariableAggregation.MEAN)
+
+            if mode == tf_estimator.ModeKeys.TRAIN:
+                xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
+                xmin = tf.reshape(
+                    tf.reduce_min(
+                        tf.boolean_mask(x, mask), axis=0),
+                    xmax.shape, name='xmin')
+                xlo_op = tf.assign(xlo, tf.minimum(xmin, xlo))
+                xhi_op = tf.assign(xhi, tf.maximum(xmax, xhi))
+                update_ops = [xlo_op, xhi_op]
+            else:
+                update_ops = []
+            with tf.control_dependencies(update_ops):
+                return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -112,75 +184,43 @@ class AtomicNN(BasicNN):
         with tf.variable_scope("ANN"):
             activation_fn = get_activation_fn(self._activation)
             outputs = []
-            for element, (value, atom_mask) in descriptors.items():
+            atomic_descriptors = self._get_atomic_descriptors(
+                universal_descriptors=descriptors,
+                mode=mode)
+            for element, x in atomic_descriptors.descriptors.items():
                 with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
-                    x = tf.identity(value, name='input')
-                    if mode == tf_estimator.ModeKeys.PREDICT:
-                        assert x.shape.ndims == 2
-                        x = tf.expand_dims(x, axis=0, name='3d')
-
-                    if self._minmax_scale:
-                        with tf.name_scope("MinMax"):
-                            _collections = [
-                                tf.GraphKeys.GLOBAL_VARIABLES,
-                                tf.GraphKeys.MODEL_VARIABLES,
-                            ] + collections
-                            _shape = [1, 1, x.shape[-1]]
-                            _dtype = x.dtype
-                            _get_initializer = \
-                                lambda val: tf.constant_initializer(val, _dtype)
-
-                            xlo = tf.get_variable(
-                                name="xlo", shape=_shape, dtype=_dtype,
-                                trainable=False, collections=_collections,
-                                initializer=_get_initializer(1000.0),
-                                aggregation=tf.VariableAggregation.MEAN)
-                            xhi = tf.get_variable(
-                                name="xhi", shape=_shape, dtype=_dtype,
-                                trainable=False, collections=_collections,
-                                initializer=_get_initializer(0.0),
-                                aggregation=tf.VariableAggregation.MEAN)
-
-                            if mode == tf_estimator.ModeKeys.TRAIN:
-                                xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
-                                xmin = tf.reshape(
-                                    tf.reduce_min(
-                                        tf.boolean_mask(x, atom_mask), axis=0),
-                                    xmax.shape, name='xmin')
-                                xlo_op = tf.assign(xlo, tf.minimum(xmin, xlo))
-                                xhi_op = tf.assign(xhi, tf.maximum(xmax, xhi))
-                                update_ops = [xlo_op, xhi_op]
-                            else:
-                                update_ops = []
-                            with tf.control_dependencies(update_ops):
-                                x = tf.div_no_nan(xhi - x, xhi - xlo, name='x')
-
-                    hidden_sizes = self._hidden_sizes[element]
-                    if verbose:
-                        log_tensor(x)
-
                     if self._use_atomic_static_energy:
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
                     else:
                         bias_mean = 0.0
-
-                    yi = convolution1x1(
-                        x,
-                        activation_fn=activation_fn,
-                        hidden_sizes=hidden_sizes,
-                        l2_weight=1.0,
-                        collections=collections,
-                        output_bias=self._use_atomic_static_energy,
-                        output_bias_mean=bias_mean,
-                        fixed_output_bias=self._fixed_atomci_static_energy,
-                        use_resnet_dt=self._use_resnet_dt,
-                        kernel_initializer=self._kernel_initializer,
-                        variable_scope=None,
-                        verbose=verbose)
-                    yi = tf.squeeze(yi, axis=2, name='atomic')
-                    if verbose:
-                        log_tensor(yi)
-                    outputs.append(yi)
+                    with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
+                        if self._minmax_scale:
+                            x = self._apply_minmax_normalization(
+                                x=x,
+                                mask=descriptors['atom_masks'][element],
+                                mode=mode,
+                                collections=collections)
+                        if verbose:
+                            log_tensor(x)
+                        hidden_sizes = self._hidden_sizes[element]
+                        yi = convolution1x1(
+                            x,
+                            activation_fn=activation_fn,
+                            hidden_sizes=hidden_sizes,
+                            num_out=1,
+                            l2_weight=1.0,
+                            collections=collections,
+                            output_bias=self._use_atomic_static_energy,
+                            output_bias_mean=bias_mean,
+                            fixed_output_bias=self._fixed_atomci_static_energy,
+                            use_resnet_dt=self._use_resnet_dt,
+                            kernel_initializer="he_normal",
+                            variable_scope=None,
+                            verbose=verbose)
+                        yi = tf.squeeze(yi, axis=2, name='atomic')
+                        if verbose:
+                            log_tensor(yi)
+                        outputs.append(yi)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
