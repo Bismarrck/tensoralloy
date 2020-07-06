@@ -4,6 +4,8 @@ This module defines data classes for `tensoralloy.nn` package.
 """
 from __future__ import print_function, absolute_import
 
+import tensorflow as tf
+
 from dataclasses import dataclass, is_dataclass
 from typing import List, Union, Dict
 
@@ -36,6 +38,23 @@ def nested_dataclass(*args, **kwargs):
         cls.__init__ = __init__
         return cls
     return wrapper(args[0]) if args else wrapper
+
+
+@dataclass(frozen=True)
+class EnergyOps:
+    """
+    Different types of energy ops.
+
+    energy: the internal energy U
+    eentropy: the electron entropy S
+    enthalpy: the enthalpy H = U + PV
+    free_energy: electron free energy F = U - T*S
+
+    """
+    energy: tf.Tensor
+    eentropy: tf.Tensor
+    enthalpy: tf.Tensor
+    free_energy: tf.Tensor
 
 
 @add_slots

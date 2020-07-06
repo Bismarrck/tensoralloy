@@ -21,6 +21,7 @@ from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
+from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
@@ -218,13 +219,16 @@ class BasicNN:
         """
         raise NotImplementedError("This method must be overridden!")
 
-    def _get_internal_energy_op(self,
-                                outputs,
-                                features: dict,
-                                name='energy',
-                                verbose=True) -> tf.Tensor:
+    def _get_energy_ops(self,
+                        outputs,
+                        features: dict,
+                        verbose=True) -> EnergyOps:
         """
-        Return the Op to compute internal energy E.
+        Return the Ops to compute different types of energies:
+            * energy: the internal energy U
+            * entropy: the electron entropy (unitless) S
+            * enthalpy: the enthalpy H = U + PV
+            * free_energy: the electron free energy E(F) = U - T*S
 
         Parameters
         ----------
@@ -248,59 +252,25 @@ class BasicNN:
         raise NotImplementedError("This method must be overridden!")
 
     @staticmethod
-    def _get_pv_energy_op(features: dict,
-                          name='pv',
-                          verbose=True) -> tf.Tensor:
+    def _get_enthalpy_op(features: dict,
+                         energy: tf.Tensor,
+                         verbose=True) -> tf.Tensor:
         """
-        Return the Op to compute `E_pv`:
+        Return the Op to compute enthalpy H:
 
-            E(pv) = pulay_stress * volume
+            H = U + PV
 
         """
         v = tf.linalg.det(features["cell"], name='V')
         p = tf.convert_to_tensor(features["pulay_stress"], name='P')
-        pv = tf.multiply(v, p, name=name)
+        pv = tf.multiply(v, p, name='PV')
+        enthalpy = tf.add(pv, energy, name='enthalpy')
         if verbose:
-            log_tensor(pv)
-        return pv
-
-    def _get_total_energy_op(self,
-                             outputs,
-                             features: dict,
-                             name='energy',
-                             verbose=True):
-        """
-        Return the Ops to compute total energy E and enthalpy H:
-
-            H = E + PV
-
-        Returns
-        -------
-        energy : tf.Tensor
-            The Op to compute internal energy E.
-        enthalpy : tf.Tensor
-            The Op to compute enthalpy H.
-
-        """
-        with tf.name_scope("PV"):
-            E_pv = self._get_pv_energy_op(features, verbose=verbose)
-
-        with tf.name_scope("Internal"):
-            E_internal = self._get_internal_energy_op(
-                outputs=outputs,
-                features=features,
-                verbose=verbose)
-
-        E_total = tf.identity(E_internal, name=name)
-        H = tf.add(E_internal, E_pv, name='enthalpy')
-
-        if verbose:
-            log_tensor(H)
-
-        return E_total, H
+            log_tensor(enthalpy)
+        return enthalpy
 
     @staticmethod
-    def _get_forces_op(energy, positions, name='forces', verbose=True):
+    def _get_forces_op(energy, positions, verbose=True):
         """
         Return the Op to compute atomic forces (eV / Angstrom).
         """
@@ -310,7 +280,7 @@ class BasicNN:
         # Please remember: f = -dE/dR
         forces = tf.negative(
             tf.split(dEdR, [1, -1], axis=axis, name='split')[1],
-            name=name)
+            name='forces')
         if verbose:
             log_tensor(forces)
         return forces
@@ -388,8 +358,7 @@ class BasicNN:
             return tf.identity(stress, name='unit'), total_stress
 
     @staticmethod
-    def _convert_to_voigt_stress(stress, batch_size, name='stress',
-                                 verbose=False):
+    def _convert_to_voigt_stress(stress, batch_size, verbose=False):
         """
         Convert a 3x3 stress tensor or a Nx3x3 stress tensors to corresponding
         Voigt form(s).
@@ -406,14 +375,14 @@ class BasicNN:
                     tf.range(batch_size), [batch_size, 1, 1]),
                     [1, 6, 1])
                 voigt = tf.concat((indices, voigt), axis=2, name='indices')
-            stress = tf.gather_nd(stress, voigt, name=name)
+            stress = tf.gather_nd(stress, voigt, name='stress')
             if verbose:
                 log_tensor(stress)
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cell, volume, positions,
-                       forces, pulay_stress, name='stress',
-                       return_pressure=False, verbose=True):
+                       forces, pulay_stress, return_pressure=False,
+                       verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
@@ -431,7 +400,7 @@ class BasicNN:
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
         voigt = self._convert_to_voigt_stress(
-            stress_per_volume, batch_size, name=name, verbose=verbose)
+            stress_per_volume, batch_size, verbose=verbose)
 
         if return_pressure:
             total_pressure = self._get_total_pressure_op(stress_per_volume,
@@ -459,8 +428,7 @@ class BasicNN:
         return total_pressure
 
     @staticmethod
-    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
-                        verbose=True):
+    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, verbose=True):
         """
         Return the Op to compute the Hessian matrix:
 
@@ -719,26 +687,24 @@ class BasicNN:
             predictions = dict()
 
             with tf.name_scope("Energy"):
-                energy, enthalpy = self._get_total_energy_op(
-                    outputs, features, name='energy', verbose=verbose)
-                predictions["energy"] = energy
-                predictions["enthalpy"] = enthalpy
+                ops = self._get_energy_ops(
+                    outputs, features, verbose=verbose)
+                predictions.update(ops.__dict__)
 
             if 'forces' in properties or \
                     'stress' in properties or \
                     'total_pressure' in properties:
                 with tf.name_scope("Forces"):
                     predictions["forces"] = self._get_forces_op(
-                        predictions["energy"],
+                        ops.free_energy,
                         features["positions"],
-                        name='forces',
                         verbose=verbose)
 
             if export_partial_forces:
                 with tf.name_scope("PartialForces"):
                     predictions.update(
                         self._get_partial_forces_ops(
-                            energy,
+                            ops.free_energy,
                             rij=features["g2.rij"],
                             rijk=features.get("g4.rijk", None)))
 
@@ -746,13 +712,12 @@ class BasicNN:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
-                            energy=predictions["energy"],
+                            energy=ops.free_energy,
                             cell=features["cell"],
                             volume=features["volume"],
                             positions=features["positions"],
                             forces=predictions["forces"],
                             pulay_stress=features["pulay_stress"],
-                            name='stress',
                             verbose=verbose)
                     predictions["stress"] = voigt_stress
                     predictions["total_stress"] = total_stress
@@ -761,8 +726,8 @@ class BasicNN:
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
                     predictions["hessian"] = self._get_hessian_op(
-                        predictions["energy"], features["positions"],
-                        name='hessian', verbose=verbose)
+                        ops.free_energy, features["positions"],
+                        verbose=verbose)
 
             if mode == tf_estimator.ModeKeys.PREDICT \
                     and 'elastic' in properties:
