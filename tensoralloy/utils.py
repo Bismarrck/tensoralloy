@@ -8,7 +8,6 @@ import numpy as np
 import logging
 
 from dataclasses import fields
-from ase import Atoms
 from genericpath import isdir
 from os import makedirs
 from os.path import dirname
