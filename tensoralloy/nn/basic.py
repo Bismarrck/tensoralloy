@@ -148,7 +148,6 @@ class BasicNN:
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
         self._transformer = None
-        self._y_atomic_op_name = None
 
     @property
     def elements(self):
@@ -178,11 +177,11 @@ class BasicNN:
         """
         return self._export_properties
 
-    def _get_atomic_energy_tensor_name(self) -> str:
+    def _get_atomic_energy_op_name(self) -> str:
         """
         Return the name of the atomic energy tensor.
         """
-        return self._y_atomic_op_name
+        return "Output/Energy/atomic"
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -909,8 +908,8 @@ class BasicNN:
             with tf.name_scope("Metadata/"):
                 timestamp_node = tf.constant(
                     str(datetime.today()), name='timestamp')
-                y_atomic_node = tf.constant(nn._get_atomic_energy_tensor_name(),
-                                            name="y_atomic")
+                y_atomic_node = tf.constant(nn._get_atomic_energy_op_name(),
+                                            name="atomic")
                 fp_prec_node = tf.constant(
                     get_float_precision().name, name='precision')
                 tf_version_node = tf.constant(tf.__version__, name='tf_version')

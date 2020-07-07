@@ -43,6 +43,9 @@ class SymmetryFunctionNN(AtomicNN):
                  fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
                  use_resnet_dt=True,
+                 temperature_dependent=False,
+                 temperature_layers=(128, 128),
+                 temperature_activation='softplus',
                  eta=np.array([0.05, 4.0, 20.0, 80.0]),
                  omega=np.asarray([0.0]),
                  beta=np.asarray([0.005]),
@@ -59,6 +62,9 @@ class SymmetryFunctionNN(AtomicNN):
             atomic_static_energy=atomic_static_energy,
             use_resnet_dt=use_resnet_dt,
             minmax_scale=minmax_scale,
+            temperature_dependent=temperature_dependent,
+            temperature_layers=temperature_layers,
+            temperature_activation=temperature_activation,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 

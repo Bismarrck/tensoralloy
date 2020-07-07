@@ -49,12 +49,14 @@ class EnergyOps:
     eentropy: the electron entropy S
     enthalpy: the enthalpy H = U + PV
     free_energy: electron free energy F = U - T*S
+    atomic: energy for each atom
 
     """
     energy: tf.Tensor
     eentropy: tf.Tensor
     enthalpy: tf.Tensor
     free_energy: tf.Tensor
+    atomic: tf.Tensor
 
 
 @add_slots

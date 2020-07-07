@@ -463,18 +463,18 @@ class Tersoff(BasicNN):
             The energy tensors.
 
         """
-        y_atomic = tf.identity(outputs, name='y_atomic')
+        atomic_energy = tf.identity(outputs, name='atomic/raw')
         ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
         with tf.name_scope("Mask"):
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-            y_mask = tf.multiply(y_atomic, mask, name='mask')
-            self._y_atomic_op_name = y_mask.name
+        atomic_energy = tf.multiply(atomic_energy, mask, name='atomic')
         energy = tf.reduce_sum(
-            y_mask, axis=axis, keepdims=False, name=name)
+            atomic_energy, axis=axis, keepdims=False, name=name)
         enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
             log_tensor(enthalpy)
-        return EnergyOps(energy, tf.no_op('eentropy'), enthalpy, energy)
+        return EnergyOps(
+            energy, tf.no_op('eentropy'), enthalpy, energy, atomic_energy)

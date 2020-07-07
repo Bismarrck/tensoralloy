@@ -90,6 +90,15 @@ class AtomicNN(BasicNN):
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
+    def _get_atomic_energy_op_name(self):
+        """
+        The Op for calculating atomic energies.
+        """
+        if self._temperature_dependent:
+            return "Output/Energy/E/atomic"
+        else:
+            return "Output/Energy/U/atomic"
+
     def _get_atomic_descriptors(self,
                                 universal_descriptors,
                                 mode: tf_estimator.ModeKeys,
@@ -285,7 +294,7 @@ class AtomicNN(BasicNN):
                             s = _build_ann(h, element, "S", "S/atomic")
                             ts = tf.multiply(
                                 features["etemperature"], s, name='TS')
-                            y = tf.math.subtract(u, ts, name="F")
+                            y = tf.subtract(u, ts, name="F")
                             outputs['energy'].append(u)
                             outputs['eentropy'].append(s)
                             outputs['free_energy'].append(y)
@@ -293,7 +302,7 @@ class AtomicNN(BasicNN):
                             y = _build_ann(x, element, None, 'U')
                             if verbose:
                                 log_tensor(y)
-                            outputs['energy'].append(y)
+                            outputs['free_energy'].append(y)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
@@ -302,7 +311,7 @@ class AtomicNN(BasicNN):
 
         Parameters
         ----------
-        outputs : List[tf.Tensor]
+        outputs : Dict[str, [tf.Tensor]]
             A list of `tf.Tensor` as the outputs of the ANNs.
         features : dict
             A dict of input tensors.
@@ -317,20 +326,38 @@ class AtomicNN(BasicNN):
             The energy tensors.
 
         """
-        y_atomic = tf.concat(outputs, axis=1, name='atomic/raw')
         ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
         with tf.name_scope("Mask"):
-            if ndims == 1:
-                y_atomic = tf.squeeze(y_atomic, axis=0)
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-            y_mask = tf.multiply(y_atomic, mask, name='mask')
-        y_atomic = tf.identity(y_mask, name='atomic')
-        energy = tf.reduce_sum(
-            y_atomic, axis=axis, keepdims=False, name='energy')
-        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
+
+        def _apply_mask(name: str):
+            name_map = {
+                'energy': 'U',
+                'eentropy': 'S',
+                'free_energy': 'E'
+            }
+            with tf.name_scope(name_map[name]):
+                y_atomic = tf.concat(outputs[name], axis=1, name='atomic/raw')
+                if ndims == 1:
+                    y_atomic = tf.squeeze(y_atomic, axis=0)
+                y_atomic = tf.multiply(y_atomic, mask, name='atomic')
+            y_sum = tf.reduce_sum(
+                y_atomic, axis=axis, keepdims=False, name=name)
+            return y_sum, y_atomic
+
+        if self._temperature_dependent:
+            free_energy, atomic_energy = _apply_mask('free_energy')
+            eentropy = _apply_mask('eentropy')[0]
+            energy = _apply_mask('energy')[0]
+        else:
+            eentropy = tf.no_op("eentropy")
+            energy, atomic_energy = _apply_mask('energy')
+            free_energy = energy
+
+        enthalpy = self._get_enthalpy_op(features, free_energy, verbose=verbose)
         if verbose:
-            log_tensor(energy)
+            log_tensor(free_energy)
             log_tensor(enthalpy)
-        return EnergyOps(energy, tf.no_op('eentropy'), enthalpy, energy)
+        return EnergyOps(energy, eentropy, enthalpy, free_energy, atomic_energy)
