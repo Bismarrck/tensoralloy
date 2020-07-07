@@ -43,6 +43,9 @@ class DeepPotSE(AtomicNN):
                  use_atomic_static_energy=True,
                  fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
+                 temperature_dependent=False,
+                 temperature_layers=(128, 128),
+                 temperature_activation='softplus',
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -60,6 +63,9 @@ class DeepPotSE(AtomicNN):
             use_atomic_static_energy=use_atomic_static_energy,
             fixed_atomic_static_energy=fixed_atomic_static_energy,
             atomic_static_energy=atomic_static_energy,
+            temperature_dependent=temperature_dependent,
+            temperature_layers=temperature_layers,
+            temperature_activation=temperature_activation,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
@@ -74,21 +80,13 @@ class DeepPotSE(AtomicNN):
         """
         Return a JSON serializable dict representation of this `BasicNN`.
         """
-        return {"class": self.__class__.__name__,
-                "elements": self._elements,
-                "hidden_sizes": self._hidden_sizes,
-                "activation": self._activation,
-                "kernel_initializer": self._kernel_initializer,
-                "m1": self._m1,
-                "m2": self._m2,
-                "rcs": self._rcs,
-                "embedding_activation": self._embedding_activation,
-                "embedding_sizes": self._embedding_sizes,
-                "use_resnet_dt": self._use_resnet_dt,
-                'use_atomic_static_energy': self._use_atomic_static_energy,
-                'fixed_atomic_static_energy': self._fixed_atomci_static_energy,
-                "minimize_properties": self._minimize_properties,
-                "export_properties": self._export_properties}
+        d = super(DeepPotSE, self).as_dict()
+        d.update({"m1": self._m1,
+                  "m2": self._m2,
+                  "rcs": self._rcs,
+                  "embedding_activation": self._embedding_activation,
+                  "embedding_sizes": self._embedding_sizes})
+        return d
 
     def _build_embedding_nn(self,
                             partitions: dict,

@@ -20,7 +20,6 @@ from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
-from tensoralloy.nn.atomic.sf import TemperatureDependentSymmetryFunctionNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
@@ -154,6 +153,9 @@ class TrainingManager:
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
             'use_resnet_dt': configs['use_resnet_dt'],
+            'temperature_dependent': configs['temperature_dependent'],
+            'temperature_layers': configs['temperature_layers'],
+            'temperature_activation': configs['temperature_activation'],
         }
         params.update(kwargs)
 
@@ -161,11 +163,7 @@ class TrainingManager:
             for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
                         'cutoff_function', 'minmax_scale'):
                 params[key] = configs['sf'][key]
-            ft = configs['sf'].pop('finite_temperature')
-            if ft:
-                return TemperatureDependentSymmetryFunctionNN(**params)
-            else:
-                return SymmetryFunctionNN(**params)
+            return SymmetryFunctionNN(**params)
         else:
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
