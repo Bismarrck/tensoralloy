@@ -846,7 +846,7 @@ class UniversalTransformer(DescriptorTransformer):
             g4 = None
         return g2, g4
 
-    def get_np_features(self, atoms: Atoms):
+    def get_np_feed_dict(self, atoms: Atoms):
         """
         Return a dict of features (Numpy or Python objects).
         """
@@ -899,7 +899,7 @@ class UniversalTransformer(DescriptorTransformer):
             self._initialize_placeholders()
         placeholders = self._placeholders
 
-        for key, value in self.get_np_features(atoms).items():
+        for key, value in self.get_np_feed_dict(atoms).items():
             feed_dict[placeholders[key]] = value
 
         return feed_dict
@@ -910,7 +910,7 @@ class UniversalTransformer(DescriptorTransformer):
         """
         feed_dict = dict()
         with tf.name_scope("Constants"):
-            for key, val in self.get_np_features(atoms).items():
+            for key, val in self.get_np_feed_dict(atoms).items():
                 feed_dict[key] = tf.convert_to_tensor(val, name=key)
         return feed_dict
 

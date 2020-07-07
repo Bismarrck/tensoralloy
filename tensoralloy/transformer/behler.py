@@ -261,7 +261,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
             nijk_max=None,
             mode=tf_estimator.ModeKeys.PREDICT)
 
-    def _get_np_features(self, atoms: Atoms):
+    def get_np_feed_dict(self, atoms: Atoms):
         """
         Return a dict of features (Numpy or Python objects).
         """
@@ -305,7 +305,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         if not self._placeholders:
             self._initialize_placeholders()
         placeholders = self._placeholders
-        for key, value in self._get_np_features(atoms).items():
+        for key, value in self.get_np_feed_dict(atoms).items():
             feed_dict[placeholders[key]] = value
         return feed_dict
 
@@ -315,7 +315,7 @@ class SymmetryFunctionTransformer(SymmetryFunction, DescriptorTransformer):
         """
         feed_dict = {}
         with tf.name_scope("Constants"):
-            for key, value in self._get_np_features(atoms).items():
+            for key, value in self.get_np_feed_dict(atoms).items():
                 feed_dict[key] = tf.convert_to_tensor(value, name=key)
             return feed_dict
 

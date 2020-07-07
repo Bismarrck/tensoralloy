@@ -25,14 +25,14 @@ def test_get_map():
     with tf.Graph().as_default():
         clf = UniversalTransformer(['Ni'], rcut=4.5, acut=4.5, angular=True,
                                    use_computed_dists=True)
-        descriptors = clf.build_graph(clf.get_np_features(atoms))
+        descriptors = clf.build_graph(clf.get_constant_features(atoms))
         with tf.Session() as sess:
             comput = sess.run(descriptors)
 
     with tf.Graph().as_default():
         clf = UniversalTransformer(['Ni'], rcut=4.5, acut=4.5, angular=True,
                                    use_computed_dists=False)
-        descriptors = clf.build_graph(clf.get_np_features(atoms))
+        descriptors = clf.build_graph(clf.get_constant_features(atoms))
         with tf.Session() as sess:
             direct = sess.run(descriptors)
 

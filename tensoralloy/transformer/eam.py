@@ -180,7 +180,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
                           nij_max=None,
                           dtype=get_float_dtype().as_numpy_dtype)
 
-    def _get_np_features(self, atoms: Atoms):
+    def get_np_feed_dict(self, atoms: Atoms):
         """
         Return a dict of features (Numpy or Python objects).
         """
@@ -229,7 +229,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
             self._initialize_placeholders()
         placeholders = self._placeholders
 
-        for key, value in self._get_np_features(atoms).items():
+        for key, value in self.get_np_feed_dict(atoms).items():
             if self._use_direct_rij \
                     and key in ("g2.ilist", "g2.jlist", "g2.n1"):
                 continue
@@ -243,7 +243,7 @@ class EAMTransformer(EAM, DescriptorTransformer):
         """
         feed_dict = dict()
         with tf.name_scope("Constants"):
-            for key, val in self._get_np_features(atoms).items():
+            for key, val in self.get_np_feed_dict(atoms).items():
                 feed_dict[key] = tf.convert_to_tensor(val, name=key)
         return feed_dict
 
