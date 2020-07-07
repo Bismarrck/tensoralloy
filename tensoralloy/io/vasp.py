@@ -151,12 +151,6 @@ def read_vasp_xml(filename='vasprun.xml',
                                        constraint=constraints,
                                        pbc=True)
 
-                elif elem.tag == 'dipole':
-                    dblock = elem.find('v[@name="dipole"]')
-                    if dblock is not None:
-                        dipole = np.array([float(val)
-                                           for val in dblock.text.split()])
-
                 elif elem.tag == 'incar':
                     subelem = elem.find("i[@name='SIGMA']")
                     if subelem is not None:
@@ -176,6 +170,8 @@ def read_vasp_xml(filename='vasprun.xml',
     if calculation:
         if isinstance(index, int):
             steps = [calculation[index]]
+        elif isinstance(index, (list, tuple)):
+            steps = [calculation[i] for i in index]
         else:
             steps = calculation[index]
     else:
@@ -203,7 +199,8 @@ def read_vasp_xml(filename='vasprun.xml',
         if sigma is None or np.abs(sigma) < 1e-6:
             eentropy = 0
         else:
-            eentropy = -eentropy / sigma
+            # electron entropy should be positive
+            eentropy = np.abs(-eentropy / sigma)
 
         free_energy = float(step.find('energy/i[@name="e_fr_energy"]').text)
         energy = free_energy + de
