@@ -54,11 +54,26 @@ def __get_xml_parameter(par):
 
 
 def read_vasp_xml(filename='vasprun.xml',
-                  index=-1):
+                  index=-1,
+                  finite_temperature=False):
     """Parse vasprun.xml file.
 
     Reads unit cell, atom positions, energies, forces, and constraints
     from vasprun.xml file
+
+    Parameters
+    ----------
+    filename : str
+        The vasprun xml.
+    index : slice or int or List[str]
+        Can be a slice, an int or a list of int.
+    finite_temperature : bool
+        A boolean. If True, the calculations will be treated as
+        'finite temperature' calculations, The internal energy U or `energy
+        without entropy` will be used as `energy`. Otherwise all calculations
+        within this file will be considered as zero-temperature, hence
+        `E(sigma->0)` will be used as `energy`.
+
     """
 
 
@@ -266,6 +281,12 @@ def read_vasp_xml(filename='vasprun.xml',
                                                      spin, ikpt, eps_n, f_n))
         if len(kpoints) == 0:
             kpoints = None
+
+        if finite_temperature:
+            if sigma is None:
+                raise ValueError("For finite temperature calculations "
+                                 "`ISIGMA` should be non-zero")
+            energy = free_energy + eentropy * sigma
 
         atoms = atoms_init.copy()
         atoms.set_cell(cell)
