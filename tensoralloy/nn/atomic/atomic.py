@@ -292,8 +292,9 @@ class AtomicNN(BasicNN):
 
                             u = _build_ann(h, element, "U", "U/atomic")
                             s = _build_ann(h, element, "S", "S/atomic")
-                            ts = tf.multiply(
-                                features["etemperature"], s, name='TS')
+                            t = tf.reshape(
+                                features["etemperature"], (-1, 1), name='T')
+                            ts = tf.multiply(t, s, name='TS')
                             y = tf.subtract(u, ts, name="F")
                             outputs['energy'].append(u)
                             outputs['eentropy'].append(s)
