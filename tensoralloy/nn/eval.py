@@ -1,4 +1,4 @@
-#!coding=utf-8
+ #!coding=utf-8
 """
 This module defines evaluation metrics and hooks for `BasicNN`.
 """
@@ -76,16 +76,23 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
         n_atoms = tf.cast(n_atoms, labels["energy"].dtype, name='n_atoms')
 
         with tf.name_scope("Energy"):
-            x = labels["energy"]
-            y = predictions["energy"]
-            xn = x / n_atoms
-            yn = y / n_atoms
-            ops_dict = {
-                'Energy/mae': tf.metrics.mean_absolute_error(x, y),
-                'Energy/mse': tf.metrics.mean_squared_error(x, y),
-                'Energy/mae/atom': tf.metrics.mean_absolute_error(xn, yn),
+            name_map = {
+                'energy': 'Energy',
+                'free_energy': 'E(free)',
+                'eentropy': 'S',
             }
-            metrics.update(ops_dict)
+            for prop, desc in name_map.items():
+                if prop in eval_properties:
+                    x = labels[prop]
+                    y = predictions[prop]
+                    xn = x / n_atoms
+                    yn = y / n_atoms
+                    ops_dict = {
+                        f'{desc}/mae': tf.metrics.mean_absolute_error(x, y),
+                        f'{desc}/mse': tf.metrics.mean_squared_error(x, y),
+                        f'{desc}/mae/atom': tf.metrics.mean_absolute_error(
+                            xn, yn)}
+                    metrics.update(ops_dict)
 
         if 'forces' in eval_properties:
             with tf.name_scope("Forces"):

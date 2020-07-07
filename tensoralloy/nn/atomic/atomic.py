@@ -12,7 +12,9 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.nn.dataclasses import EnergyOps
+from tensoralloy.nn.dataclasses import EnergyOps, LossParameters
+from tensoralloy.nn.losses import LossMethod
+from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
@@ -194,6 +196,97 @@ class AtomicNN(BasicNN):
             x = tf.concat((x, etemp), axis=2, name='x')
         return x
 
+    def _get_eentropy_outputs(self,
+                              h: tf.Tensor,
+                              t: tf.Tensor,
+                              element: str,
+                              collections: List[str],
+                              verbose=True):
+        """
+        Model electron entropy S using the given features 'h'.
+
+        Parameters
+        ----------
+        h : tf.Tensor
+            Input features.
+        t : tf.Tensor
+            Electron temperature (eV).
+        element : str
+            The target element.
+        collections : List[str]
+            A list of str as the collections where the variables should be
+            added.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        """
+        with tf.variable_scope("S"):
+            eentropy = convolution1x1(
+                h,
+                activation_fn=get_activation_fn(self._activation),
+                hidden_sizes=self._hidden_sizes[element],
+                num_out=1,
+                l2_weight=1.0,
+                collections=collections,
+                output_bias=True,
+                output_bias_mean=0.0,
+                use_resnet_dt=self._use_resnet_dt,
+                kernel_initializer=self._kernel_initializer,
+                variable_scope=None,
+                verbose=verbose)
+            eentropy = tf.squeeze(eentropy, axis=2, name="atomic/raw")
+            k = tf.constant(26.78, dtype=h.dtype, name='k')
+            coef = tf.reshape(tf.multiply(k, t, name='coef'), (-1, 1))
+            return tf.multiply(coef, eentropy, name='atomic')
+
+    def _get_internal_energy_outputs(self,
+                                     h: tf.Tensor,
+                                     t: tf.Tensor,
+                                     element: str,
+                                     atomic_static_energy: float,
+                                     collections: List[str],
+                                     verbose=True):
+        """
+        Model internal energy U using the given features 'h'.
+
+        Parameters
+        ----------
+        h : tf.Tensor
+            Input features.
+        t : tf.Tensor
+            Electron temperature (eV).
+        element : str
+            The target element.
+        atomic_static_energy : float
+            Atomic static energy, used as the bias unit of the output layer.
+        collections : List[str]
+            A list of str as the collections where the variables should be
+            added.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        """
+        with tf.variable_scope("U"):
+            energy = convolution1x1(
+                h,
+                activation_fn=get_activation_fn(self._activation),
+                hidden_sizes=self._hidden_sizes[element],
+                num_out=1,
+                l2_weight=1.0,
+                collections=collections,
+                output_bias=True,
+                output_bias_mean=atomic_static_energy,
+                use_resnet_dt=self._use_resnet_dt,
+                kernel_initializer=self._kernel_initializer,
+                variable_scope=None,
+                verbose=verbose)
+            energy = tf.squeeze(energy, axis=2, name="atomic/raw")
+            eb = tf.constant(5.884747842039223, dtype=h.dtype, name='eb')
+            a = tf.constant(0.5251556507716901, dtype=h.dtype, name='a')
+            ta = tf.pow(t, a, name='Ta')
+            coef = tf.reshape(tf.multiply(eb, ta, name='coef'), (-1, 1))
+            return tf.multiply(coef, energy, name='atomic')
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -225,24 +318,6 @@ class AtomicNN(BasicNN):
         collections = [self.default_collection]
         activation_fn = get_activation_fn(self._activation)
 
-        def _build_ann(val, symbol, variable_scope, output_name):
-            conv = convolution1x1(
-                val,
-                activation_fn=activation_fn,
-                hidden_sizes=self._hidden_sizes[symbol],
-                num_out=1,
-                l2_weight=1.0,
-                collections=collections,
-                output_bias=self._use_atomic_static_energy,
-                output_bias_mean=bias_mean,
-                fixed_output_bias=self._fixed_atomci_static_energy,
-                use_resnet_dt=self._use_resnet_dt,
-                kernel_initializer=self._kernel_initializer,
-                variable_scope=variable_scope,
-                verbose=verbose)
-            return tf.squeeze(conv, axis=2, name=output_name)
-
-
         with tf.variable_scope("ANN"):
 
             outputs = {'energy': [], 'eentropy': [], 'free_energy': []}
@@ -255,6 +330,7 @@ class AtomicNN(BasicNN):
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
                     else:
                         bias_mean = 0.0
+
                     with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                         if verbose:
                             log_tensor(x)
@@ -286,12 +362,23 @@ class AtomicNN(BasicNN):
                                 collections=collections,
                                 kernel_initializer=self._kernel_initializer,
                                 output_bias=True,
+                                output_bias_mean=0.0,
                                 use_resnet_dt=self._use_resnet_dt,
                                 variable_scope="T",
                                 verbose=verbose)
-
-                            u = _build_ann(h, element, "U", "U/atomic")
-                            s = _build_ann(h, element, "S", "S/atomic")
+                            s = self._get_eentropy_outputs(
+                                h,
+                                t=features["etemperature"],
+                                element=element,
+                                collections=collections,
+                                verbose=verbose)
+                            u = self._get_internal_energy_outputs(
+                                h,
+                                t=features["etemperature"],
+                                element=element,
+                                atomic_static_energy=bias_mean,
+                                collections=collections,
+                                verbose=verbose)
                             t = tf.reshape(
                                 features["etemperature"], (-1, 1), name='T')
                             ts = tf.multiply(t, s, name='TS')
@@ -300,7 +387,21 @@ class AtomicNN(BasicNN):
                             outputs['eentropy'].append(s)
                             outputs['free_energy'].append(y)
                         else:
-                            y = _build_ann(x, element, None, 'U')
+                            y = convolution1x1(
+                                x,
+                                activation_fn=activation_fn,
+                                hidden_sizes=self._hidden_sizes[element],
+                                num_out=1,
+                                l2_weight=1.0,
+                                collections=collections,
+                                output_bias=self._use_atomic_static_energy,
+                                output_bias_mean=bias_mean,
+                                fixed_output_bias=self._fixed_atomci_static_energy,
+                                use_resnet_dt=self._use_resnet_dt,
+                                kernel_initializer=self._kernel_initializer,
+                                variable_scope=None,
+                                verbose=verbose)
+                            y = tf.squeeze(y, axis=2, name="atomic")
                             if verbose:
                                 log_tensor(y)
                             outputs['free_energy'].append(y)
@@ -359,6 +460,40 @@ class AtomicNN(BasicNN):
 
         enthalpy = self._get_enthalpy_op(features, free_energy, verbose=verbose)
         if verbose:
-            log_tensor(free_energy)
-            log_tensor(enthalpy)
+            if self._temperature_dependent:
+                log_tensor(free_energy)
+                log_tensor(eentropy)
+            log_tensor(energy)
         return EnergyOps(energy, eentropy, enthalpy, free_energy, atomic_energy)
+
+    def _get_energy_loss(self,
+                         predictions,
+                         labels,
+                         n_atoms,
+                         loss_parameters: LossParameters,
+                         collections) -> Dict[str, tf.Tensor]:
+        """
+        The energy loss or energy losses if temperature effect is considered.
+        """
+        if not self._temperature_dependent:
+            return super(AtomicNN, self)._get_energy_loss(
+                predictions, labels, n_atoms, loss_parameters, collections)
+
+        losses = {}
+
+        with tf.name_scope("Energy"):
+            for scope_name, prop in {"U": "energy",
+                                     "F": "free_energy",
+                                     "S": "eentropy"}.items():
+                if prop in self._minimize_properties:
+                    loss = loss_ops.get_energy_loss(
+                        labels=labels[prop],
+                        predictions=predictions[prop],
+                        n_atoms=n_atoms,
+                        loss_weight=loss_parameters.energy.weight,
+                        per_atom_loss=loss_parameters.energy.per_atom_loss,
+                        method=LossMethod[loss_parameters.energy.method],
+                        collections=collections,
+                        name_scope=scope_name)
+                    losses[prop] = loss
+        return losses

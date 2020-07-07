@@ -69,6 +69,8 @@ class ExportablePropertyError(_PropertyError):
 
 all_properties = (
     StructuralProperty(name='energy'),
+    StructuralProperty(name='eentropy'),
+    StructuralProperty(name='free_energy'),
     StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
     StructuralProperty(name="partial_forces", exportable=True,
@@ -439,6 +441,25 @@ class BasicNN:
             log_tensor(hessian)
         return hessian
 
+    def _get_energy_loss(self,
+                         predictions,
+                         labels,
+                         n_atoms,
+                         loss_parameters: LossParameters,
+                         collections) -> Dict[str, tf.Tensor]:
+        """
+        Return energy loss(es).
+        """
+        loss = loss_ops.get_energy_loss(
+            labels=labels["energy"],
+            predictions=predictions["energy"],
+            n_atoms=n_atoms,
+            loss_weight=loss_parameters.energy.weight,
+            per_atom_loss=loss_parameters.energy.per_atom_loss,
+            method=LossMethod[loss_parameters.energy.method],
+            collections=collections)
+        return {"energy": loss}
+
     def get_total_loss(self, predictions, labels, n_atoms, atom_masks,
                        loss_parameters: LossParameters,
                        mode=tf_estimator.ModeKeys.TRAIN):
@@ -500,14 +521,11 @@ class BasicNN:
             else:
                 collections = None
 
-            losses = dict()
-            losses["energy"] = loss_ops.get_energy_loss(
-                labels=labels["energy"],
-                predictions=predictions["energy"],
+            losses = self._get_energy_loss(
+                predictions=predictions,
+                labels=labels,
                 n_atoms=n_atoms,
-                loss_weight=loss_parameters.energy.weight,
-                per_atom_loss=loss_parameters.energy.per_atom_loss,
-                method=LossMethod[loss_parameters.energy.method],
+                loss_parameters=loss_parameters,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:

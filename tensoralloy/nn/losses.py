@@ -109,7 +109,8 @@ def _get_weighted_loss(loss_weight: float, raw_loss: tf.Tensor,
 
 def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
                     collections=None, per_atom_loss=False,
-                    method=LossMethod.rmse):
+                    method=LossMethod.rmse,
+                    name_scope="Energy"):
     """
     Return the loss tensor of the energy.
 
@@ -131,6 +132,8 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
         A list of str as the collections where the loss tensors should be added.
     method : LossMethod
         The loss method to use.
+    name_scope : str
+        The name scope for this function.
 
     Returns
     -------
@@ -140,7 +143,7 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
     """
     assert method != LossMethod.rrmse
 
-    with tf.name_scope("Energy"):
+    with tf.name_scope(name_scope):
         assert labels.shape.ndims == 1
         assert predictions.shape.ndims == 1
         if per_atom_loss:
