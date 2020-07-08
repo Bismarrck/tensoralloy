@@ -228,7 +228,7 @@ class AtomicNN(BasicNN):
                 num_out=1,
                 l2_weight=1.0,
                 collections=collections,
-                output_bias=True,
+                output_bias=False,
                 output_bias_mean=0.0,
                 use_resnet_dt=self._use_resnet_dt,
                 kernel_initializer=self._kernel_initializer,
@@ -236,8 +236,12 @@ class AtomicNN(BasicNN):
                 verbose=verbose)
             eentropy = tf.squeeze(eentropy, axis=2, name="atomic/raw")
             k = tf.constant(26.78, dtype=h.dtype, name='k')
-            coef = tf.reshape(tf.multiply(k, t, name='coef'), (-1, 1))
-            return tf.multiply(coef, eentropy, name='atomic')
+            coef = tf.multiply(k, t, name='coef')
+            b = tf.constant(49.4281, dtype=h.dtype, name='b')
+            avg = tf.multiply(b, t, name='bias')
+            eentropy = tf.multiply(coef, eentropy, name='kt')
+            eentropy = tf.add(eentropy, avg, name='atomic')
+            return eentropy
 
     def _get_internal_energy_outputs(self,
                                      h: tf.Tensor,
@@ -284,7 +288,7 @@ class AtomicNN(BasicNN):
             eb = tf.constant(5.884747842039223, dtype=h.dtype, name='eb')
             a = tf.constant(0.5251556507716901, dtype=h.dtype, name='a')
             ta = tf.pow(t, a, name='Ta')
-            coef = tf.reshape(tf.multiply(eb, ta, name='coef'), (-1, 1))
+            coef = tf.multiply(eb, ta, name='coef')
             return tf.multiply(coef, energy, name='atomic')
 
     def _get_model_outputs(self,
@@ -351,6 +355,8 @@ class AtomicNN(BasicNN):
                                 max_occurs=atomic_descriptors.max_occurs)
                             if verbose:
                                 log_tensor(x)
+                            t = tf.reshape(
+                                features["etemperature"], (-1, 1), name='T')
                             etemp_fn = get_activation_fn(
                                 self._temperature_activation)
                             h = convolution1x1(
@@ -368,19 +374,17 @@ class AtomicNN(BasicNN):
                                 verbose=verbose)
                             s = self._get_eentropy_outputs(
                                 h,
-                                t=features["etemperature"],
+                                t=t,
                                 element=element,
                                 collections=collections,
                                 verbose=verbose)
                             u = self._get_internal_energy_outputs(
                                 h,
-                                t=features["etemperature"],
+                                t=t,
                                 element=element,
                                 atomic_static_energy=bias_mean,
                                 collections=collections,
                                 verbose=verbose)
-                            t = tf.reshape(
-                                features["etemperature"], (-1, 1), name='T')
                             ts = tf.multiply(t, s, name='TS')
                             y = tf.subtract(u, ts, name="F")
                             outputs['energy'].append(u)
