@@ -86,6 +86,26 @@ beta = [0.005]
 gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
 
+[nn.atomic.grap]
+multipole = 0
+algorithm = 'sf'
+cutoff_function = 'cosine'
+minmax_scale = false
+
+[nn.atomic.grap.sf]
+eta = [0.1, 0.5, 1.0, 4.0]
+omega = [0.0]
+
+[nn.atomic.grap.density]
+A = [1.0]
+beta = [1.0, 2.0, 3.0, 4.0]
+re = [4.0]
+
+[nn.atomic.grap.morse]
+D = [1.0]
+gamma = [0.5, 0.6]
+r0 = [1.5, 2.5]
+
 [nn.atomic.layers]
 
 [nn.eam]
