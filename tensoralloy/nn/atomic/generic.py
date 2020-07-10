@@ -3,10 +3,15 @@ from __future__ import print_function
 
 import tensorflow as tf
 
+from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict
 from sklearn.model_selection import ParameterGrid
 
+from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
+from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp
 
 available_algorithms = ['sf', 'morse', 'density']
@@ -39,7 +44,7 @@ class Algorithm:
         """
         return {"algorithm": self.name, "parameters": self._params}
     
-    def compute(self, tau: int, rij: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         
@@ -60,7 +65,7 @@ class SymmetryFunctionAlgorithm(Algorithm):
     required_keys = ['eta', 'omega']
     name = "sf"
     
-    def compute(self, tau: int, rij: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -68,6 +73,7 @@ class SymmetryFunctionAlgorithm(Algorithm):
             self._grid[tau]['omega'], dtype=dtype, name='omega')
         eta = tf.convert_to_tensor(
             self._grid[tau]['eta'], dtype=dtype, name='eta')
+        rc2 = tf.multiply(rc, rc, name='rc2')
         z = tf.math.truediv(
             tf.square(tf.math.subtract(rij, omega)), rc2, name='z')
         v = tf.exp(tf.negative(tf.math.multiply(z, eta)))
@@ -82,7 +88,7 @@ class MorseAlgorithm(Algorithm):
     required_keys = ['D', 'gamma', 'r0']
     name = "morse"
     
-    def compute(self, tau: int, rij: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -103,7 +109,7 @@ class DensityExpAlgorithm(Algorithm):
     required_keys = ['A', 'beta', 're']
     name = "density
     
-    def compute(self, tau: int, rij: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -117,6 +123,9 @@ class DensityExpAlgorithm(Algorithm):
     
 
 class GenericRadialAtomicPotential(AtomicNN):
+    """
+    The generic atomic potential with polarized radial interactions.
+    """
     
     def __init__(self,
                  elements: List[str],
@@ -158,6 +167,7 @@ class GenericRadialAtomicPotential(AtomicNN):
         
         if algorithm not in available_algorithms:
             raise ValueError(f"GRAP: algorithm '{algorithm}' is not implemented")
+        assert 0 <= multipole <= 2 
         
         self._algorithm = initialize_algorithm(algorithm, parameters)
         self._multipole = multipole
@@ -198,31 +208,70 @@ class GenericRadialAtomicPotential(AtomicNN):
         """
         Apply the descriptor functions to all partitions.
         """
+        xyz_map = {
+            0: 'x', 1: 'y', 2: 'z'
+        }
+        multipole_map = {
+            1: [0, 1, 2],
+            2: [(0, 1), (0, 2), (1, 2)]
+        }
+        
         clf = self._transformer
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
-        rc2 = tf.convert_to_tensor(clf.rcut**2, dtype=dtype, name='rc2')
+        one = tf.convert_to_tensor(1.0, dtype=dtype, name='one')
         outputs = {element: [None] * len(self._elements)
                    for element in self._elements}
         for kbody_term, (dists, masks) in partitions.items():
             center = get_elements_from_kbody_term(kbody_term)[0]
             with tf.variable_scope(f"{kbody_term}"):
                 rij = tf.squeeze(dists[0], axis=1, name='rij')
-                ijx = tf.squeeze(dists[1], axis=1, name='ijx')
-                ijy = tf.squeeze(dists[2], axis=1, name='ijy')
-                ijz = tf.squeeze(dists[3], axis=1, name='ijz')
+                dij = tf.squeeze(dists[1:], axis=2, name='dij')
                 masks = tf.squeeze(masks, axis=1, name='masks')
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 gtau = []
+                
+                def _post_compute(fx):
+                    """
+                    Apply the smooth cutoff values and zero masks to `fx`.
+                    Then sum `fx` for each atom.
+                    """
+                    gx = tf.math.multiply(fx, fc)
+                    gx = tf.math.multiply(fx, masks, name=f'gx/masked')
+                    gx = tf.expand_dims(
+                        tf.reduce_sum(v, axis=[-1, -2], keep_dims=False),
+                        axis=-1, name='gx')
+                    return gx
+                
                 for tau in range(len(self._algorithm)):
                     with tf.name_scope(f"{tau}"):
-                        v = self._algorithm.compute(tau, rij, dtype=dtype)
-                        v = tf.math.multiply(v, fc)
-                        v = tf.math.multiply(v, masks, name='v/masked')
-                        g = tf.expand_dims(
-                            tf.reduce_sum(v, axis=[-1, -2], keep_dims=False),
-                            axis=-1, name='g')
-                        gtau.append(g)
+                        v = self._algorithm.compute(
+                            tau, rij, rc, dtype=dtype)
+                        # The standard central-force model
+                        if self._multipole >= 0:
+                            with tf.name_scope("r"):
+                                gtau.append(_post_compute(v))
+                        # Dipole effect
+                        if self._multipole >= 1:
+                            for i in multipole_map[1]:
+                                itag = xyz_map[i]
+                                with tf.name_scope(f"r{itag}"):
+                                    coef = tf.div_no_nan(
+                                        dij[i], rij, name='coef')
+                                    fx = tf.multiply(v, coef, name='fx')
+                                    gtau.append(_post_compute(fx))
+                        # Quadrupole effect
+                        if self._multipole >= 2:
+                            for (i, j) in multipole_map[2]:
+                                itag = xyz_map[i]
+                                jtag = xyz_map[j]
+                                with tf.name_scope(f"r{itag}{jtag}"):
+                                    coef = tf.div_no_nan(
+                                        dij[i] * dij[j], 
+                                        rij * rij, name='coef')
+                                    fx = tf.multiply(
+                                        v, coef, name='fx')
+                                    gtau.append(_post_compute(fx))      
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
@@ -232,4 +281,22 @@ class GenericRadialAtomicPotential(AtomicNN):
                 results[element] = tf.concat(
                     outputs[element], axis=-1, name=element)
             return results
-    
+
+    def _get_atomic_descriptors(self,
+                                universal_descriptors,
+                                mode: tf_estimator.ModeKeys,
+                                verbose=True):
+        """
+        Construct the computation graph for calculating descriptors.
+        """
+        clf = self._transformer
+        with tf.name_scope("Radial"):
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=universal_descriptors['radial'],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
+                mode=mode,
+                angular=False,
+                merge_symmetric=False)
+            descriptors = self.apply_pairwise_descriptor_functions(partitions)
+        return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)
