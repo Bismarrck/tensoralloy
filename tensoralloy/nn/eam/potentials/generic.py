@@ -14,21 +14,22 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def morse(r, D, gamma, r0, name='Morse'):
+def morse(r, d, gamma, r0, name='Morse'):
     """
     The generic Morse potential.
 
-        f(x) = D[ exp(-2 * gamma * (r - r0)) - 2 * exp(-gamma * (r - r0)) ]
+        f(x) = d * [ exp(-2 * gamma * (r - r0)) - 2 * exp(-gamma * (r - r0)) ]
 
     """
     with tf.name_scope(name):
         r = tf.convert_to_tensor(r, name='r')
         diff = tf.math.subtract(r, r0, name='diff')
-        g_diff = tf.multiply(gamma, diff, name='g_diff')
+        d = tf.convert_to_tensor(d, name='D')
+        gd = tf.multiply(gamma, diff, name='g_diff')
         dtype = r.dtype
         two = tf.constant(2.0, dtype=dtype)
-        c = tf.exp(-two * g_diff) - two * tf.exp(-g_diff)
-        return tf.multiply(c, D, name='value')
+        c = tf.exp(-two * gd) - two * tf.exp(-gd)
+        return tf.multiply(c, d, name='morse')
 
 
 def buckingham(r, A, rho, C, order=6, name='Buckingham'):
@@ -85,18 +86,34 @@ def mishin_polar(x, p1, p2, p3, rc, h, name=None):
         return polar
 
 
-def zhou_exp(r, A, B, C, r_eq, name=None):
+def density_exp(r, a, b, re, name=None):
+    """
+    The most widely used exponential density function.
+
+        f(r) = a * exp(-b * (r / re - 1))
+
+    """
+    with ops.name_scope(name, "Density", [r]):
+        r = tf.convert_to_tensor(r, name='r')
+        one = tf.convert_to_tensor(1.0, dtype=r.dtype, name='one')
+        x = tf.math.divide(r, re, name='x')
+        upper = tf.math.multiply(a, tf.exp(-b * (x - one)), name=name)
+        return uppper
+    
+
+def zhou_exp(r, a, b, c, re, order=20, name=None):
     """
     The exponential-form function proposed by Zhou.
 
-        f(r) = A * exp(-B * (r / r_eq - 1)) / (1 + (r / r_eq - C)**20)
-
+        f(r) = a * exp(-b * (r / re - 1)) / (1 + (r / re - c)**order)
+     
+    The default order is 20.
     """
     with ops.name_scope(name, "ZhouExp", [r]):
         r = tf.convert_to_tensor(r, name='r')
         one = tf.convert_to_tensor(1.0, dtype=r.dtype, name='one')
-        order = tf.convert_to_tensor(20.0, dtype=r.dtype, name='order')
-        x = tf.math.divide(r, r_eq, name='x')
-        upper = tf.math.multiply(A, tf.exp(-B * (x - one)), name='upper')
-        lower = tf.math.add(one, safe_pow(x - C, order))
+        order = tf.convert_to_tensor(order, dtype=r.dtype, name='order')
+        x = tf.math.divide(r, re, name='x')
+        upper = density_exp(r, a, b, re)
+        lower = tf.math.add(one, safe_pow(x - c, order))
         return tf.math.divide(upper, lower, name=name)
