@@ -217,8 +217,8 @@ class Zjw04(EamAlloyPotential):
                 kappa = self._get_shared_variable('kappa', r.dtype, el_a)
                 lamda = self._get_shared_variable('lamda', r.dtype, el_a)
                 phi = tf.subtract(
-                    zhou_exp(r, A=A, B=alpha, C=kappa, r_eq=r_eq, name='A'),
-                    zhou_exp(r, A=B, B=beta, C=lamda, r_eq=r_eq, name='B'),
+                    zhou_exp(r, a=A, b=alpha, c=kappa, re=r_eq, name='A'),
+                    zhou_exp(r, a=B, b=beta, c=lamda, re=r_eq, name='B'),
                     name='phi')
                 if verbose:
                     log_tensor(phi)
@@ -266,7 +266,7 @@ class Zjw04(EamAlloyPotential):
             f_eq = self._get_shared_variable('f_eq', r.dtype, element)
             beta = self._get_shared_variable('beta', r.dtype, element)
             lamda = self._get_shared_variable('lamda', r.dtype, element)
-            rho = zhou_exp(r, A=f_eq, B=beta, C=lamda, r_eq=r_eq)
+            rho = zhou_exp(r, a=f_eq, b=beta, c=lamda, re=r_eq)
             if verbose:
                 log_tensor(rho)
             return rho
@@ -675,8 +675,8 @@ class Zjw04xcp(Zjw04xc):
                 kappa = self._get_variable('kappa', dtype, *args)
                 lamda = self._get_variable('lamda', dtype, *args)
             phi = tf.subtract(
-                zhou_exp(r, A=A, B=alpha, C=kappa, r_eq=r_eq, name='A'),
-                zhou_exp(r, A=B, B=beta, C=lamda, r_eq=r_eq, name='B'),
+                zhou_exp(r, a=A, b=alpha, c=kappa, re=r_eq, name='A'),
+                zhou_exp(r, a=B, b=beta, c=lamda, re=r_eq, name='B'),
                 name='phi')
             if verbose:
                 log_tensor(phi)

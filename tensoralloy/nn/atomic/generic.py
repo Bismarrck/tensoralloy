@@ -1,16 +1,21 @@
-!#coding=utf-8
+#!coding=utf-8
+"""
+The GenericRadialAtomicPotential, GRAP
+"""
 from __future__ import print_function
 
+import numpy as np
 import tensorflow as tf
 
 from tensorflow_estimator import estimator as tf_estimator
-from typing import List, Dict
+from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp
 
@@ -29,10 +34,10 @@ class Algorithm:
         """
         Initialization method.
         """
-        for key in required_keys:
+        for key in self.required_keys:
             assert key in parameters and len(parameters[key]) >= 1
         self._params = {key: [float(x) for x in parameters[key]] 
-                        for key in required_keys}
+                        for key in self.required_keys}
         self._grid = ParameterGrid(**self._params)
     
     def __len__(self):
@@ -44,7 +49,8 @@ class Algorithm:
         """
         return {"algorithm": self.name, "parameters": self._params}
     
-    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
+                dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         
@@ -98,7 +104,7 @@ class MorseAlgorithm(Algorithm):
             self._grid[tau]['gamma'], dtype=dtype, name='gamma')
         r0 = tf.convert_to_tensor(
             self._grid[tau]['r0'], dtype=dtype, name='r0')
-        return morse(rij, D=d, gamma=gamma, r0=r0)
+        return morse(rij, d=d, gamma=gamma, r0=r0)
 
 
 class DensityExpAlgorithm(Algorithm):
@@ -107,7 +113,7 @@ class DensityExpAlgorithm(Algorithm):
     """
     
     required_keys = ['A', 'beta', 're']
-    name = "density
+    name = "density"
     
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
         """
@@ -169,7 +175,7 @@ class GenericRadialAtomicPotential(AtomicNN):
             raise ValueError(f"GRAP: algorithm '{algorithm}' is not implemented")
         assert 0 <= multipole <= 2 
         
-        self._algorithm = initialize_algorithm(algorithm, parameters)
+        self._algorithm = self.initialize_algorithm(algorithm, parameters)
         self._multipole = multipole
         self._cutoff_function = cutoff_function
         self._nn_scope = "Atomic/GRAP"
@@ -182,14 +188,15 @@ class GenericRadialAtomicPotential(AtomicNN):
         d["multipole"] = self._multipole
         d.update(self._algorithm.as_dict())
         return d
-    
-    def initialize_algorithm(self, algorithm: str, parameters: dict):
+
+    @staticmethod
+    def initialize_algorithm(algorithm: str, parameters: dict):
         """
         Initialize an `Algorithm` object.
         """
-        if self._algorithm == "sf":
+        if algorithm == "sf":
             cls = SymmetryFunctionAlgorithm
-        elif self._algorithm == "density":
+        elif algorithm == "density":
             cls = DensityExpAlgorithm
         else:
             cls = MorseAlgorithm
@@ -219,7 +226,6 @@ class GenericRadialAtomicPotential(AtomicNN):
         clf = self._transformer
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
-        one = tf.convert_to_tensor(1.0, dtype=dtype, name='one')
         outputs = {element: [None] * len(self._elements)
                    for element in self._elements}
         for kbody_term, (dists, masks) in partitions.items():
@@ -237,9 +243,9 @@ class GenericRadialAtomicPotential(AtomicNN):
                     Then sum `fx` for each atom.
                     """
                     gx = tf.math.multiply(fx, fc)
-                    gx = tf.math.multiply(fx, masks, name=f'gx/masked')
+                    gx = tf.math.multiply(gx, masks, name=f'gx/masked')
                     gx = tf.expand_dims(
-                        tf.reduce_sum(v, axis=[-1, -2], keep_dims=False),
+                        tf.reduce_sum(gx, axis=[-1, -2], keep_dims=False),
                         axis=-1, name='gx')
                     return gx
                 
@@ -258,8 +264,9 @@ class GenericRadialAtomicPotential(AtomicNN):
                                 with tf.name_scope(f"r{itag}"):
                                     coef = tf.div_no_nan(
                                         dij[i], rij, name='coef')
-                                    fx = tf.multiply(v, coef, name='fx')
-                                    gtau.append(_post_compute(fx))
+                                    gtau.append(
+                                        _post_compute(
+                                            tf.multiply(v, coef, name='fx')))
                         # Quadrupole effect
                         if self._multipole >= 2:
                             for (i, j) in multipole_map[2]:
@@ -267,11 +274,10 @@ class GenericRadialAtomicPotential(AtomicNN):
                                 jtag = xyz_map[j]
                                 with tf.name_scope(f"r{itag}{jtag}"):
                                     coef = tf.div_no_nan(
-                                        dij[i] * dij[j], 
-                                        rij * rij, name='coef')
-                                    fx = tf.multiply(
-                                        v, coef, name='fx')
-                                    gtau.append(_post_compute(fx))      
+                                        dij[i] * dij[j], rij * rij, name='coef')
+                                    gtau.append(
+                                        _post_compute(
+                                            tf.multiply(v, coef, name='fx')))
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
