@@ -3,7 +3,7 @@
 precision = ['high', 'medium']
 pair_style = [
     'eam/alloy', 'eam/fs', 'eam/adp', 'tersoff',
-    'atomic/deepmd', 'atomic/sf'
+    'atomic/deepmd', 'atomic/sf', 'atomic/grap'
 ]
 
 [nn.atomic]
@@ -18,6 +18,11 @@ kernel_initializer = [
 
 [nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
+
+[nn.atomic.grap]
+multipole = [0, 1, 2]
+algorithm = ['sf', 'density', 'morse']
+cutoff_function = ['cosine', 'polynomial']
 
 [nn.loss.energy]
 method = ["rmse", "logcosh"]

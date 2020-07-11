@@ -131,5 +131,17 @@ def test_read_deepmd_toml():
     assert_list_equal(reader['nn.atomic.deepmd.embedding_sizes'], [20, 40])
 
 
+def test_read_grap_toml():
+    """
+    Test `InputReader` with the file `Be_grap_sf_quad.toml` for a `GRAP` task.
+    """
+    reader = InputReader(join(test_dir(), 'inputs', 'Be_grap_sf_quad.toml'))
+
+    assert_equal(reader['pair_style'], 'atomic/grap')
+    assert_list_equal(reader['nn.atomic.grap.sf.omega'], [0.0, 1.5, 3.0])
+    assert_equal(reader['nn.atomic.grap.multipole'], 2)
+    assert_equal(reader['nn.atomic.grap.algorithm'], 'sf')
+
+
 if __name__ == "__main__":
     nose.run()
