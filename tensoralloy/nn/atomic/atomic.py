@@ -198,7 +198,6 @@ class AtomicNN(BasicNN):
 
     def _get_eentropy_outputs(self,
                               h: tf.Tensor,
-                              t: tf.Tensor,
                               element: str,
                               collections: List[str],
                               verbose=True):
@@ -209,8 +208,6 @@ class AtomicNN(BasicNN):
         ----------
         h : tf.Tensor
             Input features.
-        t : tf.Tensor
-            Electron temperature (eV).
         element : str
             The target element.
         collections : List[str]
@@ -234,18 +231,11 @@ class AtomicNN(BasicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            eentropy = tf.squeeze(eentropy, axis=2, name="atomic/raw")
-            k = tf.constant(26.78, dtype=h.dtype, name='k')
-            coef = tf.multiply(k, t, name='coef')
-            b = tf.constant(49.4281, dtype=h.dtype, name='b')
-            avg = tf.multiply(b, t, name='bias')
-            eentropy = tf.multiply(coef, eentropy, name='kt')
-            eentropy = tf.add(eentropy, avg, name='atomic')
+            eentropy = tf.squeeze(eentropy, axis=2, name="atomic")
             return eentropy
 
     def _get_internal_energy_outputs(self,
                                      h: tf.Tensor,
-                                     t: tf.Tensor,
                                      element: str,
                                      atomic_static_energy: float,
                                      collections: List[str],
@@ -257,8 +247,6 @@ class AtomicNN(BasicNN):
         ----------
         h : tf.Tensor
             Input features.
-        t : tf.Tensor
-            Electron temperature (eV).
         element : str
             The target element.
         atomic_static_energy : float
@@ -284,12 +272,8 @@ class AtomicNN(BasicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            energy = tf.squeeze(energy, axis=2, name="atomic/raw")
-            eb = tf.constant(5.884747842039223, dtype=h.dtype, name='eb')
-            a = tf.constant(0.5251556507716901, dtype=h.dtype, name='a')
-            ta = tf.pow(t, a, name='Ta')
-            coef = tf.multiply(eb, ta, name='coef')
-            return tf.multiply(coef, energy, name='atomic')
+            energy = tf.squeeze(energy, axis=2, name="atomic")
+            return energy
 
     def _get_model_outputs(self,
                            features: dict,
@@ -374,13 +358,11 @@ class AtomicNN(BasicNN):
                                 verbose=verbose)
                             s = self._get_eentropy_outputs(
                                 h,
-                                t=t,
                                 element=element,
                                 collections=collections,
                                 verbose=verbose)
                             u = self._get_internal_energy_outputs(
                                 h,
-                                t=t,
                                 element=element,
                                 atomic_static_energy=bias_mean,
                                 collections=collections,
