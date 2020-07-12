@@ -6,17 +6,12 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from os.path import join
-
 from tensoralloy.nn.eam.potentials.generic import mishin_cutoff, mishin_polar
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.extension.grad_ops import safe_pow
-from tensoralloy.extension.interp.cubic import CubicInterpolator
-from tensoralloy.test_utils import test_dir
-from tensoralloy.io.lammps import read_adp_setfl
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -306,125 +301,6 @@ class MishinH(EamAlloyPotential):
             rc = self._get_shared_variable('rc', dtype, kbody_term)
             h = self._get_shared_variable('h', dtype, kbody_term)
             quadrupole = mishin_polar(r, q1, q2, q3, rc, h, name='W')
-            if verbose:
-                log_tensor(quadrupole)
-            return quadrupole
-
-
-class AlCuSplineAdp(EamAlloyPotential):
-    """
-    The Cubic Spline form of the Al-Cu ADP potential.
-
-    References
-    ----------
-    PHYSICAL REVIEW B 83, 054116 (2011)
-
-    """
-
-    def __init__(self, interval=1):
-        """
-        Initialization method.
-        """
-        super(AlCuSplineAdp, self).__init__()
-
-        filename = join(test_dir(), 'lammps', 'AlCu.adp')
-        self._adpfl = read_adp_setfl(filename)
-        self._name = "AlCuAdp"
-        self._interval = interval
-
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
-        """
-        The electron density function.
-        """
-        with tf.name_scope(f"{self._name}/Rho/{element}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.rho[element].x[0:nr:self._interval]
-            y = self._adpfl.rho[element].y[0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            rho = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            rho = tf.reshape(rho, shape, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
-    def embed(self,
-              rho: tf.Tensor,
-              element: str,
-              variable_scope: str,
-              verbose=False):
-        """
-        The embedding function.
-        """
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-            nrho = self._adpfl.nrho
-            x = self._adpfl.embed[element].x[0:nrho:self._interval]
-            y = self._adpfl.embed[element].y[0:nrho:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(rho, name='shape')
-            frho = f.evaluate(tf.reshape(rho, (-1,), name='rho/flat'))
-            frho = tf.reshape(frho, shape, name='frho')
-            if verbose:
-                log_tensor(frho)
-            return frho
-
-    def phi(self,
-            r: tf.Tensor,
-            kbody_term: str,
-            variable_scope: str,
-            verbose=False):
-        """
-        The pairwise interaction function.
-        """
-        with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.phi[kbody_term].x[0:nr:self._interval]
-            y = self._adpfl.phi[kbody_term].y[0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            phi = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            phi = tf.reshape(phi, shape, name='phi')
-            if verbose:
-                log_tensor(phi)
-            return phi
-
-    def dipole(self,
-               r: tf.Tensor,
-               kbody_term: str,
-               variable_scope: str,
-               verbose=False):
-        """
-        The dipole function.
-        """
-        with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.dipole[kbody_term].x[0:nr:self._interval]
-            y = self._adpfl.dipole[kbody_term].y[0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            dipole = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            dipole = tf.reshape(dipole, shape, name='dipole')
-            if verbose:
-                log_tensor(dipole)
-            return dipole
-
-    def quadrupole(self,
-                   r: tf.Tensor,
-                   kbody_term: str,
-                   variable_scope: str,
-                   verbose=False):
-        """
-        The quadrupole function.
-        """
-        with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.quadrupole[kbody_term].x[0:nr:self._interval]
-            y = self._adpfl.quadrupole[kbody_term].y[0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            quadrupole = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            quadrupole = tf.reshape(quadrupole, shape, name='quadrupole')
             if verbose:
                 log_tensor(quadrupole)
             return quadrupole

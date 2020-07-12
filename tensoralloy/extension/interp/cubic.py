@@ -21,9 +21,9 @@ __all__ = [
 
 
 try:
-    cubic_op = load_op_library("cubic_op")
+    cubic_ops_lib = load_op_library("cubic_op")
 except Exception:
-    cubic_op = None
+    cubic_ops_lib = None
 
 
 class CubicInterpolator(object):
@@ -62,7 +62,14 @@ class CubicInterpolator(object):
         self.bc_end = bc_end
         self.use_natural_boundary = natural_boundary
 
-    def evaluate(self, t, name=None):
+    @classmethod
+    def runnable(cls):
+        """
+        Return True if `cubic_ops_lib` is loaded.
+        """
+        return cubic_ops_lib is not None
+
+    def run(self, t, name=None):
         """
         Interpolate the training points using a cubic spline.
 
@@ -159,7 +166,7 @@ class CubicInterpolator(object):
             b = dy / dx - dx * (c_up + two * c_lo) / three
             d = (c_up - c_lo) / (three * dx)
 
-            res = cubic_op.cubic_gather(t, x, y, b, c_lo, d)
+            res = cubic_ops_lib.cubic_gather(t, x, y, b, c_lo, d)
             tau = t - res.xk
             mod = tf.add_n([res.ak,
                             res.bk * tau,
@@ -173,5 +180,5 @@ def _cubic_gather_rev(op, *grads):
     x = op.inputs[1]
     inds = op.outputs[-1]
     args = [x, inds] + list(grads)
-    results = cubic_op.cubic_gather_rev(*args)
+    results = cubic_ops_lib.cubic_gather_rev(*args)
     return [tf.zeros_like(op.inputs[0])] + list(results)

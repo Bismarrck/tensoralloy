@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 import nose
+import unittest
 
 from scipy.interpolate import CubicSpline
 from os.path import join
@@ -20,6 +21,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+@unittest.skipUnless(CubicInterpolator.runnable(), "Cubic ops lib is not built")
 def test_cubic_spline_1d():
     """
     Test the cubic spline function with scalars and natural boundary type.
@@ -38,7 +40,7 @@ def test_cubic_spline_1d():
         r = tf.placeholder(dtype=dtype, shape=(None, ), name='r')
 
         clf = CubicInterpolator(x, y, natural_boundary=True)
-        z = clf.evaluate(r)
+        z = clf.run(r)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -47,6 +49,7 @@ def test_cubic_spline_1d():
             assert_array_almost_equal(values, zlist, delta=1e-6)
 
 
+@unittest.skipUnless(CubicInterpolator.runnable(), "Cubic ops lib is not built")
 def test_cubic_spline_2d():
     """
     Test the cubic spline function with multidimensional arrays and clamped
@@ -65,13 +68,14 @@ def test_cubic_spline_2d():
         r = tf.placeholder(dtype=dtype, shape=rlist.shape, name='r')
 
         clf = CubicInterpolator(x, y, natural_boundary=False)
-        z = clf.evaluate(r)
+        z = clf.run(r)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             sess.run(z, feed_dict={r: rlist})
 
 
+@unittest.skipUnless(CubicInterpolator.runnable(), "Cubic ops lib is not built")
 def test_reconstruct_lammps_adp():
     """
     Test the reconstruction of the Al-Cu ADP potential.
@@ -90,7 +94,7 @@ def test_reconstruct_lammps_adp():
                 ux = adpfl.dipole['AlCu'].x
                 uy = adpfl.dipole['AlCu'].y
                 func = CubicInterpolator(ux, uy, natural_boundary=True)
-                u_op = func.evaluate(rlist, name='Dipole')
+                u_op = func.run(rlist, name='Dipole')
 
             with tf.name_scope("Quadrupole"):
                 rlist = tf.convert_to_tensor(
@@ -98,7 +102,7 @@ def test_reconstruct_lammps_adp():
                 qx = adpfl.quadrupole['AlCu'].x
                 qy = adpfl.quadrupole['AlCu'].y
                 func = CubicInterpolator(qx, qy, natural_boundary=True)
-                q_op = func.evaluate(rlist, name='Quadrupole')
+                q_op = func.run(rlist, name='Quadrupole')
 
             with tf.name_scope("Rho"):
                 rlist = tf.convert_to_tensor(
@@ -106,7 +110,7 @@ def test_reconstruct_lammps_adp():
                 rhox = adpfl.rho['Al'].x
                 rhoy = adpfl.rho['Al'].y
                 func = CubicInterpolator(rhox, rhoy, natural_boundary=True)
-                rho_op = func.evaluate(rlist, name='Rho')
+                rho_op = func.run(rlist, name='Rho')
 
             with tf.name_scope("Frho"):
                 rholist = tf.convert_to_tensor(
@@ -114,7 +118,7 @@ def test_reconstruct_lammps_adp():
                 frhox = adpfl.embed['Al'].x[1:]
                 frhoy = adpfl.embed['Al'].y[1:]
                 func = CubicInterpolator(frhox, frhoy, natural_boundary=True)
-                frho_op = func.evaluate(rholist, name='Frho')
+                frho_op = func.run(rholist, name='Frho')
 
             with tf.name_scope("Phi/AlAl"):
                 rlist = tf.convert_to_tensor(
@@ -122,7 +126,7 @@ def test_reconstruct_lammps_adp():
                 phix = adpfl.phi['AlAl'].x[1:]
                 phiy = adpfl.phi['AlAl'].y[1:]
                 func = CubicInterpolator(phix, phiy, natural_boundary=True)
-                phi_alal_op = func.evaluate(rlist, name='Phi')
+                phi_alal_op = func.run(rlist, name='Phi')
 
             with tf.name_scope("Phi/AlCu"):
                 rlist = tf.convert_to_tensor(
@@ -130,7 +134,7 @@ def test_reconstruct_lammps_adp():
                 phix = adpfl.phi['AlCu'].x[1:]
                 phiy = adpfl.phi['AlCu'].y[1:]
                 func = CubicInterpolator(phix, phiy, natural_boundary=True)
-                phi_alcu_op = func.evaluate(rlist, name='Phi')
+                phi_alcu_op = func.run(rlist, name='Phi')
 
             with tf.Session() as sess:
                 reconstructs = sess.run(

@@ -74,7 +74,7 @@ class CubicSplinePotential(EamAlloyPotential):
         cubic = CubicInterpolator(x, y, natural_boundary=natural_boundary,
                                   bc_start=bc_start, bc_end=bc_end)
         shape = tf.shape(t, name='shape')
-        val = cubic.evaluate(tf.reshape(t, (-1, ), name='t/flat'), name='eval')
+        val = cubic.run(tf.reshape(t, (-1,), name='t/flat'), name='eval')
         val = tf.reshape(val, shape, name=name)
         return val
 
@@ -271,7 +271,7 @@ class LinearlyExtendedSplinePotential(CubicSplinePotential):
                 """
                 The cubic spline function for xmin <= x <= xmax
                 """
-                return cubic.evaluate(z, name='mid')
+                return cubic.run(z, name='mid')
 
             def right_fn(z):
                 """

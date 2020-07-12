@@ -22,8 +22,8 @@ __email__ = 'Bismarrck@me.com'
 
 __all__ = ["LAMMPS_COMMAND", "SetFL", "MeamSpline",
            "read_adp_setfl", "read_eam_alloy_setfl", "write_adp_setfl",
-           "read_tersoff_file",
-           "read_meam_spline_file"]
+           "read_tersoff_file", "write_tersoff_file",
+           "read_meam_spline_file", "read_old_meam_spline_file"]
 
 
 def get_lammps_command():

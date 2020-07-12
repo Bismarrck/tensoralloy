@@ -180,6 +180,7 @@ class EamNN(BasicNN):
         """
         Insert the spline functions read from the given csv file.
         """
+
         for (patt, cls) in (
                 (_spline_pot_patt, CubicSplinePotential),
                 (_lext_spline_pot_patt, LinearlyExtendedSplinePotential)):
