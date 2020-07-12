@@ -354,7 +354,7 @@ class AtomicNN(BasicNN):
                                 output_bias=True,
                                 output_bias_mean=0.0,
                                 use_resnet_dt=self._use_resnet_dt,
-                                variable_scope="T",
+                                variable_scope="H",
                                 verbose=verbose)
                             s = self._get_eentropy_outputs(
                                 h,

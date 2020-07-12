@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module is used to train the model
 """
@@ -21,6 +21,7 @@ from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
+from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
@@ -144,6 +145,7 @@ class TrainingManager:
             if value is not None:
                 hidden_sizes[element] = value
 
+        pair_style = self._reader['pair_style']
         configs = self._reader['nn.atomic']
         params = {
             'activation': configs['activation'],
@@ -159,14 +161,19 @@ class TrainingManager:
         }
         params.update(kwargs)
 
-        if self._reader['pair_style'] == 'atomic/sf':
+        if pair_style == 'atomic/sf':
             for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
                         'cutoff_function', 'minmax_scale'):
                 params[key] = configs['sf'][key]
             return SymmetryFunctionNN(**params)
-        else:
+        elif pair_style == 'atomic/deepmd':
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
+        else:
+            for key in ('multipole', 'algorithm', 'cutoff_function'):
+                params[key] = configs['grap'][key]
+            params['parameters'] = configs['grap'][params['algorithm']]
+            return GenericRadialAtomicPotential(**params)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN, AdpNN]:
         """
@@ -271,7 +278,6 @@ class TrainingManager:
                 nij_max=nij_max, nijk_max=nijk_max, nnl_max=nnl_max,
                 symmetric=True)
         elif pair_style.startswith("eam"):
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
             if pair_style == 'adp':
                 cls = BatchADPTransformer
             else:
@@ -287,6 +293,10 @@ class TrainingManager:
                 max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
                 symmetric=False, nij_max=nij_max, nijk_max=nijk_max,
                 nnl_max=nnl_max, ij2k_max=ij2k_max)
+        elif pair_style == 'atomic/grap':
+            clf = BatchUniversalTransformer(
+                max_occurs=max_occurs, rcut=rcut, angular=False,
+                nij_max=nij_max, nnl_max=nnl_max)
         else:
             raise ValueError(f"Unknown pair style: {pair_style}")
 
@@ -389,6 +399,7 @@ class TrainingManager:
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
 
+                timeout_ms = hparams.debug.meta_optimizer_timeout_ms
                 session_config = tf.ConfigProto(
                     allow_soft_placement=hparams.debug.allow_soft_placement,
                     log_device_placement=hparams.debug.log_device_placement,
@@ -396,7 +407,7 @@ class TrainingManager:
                         allow_growth=hparams.debug.allow_gpu_growth),
                     graph_options=tf.GraphOptions(
                         rewrite_options=RewriterConfig(
-                            meta_optimizer_timeout_ms=hparams.debug.meta_optimizer_timeout_ms,
+                            meta_optimizer_timeout_ms=timeout_ms,
                         )
                     ))
 

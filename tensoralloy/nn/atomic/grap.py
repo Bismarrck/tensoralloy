@@ -38,7 +38,7 @@ class Algorithm:
             assert key in parameters and len(parameters[key]) >= 1
         self._params = {key: [float(x) for x in parameters[key]] 
                         for key in self.required_keys}
-        self._grid = ParameterGrid(**self._params)
+        self._grid = ParameterGrid(self._params)
     
     def __len__(self):
         return len(self._grid)
