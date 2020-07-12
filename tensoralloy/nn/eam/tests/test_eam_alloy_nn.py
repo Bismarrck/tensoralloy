@@ -12,9 +12,6 @@ import shutil
 import unittest
 
 from tensorflow_estimator import estimator as tf_estimator
-from pymatgen import Lattice, Structure
-from pymatgen.core.surface import SlabGenerator
-from pymatgen.io.ase import AseAtomsAdaptor
 from nose.tools import assert_equal, assert_tuple_equal, assert_almost_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
@@ -26,6 +23,19 @@ from ase.build import bulk
 from ase.db import connect
 from ase.units import GPa
 from ase.io import read
+
+try:
+    from pymatgen import Lattice, Structure
+    from pymatgen.core.surface import SlabGenerator
+    from pymatgen.io.ase import AseAtomsAdaptor
+except ImportError:
+    is_pymatgen_avail = False
+    Lattice = None
+    Structure = None
+    SlabGenerator = None
+    AseAtomsAdaptor = None
+else:
+    is_pymatgen_avail = True
 
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
@@ -691,6 +701,7 @@ def test_batch_stress():
         assert_array_almost_equal(s_true, y2, delta=1e-8)
 
 
+@skipUnless(is_pymatgen_avail, "PyMatgen is not available")
 class Zjw04SurfaceStressTest(unittest.TestCase):
     """
     Test the stress results of built-in Zjw04 with the potential file generated

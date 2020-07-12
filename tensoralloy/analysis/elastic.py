@@ -8,15 +8,23 @@ https://elastic.readthedocs.io/en/stable/lib-usage.html
 from __future__ import print_function, absolute_import
 
 import numpy as np
-import spglib as spg
 import re
 
 from numpy import array
 from typing import Callable, Tuple
 from ase import Atoms
 from ase.units import GPa
-from pymatgen.analysis.elasticity import ElasticTensor
 from matplotlib.pyplot import Axes
+
+
+try:
+    import spglib as spg
+    from pymatgen.analysis.elasticity import ElasticTensor
+
+except ImportError:
+    spg = None
+    ElasticTensor = None
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

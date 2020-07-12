@@ -22,10 +22,10 @@ from tensorflow.python.framework import importer
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.atomic import SymmetryFunctionNN
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.dataclasses import LossParameters
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.transformer import EAMTransformer
 from tensoralloy.utils import Defaults
 from tensoralloy.atoms_utils import set_pulay_stress
@@ -198,25 +198,29 @@ def test_build_nn_with_properties():
     batch_size = 1
     db = connect(join(datasets_dir(), 'snap.db'))
     atoms = db.get_atoms(id=1)
-    nij_max = find_neighbor_size_of_atoms(atoms, rc).nij
+    size = find_neighbor_size_of_atoms(atoms, rc)
+    nij_max = size.nij
+    nnl_max = size.nnl
     max_occurs = Counter(atoms.get_chemical_symbols())
 
     def _get_transformer():
         """
         A helper function to return a `BatchSymmetryFunctionTransformer`.
         """
-        return BatchSymmetryFunctionTransformer(
-            rc=rc, max_occurs=max_occurs, nij_max=nij_max, nijk_max=0,
+        return BatchUniversalTransformer(
+            rcut=rc, max_occurs=max_occurs, nij_max=nij_max, nnl_max=nnl_max,
             batch_size=batch_size, use_stress=True, use_forces=True)
 
-    def _test_with_properties(list_of_properties: List[str]):
+    def _test_with_properties(list_of_properties: List[str],
+                              temperature_dependent=False):
         """
         Run a test.
         """
         with tf.Graph().as_default():
-            nn = AtomicNN(elements=elements,
-                          minmax_scale=False,
-                          minimize_properties=list_of_properties)
+            nn = SymmetryFunctionNN(elements=elements,
+                                    minmax_scale=False,
+                                    minimize_properties=list_of_properties,
+                                    temperature_dependent=temperature_dependent)
             clf = _get_transformer()
             nn.attach_transformer(clf)
             protobuf = tf.convert_to_tensor(
@@ -261,9 +265,9 @@ def test_build_nn_with_properties():
                 return True
 
     with precision_scope('medium'):
-        for case in (['energy', 'elastic'],
-                     ['energy', 'stress'],
-                     ['energy', 'elastic']):
+        for case, temperature in ((['energy', 'elastic'], False),
+                                  (['energy', 'stress'], False),
+                                  (['free_energy', 'eentropy'], True)):
             assert_true(_test_with_properties(case), msg=f"{case} is failed")
 
 

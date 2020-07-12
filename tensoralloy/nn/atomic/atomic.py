@@ -390,7 +390,7 @@ class AtomicNN(BasicNN):
                             y = tf.squeeze(y, axis=2, name="atomic")
                             if verbose:
                                 log_tensor(y)
-                            outputs['free_energy'].append(y)
+                            outputs['energy'].append(y)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
