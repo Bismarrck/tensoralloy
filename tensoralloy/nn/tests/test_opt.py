@@ -17,17 +17,16 @@ from tensoralloy.test_utils import test_dir
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.db import connect
 from tensoralloy.io.read import read_file
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.opt import get_train_op
-from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.atomic import SymmetryFunctionNN
 from tensoralloy.nn.dataclasses import OptParameters, LossParameters
-from tensoralloy.utils import Defaults
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def run_case(trainable=False):
+def run_case():
     """
     A helper function to created a `train_op`.
     """
@@ -38,13 +37,13 @@ def run_case(trainable=False):
         database = read_file(join(work_dir, "Ni.extxyz"), verbose=False)
     else:
         database = connect(db_file)
-    clf = BatchSymmetryFunctionTransformer(
-        rc=Defaults.rc,
+    rc = 6.0
+    clf = BatchUniversalTransformer(
+        rcut=rc,
         max_occurs=database.max_occurs,
-        nij_max=database.get_nij_max(Defaults.rc, allow_calculation=True),
-        nijk_max=0,
-        angular=False,
-        trainable=trainable)
+        nij_max=database.get_nij_max(rc, allow_calculation=True),
+        nnl_max=database.get_nnl_max(rc, allow_calculation=True),
+        angular=False)
 
     dataset = Dataset(database, name='Ni', transformer=clf, serial=True)
 
@@ -66,7 +65,7 @@ def run_case(trainable=False):
                                    decay_rate=0.9, staircase=False,
                                    method='Adam')
 
-    nn = AtomicNN(elements=dataset.transformer.elements)
+    nn = SymmetryFunctionNN(elements=dataset.transformer.elements)
     nn.attach_transformer(dataset.transformer)
 
     predictions = nn.build(features, tf_estimator.ModeKeys.TRAIN)
@@ -100,7 +99,7 @@ def test_get_train_op():
     with tf.Graph().as_default():
 
         tf.train.get_or_create_global_step()
-        run_case(trainable=False)
+        run_case()
 
         # eta0, eta1, eta2, eta3, omega0
         # xlo, xhi
@@ -110,22 +109,7 @@ def test_get_train_op():
 
         assert_equal(len(tf.trainable_variables()), 6)
         assert_equal(len(tf.moving_average_variables()), 6)
-        assert_equal(len(tf.model_variables()), 13)
-
-    with tf.Graph().as_default():
-        tf.train.get_or_create_global_step()
-        run_case(trainable=True)
-
-        assert_equal(len(tf.trainable_variables()), 11)
-        assert_equal(len(tf.moving_average_variables()), 11)
-        assert_equal(len(tf.model_variables()), 13)
-
-        # variables 11, moving averged 11, 12 * 2
-        # xlo, xhi
-        # global step 1
-        # adam 2
-        # 2 adam variables per variable, 11 * 2
-        assert_equal(len(tf.global_variables()), 11 * 2 + 2 + 1 + 2 + 11 * 2)
+        assert_equal(len(tf.model_variables()), 6)
 
 
 if __name__ == "__main__":
