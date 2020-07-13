@@ -77,8 +77,8 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
 
         with tf.name_scope("Energy"):
             name_map = {
-                'energy': 'Energy',
-                'free_energy': 'E(free)',
+                'energy': 'U',
+                'free_energy': 'F',
                 'eentropy': 'S',
             }
             for prop, desc in name_map.items():
