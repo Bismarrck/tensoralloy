@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from typing import List
+from typing import List, Dict, Tuple
 from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
 from tensorflow_estimator import estimator as tf_estimator
 
@@ -22,60 +22,47 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def sum_of_grads_and_vars(list_of_grads_and_vars):
+def sum_of_grads_and_vars(
+        grad_and_vars_for_prop: Dict[str, List[Tuple[tf.Tensor, tf.Tensor]]]):
     """
     Calculate the total gradient from `grad_and_vars` of different losses.
 
     Parameters
     ----------
-    list_of_grads_and_vars: Iterable
-        A list of lists of (gradient, variable) tuples.
+    grad_and_vars_for_prop: Dict[str, List[Tuple[tf.Tensor, tf.Tensor]]]
+        A list of (gradient, variable) tuples as the gradients and corresponding
+        vars for the total loss of `property`.
 
     Returns
     -------
     outputs: Sized[Tuple[tf.Tensor, tf.Variable]]
-        List of pairs of (gradient, variable) as the total gradient.
+        List of (gradient, variable) pairs as the total gradient.
 
     """
     with tf.name_scope("SumGrads"):
 
-        if len(list_of_grads_and_vars) == 1:
-            return list_of_grads_and_vars[0]
-
         # Merge gradients
         outputs = []
+        grads_for_var = {}
 
-        for grads_and_vars in zip(*list_of_grads_and_vars):
+        for _, grads_and_vars in grad_and_vars_for_prop.items():
             # Note that each grad_and_vars looks like the following:
-            #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-            grads = []
-            for i, (g, _) in enumerate(grads_and_vars):
-                if g is None:
-                    continue
+            #   ((grad, var0), ... , (gradN, varN))
+            for grad, var in grads_and_vars:
+                if grad is None:
+                    grad_for_var = None
+                else:
+                    grad_for_var = tf.expand_dims(grad, axis=0)
+                grads_for_var[var] = grads_for_var.get(var, []) + [grad_for_var]
 
-                # Add 0 dimension to the gradients to represent the tower.
-                expanded_g = tf.expand_dims(g, 0)
-
-                # Append on a tower dimension which we will average over below.
-                grads.append(expanded_g)
-
-            v = grads_and_vars[0][1]
-
-            # If the grads are all None, we just return a None grad.
-            if len(grads) == 0:
-                grad_and_var = (None, v)
-
+        for var, grads in grads_for_var.items():
+            valid_grads = [grad for grad in grads if grad is not None]
+            if not valid_grads:
+                outputs.append((None, var))
             else:
                 # Average over the 'tower' dimension.
-                grad = tf.concat(grads, 0)
-                grad = tf.reduce_sum(grad, 0)
-
-                # Keep in mind that the Variables are redundant because they are
-                # shared across towers. So we will just return the first tower's
-                # pointer to the Variable.
-                grad_and_var = (grad, v)
-
-            outputs.append(grad_and_var)
+                gsum = tf.reduce_sum(tf.concat(valid_grads, 0), 0)
+                outputs.append((gsum, var))
         return outputs
 
 
@@ -156,8 +143,7 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                     add_grads_and_vars_summary(g, prop)
                 grads_and_vars[prop] = g
 
-        gradients = sum_of_grads_and_vars(
-            list_of_grads_and_vars=[g for prop, g in grads_and_vars.items()])
+        gradients = sum_of_grads_and_vars(grads_and_vars)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
