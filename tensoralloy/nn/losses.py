@@ -337,11 +337,14 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
 
     Returns
     -------
-    loss : tf.Tensor
+    loss : tf.Tensor or None
         A float tensor as the total loss.
 
     """
     with tf.name_scope("L2"):
+        if options.weight == 0.0:
+            return None
+
         name = 'total_regularization_loss'
         losses = tf.compat.v1.losses.get_regularization_losses()
         if losses:

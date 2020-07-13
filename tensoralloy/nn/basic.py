@@ -553,9 +553,11 @@ class BasicNN:
                     method=LossMethod[loss_parameters.stress.method],
                     collections=collections)
 
-            losses["l2"] = loss_ops.get_l2_regularization_loss(
+            l2_loss = loss_ops.get_l2_regularization_loss(
                 options=loss_parameters.l2,
                 collections=collections)
+            if l2_loss is not None:
+                losses['l2'] = l2_loss
 
             verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)
 
