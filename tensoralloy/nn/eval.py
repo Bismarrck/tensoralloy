@@ -1,4 +1,4 @@
- #!coding=utf-8
+#!coding=utf-8
 """
 This module defines evaluation metrics and hooks for `BasicNN`.
 """
@@ -49,14 +49,15 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
     Return a dict of Ops as the evaluation metrics.
 
     Always required:
-        * 'energy' of shape `[batch_size, ]`.
-        * 'energy_confidence' of shape `[batch_size, ]`
+        * 'energy' of shape `[batch_size, ]`
+
+    Required if finite temperature:
+        * 'eentropy' of shape `[batch_size, ]`
+        * 'free_energy' of shape `[batch_size, ]`
 
     Required if 'forces' should be minimized:
         * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
           required if 'forces' should be minimized.
-        * 'forces_confidence' of shape `[batch_size, ]` is required if
-          'forces' should be minimized.
         * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`
 
     Required if 'stress' or 'total_pressure' should be minimized:
@@ -64,7 +65,6 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
           'stress' should be minimized.
         * 'pulay_stress' of shape `[batch_size, ]`
         * 'total_pressure' of shape `[batch_size, ]`
-        * 'stress_confidence' of shape `[batch_size, ]`
 
     `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
     the number of atoms in each structure.
