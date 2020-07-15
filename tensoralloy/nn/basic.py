@@ -839,6 +839,7 @@ class BasicNN:
             labels=labels,
             n_atoms=features["n_atoms_vap"],
             atom_masks=features["atom_masks"],
+            max_train_steps=params.train.train_steps,
             loss_parameters=params.loss,
             mode=mode)
 

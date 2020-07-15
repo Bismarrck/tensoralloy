@@ -456,6 +456,7 @@ class AtomicNN(BasicNN):
                          predictions,
                          labels,
                          n_atoms,
+                         max_train_steps,
                          loss_parameters: LossParameters,
                          collections) -> Dict[str, tf.Tensor]:
         """
@@ -463,7 +464,8 @@ class AtomicNN(BasicNN):
         """
         if not self._temperature_dependent:
             return super(AtomicNN, self)._get_energy_loss(
-                predictions, labels, n_atoms, loss_parameters, collections)
+                predictions, labels, n_atoms, max_train_steps, loss_parameters, 
+                collections)
 
         losses = {}
 
@@ -476,10 +478,10 @@ class AtomicNN(BasicNN):
                         labels=labels[prop],
                         predictions=predictions[prop],
                         n_atoms=n_atoms,
-                        loss_weight=loss_parameters.energy.weight,
-                        per_atom_loss=loss_parameters.energy.per_atom_loss,
-                        method=LossMethod[loss_parameters.energy.method],
+                        max_train_steps=max_train_steps,
+                        options=loss_parameters.energy,
                         collections=collections,
                         name_scope=scope_name)
                     losses[prop] = loss
         return losses
+

@@ -14,6 +14,7 @@ from tensoralloy.nn.dataclasses import L2LossOptions, EnergyLossOptions
 from tensoralloy.nn.dataclasses import ForcesLossOptions, StressLossOptions
 from tensoralloy.nn.dataclasses import PressureLossOptions
 from tensoralloy.nn.utils import is_first_replica
+from tensoralloy.utils import GraphKeys
 
 
 __author__ = 'Xin Chen'
@@ -118,19 +119,21 @@ def create_weight_tensor(weight: Union[float, Tuple[float, float]],
         return tf.convert_to_tensor(weight, name='weight')
     else:
         global_step = tf.train.get_or_create_global_step()
+        global_step = tf.cast(global_step, dtype, name='global_step')
         max_train_steps = tf.convert_to_tensor(max_train_steps, dtype=dtype,
                                                name='max_steps')
         w0 = tf.convert_to_tensor(weight[0], dtype=dtype, name='w0')
         w1 = tf.convert_to_tensor(weight[1], dtype=dtype, name='w1')
         slope = tf.truediv(w1 - w0, max_train_steps, name='slope')
         weight = tf.add(w0, slope * global_step, name='weight')
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, weight)
         return weight
 
 
 def get_energy_loss(labels,
                     predictions,
                     n_atoms,
-                    max_train_step,
+                    max_train_steps,
                     options: EnergyLossOptions,
                     collections=None,
                     name_scope="Energy"):
@@ -146,7 +149,7 @@ def get_energy_loss(labels,
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
-    max_train_step : Union[int, tf.Tensor]
+    max_train_steps : Union[int, tf.Tensor]
         The maximum number of training steps.
     options : EnergyLossOptions
         Options for computing energy loss.
@@ -164,6 +167,7 @@ def get_energy_loss(labels,
     method = LossMethod[options.method]
     per_atom_loss = options.per_atom_loss
     assert method != LossMethod.rrmse
+    print(options)
 
     with tf.name_scope(name_scope):
         assert labels.shape.ndims == 1
@@ -182,7 +186,7 @@ def get_energy_loss(labels,
             raw_loss, mae = _get_logcosh_loss(x, y,
                                               is_per_atom_loss=per_atom_loss)
         weight = create_weight_tensor(
-            options.weight, max_train_step, dtype=mae.dtype)
+            options.weight, max_train_steps, dtype=mae.dtype)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
