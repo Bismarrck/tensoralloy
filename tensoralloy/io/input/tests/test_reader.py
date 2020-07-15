@@ -141,6 +141,7 @@ def test_read_grap_toml():
     assert_list_equal(reader['nn.atomic.grap.sf.omega'], [0.0, 1.5, 3.0])
     assert_equal(reader['nn.atomic.grap.multipole'], 2)
     assert_equal(reader['nn.atomic.grap.algorithm'], 'sf')
+    assert_list_equal(reader['nn.loss.energy.weight'], [0.1, 1.0])
 
 
 if __name__ == "__main__":

@@ -26,7 +26,6 @@ from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
-from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.transformer.base import BaseTransformer
@@ -445,6 +444,7 @@ class BasicNN:
                          predictions,
                          labels,
                          n_atoms,
+                         max_train_steps,
                          loss_parameters: LossParameters,
                          collections) -> Dict[str, tf.Tensor]:
         """
@@ -454,14 +454,18 @@ class BasicNN:
             labels=labels["energy"],
             predictions=predictions["energy"],
             n_atoms=n_atoms,
-            loss_weight=loss_parameters.energy.weight,
-            per_atom_loss=loss_parameters.energy.per_atom_loss,
-            method=LossMethod[loss_parameters.energy.method],
+            max_train_step=max_train_steps,
+            options=loss_parameters.energy,
             collections=collections)
         return {"energy": loss}
 
-    def get_total_loss(self, predictions, labels, n_atoms, atom_masks,
+    def get_total_loss(self,
+                       predictions,
+                       labels,
+                       n_atoms,
+                       atom_masks,
                        loss_parameters: LossParameters,
+                       max_train_steps=None,
                        mode=tf_estimator.ModeKeys.TRAIN):
         """
         Get the total loss tensor.
@@ -481,6 +485,11 @@ class BasicNN:
             The following prediction is included and required for computing
             elastic loss:
                 * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
+
+            For finite temperature systems those are required:
+                * 'eentropy' (electron entropy) of shape `[batch_size, ]`
+                * 'free_energy' (electron free energy) of shape `[batch_size, ]`
+
         labels : dict
             A dict of reference tensors.
 
@@ -500,6 +509,8 @@ class BasicNN:
             A `int64` tensor of shape `[batch_size, ]`.
         atom_masks : tf.Tensor
             A float tensor of shape `[batch_size, n_atoms_max + 1]`.
+        max_train_steps : Union[int, tf.Tensor]
+            The maximum number of training steps.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
         mode : tf_estimator.ModeKeys
@@ -525,6 +536,7 @@ class BasicNN:
                 predictions=predictions,
                 labels=labels,
                 n_atoms=n_atoms,
+                max_train_steps=max_train_steps,
                 loss_parameters=loss_parameters,
                 collections=collections)
 
@@ -533,24 +545,24 @@ class BasicNN:
                     labels=labels["forces"],
                     predictions=predictions["forces"],
                     atom_masks=atom_masks,
-                    loss_weight=loss_parameters.forces.weight,
-                    method=LossMethod[loss_parameters.forces.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.forces,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
                 losses["total_pressure"] = loss_ops.get_total_pressure_loss(
                     labels=labels["total_pressure"],
                     predictions=predictions["total_pressure"],
-                    loss_weight=loss_parameters.total_pressure.weight,
-                    method=LossMethod[loss_parameters.total_pressure.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.total_pressure,
                     collections=collections)
 
             if 'stress' in self._minimize_properties:
                 losses["stress"] = loss_ops.get_stress_loss(
                     labels=labels["stress"],
                     predictions=predictions["stress"],
-                    loss_weight=loss_parameters.stress.weight,
-                    method=LossMethod[loss_parameters.stress.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.stress,
                     collections=collections)
 
             l2_loss = loss_ops.get_l2_regularization_loss(

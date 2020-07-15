@@ -6,11 +6,13 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from typing import List, Union
+from typing import List, Union, Tuple
 from enum import Enum
 
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.nn.dataclasses import L2LossOptions
+from tensoralloy.nn.dataclasses import L2LossOptions, EnergyLossOptions
+from tensoralloy.nn.dataclasses import ForcesLossOptions, StressLossOptions
+from tensoralloy.nn.dataclasses import PressureLossOptions
 from tensoralloy.nn.utils import is_first_replica
 
 
@@ -91,13 +93,12 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     return z, mae
 
 
-def _get_weighted_loss(loss_weight: float, raw_loss: tf.Tensor,
+def _get_weighted_loss(loss_weight: tf.Tensor,
+                       raw_loss: tf.Tensor,
                        mae: Union[None, tf.Tensor], collections):
     """
     Return the final weighted loss tensor.
     """
-    loss_weight = tf.convert_to_tensor(
-        loss_weight, raw_loss.dtype, name='weight')
     loss = tf.multiply(raw_loss, loss_weight, name='weighted/loss')
     if collections is not None and is_first_replica():
         if mae is not None:
@@ -107,9 +108,31 @@ def _get_weighted_loss(loss_weight: float, raw_loss: tf.Tensor,
     return loss
 
 
-def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
-                    collections=None, per_atom_loss=False,
-                    method=LossMethod.rmse,
+def create_weight_tensor(weight: Union[float, Tuple[float, float]],
+                         max_train_steps: Union[int, tf.Tensor],
+                         dtype=tf.float32):
+    """
+    Create the static or dynamic loss weight tensor.
+    """
+    if isinstance(weight, float):
+        return tf.convert_to_tensor(weight, name='weight')
+    else:
+        global_step = tf.train.get_or_create_global_step()
+        max_train_steps = tf.convert_to_tensor(max_train_steps, dtype=dtype,
+                                               name='max_steps')
+        w0 = tf.convert_to_tensor(weight[0], dtype=dtype, name='w0')
+        w1 = tf.convert_to_tensor(weight[1], dtype=dtype, name='w1')
+        slope = tf.truediv(w1 - w0, max_train_steps, name='slope')
+        weight = tf.add(w0, slope * global_step, name='weight')
+        return weight
+
+
+def get_energy_loss(labels,
+                    predictions,
+                    n_atoms,
+                    max_train_step,
+                    options: EnergyLossOptions,
+                    collections=None,
                     name_scope="Energy"):
     """
     Return the loss tensor of the energy.
@@ -123,15 +146,12 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
-    per_atom_loss : bool
-        If True, return the per-atom loss; otherwise, return the per-structrue
-        loss. Defaults to False.
+    max_train_step : Union[int, tf.Tensor]
+        The maximum number of training steps.
+    options : EnergyLossOptions
+        Options for computing energy loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
-    method : LossMethod
-        The loss method to use.
     name_scope : str
         The name scope for this function.
 
@@ -141,6 +161,8 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
         A float tensor as the total loss.
 
     """
+    method = LossMethod[options.method]
+    per_atom_loss = options.per_atom_loss
     assert method != LossMethod.rrmse
 
     with tf.name_scope(name_scope):
@@ -159,7 +181,9 @@ def get_energy_loss(labels, predictions, n_atoms, loss_weight=1.0,
         else:
             raw_loss, mae = _get_logcosh_loss(x, y,
                                               is_per_atom_loss=per_atom_loss)
-        return _get_weighted_loss(loss_weight, raw_loss, mae, collections)
+        weight = create_weight_tensor(
+            options.weight, max_train_step, dtype=mae.dtype)
+        return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
 def _absolute_forces_loss(labels: tf.Tensor,
@@ -197,8 +221,12 @@ def _absolute_forces_loss(labels: tf.Tensor,
     return loss, mae
 
 
-def get_forces_loss(labels, predictions, atom_masks, loss_weight=1.0,
-                    collections=None, method=LossMethod.rmse):
+def get_forces_loss(labels,
+                    predictions,
+                    atom_masks,
+                    max_train_steps: Union[int, tf.Tensor],
+                    options: ForcesLossOptions,
+                    collections=None):
     """
     Return the loss tensor of the atomic forces.
 
@@ -213,12 +241,12 @@ def get_forces_loss(labels, predictions, atom_masks, loss_weight=1.0,
     atom_masks : tf.Tensor
         A float tensor of shape `[batch_size, ]` as the atom masks of each
         structure.
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
+    max_train_steps : Union[int, tf.Tensor]
+        The maximum number of training steps.
+    options : ForcesLossOptions
+        Options for computing force loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
-    method : LossMethod
-        The method to compute the loss.
 
     Returns
     -------
@@ -232,14 +260,20 @@ def get_forces_loss(labels, predictions, atom_masks, loss_weight=1.0,
         with tf.name_scope("Split"):
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
+        method = LossMethod[options.method]
+        weight = create_weight_tensor(options.weight, max_train_steps,
+                                      labels.dtype)
         raw_loss, mae = _absolute_forces_loss(labels, predictions,
                                               atom_masks=atom_masks,
                                               method=method)
-        return _get_weighted_loss(loss_weight, raw_loss, mae, collections)
+        return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
-def get_stress_loss(labels, predictions, loss_weight=1.0, collections=None,
-                    method=LossMethod.rmse):
+def get_stress_loss(labels,
+                    predictions,
+                    max_train_steps: Union[int, tf.Tensor],
+                    options: StressLossOptions,
+                    collections=None):
     """
     Return the (relative) RMSE loss of the stress.
 
@@ -249,12 +283,12 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, collections=None,
         A float tensor of shape `[batch_size, 6]` as the reference stress.
     predictions : tf.Tensor
         A float tensor of shape `[batch_size, 6]` as the predicted stress.
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
+    max_train_steps : Union[int, tf.Tensor]
+        The maximum number of training steps.
+    options : StressLossOptions
+        Options for computing stress loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
-    method : LossMethod
-        The loss method to use.
 
     Returns
     -------
@@ -265,7 +299,7 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, collections=None,
     with tf.name_scope("Stress"):
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
-
+        method = LossMethod[options.method]
         if method == LossMethod.rmse:
             raw_loss, mae = _get_rmse_loss(
                 labels,
@@ -281,11 +315,16 @@ def get_stress_loss(labels, predictions, loss_weight=1.0, collections=None,
                 labels,
                 predictions,
                 is_per_atom_loss=False)
-        return _get_weighted_loss(loss_weight, raw_loss, mae, collections)
+        weight = create_weight_tensor(options.weight, max_train_steps,
+                                      dtype=mae.dtype)
+        return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
-def get_total_pressure_loss(labels, predictions, loss_weight=1.0,
-                            collections=None, method=LossMethod.rmse):
+def get_total_pressure_loss(labels,
+                            predictions,
+                            max_train_steps: Union[int, tf.Tensor],
+                            options: PressureLossOptions,
+                            collections=None):
     """
     Return the RMSE loss of the total pressure.
 
@@ -296,12 +335,12 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0,
         energies.
     predictions : tf.Tensor
         A float tensor of shape `[batch_size, ]` as the predicted pressure.
-    loss_weight : float or tf.Tensor
-        The weight of the overall loss.
+    max_train_steps : Union[int, tf.Tensor]
+        The maximum number of training steps.
+    options : StressLossOptions
+        Options for computing pressure loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
-    method : LossMethod
-        The loss method to use.
 
     Returns
     -------
@@ -309,6 +348,7 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0,
         A float tensor as the total loss.
 
     """
+    method = LossMethod[options.method]
     assert method != LossMethod.rrmse
 
     with tf.name_scope("Pressure"):
@@ -321,7 +361,9 @@ def get_total_pressure_loss(labels, predictions, loss_weight=1.0,
         else:
             raw_loss, mae = _get_logcosh_loss(labels, predictions,
                                               is_per_atom_loss=False)
-        return _get_weighted_loss(loss_weight, raw_loss, mae, collections)
+        weight = create_weight_tensor(options.weight, max_train_steps,
+                                      dtype=labels.dtype)
+        return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
 def get_l2_regularization_loss(options: L2LossOptions, collections=None):

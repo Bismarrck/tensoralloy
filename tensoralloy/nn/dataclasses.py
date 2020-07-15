@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from dataclasses import dataclass, is_dataclass
-from typing import List, Union, Dict
+from typing import List, Union, Dict, Tuple
 
 from tensoralloy.utils import add_slots
 
@@ -65,7 +65,7 @@ class _LossOptions:
     """
     The basic options for a loss.
     """
-    weight: float = 1.0
+    weight: Union[float, Tuple[float, float]] = 1.0
 
 
 @add_slots

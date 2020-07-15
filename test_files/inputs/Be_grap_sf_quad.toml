@@ -27,6 +27,9 @@ omega = [0.0, 1.5, 3.0]
 [nn.atomic.layers]
 Be = [64, 64]
 
+[nn.loss.energy]
+weight = [0.1, 1.0]
+
 [opt]
 learning_rate = 0.01
 decay_function = false
