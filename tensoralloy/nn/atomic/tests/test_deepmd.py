@@ -14,7 +14,8 @@ from nose.tools import assert_list_equal
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.transformer import DeePMDTransformer, BatchDeePMDTransformer
+from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.io.db import snap
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
@@ -30,7 +31,7 @@ def test_init():
         elements = ["Mo", "Ni"]
         atoms = snap().get_atoms(id=1)
 
-        clf = DeePMDTransformer(rc, elements)
+        clf = UniversalTransformer(elements, rcut=rc, angular=False)
         nn = DeepPotSE(elements, rcs, hidden_sizes=[64, 32],
                        activation='softplus')
         nn.attach_transformer(clf)
@@ -59,7 +60,9 @@ def test_batch_init():
         size = find_neighbor_size_of_atoms(atoms, rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
 
-        clf = BatchDeePMDTransformer(rc, max_occurs, size.nij, size.nnl, 1)
+        clf = BatchUniversalTransformer(max_occurs, rcut=rc, 
+                                        nij_max=size.nij, nnl_max=size.nnl, 
+                                        batch_size=1)
 
         protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
         example = clf.decode_protobuf(protobuf)

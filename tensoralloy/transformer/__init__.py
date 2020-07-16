@@ -9,8 +9,6 @@ from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
 from tensoralloy.transformer.behler import SymmetryFunctionTransformer
 from tensoralloy.transformer.eam import EAMTransformer, BatchEAMTransformer
 from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
-from tensoralloy.transformer.deepmd import DeePMDTransformer
-from tensoralloy.transformer.deepmd import BatchDeePMDTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.vap import VirtualAtomMap
@@ -22,5 +20,5 @@ __all__ = ["VirtualAtomMap",
            "BatchSymmetryFunctionTransformer", "SymmetryFunctionTransformer",
            "BatchEAMTransformer", "EAMTransformer",
            "BatchADPTransformer", "ADPTransformer",
-           "BatchDeePMDTransformer", "DeePMDTransformer",
            "UniversalTransformer", "BatchUniversalTransformer"]
+

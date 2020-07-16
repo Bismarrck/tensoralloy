@@ -28,7 +28,6 @@ from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
-from tensoralloy.transformer import BatchDeePMDTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
@@ -261,13 +260,7 @@ class TrainingManager:
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
         nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
 
-        if pair_style == 'atomic/deepmd':
-            clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
-                                         nij_max=nij_max, nnl_max=nnl_max,
-                                         use_forces=database.has_forces,
-                                         use_stress=database.has_stress)
-
-        elif pair_style == 'atomic/sf':
+        if pair_style == 'atomic/sf':
             angular = self._reader['nn.atomic.sf.angular']
             if angular:
                 nijk_max = database.get_nijk_max(acut, allow_calculation=True)
@@ -276,7 +269,8 @@ class TrainingManager:
             clf = BatchUniversalTransformer(
                 max_occurs=max_occurs, rcut=rcut, acut=acut, angular=angular,
                 nij_max=nij_max, nijk_max=nijk_max, nnl_max=nnl_max,
-                symmetric=True)
+                symmetric=True, use_forces=database.has_forces, 
+                use_stress=database.has_stress)
         elif pair_style.startswith("eam"):
             if pair_style == 'adp':
                 cls = BatchADPTransformer
@@ -292,11 +286,13 @@ class TrainingManager:
             clf = BatchUniversalTransformer(
                 max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
                 symmetric=False, nij_max=nij_max, nijk_max=nijk_max,
-                nnl_max=nnl_max, ij2k_max=ij2k_max)
-        elif pair_style == 'atomic/grap':
+                nnl_max=nnl_max, ij2k_max=ij2k_max,
+                use_forces=database.has_forces, use_stress=database.has_stress)
+        elif pair_style == 'atomic/grap' or pair_style == 'atomic/deepmd':
             clf = BatchUniversalTransformer(
                 max_occurs=max_occurs, rcut=rcut, angular=False,
-                nij_max=nij_max, nnl_max=nnl_max)
+                nij_max=nij_max, nnl_max=nnl_max, 
+                use_forces=database.has_forces, use_stress=database.has_stress)
         else:
             raise ValueError(f"Unknown pair style: {pair_style}")
 
