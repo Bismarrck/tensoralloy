@@ -156,6 +156,9 @@ rho = 0.95
 decay = 0.9
 momentum = 0.0
 
+[opt.adamw]
+decay = 1e-4
+
 [train]
 reset_global_step = true
 batch_size = 50

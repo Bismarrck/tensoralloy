@@ -37,7 +37,7 @@ method = ["rmse", "logcosh", "rrmse"]
 method = ["rmse", "logcosh"]
 
 [opt]
-method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd']
+method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd', 'adamw']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']
 
 [distribute]

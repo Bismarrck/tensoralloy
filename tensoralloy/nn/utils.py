@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow.contrib.opt import NadamOptimizer
+from tensorflow.contrib.opt import NadamOptimizer, AdamWOptimizer
 from typing import Dict
 
 __author__ = 'Xin Chen'
@@ -112,6 +112,9 @@ def get_optimizer(learning_rate, method='adam', **kwargs):
         if method.lower() == 'adam':
             return tf.compat.v1.train.AdamOptimizer(
                 learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
+        elif method.lower() == 'adamw':
+            return AdamWOptimizer(weight_decay=kwargs.get('decay', 1e-4),
+                                  learning_rate=learning_rate)
         elif method.lower() == 'nadam':
             return NadamOptimizer(
                 learning_rate=learning_rate, beta1=kwargs.get('beta1', 0.9))
