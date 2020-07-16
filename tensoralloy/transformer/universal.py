@@ -877,7 +877,6 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict["volume"] = np_dtype(volume)
         feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["etemperature"] = np_dtype(etemp)
-        feed_dict["eentropy"] = np_dtype(eentropy)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(
             g2.as_dict(use_computed_dists=self._use_computed_dists))
