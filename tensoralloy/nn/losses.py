@@ -126,7 +126,8 @@ def create_weight_tensor(weight: Union[float, Tuple[float, float]],
         w1 = tf.convert_to_tensor(weight[1], dtype=dtype, name='w1')
         slope = tf.truediv(w1 - w0, max_train_steps, name='slope')
         weight = tf.add(w0, slope * global_step, name='weight')
-        tf.add_to_collection(GraphKeys.TRAIN_METRICS, weight)
+        if is_first_replica():
+            tf.add_to_collection(GraphKeys.TRAIN_METRICS, weight)
         return weight
 
 
