@@ -155,15 +155,15 @@ class TensorAlloyCalculator(Calculator):
         props_and_names = {
             'energy': 'Output/Energy/energy:0',
             'enthalpy': 'Output/Energy/enthalpy:0',
+            'atomic': 'Output/Energy/atomic:0',
+            'free_energy': 'Output/Energy/free_energy:0',
+            'eentropy': 'Output/Energy/eentropy:0',
             'pv': 'Output/Energy/PV/pv:0',
             'forces': 'Output/Forces/forces:0',
             'stress': 'Output/Stress/Voigt/stress:0',
             'hessian': 'Output/Hessian/hessian:0',
             'elastic': 'Output/Elastic/Cijkl/elastic:0'
         }
-        op_name = self._get_y_atomic_tensor_name()
-        if op_name is not None:
-            props_and_names['atomic'] = op_name
         ops = {}
         for prop, name in props_and_names.items():
             try:
@@ -202,6 +202,19 @@ class TensorAlloyCalculator(Calculator):
         Return the PV energy (eV).
         """
         return self.get_property('pv', atoms=atoms)
+    
+    def get_electron_entropy(self, atoms=None):
+        """
+        Return the electron entropy S.
+        """
+        return self.get_property('eentropy', atoms=atoms)
+    
+    def get_free_energy(self, atoms=None):
+        """
+        Return the free energy for finite temperature system.
+        F = U - T*S
+        """
+        return self.get_property('free_energy', atoms=atoms)
 
     def get_atomic_energy(self, atoms=None):
         """

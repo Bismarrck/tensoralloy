@@ -15,7 +15,7 @@ import warnings
 from os.path import dirname, join, basename, exists
 from ase.build import bulk
 from ase.io import read
-from ase.units import GPa
+from ase.units import GPa, kB
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.calculator import TensorAlloyCalculator
@@ -29,6 +29,7 @@ from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.nn.constraint.data import read_external_crystal
 from tensoralloy.precision import precision_scope
 from tensoralloy.utils import Defaults
+from tensoralloy import atoms_utils
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -501,6 +502,18 @@ class EquationOfStateProgram(CLIProgram):
             default=None,
             help="The output volume-energy figure."
         )
+        subparser.add_argument(
+            '--etemp',
+            type=float,
+            default=0.0,
+            help="The electron temperature in Kelvin."
+        )
+        subparser.add_argument(
+            '--use-free-energy',
+            action='store_true',
+            default=False,
+            help="Plot free energy vs volume if this flag is set."
+        )
 
         super(EquationOfStateProgram, self).config_subparser(subparser)
 
@@ -512,36 +525,55 @@ class EquationOfStateProgram(CLIProgram):
         def func(args: argparse.Namespace):
             assert 0.80 <= args.xlo <= 0.99
             assert 1.01 <= args.xhi <= 1.20
+            assert 0.00 <= args.etemp
 
             crystal = _get_atoms(args.crystal)
+            atoms_utils.set_electron_temperature(crystal, args.etemp * kB)
             calc = TensorAlloyCalculator(args.graph_model_path)
             crystal.calc = calc
             cell = crystal.cell.copy()
             formula = crystal.get_chemical_formula()
-
+            properties = ['energy']
+            label = "E"
+            if args.etemp > 0:
+                formula = f"{formula}_{args.etemp:.0f}K"
+                properties.extend(['eentropy', 'free_energy'])
             if args.fig is None:
                 work_dir = "."
-                filename = join(work_dir, f"{formula}_eos.png")
+                figname = join(work_dir, f"{formula}_eos.png")
+                csvname = join(work_dir, f"{formula}_EV.csv")
             else:
                 work_dir = dirname(args.fig)
-                filename = args.fig
-                if not exists(work_dir):
+                figname = args.fig
+                csvname = f"{basename(figname)}_EV.csv"
+                if work_dir and not exists(work_dir):
                     os.makedirs(work_dir)
 
             volumes = []
             energies = []
+            eentropies = []
             num = int(np.round(args.xhi - args.xlo, 2) / 0.005) + 1
             for x in np.linspace(args.xlo, args.xhi, num, True):
                 crystal.set_cell(cell * x, scale_atoms=True)
                 volumes.append(crystal.get_volume())
-                energies.append(crystal.get_potential_energy())
+                calc.calculate(crystal, properties=properties)
+                if args.use_free_energy:
+                    energies.append(calc.results['free_energy'])
+                    label = "F"
+                else:
+                    energies.append(calc.results['energy']) 
+                if args.etemp > 0:
+                    eentropies.append(calc.results['eentropy'])
+                else:
+                    eentropies.append(0.0) 
 
             eos = EquationOfState(volumes, energies, eos=args.eos)
             v0, e0, bulk_modulus, residual = eos.fit()
-            eos.plot(filename, show=False)
+            eos.plot(figname, show=False)
 
-            df = pd.DataFrame({"E": energies, "V": volumes})
-            df.to_csv(join(work_dir, f"{formula}_EV.csv"))
+            df = pd.DataFrame({label: energies, "V": volumes, "S": eentropies,
+                               "T(K)": np.ones_like(energies) * args.etemp})
+            df.to_csv(csvname)
 
             print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
                 formula,
