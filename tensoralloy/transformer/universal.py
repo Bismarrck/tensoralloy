@@ -863,7 +863,6 @@ class UniversalTransformer(DescriptorTransformer):
         volume = atoms.get_volume()
         atom_masks = vap.atom_masks.astype(np_dtype)
         pulay_stress = atoms_utils.get_pulay_stress(atoms)
-        eentropy = atoms_utils.get_electron_entropy(atoms)
         etemp = atoms_utils.get_electron_temperature(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
 

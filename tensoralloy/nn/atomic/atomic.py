@@ -13,7 +13,6 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.dataclasses import EnergyOps, LossParameters
-from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1

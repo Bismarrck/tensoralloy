@@ -71,7 +71,8 @@ class SymmetryFunctionAlgorithm(Algorithm):
     required_keys = ['eta', 'omega']
     name = "sf"
     
-    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
+                dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -94,7 +95,8 @@ class MorseAlgorithm(Algorithm):
     required_keys = ['D', 'gamma', 'r0']
     name = "morse"
     
-    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
+                dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -115,7 +117,8 @@ class DensityExpAlgorithm(Algorithm):
     required_keys = ['A', 'beta', 're']
     name = "density"
     
-    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor, dtype=tf.float32):
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
+                dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
         """
@@ -172,7 +175,8 @@ class GenericRadialAtomicPotential(AtomicNN):
             export_properties=export_properties)
         
         if algorithm not in available_algorithms:
-            raise ValueError(f"GRAP: algorithm '{algorithm}' is not implemented")
+            raise ValueError(
+                f"GRAP: algorithm '{algorithm}' is not implemented")
         assert 0 <= multipole <= 2 
         
         self._algorithm = self.initialize_algorithm(algorithm, parameters)
