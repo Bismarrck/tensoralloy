@@ -16,6 +16,10 @@ kernel_initializer = [
     'xavier_normal', 'xavier_uniform',
     'truncated_normal']
 
+[nn.atomic.finite_temperature]
+algorithm = ["semi", "full"]
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
+
 [nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
 

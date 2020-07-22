@@ -65,9 +65,14 @@ use_resnet_dt = false
 use_atomic_static_energy = true
 fixed_atomic_static_energy = false
 activation = "softplus"
-temperature_dependent = false
-temperature_layers = [128, 128]
-temperature_activation = 'softplus'
+
+[nn.atomic.finite_temperature]
+on = false
+algorithm = "full"
+activation = "softplus"
+layers = [128, 128]
+biased_eentropy = true
+biased_internal_energy = false
 
 [nn.atomic.deepmd]
 rcs = 4.0
