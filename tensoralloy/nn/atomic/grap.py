@@ -16,6 +16,7 @@ from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
+from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp
 
@@ -135,6 +136,8 @@ class GenericRadialAtomicPotential(AtomicNN):
     """
     The generic atomic potential with polarized radial interactions.
     """
+
+    scope = "GRAP"
     
     def __init__(self,
                  elements: List[str],
@@ -148,9 +151,7 @@ class GenericRadialAtomicPotential(AtomicNN):
                  fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
                  use_resnet_dt=True,
-                 temperature_dependent=False,
-                 temperature_layers=(128, 128),
-                 temperature_activation='softplus',
+                 finite_temperature=FiniteTemperatureOptions(),
                  algorithm='sf',
                  parameters=None,
                  multipole=0,
@@ -168,9 +169,7 @@ class GenericRadialAtomicPotential(AtomicNN):
             atomic_static_energy=atomic_static_energy,
             use_resnet_dt=use_resnet_dt,
             minmax_scale=minmax_scale,
-            temperature_dependent=temperature_dependent,
-            temperature_layers=temperature_layers,
-            temperature_activation=temperature_activation,
+            finite_temperature=finite_temperature,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
         

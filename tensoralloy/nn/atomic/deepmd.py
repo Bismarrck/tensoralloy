@@ -18,6 +18,7 @@ from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
+from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -29,6 +30,7 @@ class DeepPotSE(AtomicNN):
     """
 
     default_collection = GraphKeys.DEEPMD_VARIABLES
+    scope = "DPMD"
 
     def __init__(self,
                  elements: List[str],
@@ -44,9 +46,7 @@ class DeepPotSE(AtomicNN):
                  use_atomic_static_energy=True,
                  fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
-                 temperature_dependent=False,
-                 temperature_layers=(128, 128),
-                 temperature_activation='softplus',
+                 finite_temperature=FiniteTemperatureOptions(),
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
@@ -64,9 +64,7 @@ class DeepPotSE(AtomicNN):
             use_atomic_static_energy=use_atomic_static_energy,
             fixed_atomic_static_energy=fixed_atomic_static_energy,
             atomic_static_energy=atomic_static_energy,
-            temperature_dependent=temperature_dependent,
-            temperature_layers=temperature_layers,
-            temperature_activation=temperature_activation,
+            finite_temperature=finite_temperature,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
@@ -219,4 +217,3 @@ class DeepPotSE(AtomicNN):
             max_occurs=max_occurs,
             verbose=verbose)
         return AtomicDescriptors(embeddings, max_occurs)
-

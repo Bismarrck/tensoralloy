@@ -15,6 +15,7 @@ from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
+from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.extension.grad_ops import safe_pow
 from tensoralloy.precision import get_float_dtype
@@ -29,6 +30,8 @@ class SymmetryFunctionNN(AtomicNN):
     Symmetry function based atomistic neural network potential.
     """
 
+    scope = "SF"
+
     def __init__(self,
                  elements: List[str],
                  hidden_sizes=None,
@@ -41,9 +44,7 @@ class SymmetryFunctionNN(AtomicNN):
                  fixed_atomic_static_energy=False,
                  atomic_static_energy=None,
                  use_resnet_dt=True,
-                 temperature_dependent=False,
-                 temperature_layers=(128, 128),
-                 temperature_activation='softplus',
+                 finite_temperature=FiniteTemperatureOptions(),
                  eta=np.array([0.05, 4.0, 20.0, 80.0]),
                  omega=np.asarray([0.0]),
                  beta=np.asarray([0.005]),
@@ -60,9 +61,7 @@ class SymmetryFunctionNN(AtomicNN):
             atomic_static_energy=atomic_static_energy,
             use_resnet_dt=use_resnet_dt,
             minmax_scale=minmax_scale,
-            temperature_dependent=temperature_dependent,
-            temperature_layers=temperature_layers,
-            temperature_activation=temperature_activation,
+            finite_temperature=finite_temperature,
             minimize_properties=minimize_properties,
             export_properties=export_properties)
 
@@ -72,7 +71,6 @@ class SymmetryFunctionNN(AtomicNN):
         self._zeta = zeta
         self._beta = beta
         self._cutoff_function = cutoff_function
-        self._nn_scope = "Atomic/SF"
         self._radial_parameters = ParameterGrid({'eta': self._eta,
                                                  'omega': self._omega})
         self._angular_parameters = ParameterGrid({'beta': self._beta,
