@@ -6,8 +6,8 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from typing import Dict
-from dataclasses import dataclass
+from typing import Dict, List
+from dataclasses import dataclass, field
 from collections import Counter
 
 __author__ = 'Xin Chen'
@@ -21,3 +21,21 @@ class AtomicDescriptors:
     """
     descriptors: Dict[str, tf.Tensor]
     max_occurs: Counter
+
+
+@dataclass
+class FiniteTemperatureOptions:
+    """
+    Options for modeling finite-temperature systems.
+    """
+    on: bool = field(init=False)
+    algorithm: str = "full"
+    activation: str = "softplus"
+    layers: List[int] = (128, 128)
+    biased_eentropy: bool = True
+    biased_internal_energy: bool = False
+
+    def __post_init__(self):
+        if self.algorithm not in ("off", "zero", "semi", "full"):
+            raise ValueError(f"Algorithm {self.algorithm} is unknown!")
+        self.on = self.algorithm != "off"

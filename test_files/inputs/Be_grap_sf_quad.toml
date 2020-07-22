@@ -17,7 +17,6 @@ activation = "softplus"
 kernel_initializer = 'he_normal'
 
 [nn.atomic.finite_temperature]
-on = true
 algorithm = "semi"
 
 [nn.atomic.grap]
