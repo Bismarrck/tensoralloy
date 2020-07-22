@@ -18,7 +18,7 @@ from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 from tensoralloy.nn.partition import dynamic_partition
-from tensoralloy.nn.eam.potentials.generic import morse, density_exp
+from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 
 available_algorithms = ['sf', 'morse', 'density']
 
@@ -31,7 +31,9 @@ class Algorithm:
     required_keys = []
     name = "algorithm"
     
-    def __init__(self, parameters: Dict[str, Union[List[float], np.ndarray]]):
+    def __init__(self,
+                 parameters: Dict[str, Union[List[float], np.ndarray]],
+                 gen_method="grid"):
         """
         Initialization method.
         """
@@ -39,17 +41,39 @@ class Algorithm:
             assert key in parameters and len(parameters[key]) >= 1
         self._params = {key: [float(x) for x in parameters[key]] 
                         for key in self.required_keys}
-        self._grid = ParameterGrid(self._params)
+        self._gen_method = gen_method
+
+        if gen_method == "grid":
+            self._grid = ParameterGrid(self._params)
+        else:
+            n = len(set([len(x) for x in self._params.values()]))
+            if n > 1:
+                raise ValueError(
+                    "Hyperparameters must have the same length for gen:pair")
+            self._grid = []
+            size = len(self._params[self.required_keys[0]])
+            for i in range(size):
+                row = {}
+                for key in self._params.keys():
+                    row[key] = self._params[key][i]
+                self._grid.append(row)
     
     def __len__(self):
+        """
+        Return the number of hyper-parameter combinations.
+        """
         return len(self._grid)
+
+    def __getitem__(self, item):
+        return self._grid[item]
     
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this object.
         """
-        return {"algorithm": self.name, "parameters": self._params}
-    
+        return {"algorithm": self.name, "parameters": self._params,
+                "gen_method": self._gen_method}
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -130,7 +154,27 @@ class DensityExpAlgorithm(Algorithm):
         re = tf.convert_to_tensor(
             self._grid[tau]['re'], dtype=dtype, name='re')
         return density_exp(rij, a=a, b=beta, re=re)
-    
+
+
+class PowerExpAlgorithm(Algorithm):
+    """
+    The power-exponential descriptor used by Oganov.
+    """
+
+    required_keys = ["rl", "pl"]
+    name = "pexp"
+
+    def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
+                dtype=tf.float32):
+        """
+        Compute f(r, rc) using the \tau-th set of parameters.
+        """
+        rl = tf.convert_to_tensor(
+            self._grid[tau]['rl'], dtype=dtype, name='rl')
+        pl = tf.convert_to_tensor(
+            self._grid[tau]['pl'], dtype=dtype, name='pl')
+        return power_exp(rij, rl, pl)
+
 
 class GenericRadialAtomicPotential(AtomicNN):
     """
@@ -154,7 +198,8 @@ class GenericRadialAtomicPotential(AtomicNN):
                  finite_temperature=FiniteTemperatureOptions(),
                  algorithm='sf',
                  parameters=None,
-                 multipole=0,
+                 gen_method="grid",
+                 moment_tensors: Union[int, List[int]] = 0,
                  cutoff_function="cosine"):
         """
         Initialization method.
@@ -176,24 +221,28 @@ class GenericRadialAtomicPotential(AtomicNN):
         if algorithm not in available_algorithms:
             raise ValueError(
                 f"GRAP: algorithm '{algorithm}' is not implemented")
-        assert 0 <= multipole <= 2 
+        if isinstance(moment_tensors, int):
+            moment_tensors = [moment_tensors]
+        moment_tensors = list(set(moment_tensors))
+        for moment_tensor in moment_tensors:
+            assert 0 <= moment_tensor <= 2
         
-        self._algorithm = self.initialize_algorithm(algorithm, parameters)
-        self._multipole = multipole
+        self._algorithm = self.initialize_algorithm(
+            algorithm, parameters, gen_method)
+        self._moment_tensors = moment_tensors
         self._cutoff_function = cutoff_function
-        self._nn_scope = "Atomic/GRAP"
     
     def as_dict(self):
         """
         Return a JSON serializable dict representation of GRAP.
         """
         d = super(GenericRadialAtomicPotential, self).as_dict()
-        d["multipole"] = self._multipole
+        d["moment_tensors"] = self._moment_tensors
         d.update(self._algorithm.as_dict())
         return d
 
     @staticmethod
-    def initialize_algorithm(algorithm: str, parameters: dict):
+    def initialize_algorithm(algorithm: str, parameters: dict, gen_method: str):
         """
         Initialize an `Algorithm` object.
         """
@@ -203,7 +252,7 @@ class GenericRadialAtomicPotential(AtomicNN):
             cls = DensityExpAlgorithm
         else:
             cls = MorseAlgorithm
-        return cls(parameters)
+        return cls(parameters, gen_method)
    
     def apply_cutoff(self, x, rc, name=None):
         """
@@ -221,7 +270,7 @@ class GenericRadialAtomicPotential(AtomicNN):
         xyz_map = {
             0: 'x', 1: 'y', 2: 'z'
         }
-        multipole_map = {
+        moment_tensors_indices = {
             1: [0, 1, 2],
             2: [(0, 1), (0, 2), (1, 2)]
         }
@@ -257,12 +306,12 @@ class GenericRadialAtomicPotential(AtomicNN):
                         v = self._algorithm.compute(
                             tau, rij, rc, dtype=dtype)
                         # The standard central-force model
-                        if self._multipole >= 0:
+                        if 0 in self._moment_tensors:
                             with tf.name_scope("r"):
                                 gtau.append(_post_compute(v))
                         # Dipole effect
-                        if self._multipole >= 1:
-                            for i in multipole_map[1]:
+                        if 1 in self._moment_tensors:
+                            for i in moment_tensors_indices[1]:
                                 itag = xyz_map[i]
                                 with tf.name_scope(f"r{itag}"):
                                     coef = tf.div_no_nan(
@@ -271,8 +320,8 @@ class GenericRadialAtomicPotential(AtomicNN):
                                         _post_compute(
                                             tf.multiply(v, coef, name='fx')))
                         # Quadrupole effect
-                        if self._multipole >= 2:
-                            for (i, j) in multipole_map[2]:
+                        if 2 in self._moment_tensors:
+                            for (i, j) in moment_tensors_indices[2]:
                                 itag = xyz_map[i]
                                 jtag = xyz_map[j]
                                 with tf.name_scope(f"r{itag}{jtag}"):

@@ -92,10 +92,11 @@ gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
 
 [nn.atomic.grap]
-multipole = 0
+moment_tensors = 0
 algorithm = 'sf'
 cutoff_function = 'cosine'
 minmax_scale = false
+gen_method = "grid"
 
 [nn.atomic.grap.sf]
 eta = [0.1, 0.5, 1.0, 4.0]

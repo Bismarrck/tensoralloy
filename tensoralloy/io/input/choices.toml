@@ -24,9 +24,9 @@ activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', '
 cutoff_function = ["cosine", "polynomial"]
 
 [nn.atomic.grap]
-multipole = [0, 1, 2]
 algorithm = ['sf', 'density', 'morse']
 cutoff_function = ['cosine', 'polynomial']
+gen_method = ["pair", "grid"]
 
 [nn.loss.energy]
 method = ["rmse", "logcosh"]
