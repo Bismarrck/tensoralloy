@@ -154,9 +154,7 @@ class TrainingManager:
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
             'use_resnet_dt': configs['use_resnet_dt'],
-            'temperature_dependent': configs['temperature_dependent'],
-            'temperature_layers': configs['temperature_layers'],
-            'temperature_activation': configs['temperature_activation'],
+            'finite_temperature': configs['finite_temperature'],
         }
         params.update(kwargs)
 
