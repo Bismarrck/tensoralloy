@@ -98,6 +98,9 @@ class BasicNN:
     # The default collection for model variabls.
     default_collection = None
 
+    # Global scope for this potential model.
+    scope = "Basic"
+
     def __init__(self,
                  elements: List[str],
                  hidden_sizes=None,
@@ -201,13 +204,13 @@ class BasicNN:
         return results
 
     @property
-    def transformer(self) -> BaseTransformer:
+    def transformer(self) -> UniversalTransformer:
         """
         Get the attached transformer.
         """
         return self._transformer
 
-    def attach_transformer(self, clf: BaseTransformer):
+    def attach_transformer(self, clf: UniversalTransformer):
         """
         Attach a descriptor transformer to this potential.
         """
@@ -454,7 +457,7 @@ class BasicNN:
             labels=labels["energy"],
             predictions=predictions["energy"],
             n_atoms=n_atoms,
-            max_train_step=max_train_steps,
+            max_train_steps=max_train_steps,
             options=loss_parameters.energy,
             collections=collections)
         return {"energy": loss}
