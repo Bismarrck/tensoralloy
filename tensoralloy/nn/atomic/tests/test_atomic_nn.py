@@ -32,7 +32,8 @@ def test_as_dict():
                       activation='tanh',
                       use_atomic_static_energy=False,
                       minimize_properties=['energy', ],
-                      export_properties=['energy', ])
+                      export_properties=['energy', ],
+                      finite_temperature={"algorithm": "off"})
 
     d = old_nn.as_dict()
 
@@ -44,6 +45,7 @@ def test_as_dict():
     assert_list_equal(new_nn.elements, old_nn.elements)
     assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
     assert_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
+    assert_equal(new_nn.finite_temperature_options.on, False)
 
 
 def test_tdsf():
@@ -59,7 +61,7 @@ def test_tdsf():
     nn = SymmetryFunctionNN(elements=elements,
                             hidden_sizes=[64, 64],
                             activation='softplus',
-                            temperature_dependent=True)
+                            finite_temperature={"algorithm": "full"})
     clf = UniversalTransformer(elements, rcut=4.5, acut=4.5, angular=True,
                                use_computed_dists=True)
     nn.attach_transformer(clf)
