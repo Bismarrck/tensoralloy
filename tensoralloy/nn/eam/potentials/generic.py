@@ -115,3 +115,19 @@ def zhou_exp(r, a, b, c, re, order=20, name=None):
         upper = density_exp(r, a, b, re)
         lower = tf.math.add(one, safe_pow(x - c, order))
         return tf.math.divide(upper, lower, name='result')
+
+
+def power_exp(r, rl, pl, name=None):
+    """
+    The powered-exponential function used by Oganov.
+
+        f(r) = exp(-(r / rl)**pl)
+
+    """
+    with tf.name_scope(name, "PExp"):
+        r = tf.convert_to_tensor(r, name='r')
+        rl = tf.convert_to_tensor(rl, name='rl', dtype=r.dtype)
+        pl = tf.convert_to_tensor(pl, name='pl', dtype=r.dtype)
+        rrl = tf.divide(r, rl, name='rrl')
+        rp = tf.pow(rrl, pl, name='rp')
+        return tf.exp(-rp, name='result')
