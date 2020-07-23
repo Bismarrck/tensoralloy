@@ -20,8 +20,6 @@ from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 
-available_algorithms = ['sf', 'morse', 'density']
-
 
 class Algorithm:
     """
@@ -33,17 +31,31 @@ class Algorithm:
     
     def __init__(self,
                  parameters: Dict[str, Union[List[float], np.ndarray]],
-                 gen_method="grid"):
+                 param_space_method="cross"):
         """
         Initialization method.
+
+        Parameters
+        ----------
+        parameters : dict
+            A dict of {param_name: values}.
+        param_space_method : str
+            The method to build the parameter space, 'cross' or 'pair'. Assume
+            there are M types of parameters and each has N_k (1 <= k <= M)
+            values, the total number of parameter sets will be:
+                * cross: N_1 * N_2 * ... * N_M
+                * pair: N_k (1 <= k <= M) must be the same
+
         """
+        assert param_space_method in ("cross", "pair")
+
         for key in self.required_keys:
             assert key in parameters and len(parameters[key]) >= 1
         self._params = {key: [float(x) for x in parameters[key]] 
                         for key in self.required_keys}
-        self._gen_method = gen_method
+        self._param_space_method = param_space_method
 
-        if gen_method == "grid":
+        if param_space_method == "cross":
             self._grid = ParameterGrid(self._params)
         else:
             n = len(set([len(x) for x in self._params.values()]))
@@ -72,7 +84,7 @@ class Algorithm:
         Return a JSON serializable dict representation of this object.
         """
         return {"algorithm": self.name, "parameters": self._params,
-                "gen_method": self._gen_method}
+                "param_space_method": self._param_space_method}
 
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
@@ -198,7 +210,7 @@ class GenericRadialAtomicPotential(AtomicNN):
                  finite_temperature=FiniteTemperatureOptions(),
                  algorithm='sf',
                  parameters=None,
-                 gen_method="grid",
+                 param_space_method="cross",
                  moment_tensors: Union[int, List[int]] = 0,
                  cutoff_function="cosine"):
         """
@@ -218,9 +230,6 @@ class GenericRadialAtomicPotential(AtomicNN):
             minimize_properties=minimize_properties,
             export_properties=export_properties)
         
-        if algorithm not in available_algorithms:
-            raise ValueError(
-                f"GRAP: algorithm '{algorithm}' is not implemented")
         if isinstance(moment_tensors, int):
             moment_tensors = [moment_tensors]
         moment_tensors = list(set(moment_tensors))
@@ -228,7 +237,7 @@ class GenericRadialAtomicPotential(AtomicNN):
             assert 0 <= moment_tensor <= 2
         
         self._algorithm = self.initialize_algorithm(
-            algorithm, parameters, gen_method)
+            algorithm, parameters, param_space_method)
         self._moment_tensors = moment_tensors
         self._cutoff_function = cutoff_function
     
@@ -242,17 +251,22 @@ class GenericRadialAtomicPotential(AtomicNN):
         return d
 
     @staticmethod
-    def initialize_algorithm(algorithm: str, parameters: dict, gen_method: str):
+    def initialize_algorithm(algorithm: str,
+                             parameters: dict,
+                             param_space_method='cross'):
         """
         Initialize an `Algorithm` object.
         """
-        if algorithm == "sf":
-            cls = SymmetryFunctionAlgorithm
-        elif algorithm == "density":
-            cls = DensityExpAlgorithm
+        for cls in (SymmetryFunctionAlgorithm,
+                    DensityExpAlgorithm,
+                    PowerExpAlgorithm,
+                    MorseAlgorithm):
+            if cls.name == algorithm:
+                break
         else:
-            cls = MorseAlgorithm
-        return cls(parameters, gen_method)
+            raise ValueError(
+                f"GRAP: algorithm '{algorithm}' is not implemented")
+        return cls(parameters, param_space_method)
    
     def apply_cutoff(self, x, rc, name=None):
         """

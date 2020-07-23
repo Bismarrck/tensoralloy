@@ -67,7 +67,6 @@ fixed_atomic_static_energy = false
 activation = "softplus"
 
 [nn.atomic.finite_temperature]
-on = false
 algorithm = "full"
 activation = "softplus"
 layers = [128, 128]
@@ -96,7 +95,7 @@ moment_tensors = 0
 algorithm = 'sf'
 cutoff_function = 'cosine'
 minmax_scale = false
-gen_method = "grid"
+param_space_method = "cross"
 
 [nn.atomic.grap.sf]
 eta = [0.1, 0.5, 1.0, 4.0]
@@ -111,6 +110,10 @@ re = [4.0]
 D = [1.0]
 gamma = [0.5, 0.6]
 r0 = [1.5, 2.5]
+
+[nn.atomic.grap.pexp]
+rl = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0]
+pl = [5.0, 4.6, 4.2, 3.8, 3.4, 3.0, 2.6, 2.2, 1.8, 1.4, 1.0]
 
 [nn.atomic.layers]
 

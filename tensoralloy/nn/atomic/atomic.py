@@ -396,10 +396,10 @@ class AtomicNN(BasicNN):
                             y = tf.squeeze(y, axis=2, name="atomic")
                             if verbose:
                                 log_tensor(y)
-                            if self._finite_temperature.algorithm == "off":
-                                outputs['energy'].append(y)
-                            else:
+                            if self._finite_temperature.on:
                                 outputs['free_energy'].append(y)
+                            else:
+                                outputs['energy'].append(y)
                         else:
                             x, t = self._add_electron_temperature(
                                 x=x,
@@ -506,8 +506,11 @@ class AtomicNN(BasicNN):
         if verbose:
             if self._finite_temperature.on:
                 log_tensor(free_energy)
-                log_tensor(eentropy)
-            log_tensor(energy)
+                if self._finite_temperature.algorithm == 'full':
+                    log_tensor(eentropy)
+                    log_tensor(energy)
+            else:
+                log_tensor(energy)
         return EnergyOps(energy, eentropy, enthalpy, free_energy, atomic_energy)
 
     def _get_energy_loss(self,
@@ -555,4 +558,4 @@ class AtomicNN(BasicNN):
                 max_train_steps=max_train_steps,
                 options=loss_parameters.energy,
                 collections=collections)
-            return {"energy": loss}
+            return {"free_energy": loss}

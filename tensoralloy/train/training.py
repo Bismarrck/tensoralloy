@@ -167,7 +167,10 @@ class TrainingManager:
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
         else:
-            for key in ('moment_tensors', 'algorithm', 'cutoff_function'):
+            for key in ('moment_tensors',
+                        'algorithm',
+                        'cutoff_function',
+                        'param_space_method'):
                 params[key] = configs['grap'][key]
             params['parameters'] = configs['grap'][params['algorithm']]
             return GenericRadialAtomicPotential(**params)
