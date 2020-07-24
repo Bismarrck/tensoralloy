@@ -72,10 +72,28 @@ class _LossOptions:
 @dataclass
 class EnergyLossOptions(_LossOptions):
     """
-    Special options for the loss of energies.
+    Special options for the loss of energy (internal energy).
     """
     per_atom_loss: bool = False
     method: str = 'rmse'
+
+
+@add_slots
+@dataclass
+class EEntropyLossOptions(EnergyLossOptions):
+    """
+    Special options for the loss of electron entropy.
+    """
+    pass
+
+
+@add_slots
+@dataclass
+class FreeEnergyLossOptions(EnergyLossOptions):
+    """
+    Special options for the loss of free energy.
+    """
+    pass
 
 
 @add_slots
@@ -164,17 +182,23 @@ class _HyperParameters:
 
 @add_slots
 @nested_dataclass
+@dataclass
 class LossParameters(_HyperParameters):
     """
     Hyper parameters for constructing the total loss.
     """
     energy: EnergyLossOptions = EnergyLossOptions()
+    eentropy: EEntropyLossOptions = EEntropyLossOptions()
+    free_energy: FreeEnergyLossOptions = FreeEnergyLossOptions()
     forces: ForcesLossOptions = ForcesLossOptions()
     stress: StressLossOptions = StressLossOptions()
     total_pressure: PressureLossOptions = PressureLossOptions()
     l2: L2LossOptions = L2LossOptions()
     elastic: ElasticLossOptions = ElasticLossOptions()
     rose: RoseLossOptions = RoseLossOptions()
+
+    def __getitem__(self, item):
+        return getattr(self, item)
 
 
 @add_slots

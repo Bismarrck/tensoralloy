@@ -544,7 +544,7 @@ class AtomicNN(BasicNN):
                             predictions=predictions[prop],
                             n_atoms=n_atoms,
                             max_train_steps=max_train_steps,
-                            options=loss_parameters.energy,
+                            options=loss_parameters[prop],
                             collections=collections,
                             name_scope=scope_name)
                         losses[prop] = loss
