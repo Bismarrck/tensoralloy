@@ -15,10 +15,12 @@ from typing import List, Dict, Callable
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
+from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.nn.eam.potentials import EamFSPotential, EamAlloyPotential
 from tensoralloy.nn.eam.potentials.spline import CubicSplinePotential
@@ -89,6 +91,8 @@ class EamNN(BasicNN):
     The tensorflow/CNN based implementation of the Embedded-Atom Method.
     """
 
+    scope = "EAM"
+
     def __init__(self,
                  elements: List[str],
                  custom_potentials=None,
@@ -100,7 +104,6 @@ class EamNN(BasicNN):
         """
         self._unique_kbody_terms = None
         self._kbody_terms = None
-        self._nn_scope = "nnEAM"
 
         super(EamNN, self).__init__(
             elements=elements,
@@ -356,31 +359,28 @@ class EamNN(BasicNN):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
                     # name_scope `x` to a 5D tensor.
-                    x = tf.expand_dims(value, axis=-1, name='input')
+                    x = tf.squeeze(value[0], axis=1, name='rij')
                     if verbose:
                         log_tensor(x)
                     # Apply the `phi` function on `x`
                     comput = self._get_phi_fn(kbody_term, verbose=verbose)
                     y = comput(x)
                     # Apply the value mask
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                    y = tf.multiply(y, tf.squeeze(mask, axis=1),
                                     name='masked')
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
                     values[kbody_term] = y
-                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                    y = tf.squeeze(y, axis=1)
+                    y = tf.reduce_sum(y, axis=(2, 3), keepdims=False)
                     half = tf.constant(0.5, dtype=x.dtype, name='half')
                     y = tf.multiply(y, half, name='atomic')
                     if verbose:
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-
             if mode == tf_estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
-
             return atomic, values
 
     def _build_rho_nn(self,
@@ -470,100 +470,6 @@ class EamNN(BasicNN):
                     values.append(embed)
             return tf.concat(values, axis=split_axis)
 
-    def _dynamic_partition(self,
-                           descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
-                           merge_symmetric=True):
-        """
-        Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
-        partitions where `Np` is the total number of unique k-body terms.
-
-        If `merge_symmetric` is False, `Np` is equal to `N**2`.
-        If `merge_symmetric` is True, `Np` will be `N * (N + 1) / 2`.
-
-        Here N denotes the total number of elements.
-
-        Parameters
-        ----------
-        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are elements and values are tuples of (value, mask)
-            where where `value` represents the descriptors and `mask` is
-            the value mask. `value` and `mask` have the same shape.
-                * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
-                  `[4, batch_size, max_n_terms, max_n_element, nnl]`.
-                * If `mode` is PREDICT, both should be 3D tensors of shape
-                  `[4, max_n_terms, max_n_element, nnl]`.
-            The size of the first axis is fixed to 4. Here 4 denotes:
-                * r  = 0
-                * dx = 1
-                * dy = 2
-                * dz = 3
-            and `r = sqrt(dx * dx + dy * dy + dz * dz)`
-        mode : tf_estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
-        merge_symmetric : bool
-            A bool.
-
-        Returns
-        -------
-        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are unique kbody terms and values are tuples of
-            (value, mask) where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, 1 + delta, max_n_element, nnl]`. `delta` will be zero
-            if the corresponding kbody term has only one type of atom; otherwise
-            `delta` will be one.
-        max_occurs : Counter
-            The maximum occurance of each type of element.
-
-        """
-        partitions = dict()
-        max_occurs = {}
-        if merge_symmetric:
-            name_scope = "Partition/Symmetric"
-        else:
-            name_scope = "Partition"
-
-        with tf.name_scope(name_scope):
-
-            for element in self._elements:
-
-                with tf.name_scope(f"{element}"):
-                    kbody_terms = self._kbody_terms[element]
-                    raw_values, masks = descriptors[element]
-                    raw_values = tf.convert_to_tensor(raw_values, name='values')
-                    masks = tf.convert_to_tensor(masks, name='masks')
-
-                    if mode == tf_estimator.ModeKeys.PREDICT:
-                        assert raw_values.shape.ndims == 4
-                        values = tf.expand_dims(raw_values[0], axis=0)
-                        masks = tf.expand_dims(masks, axis=0)
-                        max_occurs[element] = tf.shape(values)[2]
-                    else:
-                        assert raw_values.shape.ndims == 5
-                        values = raw_values[0]
-                        max_occurs[element] = values.shape[2].value
-
-                    num = len(kbody_terms)
-                    glists = tf.split(
-                        values, num_or_size_splits=num, axis=1, name='glist')
-                    mlists = tf.split(
-                        masks, num_or_size_splits=num, axis=1, name='mlist')
-
-                    for i, (value, mask) in enumerate(zip(glists, mlists)):
-                        kbody_term = kbody_terms[i]
-                        if merge_symmetric:
-                            kbody_term = ''.join(
-                                sorted(get_elements_from_kbody_term(
-                                    kbody_term)))
-                            if kbody_term in partitions:
-                                value = tf.concat(
-                                    (partitions[kbody_term][0], value), axis=2)
-                                mask = tf.concat(
-                                    (partitions[kbody_term][1], mask), axis=2)
-                        partitions[kbody_term] = (value, mask)
-            return partitions, Counter(max_occurs)
-
     def _dynamic_stitch(self,
                         outputs: Dict[str, tf.Tensor],
                         max_occurs: Counter,
@@ -641,12 +547,19 @@ class EamNN(BasicNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
 
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=descriptors,
+            clf = self.transformer
+            assert isinstance(clf, UniversalTransformer)
+
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=descriptors["radial"],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=mode,
-                merge_symmetric=False)
+                angular=False,
+                merge_symmetric=False,
+            )
 
             rho, _ = self._build_rho_nn(
                 partitions=partitions,
@@ -660,10 +573,14 @@ class EamNN(BasicNN):
                 mode=mode,
                 verbose=verbose)
 
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=descriptors,
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=descriptors["radial"],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=mode,
-                merge_symmetric=True)
+                angular=False,
+                merge_symmetric=True,
+            )
 
             phi, _ = self._build_phi_nn(
                 partitions=partitions,

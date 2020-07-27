@@ -169,7 +169,7 @@ class EamAlloyNN(EamNN):
                 center, other = get_elements_from_kbody_term(kbody_term)
 
                 with tf.name_scope(f"{kbody_term}"):
-                    x = tf.expand_dims(value, axis=-1, name='input')
+                    x = tf.squeeze(value[0], axis=1, name='rij')
                     if verbose:
                         log_tensor(x)
 
@@ -180,13 +180,13 @@ class EamAlloyNN(EamNN):
                     y = comput(x)
 
                     # Apply the `mask` to `rho`.
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                    y = tf.multiply(y, tf.squeeze(mask, axis=1),
                                     name='masked')
                     values[kbody_term] = y
 
                     # Compute the sum of electron densities from different `r`.
                     rho = tf.reduce_sum(
-                        y, axis=(1, 3, 4), keepdims=False, name='rho')
+                        y, axis=(2, 3), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
@@ -239,7 +239,8 @@ class EamAlloyNN(EamNN):
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
-        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
+        r = np.arange(
+            0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, 1, -1, 1))
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
@@ -250,28 +251,22 @@ class EamAlloyNN(EamNN):
             with tf.name_scope("Inputs"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
-                descriptors = dict()
-                for element in self._elements:
-                    value = tf.convert_to_tensor(r, name=f'r{element}')
-                    mask = tf.ones_like(value, name=f'm{element}')
-                    descriptors[element] = (value, mask)
-
                 partitions = dict()
                 symmetric_partitions = dict()
                 for kbody_term in all_kbody_terms:
                     value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
-                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                     partitions[kbody_term] = (value, mask)
                     a, b = get_elements_from_kbody_term(kbody_term)
                     if a == b:
                         symmetric_partitions[kbody_term] = (value, mask)
                     elif kbody_term in self._unique_kbody_terms:
-                        rr = np.concatenate((r, r), axis=2)
+                        rr = np.concatenate((r, r), axis=3)
                         value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
-                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                        mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
@@ -312,7 +307,7 @@ class EamAlloyNN(EamNN):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
                         _kbody_term = f'{_element}{_element}'
-                        return results["rho"][_kbody_term][0, 0, 0, idx, 0]
+                        return results["rho"][_kbody_term][0, 0, idx, 0]
                     return _func
 
                 def make_embed(_element):
@@ -334,7 +329,7 @@ class EamAlloyNN(EamNN):
                     def _func(_r):
                         """ Return `phi(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results["phi"][_kbody_term][0, 0, 0, idx, 0]
+                        return results["phi"][_kbody_term][0, 0, idx, 0]
                     return _func
 
             eam_potentials = []

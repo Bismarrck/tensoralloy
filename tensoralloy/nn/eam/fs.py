@@ -183,18 +183,18 @@ class EamFsNN(EamNN):
         with tf.variable_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.variable_scope(f"{kbody_term}"):
-                    x = tf.expand_dims(value, axis=-1, name='input')
+                    x = tf.squeeze(value, axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     # Apply the `rho` function on `x`
                     comput = self._get_rho_fn(kbody_term, verbose=verbose)
                     y = comput(x)
                     # Apply the mask to rho.
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                    y = tf.multiply(y, tf.squeeze(mask, axis=1),
                                     name='masked')
                     values[kbody_term] = y
                     rho = tf.reduce_sum(
-                        y, axis=(1, 3, 4), keepdims=False, name='rho')
+                        y, axis=(2, 3), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
@@ -246,7 +246,8 @@ class EamFsNN(EamNN):
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
                       reps=len(elements))
         rho = np.atleast_2d(rho)
-        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1))
+        r = np.arange(
+            0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, 1, -1, 1))
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
         mode = tf_estimator.ModeKeys.EVAL
@@ -260,18 +261,18 @@ class EamFsNN(EamNN):
                 symmetric_partitions = dict()
                 for kbody_term in self._all_kbody_terms:
                     value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
-                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                     partitions[kbody_term] = (value, mask)
                     a, b = get_elements_from_kbody_term(kbody_term)
                     if a == b:
                         symmetric_partitions[kbody_term] = (value, mask)
                     elif kbody_term in self._unique_kbody_terms:
-                        rr = np.concatenate((r, r), axis=2)
+                        rr = np.concatenate((r, r), axis=3)
                         value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
-                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                        mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
@@ -311,7 +312,7 @@ class EamFsNN(EamNN):
                     def _func(_r):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results["rho"][_kbody_term][0, 0, 0, idx, 0]
+                        return results["rho"][_kbody_term][0, 0, idx, 0]
                     return _func
 
                 def make_embed(_element):
@@ -333,7 +334,7 @@ class EamFsNN(EamNN):
                     def _func(_r):
                         """ Return `phi(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results["phi"][_kbody_term][0, 0, 0, idx, 0]
+                        return results["phi"][_kbody_term][0, 0, idx, 0]
                     return _func
 
             eam_potentials = []
