@@ -16,9 +16,10 @@ from nose.tools import assert_equal
 from collections import Counter
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.nn.eam.adp import AdpNN
-from tensoralloy.transformer.adp import ADPTransformer, BatchADPTransformer
 from tensoralloy.test_utils import data_dir
+from tensoralloy.nn.partition import dynamic_partition
+from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -38,14 +39,14 @@ def test_dynamic_partition():
 
     with tf.Graph().as_default():
 
-        nn = AdpNN(elements=elements)
-        adp = ADPTransformer(rc, elements)
-        adp.get_placeholder_features()
+        clf = UniversalTransformer(rcut=rc, elements=elements)
 
         with tf.name_scope("Symmetric"):
 
-            op, max_occurs = nn._dynamic_partition(
-                adp.get_descriptors(adp.get_placeholder_features()),
+            op, max_occurs = dynamic_partition(
+                clf.get_descriptors(clf.get_placeholder_features())["radial"],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=tf_estimator.ModeKeys.PREDICT,
                 merge_symmetric=True)
 
@@ -53,7 +54,7 @@ def test_dynamic_partition():
                 tf.global_variables_initializer().run()
 
                 partitions = sess.run(
-                    op, feed_dict=adp.get_feed_dict(atoms))
+                    op, feed_dict=clf.get_feed_dict(atoms))
 
                 assert_equal(len(partitions), 3)
                 for key, (descriptor, mask) in partitions.items():
@@ -61,29 +62,28 @@ def test_dynamic_partition():
                     assert_equal(mask.shape[0], 1)
 
     with tf.Graph().as_default():
-        nn = AdpNN(elements=elements)
-
         size = find_neighbor_size_of_atoms(atoms, rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
 
-        adp = BatchADPTransformer(rc=rc,
-                                  max_occurs=max_occurs,
-                                  nij_max=size.nij,
-                                  nnl_max=size.nnl,
-                                  batch_size=1)
+        clf = BatchUniversalTransformer(
+            rcut=rc, max_occurs=max_occurs, nij_max=size.nij, nnl_max=size.nnl,
+            batch_size=1)
 
-        protobuf = tf.convert_to_tensor(adp.encode(atoms).SerializeToString())
-        example = adp.decode_protobuf(protobuf)
+        protobuf = tf.convert_to_tensor(clf.encode(atoms).SerializeToString())
+        example = clf.decode_protobuf(protobuf)
 
         batch = dict()
         for key, tensor in example.items():
             batch[key] = tf.expand_dims(
                 tensor, axis=0, name=tensor.op.name + '/batch')
 
-        descriptors = adp.get_descriptors(batch)
-        op, max_occurs = nn._dynamic_partition(descriptors,
-                                               mode=tf_estimator.ModeKeys.TRAIN,
-                                               merge_symmetric=False)
+        descriptors = clf.get_descriptors(batch)
+        op, max_occurs = dynamic_partition(
+            descriptors["radial"],
+            elements=clf.elements,
+            kbody_terms_for_element=clf.kbody_terms_for_element,
+            mode=tf_estimator.ModeKeys.TRAIN,
+            merge_symmetric=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()

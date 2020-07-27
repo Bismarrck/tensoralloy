@@ -13,157 +13,22 @@ import unittest
 
 from tensorflow_estimator import estimator as tf_estimator
 from unittest import skipUnless
-from nose.tools import assert_list_equal, assert_dict_equal, with_setup
-from nose.tools import assert_equal, assert_almost_equal
+from nose.tools import assert_list_equal, with_setup
+from nose.tools import assert_almost_equal
 from os.path import exists, join
 from os import remove
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 
 from tensoralloy.nn.eam import EamFsNN
-from tensoralloy.transformer import EAMTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
-from tensoralloy.utils import get_elements_from_kbody_term, GraphKeys
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 from tensoralloy.precision import precision_scope
 
+
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-class AlFeFakeData:
-    """
-    A fake dataset for unit tests in this module.
-    """
-
-    def __init__(self):
-        """
-        Initialization method.
-        """
-        self.batch_size = 10
-        self.max_n_terms = 2
-        self.max_n_al = 5
-        self.max_n_fe = 7
-        self.max_n_atoms = self.max_n_al + self.max_n_fe + 1
-        self.nnl = 10
-        self.elements = sorted(['Fe', 'Al'])
-
-        shape_al = (4,
-                    self.batch_size,
-                    self.max_n_terms,
-                    self.max_n_al,
-                    self.nnl)
-        shape_fe = (4,
-                    self.batch_size,
-                    self.max_n_terms,
-                    self.max_n_fe,
-                    self.nnl)
-
-        self.g_al = np.random.randn(*shape_al)
-        self.m_al = np.random.randint(0, 2, shape_al[1:]).astype(np.float64)
-        self.g_fe = np.random.randn(*shape_fe)
-        self.m_fe = np.random.randint(0, 2, shape_fe[1:]).astype(np.float64)
-
-        with tf.name_scope("Inputs"):
-            self.descriptors = dict(
-                Al=(tf.convert_to_tensor(self.g_al, tf.float64, 'g_al'),
-                    tf.convert_to_tensor(self.m_al, tf.float64, 'm_al')),
-                Fe=(tf.convert_to_tensor(self.g_fe, tf.float64, 'g_fe'),
-                    tf.convert_to_tensor(self.m_fe, tf.float64, 'm_fe')))
-            self.positions = tf.constant(
-                np.random.rand(1, self.max_n_atoms, 3),
-                dtype=tf.float64,
-                name='positions')
-            self.mask = np.ones((self.batch_size, self.max_n_atoms), np.float64)
-            self.features = dict(
-                descriptors=self.descriptors, positions=self.positions,
-                mask=self.mask)
-
-
-def test_inference():
-    """
-    Test the inference of `EamFsNN` with mixed potentials.
-    """
-    with tf.Graph().as_default():
-
-        data = AlFeFakeData()
-        mode = tf_estimator.ModeKeys.EVAL
-        batch_size = data.batch_size
-        max_n_atoms = data.max_n_atoms
-        max_n_elements = {
-            'Al': data.max_n_al,
-            'Fe': data.max_n_fe
-        }
-
-        nn = EamFsNN(elements=['Al', 'Fe'],
-                     custom_potentials={'Al': {'embed': 'msah11'},
-                                        'Fe': {'embed': 'nn'},
-                                        'AlAl': {'rho': 'msah11', 'phi': 'nn'},
-                                        'AlFe': {'rho': 'nn', 'phi': 'nn'},
-                                        'FeFe': {'rho': 'msah11', 'phi': 'nn'},
-                                        'FeAl': {'rho': 'msah11'}})
-
-        with tf.name_scope("Inference"):
-            partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features["descriptors"],
-                mode=mode,
-                merge_symmetric=False)
-            rho, rho_values = nn._build_rho_nn(
-                partitions=partitions,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=False)
-
-            embed = nn._build_embed_nn(
-                rho=rho,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=False)
-
-            partitions, max_occurs = nn._dynamic_partition(
-                descriptors=data.features["descriptors"],
-                mode=mode,
-                merge_symmetric=True)
-            phi, phi_values = nn._build_phi_nn(
-                partitions=partitions,
-                max_occurs=max_occurs,
-                mode=mode,
-                verbose=False)
-            y = tf.add(phi, embed, name='atomic')
-
-        collection = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-        assert_equal(len(collection), 25)
-
-        collection = tf.get_collection(GraphKeys.EAM_FS_NN_VARIABLES)
-        assert_equal(len(collection), 25)
-
-        collection = tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)
-        assert_equal(len(collection), 0)
-
-        assert_dict_equal(max_occurs, {'Al': data.max_n_al,
-                                       'Fe': data.max_n_fe})
-        assert_list_equal(rho.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_equal(len(rho_values), 4)
-        for kbody_term in nn.all_kbody_terms:
-            center = get_elements_from_kbody_term(kbody_term)[0]
-            max_n_element = max_n_elements[center]
-            assert_list_equal(rho_values[kbody_term].shape.as_list(),
-                              [batch_size, 1, max_n_element, data.nnl, 1])
-
-        assert_list_equal(embed.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_list_equal(phi.shape.as_list(), [batch_size, max_n_atoms - 1])
-        assert_equal(len(phi_values), 3)
-        for kbody_term in nn.unique_kbody_terms:
-            center, specie = get_elements_from_kbody_term(kbody_term)
-            if center == specie:
-                max_n_element = max_n_elements[center]
-                assert_list_equal(phi_values[kbody_term].shape.as_list(),
-                                  [batch_size, 1, max_n_element, data.nnl, 1])
-            else:
-                assert_list_equal(phi_values[kbody_term].shape.as_list(),
-                                  [batch_size, 1, max_n_atoms - 1, data.nnl, 1])
-
-        assert_list_equal(y.shape.as_list(), [batch_size, max_n_atoms - 1])
 
 
 def export_setfl_teardown():
@@ -220,8 +85,6 @@ def test_export_setfl():
     assert_list_equal(out_key_lines, ref_key_lines)
 
 
-# TODO: the test below will fail if ase-3.18.1 is used.
-
 class EamFsTest(unittest.TestCase):
 
     def setUp(self):
@@ -271,7 +134,7 @@ class EamFsTest(unittest.TestCase):
         with precision_scope("high"):
 
             with tf.Graph().as_default():
-                clf = EAMTransformer(rc=rc, elements=elements)
+                clf = UniversalTransformer(rcut=rc, elements=elements)
                 nn = EamFsNN(elements=elements,
                              export_properties=['energy', 'forces', 'stress'],
                              custom_potentials={

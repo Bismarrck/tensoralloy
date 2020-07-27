@@ -183,7 +183,7 @@ class EamFsNN(EamNN):
         with tf.variable_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.variable_scope(f"{kbody_term}"):
-                    x = tf.squeeze(value, axis=1, name='input')
+                    x = tf.squeeze(value[0], axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     # Apply the `rho` function on `x`
