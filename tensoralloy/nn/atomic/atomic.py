@@ -378,6 +378,8 @@ class AtomicNN(BasicNN):
                                     element=element,
                                     mode=mode,
                                     max_occurs=atomic_descriptors.max_occurs)[0]
+                                if verbose:
+                                    log_tensor(x)
                             output_bias = self._fixed_atomic_static_energy
                             y = convolution1x1(
                                 x,

@@ -146,6 +146,7 @@ class DeepPotSE(AtomicNN):
                 shape = tf.shape(d3)
                 x = tf.reshape(d3, [shape[0], shape[1], self._m1 * self._m2],
                                name='D')
+                # TODO: apply value mask on `x`
                 if verbose:
                     log_tensor(x)
                 outputs[kbody_term] = x
