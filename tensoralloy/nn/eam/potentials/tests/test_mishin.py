@@ -19,7 +19,7 @@ from typing import List
 from nose.tools import assert_almost_equal
 
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
-from tensoralloy.transformer.adp import ADPTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.eam.potentials import EamAlloyPotential
 from tensoralloy.nn.eam.potentials import available_potentials
@@ -204,7 +204,7 @@ class AlCuAdpTest(unittest.TestCase):
             with tf.Graph().as_default():
                 available_potentials['adp/AlCu'] = AlCuSplineAdp
                 elements = sorted(list(set(atoms.get_chemical_symbols())))
-                clf = ADPTransformer(rc, elements)
+                clf = UniversalTransformer(rcut=rc, elements=elements)
                 nn = AdpNN(elements,
                            custom_potentials="adp/AlCu",
                            export_properties=['energy', 'forces', 'stress'])

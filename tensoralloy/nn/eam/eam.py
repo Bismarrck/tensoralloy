@@ -15,7 +15,6 @@ from typing import List, Dict, Callable
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term
-from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.basic import BasicNN
@@ -550,7 +549,6 @@ class EamNN(BasicNN):
         with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
 
             clf = self.transformer
-            assert isinstance(clf, UniversalTransformer)
 
             partitions, max_occurs = dynamic_partition(
                 dists_and_masks=descriptors["radial"],

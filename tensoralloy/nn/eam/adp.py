@@ -226,7 +226,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 assert isinstance(value, tf.Tensor)
-                assert value.shape.ndims == 5
+                assert value.shape.ndims == 6
 
                 center, other = get_elements_from_kbody_term(kbody_term)
                 with tf.name_scope(f"{kbody_term}"):

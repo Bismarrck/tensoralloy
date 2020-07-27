@@ -13,7 +13,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from nose.tools import assert_in, assert_almost_equal
 
-from tensoralloy.transformer import EAMTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn import EamAlloyNN
 
 __author__ = 'Xin Chen'
@@ -32,7 +32,7 @@ def test_elastic_constant_tensor_op():
         rc = 6.0
         export_properties = ['energy', 'forces', 'stress', 'elastic']
         nn = EamAlloyNN(elements, "zjw04", export_properties=export_properties)
-        clf = EAMTransformer(rc, elements)
+        clf = UniversalTransformer(rcut=rc, elements=elements)
         nn.attach_transformer(clf)
         predictions = nn.build(clf.get_placeholder_features(),
                                mode=tf_estimator.ModeKeys.PREDICT,
