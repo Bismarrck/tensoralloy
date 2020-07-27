@@ -56,9 +56,9 @@ def dynamic_partition(dists_and_masks: dict,
             * riky = 6
             * rikz = 7
             * rjk  = 8
-            * rjkx = 8
-            * rjky = 8
-            * rjkz = 8
+            * rjkx = 9
+            * rjky = 10
+            * rjkz = 11
     elements : List[str]
         A list of str as the sorted elements.
     kbody_terms_for_element : Dict[str, List[str]]
@@ -112,7 +112,7 @@ def dynamic_partition(dists_and_masks: dict,
                     max_occurs[element] = tf.shape(dists)[3]
                 else:
                     assert dists.shape.ndims == 6
-                    max_occurs[element] = dists.shape[4].value
+                    max_occurs[element] = dists.shape[3].value
 
                 if angular:
                     num = len([x for x in kbody_terms
