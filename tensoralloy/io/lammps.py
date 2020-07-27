@@ -46,7 +46,7 @@ def get_lammps_command():
         elif shutil.which("lammps"):
             return shutil.which("lammps")
         else:
-            return None
+            return ""
 
 
 LAMMPS_COMMAND = get_lammps_command()
