@@ -20,7 +20,7 @@ kernel_initializer = 'he_normal'
 algorithm = "semi"
 
 [nn.atomic.grap]
-multipole = 2
+moment_tensors = [2]
 algorithm = 'sf'
 
 [nn.atomic.grap.sf]

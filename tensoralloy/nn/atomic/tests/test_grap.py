@@ -20,7 +20,7 @@ def test_gen_algorithm():
     """
     params = {"x": [1, 2, 3, 4, 5], "y": [2, 3, 4, 5, 6]}
     Algorithm.required_keys = ["x", "y"]
-    algo = Algorithm(params, gen_method="pair")
+    algo = Algorithm(params, param_space_method="pair")
     assert_equal(len(algo), 5)
 
     for i in range(5):
