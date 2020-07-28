@@ -18,7 +18,7 @@ from tensoralloy.nn.utils import is_first_replica
 from tensoralloy.nn.constraint.data import get_crystal
 from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
-from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.utils import GraphKeys
 from tensoralloy.precision import get_float_dtype
 
@@ -26,7 +26,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def get_batch_transformer(original_clf: BatchDescriptorTransformer,
+def get_batch_transformer(original_clf: BatchUniversalTransformer,
                           trajectory: List[Atoms],
                           sizes: List[NeighborSize],
                           max_occurs: Counter):
@@ -46,31 +46,26 @@ def get_batch_transformer(original_clf: BatchDescriptorTransformer,
 
     Returns
     -------
-    clf : BatchDescriptorTransformer
-        The newly created batch descriptor transformer for this trajectory.
+    clf : BatchUniversalTransformer
+        The newly created transformer for this trajectory.
 
     """
     configs = original_clf.as_dict()
     cls = configs.pop('class')
 
-    if cls == 'BatchSymmetryFunctionTransformer':
-        nij_max = max(map(lambda x: x.nij, sizes))
-        if configs['angular']:
-            nijk_max = max(map(lambda x: x.nijk, sizes))
-        else:
-            nijk_max = 0
-        configs['nij_max'] = nij_max
-        configs['nijk_max'] = nijk_max
-
-    elif cls == "BatchEAMTransformer" or cls == "BatchADPTransformer":
+    if cls == "BatchUniversalTransformer":
         nij_max = max(map(lambda x: x.nij, sizes))
         nnl_max = max(map(lambda x: x.nnl, sizes))
+        if configs["angular"]:
+            ij2k_max = max(map(lambda x: x.ij2k, sizes))
+            nijk_max = max(map(lambda x: x.nijk, sizes))
+        else:
+            ij2k_max = 0
+            nijk_max = 0
         configs['nij_max'] = nij_max
         configs['nnl_max'] = nnl_max
-
-    elif cls == "BatchUniversalTransformer":
-        pass
-
+        configs['ij2k_max'] = ij2k_max
+        configs['nijk_max'] = nijk_max
     else:
         raise ValueError(f"Unsupported batch transformer: {cls}")
 
@@ -145,7 +140,7 @@ def get_rose_constraint_loss(base_nn,
                     rc = base_clf.rc
                     angular = base_clf.angular
 
-                    if isinstance(base_clf, BatchDescriptorTransformer):
+                    if isinstance(base_clf, BatchUniversalTransformer):
                         clf = base_clf.as_descriptor_transformer()
                     else:
                         raise ValueError(
