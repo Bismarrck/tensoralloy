@@ -71,6 +71,7 @@ class MeamSplineTest(unittest.TestCase):
                       command=LAMMPS_COMMAND,
                       pair_coeff=pair_coeff)
 
+    @unittest.skip
     def test_elementary_meam_spline(self):
         """
         Test the meam/spline implementation with the Ti system.
