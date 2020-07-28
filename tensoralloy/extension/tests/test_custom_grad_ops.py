@@ -19,7 +19,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-@unittest.skipUnless(os.environ['TENSORALLOY_USE_CUSTOM_POW'] == "1",
+@unittest.skipUnless(os.environ.get('TENSORALLOY_USE_CUSTOM_POW') == "1",
                      "TENSORALLOY_USE_CUSTOM_POW is not set")
 def test_safe_pow():
     """
@@ -70,7 +70,7 @@ def test_safe_pow():
                 assert_equal(sess.run(g1, feed_dict={x: 0.0, y: 1.0}), 1.0)
 
 
-@unittest.skipUnless(os.environ['TENSORALLOY_USE_CUSTOM_POW'] == "1",
+@unittest.skipUnless(os.environ.get('TENSORALLOY_USE_CUSTOM_POW') == "1",
                      "TENSORALLOY_USE_CUSTOM_POW is not set")
 def test_safe_pow_1():
 
