@@ -17,7 +17,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from tensoralloy import atoms_utils
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.vap import VirtualAtomMap
-from tensoralloy.transformer.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.metadata import RadialMetadata
 
 
 __author__ = 'Xin Chen'
@@ -362,20 +362,20 @@ class BatchDescriptorTransformer(BaseTransformer):
         return self._vap_transformers[formula]
 
     @staticmethod
-    def _encode_g2_indexed_slices(g2: G2IndexedSlices):
+    def _encode_radial_metadata(data: RadialMetadata):
         """
-        Encode the indexed slices of G2:
+        Encode the radial metadata:
             * `v2g_map`, `ilist` and `jlist` are merged into a single array
               with key 'g2.indices'.
             * `n1` will be encoded separately with key 'g2.shifts'.
 
         """
         indices = np.concatenate((
-            g2.v2g_map,
-            g2.ilist[..., np.newaxis],
-            g2.jlist[..., np.newaxis]), axis=1)
+            data.v2g_map,
+            data.ilist[..., np.newaxis],
+            data.jlist[..., np.newaxis]), axis=1)
         return {'g2.indices': bytes_feature(indices.tostring()),
-                'g2.shifts': bytes_feature(g2.n1.tostring())}
+                'g2.shifts': bytes_feature(data.n1.tostring())}
 
     def _encode_atoms(self, atoms: Atoms) -> dict:
         """

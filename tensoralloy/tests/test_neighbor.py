@@ -46,7 +46,7 @@ def test_find_ij2k():
     from tensoralloy.io.db import snap
     from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
     from tensoralloy.transformer.vap import VirtualAtomMap
-    from tensoralloy.transformer.universal import get_g2_map, get_g4_map
+    from tensoralloy.transformer.universal import get_radial_metadata, get_angular_metadata
 
     db = snap()
     symmetric = False
@@ -69,19 +69,19 @@ def test_find_ij2k():
                 else:
                     angular_interactions[kbody_term] = i - len(elements)
         vap = VirtualAtomMap(max_occurs, symbols)
-        g2, ijn_id_map = get_g2_map(atoms,
-                                    rc=rc,
-                                    interactions=radial_interactions,
-                                    vap=vap,
-                                    mode=tf_estimator.ModeKeys.PREDICT)
-        g4 = get_g4_map(atoms,
-                        rc=rc,
-                        radial_interactions=radial_interactions,
-                        angular_interactions=angular_interactions,
-                        vap=vap,
-                        mode=tf_estimator.ModeKeys.PREDICT,
-                        g2=g2,
-                        ijn_id_map=ijn_id_map)
+        g2, ijn_id_map = get_radial_metadata(atoms,
+                                             rc=rc,
+                                             interactions=radial_interactions,
+                                             vap=vap,
+                                             mode=tf_estimator.ModeKeys.PREDICT)
+        g4 = get_angular_metadata(atoms,
+                                  rc=rc,
+                                  radial_interactions=radial_interactions,
+                                  angular_interactions=angular_interactions,
+                                  vap=vap,
+                                  mode=tf_estimator.ModeKeys.PREDICT,
+                                  g2=g2,
+                                  ijn_id_map=ijn_id_map)
 
         ij2k = g4.v2g_map[:, 3].max() + 1
         nl = find_neighbor_size_of_atoms(atoms, rc, find_ij2k=True)

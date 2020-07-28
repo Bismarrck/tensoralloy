@@ -7,21 +7,19 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from collections import namedtuple
+from dataclasses import dataclass
 from typing import Union
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["G2IndexedSlices", "G4IndexedSlices"]
+__all__ = ["RadialMetadata", "AngularMetadata"]
 
 
-# noinspection PyTypeChecker,PyArgumentList
-class G2IndexedSlices(namedtuple('G2IndexedSlices',
-                                 ('v2g_map', 'ilist', 'jlist', 'n1',
-                                  'rij'))):
+@dataclass(frozen=True)
+class RadialMetadata:
     """
-    A `dataclass` contains indexed slices for the atom-atom interactions.
+    A `dataclass` contains metadata for the atom-atom interactions.
 
     'v2g_map' : array_like
         A list of (atomi, etai, termi) where atomi is the index of the
@@ -38,14 +36,11 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
 
     """
 
-    def __new__(cls,
-                v2g_map: Union[tf.Tensor, np.ndarray],
-                ilist: Union[tf.Tensor, np.ndarray],
-                jlist: Union[tf.Tensor, np.ndarray],
-                n1: Union[tf.Tensor, np.ndarray],
-                rij: Union[tf.Tensor, np.ndarray, None]):
-        return super(G2IndexedSlices, cls).__new__(
-            cls, v2g_map, ilist, jlist, n1, rij)
+    v2g_map: Union[tf.Tensor, np.ndarray]
+    ilist: Union[tf.Tensor, np.ndarray]
+    jlist: Union[tf.Tensor, np.ndarray]
+    n1: Union[tf.Tensor, np.ndarray]
+    rij: Union[tf.Tensor, np.ndarray, None]
 
     def as_dict(self, use_computed_dists=True):
         """
@@ -61,14 +56,10 @@ class G2IndexedSlices(namedtuple('G2IndexedSlices',
                     "g2.rij": self.rij}
 
 
-# noinspection PyTypeChecker,PyArgumentList
-class G4IndexedSlices(namedtuple('G4IndexedSlices',
-                                 ('v2g_map',
-                                  'ilist', 'jlist', 'klist',
-                                  'n1', 'n2', 'n3',
-                                  'rijk'))):
+@dataclass(frozen=True)
+class AngularMetadata:
     """
-    A `dataclass` contains indexed slices for triple-atom interactions.
+    A `dataclass` contains metadata for triple-atom interactions.
 
     'v2g_map' : array_like
         A list of (atomi, termi) where atomi is the index of the center atom
@@ -90,17 +81,14 @@ class G4IndexedSlices(namedtuple('G4IndexedSlices',
 
     """
 
-    def __new__(cls,
-                v2g_map: Union[np.ndarray, tf.Tensor],
-                ilist: Union[np.ndarray, tf.Tensor],
-                jlist: Union[np.ndarray, tf.Tensor],
-                klist: Union[np.ndarray, tf.Tensor],
-                n1: Union[np.ndarray, tf.Tensor],
-                n2: Union[np.ndarray, tf.Tensor],
-                n3: Union[np.ndarray, tf.Tensor],
-                rijk: Union[np.ndarray, tf.Tensor, None]):
-        return super(G4IndexedSlices, cls).__new__(
-            cls, v2g_map, ilist, jlist, klist, n1, n2, n3, rijk)
+    v2g_map: Union[np.ndarray, tf.Tensor]
+    ilist: Union[np.ndarray, tf.Tensor]
+    jlist: Union[np.ndarray, tf.Tensor]
+    klist: Union[np.ndarray, tf.Tensor]
+    n1: Union[np.ndarray, tf.Tensor]
+    n2: Union[np.ndarray, tf.Tensor]
+    n3: Union[np.ndarray, tf.Tensor]
+    rijk: Union[np.ndarray, tf.Tensor, None]
 
     def as_dict(self, use_computed_dists=True):
         """

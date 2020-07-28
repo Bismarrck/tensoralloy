@@ -17,8 +17,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import szudzik_pairing
 from tensoralloy import atoms_utils
-from tensoralloy.transformer.indexed_slices import G2IndexedSlices
-from tensoralloy.transformer.indexed_slices import G4IndexedSlices
+from tensoralloy.transformer.metadata import RadialMetadata, AngularMetadata
 from tensoralloy.transformer.vap import VirtualAtomMap
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
@@ -45,13 +44,13 @@ def get_ijn_id(i, j, nx, ny, nz):
     return ij_id, n_id
 
 
-def get_g2_map(atoms: Atoms,
-               rc: float,
-               interactions: Dict[str, int],
-               vap: VirtualAtomMap,
-               mode: tf_estimator.ModeKeys,
-               nij_max: int = None,
-               dtype=np.float32):
+def get_radial_metadata(atoms: Atoms,
+                        rc: float,
+                        interactions: Dict[str, int],
+                        vap: VirtualAtomMap,
+                        mode: tf_estimator.ModeKeys,
+                        nij_max: int = None,
+                        dtype=np.float32) -> (RadialMetadata, dict):
     """
     Build the base `v2g_map`.
 
@@ -109,27 +108,27 @@ def get_g2_map(atoms: Atoms,
 
     rij = np.concatenate(
         (rij.astype(dtype).reshape((-1, 1)), dij.astype(dtype)), axis=1).T
-    g2 = G2IndexedSlices(v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1,
-                         rij=rij)
-    return g2, ijn_id_map
+    radial_metadata = RadialMetadata(
+        v2g_map=g2_map, ilist=ilist, jlist=jlist, n1=n1, rij=rij)
+    return radial_metadata, ijn_id_map
 
 
-def get_g4_map(atoms: Atoms,
-               rc: float,
-               radial_interactions: Dict[str, int],
-               angular_interactions: Dict[str, int],
-               vap: VirtualAtomMap,
-               mode: tf_estimator.ModeKeys,
-               g2: G2IndexedSlices = None,
-               ijn_id_map: Dict[int, int] = None,
-               nijk_max: int = None,
-               symmetric=True,
-               dtype=np.float32) -> G4IndexedSlices:
+def get_angular_metadata(atoms: Atoms,
+                         rc: float,
+                         radial_interactions: Dict[str, int],
+                         angular_interactions: Dict[str, int],
+                         vap: VirtualAtomMap,
+                         mode: tf_estimator.ModeKeys,
+                         radial_metadata: RadialMetadata = None,
+                         ijn_id_map: Dict[int, int] = None,
+                         nijk_max: int = None,
+                         angular_symmetricity=True,
+                         dtype=np.float32) -> AngularMetadata:
     """
     Build the base `v2g_map`.
     """
-    if g2 is None:
-        g2, ijn_id_map = get_g2_map(
+    if radial_metadata is None:
+        radial_metadata, ijn_id_map = get_radial_metadata(
             atoms=atoms,
             rc=rc,
             interactions=radial_interactions,
@@ -139,23 +138,23 @@ def get_g4_map(atoms: Atoms,
     indices = {}
     vectors = {}
     ijdists = {}
-    for i, atom_vap_i in enumerate(g2.ilist):
+    for i, atom_vap_i in enumerate(radial_metadata.ilist):
         if atom_vap_i == 0:
             break
         if atom_vap_i not in indices:
             indices[atom_vap_i] = []
             vectors[atom_vap_i] = []
             ijdists[atom_vap_i] = []
-        indices[atom_vap_i].append(g2.jlist[i])
-        vectors[atom_vap_i].append(g2.n1[i])
-        ijdists[atom_vap_i].append(g2.rij[:, i])
+        indices[atom_vap_i].append(radial_metadata.jlist[i])
+        vectors[atom_vap_i].append(radial_metadata.n1[i])
+        ijdists[atom_vap_i].append(radial_metadata.rij[:, i])
 
     if nijk_max is None:
         nijk = 0
         for atomi, nl in indices.items():
             n = len(nl)
             # nijk += (n - 1) * n // 2
-            if symmetric:
+            if angular_symmetricity:
                 nijk += (n - 1) * n // 2
             else:
                 nijk += (n - 1) * n
@@ -167,9 +166,9 @@ def get_g4_map(atoms: Atoms,
     ilist = np.zeros(nijk_max, dtype=np.int32)
     jlist = np.zeros(nijk_max, dtype=np.int32)
     klist = np.zeros(nijk_max, dtype=np.int32)
-    n1 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
-    n2 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
-    n3 = np.zeros((nijk_max, 3), dtype=g2.n1.dtype)
+    n1 = np.zeros((nijk_max, 3), dtype=radial_metadata.n1.dtype)
+    n2 = np.zeros((nijk_max, 3), dtype=radial_metadata.n1.dtype)
+    n3 = np.zeros((nijk_max, 3), dtype=radial_metadata.n1.dtype)
     rijk = np.zeros((12, nijk_max), dtype=dtype)
     symbols = atoms.get_chemical_symbols()
     counters = {}
@@ -182,7 +181,7 @@ def get_g4_map(atoms: Atoms,
             atom_vap_j = nl[j]
             atom_local_j = vap.gsl_to_local_map[atom_vap_j]
             symbolj = symbols[atom_local_j]
-            if symmetric:
+            if angular_symmetricity:
                 kstart = j + 1
             else:
                 kstart = 0
@@ -190,7 +189,7 @@ def get_g4_map(atoms: Atoms,
                 atom_vap_k = nl[k]
                 atom_local_k = vap.gsl_to_local_map[atom_vap_k]
                 symbolk = symbols[atom_local_k]
-                if symmetric:
+                if angular_symmetricity:
                     interaction = \
                         f"{symboli}{''.join(sorted([symbolj, symbolk]))}"
                     if symbolj < symbolk:
@@ -232,7 +231,7 @@ def get_g4_map(atoms: Atoms,
                 g4_map[count, iaxis + 4] = 1
                 counters[atom_vap_i][index][ijn_id] += 1
                 count += 1
-    return G4IndexedSlices(g4_map, ilist, jlist, klist, n1, n2, n3, rijk=rijk)
+    return AngularMetadata(g4_map, ilist, jlist, klist, n1, n2, n3, rijk=rijk)
 
 
 class UniversalTransformer(DescriptorTransformer):
@@ -785,7 +784,7 @@ class UniversalTransformer(DescriptorTransformer):
 
         return self._placeholders
 
-    def get_indexed_slices(self, atoms, vap: VirtualAtomMap):
+    def get_metadata(self, atoms, vap: VirtualAtomMap):
         """
         Return the corresponding indexed slices.
 
@@ -798,25 +797,27 @@ class UniversalTransformer(DescriptorTransformer):
 
         Returns
         -------
-        g2 : G2IndexedSlices
-            The radial indexed slices for the target `Atoms` object.
-        g4 : G4IndexedSlices
-            The angular indexed slices for the target `Atoms` object.
+        radial_metadata : RadialMetadata
+            The radial metadata for the target `Atoms` object.
+        angular_metadata : AngularMetadata
+            The angular metadata for the target `Atoms` object.
 
         """
 
         radial_interactions = {}
         angular_interactions = {}
+        n = len(self._elements)
+
         for element in self._elements:
             kbody_terms = self._kbody_terms_for_element[element]
             for i, kbody_term in enumerate(kbody_terms):
                 if len(get_elements_from_kbody_term(kbody_term)) == 2:
                     radial_interactions[kbody_term] = i
                 else:
-                    angular_interactions[kbody_term] = i - len(self._elements)
+                    angular_interactions[kbody_term] = i - n
 
         dtype = get_float_dtype().as_numpy_dtype
-        g2, ijn_id_map = get_g2_map(
+        radial_metadata, ijn_id_map = get_radial_metadata(
             atoms=atoms,
             rc=self._rcut,
             interactions=radial_interactions,
@@ -826,25 +827,26 @@ class UniversalTransformer(DescriptorTransformer):
             dtype=dtype)
         if self._angular:
             if np.round(self._acut - self._rcut, 2) == 0.0:
-                ref_g2 = g2
+                ref_radial_metadata = radial_metadata
                 ref_ijn_id_map = ijn_id_map
             else:
-                ref_g2 = None
+                ref_radial_metadata = None
                 ref_ijn_id_map = None
-            g4 = get_g4_map(atoms,
-                            rc=self._acut,
-                            g2=ref_g2,
-                            ijn_id_map=ref_ijn_id_map,
-                            radial_interactions=radial_interactions,
-                            angular_interactions=angular_interactions,
-                            vap=vap,
-                            symmetric=self._symmetric,
-                            mode=tf_estimator.ModeKeys.PREDICT,
-                            nijk_max=None,
-                            dtype=dtype)
+            angular_metadata = get_angular_metadata(
+                atoms=atoms,
+                rc=self._acut,
+                radial_metadata=ref_radial_metadata,
+                ijn_id_map=ref_ijn_id_map,
+                radial_interactions=radial_interactions,
+                angular_interactions=angular_interactions,
+                vap=vap,
+                angular_symmetricity=self._symmetric,
+                mode=tf_estimator.ModeKeys.PREDICT,
+                nijk_max=None,
+                dtype=dtype)
         else:
-            g4 = None
-        return g2, g4
+            angular_metadata = None
+        return radial_metadata, angular_metadata
 
     def get_np_feed_dict(self, atoms: Atoms):
         """
@@ -853,7 +855,7 @@ class UniversalTransformer(DescriptorTransformer):
         np_dtype = get_float_dtype().as_numpy_dtype
 
         vap = self.get_vap_transformer(atoms)
-        g2, g4 = self.get_indexed_slices(atoms, vap)
+        radial_metadata, angular_metadata = self.get_metadata(atoms, vap)
 
         positions = vap.map_positions(atoms.positions)
 
@@ -870,7 +872,7 @@ class UniversalTransformer(DescriptorTransformer):
 
         feed_dict["positions"] = positions.astype(np_dtype)
         feed_dict["n_atoms_vap"] = np.int32(vap.max_vap_natoms)
-        feed_dict["nnl_max"] = np.int32(g2.v2g_map[:, 2].max() + 1)
+        feed_dict["nnl_max"] = np.int32(radial_metadata.v2g_map[:, 2].max() + 1)
         feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
         feed_dict["cell"] = cell.array.astype(np_dtype)
         feed_dict["volume"] = np_dtype(volume)
@@ -878,12 +880,15 @@ class UniversalTransformer(DescriptorTransformer):
         feed_dict["etemperature"] = np_dtype(etemp)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(
-            g2.as_dict(use_computed_dists=self._use_computed_dists))
+            radial_metadata.as_dict(
+                use_computed_dists=self._use_computed_dists))
 
         if self._angular:
-            feed_dict['ij2k_max'] = np.int32(g4.v2g_map[:, 3].max() + 1)
+            feed_dict['ij2k_max'] = np.int32(
+                angular_metadata.v2g_map[:, 3].max() + 1)
             feed_dict.update(
-                g4.as_dict(use_computed_dists=self._use_computed_dists))
+                angular_metadata.as_dict(
+                    use_computed_dists=self._use_computed_dists))
 
         return feed_dict
 
@@ -1042,39 +1047,41 @@ class BatchUniversalTransformer(UniversalTransformer,
                                     periodic=self._periodic,
                                     symmetric=self._symmetric)
 
-    def get_indexed_slices(self, atoms, vap: VirtualAtomMap):
+    def get_metadata(self, atoms, vap: VirtualAtomMap):
         """
-        Return indexed slices.
+        Return metadata for the `atoms`.
         """
         dtype = get_float_dtype().as_numpy_dtype
-        g2, ijn_id_map = get_g2_map(atoms=atoms,
-                                    rc=self._rcut,
-                                    interactions=self._radial_interactions,
-                                    vap=vap,
-                                    mode=tf_estimator.ModeKeys.TRAIN,
-                                    nij_max=self._nij_max,
-                                    dtype=dtype)
+        radial_metadata, ijn_id_map = get_radial_metadata(
+            atoms=atoms,
+            rc=self._rcut,
+            interactions=self._radial_interactions,
+            vap=vap,
+            mode=tf_estimator.ModeKeys.TRAIN,
+            nij_max=self._nij_max,
+            dtype=dtype)
         if self._angular:
             if np.round(self._acut - self._rcut, 2) == 0.0:
-                ref_g2 = g2
+                ref_radial_metadata = radial_metadata
                 ref_ijn_id_map = ijn_id_map
             else:
-                ref_g2 = None
+                ref_radial_metadata = None
                 ref_ijn_id_map = None
-            g4 = get_g4_map(atoms,
-                            rc=self._acut,
-                            g2=ref_g2,
-                            ijn_id_map=ref_ijn_id_map,
-                            radial_interactions=self._radial_interactions,
-                            angular_interactions=self._angular_interactions,
-                            vap=vap,
-                            symmetric=self._symmetric,
-                            mode=tf_estimator.ModeKeys.TRAIN,
-                            nijk_max=self._nijk_max,
-                            dtype=dtype)
+            angular_metadata = get_angular_metadata(
+                atoms=atoms,
+                rc=self._acut,
+                radial_metadata=ref_radial_metadata,
+                ijn_id_map=ref_ijn_id_map,
+                radial_interactions=self._radial_interactions,
+                angular_interactions=self._angular_interactions,
+                vap=vap,
+                angular_symmetricity=self._symmetric,
+                mode=tf_estimator.ModeKeys.TRAIN,
+                nijk_max=self._nijk_max,
+                dtype=dtype)
         else:
-            g4 = None
-        return g2, g4
+            angular_metadata = None
+        return radial_metadata, angular_metadata
 
     @staticmethod
     def get_pbc_displacements(shift, cell, dtype=tf.float64):
@@ -1168,21 +1175,21 @@ class BatchUniversalTransformer(UniversalTransformer,
         return v2g_map, v2g_masks
 
     @staticmethod
-    def _encode_g4_indexed_slices(g4: G4IndexedSlices):
+    def _encode_angular_metadata(data: AngularMetadata):
         """
-        Encode the indexed slices of G4:
-            * `v2g_map`, `ij`, `ik` and `jk` are merged into a single array
-              with key 'a_indices'.
-            * `ij_shift`, `ik_shift` and `jk_shift` are merged into another
-              array with key 'a_shifts'.
+        Encode the angular metadata:
+            * `v2g_map`, `ilist`, `jlist` and `klist` are merged into a single
+              array with key 'g4.indices'.
+            * `n1`, `n2` and `n3` are merged into another array with key
+              'g4.shifts'.
 
         """
         indices = np.concatenate(
-            (g4.v2g_map,
-             g4.ilist[..., np.newaxis],
-             g4.jlist[..., np.newaxis],
-             g4.klist[..., np.newaxis]), axis=1).tostring()
-        shifts = np.concatenate((g4.n1, g4.n2, g4.n3), axis=1).tostring()
+            (data.v2g_map,
+             data.ilist[..., np.newaxis],
+             data.jlist[..., np.newaxis],
+             data.klist[..., np.newaxis]), axis=1).tostring()
+        shifts = np.concatenate((data.n1, data.n2, data.n3), axis=1).tostring()
         return {'g4.indices': bytes_feature(indices),
                 'g4.shifts': bytes_feature(shifts)}
 
@@ -1216,18 +1223,18 @@ class BatchUniversalTransformer(UniversalTransformer,
         """
         feature_list = self._encode_atoms(atoms)
         vap = self.get_vap_transformer(atoms)
-        g2, g4 = self.get_indexed_slices(atoms, vap=vap)
-        feature_list.update(self._encode_g2_indexed_slices(g2))
-        if isinstance(g4, G4IndexedSlices):
-            feature_list.update(self._encode_g4_indexed_slices(g4))
+        radial_metadata, angular_metadata = self.get_metadata(atoms, vap=vap)
+        feature_list.update(self._encode_radial_metadata(radial_metadata))
+        if isinstance(angular_metadata, AngularMetadata):
+            feature_list.update(self._encode_angular_metadata(angular_metadata))
         return tf.train.Example(
             features=tf.train.Features(feature=feature_list))
 
-    def _decode_g2_indexed_slices(self, example: Dict[str, tf.Tensor]):
+    def _decode_radial_metadata(self, example: Dict[str, tf.Tensor]):
         """
-        Decode v2g_map, ilist, jlist and Slist for radial functions.
+        Decode the radial metadata.
         """
-        with tf.name_scope("G2"):
+        with tf.name_scope("Metadata/Radial"):
             indices = tf.decode_raw(example['g2.indices'], tf.int32)
             indices.set_shape([self._nij_max * 8])
             indices = tf.reshape(
@@ -1241,14 +1248,13 @@ class BatchUniversalTransformer(UniversalTransformer,
             shift.set_shape([self._nij_max * 3])
             shift = tf.reshape(shift, [self._nij_max, 3], name='shift')
 
-            return G2IndexedSlices(v2g_map, ilist, jlist, shift, None)
+            return RadialMetadata(v2g_map, ilist, jlist, shift, None)
 
-    def _decode_g4_indexed_slices(self, example: Dict[str, tf.Tensor]):
+    def _decode_angular_metadata(self, example: Dict[str, tf.Tensor]):
         """
-        Decode v2g_map, ij, ik, jk, ijSlist, ikSlist and jkSlist for angular
-        functions.
+        Decode the angular metadata.
         """
-        with tf.name_scope("G4"):
+        with tf.name_scope("Metadata/Angular"):
             indices = tf.decode_raw(example['g4.indices'], tf.int32)
             indices.set_shape([self._nijk_max * 9])
             indices = tf.reshape(
@@ -1265,7 +1271,7 @@ class BatchUniversalTransformer(UniversalTransformer,
                 shifts, [self._nijk_max, 9], name='g4.shifts')
             n1, n2, n3 = tf.split(shifts, [3, 3, 3], axis=1, name='splits')
 
-        return G4IndexedSlices(v2g_map, ilist, jlist, klist, n1, n2, n3, None)
+        return AngularMetadata(v2g_map, ilist, jlist, klist, n1, n2, n3, None)
 
     def _decode_example(self, example: Dict[str, tf.Tensor]):
         """
@@ -1277,11 +1283,11 @@ class BatchUniversalTransformer(UniversalTransformer,
             use_forces=self._use_forces,
             use_stress=self._use_stress
         )
-        g2 = self._decode_g2_indexed_slices(example)
-        decoded.update(g2.as_dict())
+        radial_metadata = self._decode_radial_metadata(example)
+        decoded.update(radial_metadata.as_dict())
         if self._angular:
-            g4 = self._decode_g4_indexed_slices(example)
-            decoded.update(g4.as_dict())
+            angular_metadata = self._decode_angular_metadata(example)
+            decoded.update(angular_metadata.as_dict())
         return decoded
 
     def decode_protobuf(self, example_proto: tf.Tensor):

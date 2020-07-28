@@ -46,7 +46,7 @@ def qm7m_compute():
     for i, atoms in enumerate(qm7m["trajectory"]):
         vap = sf.get_vap_transformer(atoms)
         positions[i] = vap.map_positions(atoms.positions)
-        g2.append(sf.get_indexed_slices(atoms, vap)[0])
+        g2.append(sf.get_metadata(atoms, vap)[0])
 
     return dict(positions=positions, g2=g2)
 
