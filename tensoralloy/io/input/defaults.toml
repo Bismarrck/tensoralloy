@@ -90,6 +90,7 @@ activation = "softplus"
 layers = [128, 128]
 biased_eentropy = true
 biased_internal_energy = false
+biased_free_energy = false
 
 [nn.atomic.deepmd]
 rcs = 4.0

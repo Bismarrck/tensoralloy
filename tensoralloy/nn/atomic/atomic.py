@@ -204,6 +204,26 @@ class AtomicNN(BasicNN):
             x = tf.concat((x, etemp), axis=2, name='x')
         return x, etemp
 
+    @staticmethod
+    def _apply_temperature_bias(atomic: tf.Tensor,
+                                t: tf.Tensor,
+                                name='atomic/bias'):
+        """
+        Add a temperature-depedent bias unit to the target atomic tensor.
+        """
+        bias = tf.get_variable(
+            name="bias_t", shape=(), dtype=atomic.dtype,
+            trainable=True, collections=[
+                tf.GraphKeys.GLOBAL_VARIABLES,
+                tf.GraphKeys.MODEL_VARIABLES,
+                tf.GraphKeys.TRAINABLE_VARIABLES,
+                GraphKeys.TRAIN_METRICS
+            ],
+            initializer=tf.constant_initializer(0.0, dtype=atomic.dtype),
+            aggregation=tf.VariableAggregation.MEAN)
+        bias = tf.multiply(bias, t, name='b')
+        return tf.add(bias, atomic, name=name)
+
     def _get_eentropy_outputs(self,
                               h: tf.Tensor,
                               t: tf.Tensor,
@@ -244,18 +264,9 @@ class AtomicNN(BasicNN):
                 verbose=verbose)
             eentropy = tf.squeeze(eentropy, axis=2, name="atomic")
             if self._finite_temperature.biased_eentropy:
-                bias = tf.get_variable(
-                    name="bias", shape=(), dtype=h.dtype,
-                    trainable=True, collections=[
-                        tf.GraphKeys.GLOBAL_VARIABLES,
-                        tf.GraphKeys.MODEL_VARIABLES,
-                        tf.GraphKeys.TRAINABLE_VARIABLES,
-                        GraphKeys.TRAIN_METRICS
-                    ],
-                    initializer=tf.constant_initializer(0.0, dtype=h.dtype),
-                    aggregation=tf.VariableAggregation.MEAN)
-                bias = tf.multiply(bias, t, name='b')
-                eentropy = tf.add(bias, eentropy, name='atomic/bias')
+                eentropy = self._apply_temperature_bias(eentropy, t)
+                if verbose:
+                    log_tensor(eentropy)
             return eentropy
 
     def _get_internal_energy_outputs(self,
@@ -301,18 +312,9 @@ class AtomicNN(BasicNN):
                 verbose=verbose)
             energy = tf.squeeze(energy, axis=2, name="atomic")
             if self._finite_temperature.biased_internal_energy:
-                bias = tf.get_variable(
-                    name="bias", shape=(), dtype=h.dtype,
-                    trainable=True, collections=[
-                        tf.GraphKeys.GLOBAL_VARIABLES,
-                        tf.GraphKeys.MODEL_VARIABLES,
-                        tf.GraphKeys.TRAINABLE_VARIABLES,
-                        GraphKeys.TRAIN_METRICS
-                    ],
-                    initializer=tf.constant_initializer(0.0, dtype=h.dtype),
-                    aggregation=tf.VariableAggregation.MEAN)
-                bias = tf.multiply(bias, t, name='b')
-                energy = tf.add(bias, energy, name='atomic/bias')
+                energy = self._apply_temperature_bias(energy, t)
+                if verbose:
+                    log_tensor(energy)
             return energy
 
     def _get_model_outputs(self,
@@ -371,15 +373,20 @@ class AtomicNN(BasicNN):
                             if verbose:
                                 log_tensor(x)
                         if self._finite_temperature.algorithm != "full":
-                            if self._finite_temperature.algorithm == "semi":
-                                x = self._add_electron_temperature(
+                            if self._finite_temperature.on:
+                                xp, t = self._add_electron_temperature(
                                     x=x,
                                     etemperature=features["etemperature"],
                                     element=element,
                                     mode=mode,
-                                    max_occurs=atomic_descriptors.max_occurs)[0]
+                                    max_occurs=atomic_descriptors.max_occurs)
+                                if self._finite_temperature.algorithm == "semi":
+                                    x = xp
+                                t = tf.squeeze(t, axis=2, name='T')
                                 if verbose:
                                     log_tensor(x)
+                            else:
+                                t = None
                             output_bias = self._fixed_atomic_static_energy
                             y = convolution1x1(
                                 x,
@@ -399,6 +406,10 @@ class AtomicNN(BasicNN):
                             if verbose:
                                 log_tensor(y)
                             if self._finite_temperature.on:
+                                if self._finite_temperature.biased_free_energy:
+                                    y = self._apply_temperature_bias(y, t)
+                                    if verbose:
+                                        log_tensor(y)
                                 outputs['free_energy'].append(y)
                             else:
                                 outputs['energy'].append(y)

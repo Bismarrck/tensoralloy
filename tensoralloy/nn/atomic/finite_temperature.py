@@ -21,6 +21,7 @@ class FiniteTemperatureOptions:
     layers: List[int] = (128, 128)
     biased_eentropy: bool = True
     biased_internal_energy: bool = False
+    biased_free_energy: bool = False
 
     def __post_init__(self):
         if self.algorithm not in ("off", "zero", "semi", "full"):
