@@ -27,7 +27,6 @@ from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
@@ -227,7 +226,7 @@ class TrainingManager:
 
     def _get_nn(self):
         """
-        Initialize a `BasicNN` using the configs of the input file.
+        Initialize a `BasicNN`.
         """
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
@@ -242,8 +241,6 @@ class TrainingManager:
             nn = self._get_tersoff_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
-
-        # Attach the transformer
         nn.attach_transformer(self._dataset.transformer)
         return nn
 
@@ -260,42 +257,29 @@ class TrainingManager:
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
         nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
+        angular = False
+        angular_symmetricity = False
+        ij2k_max = 0
+        nijk_max = 0
 
-        if pair_style == 'atomic/sf':
-            angular = self._reader['nn.atomic.sf.angular']
-            if angular:
-                nijk_max = database.get_nijk_max(acut, allow_calculation=True)
-            else:
-                nijk_max = 0
-            clf = BatchUniversalTransformer(
-                max_occurs=max_occurs, rcut=rcut, acut=acut, angular=angular,
-                nij_max=nij_max, nijk_max=nijk_max, nnl_max=nnl_max,
-                symmetric=True, use_forces=database.has_forces, 
-                use_stress=database.has_stress)
-        elif pair_style.startswith("eam"):
-            if pair_style == 'adp':
-                cls = BatchADPTransformer
-            else:
-                cls = BatchEAMTransformer
-            clf = cls(rc=rcut, max_occurs=max_occurs, nij_max=nij_max,
-                      nnl_max=nnl_max, use_forces=database.has_forces,
-                      use_stress=database.has_stress)
-        elif pair_style == "tersoff":
-            nijk_max = database.get_nijk_max(acut, allow_calculation=True,
-                                             symmetric=False)
+        if pair_style == 'atomic/sf' and self._reader['nn.atomic.sf.angular']:
+            angular = True
+            angular_symmetricity = True
+            nijk_max = database.get_nijk_max(acut, allow_calculation=True)
             ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
-            clf = BatchUniversalTransformer(
-                max_occurs=max_occurs, rcut=rcut, acut=acut, angular=True,
-                symmetric=False, nij_max=nij_max, nijk_max=nijk_max,
-                nnl_max=nnl_max, ij2k_max=ij2k_max,
-                use_forces=database.has_forces, use_stress=database.has_stress)
-        elif pair_style == 'atomic/grap' or pair_style == 'atomic/deepmd':
-            clf = BatchUniversalTransformer(
-                max_occurs=max_occurs, rcut=rcut, angular=False,
-                nij_max=nij_max, nnl_max=nnl_max, 
-                use_forces=database.has_forces, use_stress=database.has_stress)
-        else:
-            raise ValueError(f"Unknown pair style: {pair_style}")
+
+        elif pair_style == "tersoff":
+            nijk_max = database.get_nijk_max(
+                acut, allow_calculation=True, symmetric=False)
+            ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
+            angular = True
+            angular_symmetricity = False
+
+        clf = BatchUniversalTransformer(
+            max_occurs=max_occurs, rcut=rcut, angular=angular, nij_max=nij_max,
+            nnl_max=nnl_max, nijk_max=nijk_max, ij2k_max=ij2k_max,
+            symmetric=angular_symmetricity, use_forces=database.has_forces,
+            use_stress=database.has_stress)
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']
