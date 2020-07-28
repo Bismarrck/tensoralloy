@@ -16,7 +16,7 @@ from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
+from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 

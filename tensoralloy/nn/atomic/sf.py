@@ -15,7 +15,7 @@ from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
+from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.extension.grad_ops import safe_pow
 from tensoralloy.precision import get_float_dtype

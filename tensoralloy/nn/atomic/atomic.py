@@ -17,7 +17,7 @@ from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
+from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

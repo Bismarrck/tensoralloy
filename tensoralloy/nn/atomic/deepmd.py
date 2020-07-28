@@ -18,7 +18,7 @@ from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
+from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
