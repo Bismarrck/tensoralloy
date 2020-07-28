@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import nose
 import os
+import unittest
 
 from nose.tools import assert_almost_equal, assert_true
 
@@ -18,6 +19,8 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+@unittest.skipUnless(os.environ.get('TENSORALLOY_USE_CUSTOM_POW') == "1",
+                     "TENSORALLOY_USE_CUSTOM_POW is not set")
 def test_safe_pow():
     """
     Test the function `safe_pow`.
@@ -26,9 +29,6 @@ def test_safe_pow():
     def assert_equal(a, b):
         """ A wrapper. """
         return assert_almost_equal(a, b, delta=1e-12)
-
-    val = os.environ.get('TENSORALLOY_USE_CUSTOM_POW', False)
-    os.environ['TENSORALLOY_USE_CUSTOM_POW'] = "1"
 
     with precision_scope("high"):
         dtype = get_float_dtype()
@@ -69,9 +69,9 @@ def test_safe_pow():
                 assert_true(np.isnan(sess.run(g2, feed_dict={x: 0.0, y: 1.0})))
                 assert_equal(sess.run(g1, feed_dict={x: 0.0, y: 1.0}), 1.0)
 
-    os.environ['TENSORALLOY_USE_CUSTOM_POW'] = val
 
-
+@unittest.skipUnless(os.environ.get('TENSORALLOY_USE_CUSTOM_POW') == "1",
+                     "TENSORALLOY_USE_CUSTOM_POW is not set")
 def test_safe_pow_1():
 
     with precision_scope("medium"):
@@ -91,12 +91,12 @@ def test_safe_pow_1():
                 Fn1 = tf.constant(1.0, dtype=dtype, name='Fn1')
                 Fn2 = tf.constant(5.0, dtype=dtype, name='Fn2')
                 Fn3 = tf.constant(4.0, dtype=dtype, name='Fn3')
-                x1 = tf.subtract(tf.math.divide(_rho, rho_n), one, name='x')
-                x2 = pow_fn(x1, two)
-                x3 = pow_fn(x1, three)
-                e11 = tf.multiply(Fn1, x1, 'Fn1e1')
-                e12 = tf.multiply(Fn2, x2, 'Fn2e2')
-                e13 = tf.multiply(Fn3, x3, 'Fn3e3')
+                v1 = tf.subtract(tf.math.divide(_rho, rho_n), one, name='x')
+                v2 = pow_fn(v1, two)
+                v3 = pow_fn(v1, three)
+                e11 = tf.multiply(Fn1, v1, 'Fn1e1')
+                e12 = tf.multiply(Fn2, v2, 'Fn2e2')
+                e13 = tf.multiply(Fn3, v3, 'Fn3e3')
                 return tf.add(Fn0, e11 + e12 + e13, name='e1')
 
         def embed3(_rho, pow_fn, name=None):
@@ -108,10 +108,10 @@ def test_safe_pow_1():
                 one = tf.constant(1.0, dtype=dtype, name='one')
                 eta = tf.constant(0.5, dtype=dtype, name='eta')
                 Fe = tf.constant(-3.0, dtype=dtype, name='Fe')
-                x1 = _rho / rho_s + tf.constant(1e-8, dtype=dtype, name='eps')
-                lnx = tf.log(x1)
+                v1 = _rho / rho_s + tf.constant(1e-8, dtype=dtype, name='eps')
+                lnx = tf.log(v1)
                 return tf.multiply(Fe * (one - eta * lnx),
-                                   pow_fn(x1, eta), name='e3')
+                                   pow_fn(v1, eta), name='e3')
 
         with tf.Graph().as_default():
 

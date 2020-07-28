@@ -4,45 +4,15 @@ This module defines data classes for `tensoralloy.nn` package.
 """
 from __future__ import print_function, absolute_import
 
-from dataclasses import dataclass, fields, is_dataclass
-from typing import List, Union, Dict
+import tensorflow as tf
+
+from dataclasses import dataclass, is_dataclass
+from typing import List, Union, Dict, Tuple
+
+from tensoralloy.utils import add_slots
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def add_slots(cls):
-    """
-    A decorator to put __slots__ on a dataclass with fields with defaults.
-
-    Need to create a new class, since we can't set __slots__ after a class has
-    been created.
-
-    References
-    ----------
-    https://github.com/ericvsmith/dataclasses/blob/master/dataclass_tools.py
-
-    """
-    # Make sure __slots__ isn't already set.
-    if '__slots__' in cls.__dict__:
-        raise TypeError(f'{cls.__name__} already specifies __slots__')
-
-    # Create a new dict for our new class.
-    cls_dict = dict(cls.__dict__)
-    field_names = tuple(f.name for f in fields(cls))
-    cls_dict['__slots__'] = field_names
-    for field_name in field_names:
-        # Remove our attributes, if present. They'll still be
-        #  available in _MARKER.
-        cls_dict.pop(field_name, None)
-    # Remove __dict__ itself.
-    cls_dict.pop('__dict__', None)
-    # And finally create the class.
-    qualname = getattr(cls, '__qualname__', None)
-    cls = type(cls)(cls.__name__, cls.__bases__, cls_dict)
-    if qualname is not None:
-        cls.__qualname__ = qualname
-    return cls
 
 
 def nested_dataclass(*args, **kwargs):
@@ -70,23 +40,60 @@ def nested_dataclass(*args, **kwargs):
     return wrapper(args[0]) if args else wrapper
 
 
+@dataclass(frozen=True)
+class EnergyOps:
+    """
+    Different types of energy ops.
+
+    energy: the internal energy U
+    eentropy: the electron entropy S
+    enthalpy: the enthalpy H = U + PV
+    free_energy: electron free energy F = U - T*S
+    atomic: energy for each atom
+
+    """
+    energy: tf.Tensor
+    eentropy: tf.Tensor
+    enthalpy: tf.Tensor
+    free_energy: tf.Tensor
+    atomic: tf.Tensor
+
+
 @add_slots
 @dataclass
 class _LossOptions:
     """
     The basic options for a loss.
     """
-    weight: float = 1.0
+    weight: Union[float, Tuple[float, float]] = 1.0
 
 
 @add_slots
 @dataclass
 class EnergyLossOptions(_LossOptions):
     """
-    Special options for the loss of energies.
+    Special options for the loss of energy (internal energy).
     """
     per_atom_loss: bool = False
     method: str = 'rmse'
+
+
+@add_slots
+@dataclass
+class EEntropyLossOptions(EnergyLossOptions):
+    """
+    Special options for the loss of electron entropy.
+    """
+    pass
+
+
+@add_slots
+@dataclass
+class FreeEnergyLossOptions(EnergyLossOptions):
+    """
+    Special options for the loss of free energy.
+    """
+    pass
 
 
 @add_slots
@@ -187,11 +194,14 @@ class _HyperParameters:
 
 @add_slots
 @nested_dataclass
+@dataclass
 class LossParameters(_HyperParameters):
     """
     Hyper parameters for constructing the total loss.
     """
     energy: EnergyLossOptions = EnergyLossOptions()
+    eentropy: EEntropyLossOptions = EEntropyLossOptions()
+    free_energy: FreeEnergyLossOptions = FreeEnergyLossOptions()
     forces: ForcesLossOptions = ForcesLossOptions()
     stress: StressLossOptions = StressLossOptions()
     total_pressure: PressureLossOptions = PressureLossOptions()
@@ -199,6 +209,9 @@ class LossParameters(_HyperParameters):
     elastic: ElasticLossOptions = ElasticLossOptions()
     rose: RoseLossOptions = RoseLossOptions()
     ediff: EnergyDifferenceLossOptions = EnergyDifferenceLossOptions()
+
+    def __getitem__(self, item):
+        return getattr(self, item)
 
 
 @add_slots

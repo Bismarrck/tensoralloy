@@ -1,0 +1,55 @@
+precision = 'medium'
+pair_style = 'atomic/grap'
+rcut = 5.0
+
+[dataset]
+sqlite3 = "Be_v2_N1903.db"
+name = "Be_v2"
+tfrecords_dir = "."
+test_size = 103
+
+[nn]
+minimize = ['energy', 'eentropy', 'free_energy', 'forces', 'stress']
+export = ['energy', 'forces', 'stress', 'eentropyy']
+
+[nn.atomic]
+activation = "softplus"
+kernel_initializer = 'he_normal'
+
+[nn.atomic.finite_temperature]
+algorithm = "semi"
+
+[nn.atomic.grap]
+moment_tensors = [2]
+algorithm = 'sf'
+
+[nn.atomic.grap.sf]
+eta = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 20.0, 40.0]
+omega = [0.0, 1.5, 3.0]
+
+[nn.atomic.layers]
+Be = [64, 64]
+
+[nn.loss.energy]
+weight = [0.1, 1.0]
+
+[opt]
+learning_rate = 0.01
+decay_function = false
+method = 'adam'
+
+[train]
+reset_global_step = true
+batch_size = 25
+shuffle = true
+model_dir = "./model"
+max_checkpoints_to_keep = 10
+train_steps = 200
+eval_steps = 200
+summary_steps = 10
+log_steps = 10
+profile_steps = 0
+
+[train.ckpt]
+use_ema_variables = false
+restore_all_variables = false

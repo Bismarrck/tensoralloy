@@ -1,7 +1,6 @@
-# coding=utf-8
+#!coding=utf-8
 """
-This module defines the unit tests for implementations of Behler's symmetry
-functions.
+Unit tests of the symmetry function neural network (SFNN).
 """
 from __future__ import print_function, absolute_import
 
@@ -9,35 +8,84 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from nose.tools import assert_less, assert_equal, assert_dict_equal
-from ase import Atoms
+from dataclasses import dataclass
+from tensorflow_estimator import estimator as tf_estimator
 from ase.io import read
+from ase import Atoms
 from ase.neighborlist import neighbor_list
+from os.path import join
 from sklearn.metrics import pairwise_distances
 from sklearn.model_selection import ParameterGrid
 from itertools import product
-from typing import List, Union, Tuple
-from collections import Counter
-from dataclasses import dataclass
-from os.path import join
+from typing import Union, List
 
-from tensoralloy.precision import precision_scope, Precision, get_float_dtype
-from tensoralloy.test_utils import Pd3O2, get_qm7m_test_dict, test_dir
-from tensoralloy.test_utils import assert_array_equal, assert_array_almost_equal
-from tensoralloy.descriptor import compute_dimension, cosine_cutoff
-from tensoralloy.utils import get_kbody_terms, Defaults
-from tensoralloy.neighbor import find_neighbor_size_of_atoms
-from tensoralloy.transformer.indexed_slices import G2IndexedSlices
-from tensoralloy.transformer.indexed_slices import G4IndexedSlices
-from tensoralloy.transformer import SymmetryFunctionTransformer
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
+from tensoralloy.nn.cutoff import cosine_cutoff
+from tensoralloy.transformer.universal import UniversalTransformer
+from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.precision import precision_scope
+from tensoralloy.test_utils import test_dir, assert_array_equal, Pd3O2
+from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+
+@dataclass
+class Defaults:
+    """
+    Default parameter choices for generating symmetry function descriptors.
+    """
+    eta = np.array([0.05, 4.0, 20.0, 80.0])
+    omega = np.array([0.0])
+    beta = np.array([0.005, ])
+    gamma = np.array([1.0, -1.0])
+    zeta = np.array([1.0, 4.0])
+
+
 grid = ParameterGrid({'beta': Defaults.beta, 'gamma': Defaults.gamma,
                       'zeta': Defaults.zeta})
+
+
+def compute_dimension(all_kbody_terms: List[str], n_etas, n_omegas, n_betas,
+                      n_gammas, n_zetas):
+    """
+    Compute the total dimension of the feature vector.
+
+    Parameters
+    ----------
+    all_kbody_terms : List[str]
+        A list of str as all k-body terms.
+    n_etas : int
+        The number of `eta` for radial functions.
+    n_omegas : int
+        The number of `omega` for radial functions.
+    n_betas : int
+        The number of `beta` for angular functions.
+    n_gammas : int
+        The number of `gamma` for angular functions.
+    n_zetas : int
+        The number of `zeta` for angular functions.
+
+    Returns
+    -------
+    total_dim : int
+        The total dimension of the feature vector.
+    kbody_sizes : List[int]
+        The size of each k-body term.
+
+    """
+    total_dim = 0
+    kbody_sizes = []
+    for kbody_term in all_kbody_terms:
+        k = len(get_elements_from_kbody_term(kbody_term))
+        if k == 2:
+            n = n_etas * n_omegas
+        else:
+            n = n_gammas * n_betas * n_zetas
+        total_dim += n
+        kbody_sizes.append(n)
+    return total_dim, kbody_sizes
 
 
 @dataclass(frozen=True)
@@ -520,16 +568,16 @@ def legacy_symmetry_function(atoms: Atoms, rc: float):
     all_kbody_terms, _, _ = get_kbody_terms(list(set(symbols)), angular=True)
     total_dim, kbody_sizes = compute_dimension(
         all_kbody_terms,
-        n_etas=Defaults.n_etas,
-        n_omegas=Defaults.n_omegas,
-        n_betas=Defaults.n_betas,
-        n_gammas=Defaults.n_gammas,
-        n_zetas=Defaults.n_zetas)
+        n_etas=len(Defaults.eta),
+        n_omegas=len(Defaults.omega),
+        n_betas=len(Defaults.beta),
+        n_gammas=len(Defaults.gamma),
+        n_zetas=len(Defaults.zeta))
 
     with tf.Graph().as_default():
         R = tf.constant(atoms.positions, dtype=tf.float64, name='R')
         cell = tf.constant(atoms.cell.array, tf.float64, name='cell')
-        rmap = legacy_build_radial_v2g_map(atoms, rc, Defaults.n_etas,
+        rmap = legacy_build_radial_v2g_map(atoms, rc, len(Defaults.eta),
                                            all_kbody_terms, kbody_sizes)
         amap = legacy_build_angular_v2g_map(atoms, rmap, all_kbody_terms,
                                             kbody_sizes)
@@ -559,9 +607,24 @@ def test_monoatomic_molecule():
     zr = get_radial_fingerprints_v1(coords, rr, rc, Defaults.eta)
     za = get_augular_fingerprints_v1(coords, rr, rc, Defaults.beta,
                                      Defaults.gamma, Defaults.zeta)
-    z = np.hstack((zr, za))
-    g, _, _ = legacy_symmetry_function(atoms, rc=rc)
-    assert_array_equal(z, g)
+    g_init = np.hstack((zr, za))
+    g_old, _, _ = legacy_symmetry_function(atoms, rc=rc)
+    assert_array_equal(g_init, g_old)
+
+    with tf.Graph().as_default():
+        clf = UniversalTransformer(['B'], rcut=rc, acut=rc, angular=True,
+                                   periodic=False)
+        nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=Defaults.omega,
+                                gamma=Defaults.gamma, zeta=Defaults.zeta, beta=Defaults.beta)
+        nn.attach_transformer(clf)
+        op = nn.get_symmetry_function_descriptors(
+            clf.get_descriptors(
+                clf.get_constant_features(atoms)),
+            mode=tf_estimator.ModeKeys.PREDICT)[0]
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            g_new = sess.run(op)
+            assert_array_equal(g_old, g_new['B'])
 
 
 def test_monoatomic_molecule_with_omega():
@@ -572,25 +635,26 @@ def test_monoatomic_molecule_with_omega():
     atoms.set_cell([20.0, 20.0, 20.0])
     atoms.set_pbc([False, False, False])
 
-    omegas = np.array([0.0, 1.0, 2.0])
+    omega = np.array([0.0, 1.0, 2.0])
 
     coords = atoms.get_positions()
     rr = pairwise_distances(coords)
     rc = 6.0
-    z = get_radial_fingerprints_v2(coords, rr, rc, Defaults.eta, omegas)
+    z = get_radial_fingerprints_v2(coords, rr, rc, Defaults.eta, omega)
 
-    with precision_scope(Precision.high):
+    with precision_scope("high"):
         with tf.Graph().as_default():
-            sf = SymmetryFunctionTransformer(rc=rc, elements=['B'],
-                                             eta=Defaults.eta,
-                                             omega=omegas, angular=False)
-            g = sf.get_descriptors(sf.get_placeholder_features())
-
+            clf = UniversalTransformer(['B'], rcut=rc, angular=False,
+                                       periodic=False)
+            nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=omega)
+            nn.attach_transformer(clf)
+            op = nn.get_symmetry_function_descriptors(
+                clf.get_descriptors(
+                    clf.get_constant_features(atoms)),
+                mode=tf_estimator.ModeKeys.PREDICT)[0]
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                values = sess.run(g, feed_dict=sf.get_feed_dict(atoms))
-
-            assert_array_equal(values['B'][0], z)
+                assert_array_equal(sess.run(op)['B'], z)
 
 
 def test_single_structure():
@@ -598,312 +662,26 @@ def test_single_structure():
     Test computing descriptors of a single multi-elements periodic structure.
     """
     amp = np.load(join(test_dir(), 'amp_Pd3O2.npz'))['g']
-    g, _, _ = legacy_symmetry_function(Pd3O2, rc=6.5)
-    assert_less(np.abs(amp - g).max(), 1e-8)
 
-
-def get_ij_ijk_max(trajectory, rc, k_max=3) -> (int, int):
-    """
-    Return the maximum number of unique `R(ij)` and `Angle(i,j,k)` from one
-    `Atoms` object.
-    """
-    nij_max = 0
-    nijk_max = 0
-    for atoms in trajectory:
-        size = find_neighbor_size_of_atoms(atoms, rc, angular=(k_max == 3))
-        nij_max = max(nij_max, size.nij)
-        nijk_max = max(size.nijk, nijk_max)
-    return nij_max, nijk_max
-
-
-def test_legacy_and_new_flexible():
-    """
-    Test computing descriptors of B28 molecules with the legacy function and the
-    new flexible implementation.
-    """
-    trajectory = read(join(test_dir(), 'B28.xyz'), index='0:2', format='xyz')
-    targets = np.zeros((2, 28, 8), dtype=np.float64)
-    rc = 6.0
-    for i, atoms in enumerate(trajectory):
-        atoms.set_cell([20.0, 20.0, 20.0])
-        atoms.set_pbc([False, False, False])
-        targets[i] = legacy_symmetry_function(atoms, rc)[0]
-
-    with precision_scope(Precision.high):
+    with precision_scope("high"):
         with tf.Graph().as_default():
-            sf = SymmetryFunctionTransformer(
-                rc=rc, elements=['B'], angular=True)
-            g = sf.get_descriptors(sf.get_placeholder_features())
-
+            symbols = Pd3O2.get_chemical_symbols()
+            elements = sorted(list(set(symbols)))
+            rc = 6.5
+            clf = UniversalTransformer(elements, rcut=rc, angular=True,
+                                       periodic=True)
+            nn = SymmetryFunctionNN(elements)
+            nn.attach_transformer(clf)
+            op = nn.get_symmetry_function_descriptors(
+                clf.get_descriptors(
+                    clf.get_constant_features(Pd3O2)),
+                mode=tf_estimator.ModeKeys.PREDICT)[0]
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
-                for i, atoms in enumerate(trajectory):
-                    feed_dict = sf.get_feed_dict(atoms)
-                    values = sess.run(g, feed_dict=feed_dict)
-                    assert_array_equal(values['B'][0], targets[i])
-
-
-def test_manybody_k():
-    """
-    Test computing descriptors for different `k_max`.
-    """
-    symbols = Pd3O2.get_chemical_symbols()
-    rc = 6.0
-    max_occurs = Counter(symbols)
-    elements = sorted(max_occurs.keys())
-    ref, ref_all_kbody_terms, ref_sizes = legacy_symmetry_function(Pd3O2, rc)
-    ref = ref[[3, 4, 0, 1, 2]]
-    ref_offsets = np.insert(np.cumsum(ref_sizes), 0, 0)
-
-    with precision_scope(Precision.high):
-        for k_max in (2, 3):
-            with tf.Graph().as_default():
-                sf = SymmetryFunctionTransformer(
-                    rc, elements, angular=(k_max == 3))
-                g = sf.get_descriptors(sf.get_placeholder_features())
-                with tf.Session() as sess:
-                    tf.global_variables_initializer().run()
-                    values = sess.run(g, feed_dict=sf.get_feed_dict(Pd3O2))
-
-                x = np.zeros((5, len(sf.all_kbody_terms) * len(Defaults.eta)))
-                x[:2, :values['O'][0].shape[1]] = values['O'][0]
-                x[2:, values['O'][0].shape[1]:] = values['Pd'][0]
-
-                columns = []
-                for i, ref_term in enumerate(ref_all_kbody_terms):
-                    if ref_term in sf.all_kbody_terms:
-                        columns.extend(
-                            range(ref_offsets[i], ref_offsets[i + 1]))
-                assert_array_equal(x, ref[:, columns])
-
-
-def _merge_indexed_slices(
-        indexed_slices: List[Tuple[G2IndexedSlices, G4IndexedSlices]]):
-    """
-    Merge the indexed slices into a single dict.
-    """
-    batch_size = len(indexed_slices)
-    g2 = 0
-    g4 = 1
-
-    def _stack(index, attr):
-        return np.stack([getattr(indexed_slices[i][index], attr)
-                         for i in range(batch_size)],
-                        axis=0)
-
-    batch = dict()
-    batch["g2.ilist"] = _stack(g2, 'ilist')
-    batch["g2.jlist"] = _stack(g2, 'jlist')
-    batch["g2.n1"] = _stack(g2, 'n1')
-    batch["g2.v2g_map"] = _stack(g2, 'v2g_map')
-    batch["g4.ilist"] = _stack(g4, 'ilist')
-    batch["g4.jlist"] = _stack(g4, 'jlist')
-    batch["g4.klist"] = _stack(g4, 'klist')
-    batch["g4.n1"] = _stack(g4, 'n1')
-    batch["g4.n2"] = _stack(g4, 'n2')
-    batch["g4.n3"] = _stack(g4, 'n3')
-    batch["g4.v2g_map"] = _stack(g4, 'v2g_map')
-
-    return batch
-
-
-def _compute_qm7m_descriptors_legacy(rc):
-    """
-    The legacy approach to compute symmetry function descriptors of the qm7m
-    trajectory.
-    """
-    qm7m = get_qm7m_test_dict()
-    batch_size = len(qm7m["trajectory"])
-    max_n_atoms = sum(qm7m["max_occurs"].values())
-    all_kbody_terms, kbody_terms, elements = get_kbody_terms(
-        list(qm7m["max_occurs"].keys()), angular=True
-    )
-    total_dim, kbody_sizes = compute_dimension(
-        all_kbody_terms,
-        n_etas=Defaults.n_etas,
-        n_omegas=Defaults.n_omegas,
-        n_betas=Defaults.n_betas,
-        n_gammas=Defaults.n_gammas,
-        n_zetas=Defaults.n_zetas)
-    element_offsets = np.insert(
-        np.cumsum([qm7m["max_occurs"][e] for e in elements]), 0, 0)
-
-    offsets = np.insert(np.cumsum(kbody_sizes)[:-1], 0, 0)
-    targets = np.zeros((batch_size, max_n_atoms + 1, total_dim))
-    for i, atoms in enumerate(qm7m["trajectory"]):
-        g, local_all_body_terms, local_sizes = \
-            legacy_symmetry_function(atoms, rc)
-        local_offsets = np.insert(np.cumsum(local_sizes)[:-1], 0, 0)
-        row = Counter()
-        for k, atom in enumerate(atoms):
-            atom_kbody_terms = kbody_terms[atom.symbol]
-            j = row[atom.symbol] + element_offsets[elements.index(atom.symbol)]
-            for term in atom_kbody_terms:
-                if term not in local_all_body_terms:
-                    continue
-                idx = all_kbody_terms.index(term)
-                istart = offsets[idx]
-                istop = istart + kbody_sizes[idx]
-                idx = local_all_body_terms.index(term)
-                lstart = local_offsets[idx]
-                lstop = lstart + local_sizes[idx]
-                targets[i, j + 1, istart: istop] = g[k, lstart: lstop]
-            row[atom.symbol] += 1
-    return {'C': targets[:, 1: 6, :36],
-            'H': targets[:, 6: 14, 36: 72],
-            'O': targets[:, 14: 16, 72:]}
-
-
-def test_batch_multi_elements():
-    """
-    Test computing descriptors of a batch of multi-elements molecules.
-    """
-    rc = 6.0
-    qm7m = get_qm7m_test_dict()
-    batch_size = len(qm7m["trajectory"])
-    targets = _compute_qm7m_descriptors_legacy(rc)
-
-    with tf.Graph().as_default():
-        with precision_scope(Precision.medium):
-            float_dtype = get_float_dtype()
-            np_dtype = float_dtype.as_numpy_dtype
-
-            nij_max, nijk_max = get_ij_ijk_max(qm7m["trajectory"], rc)
-            sf = BatchSymmetryFunctionTransformer(rc, qm7m["max_occurs"],
-                                                  nij_max, nijk_max, batch_size,
-                                                  angular=True)
-            indexed_slices = []
-            positions = []
-            cell = []
-            volume = []
-            atom_masks = []
-            for i, atoms in enumerate(qm7m["trajectory"]):
-                clf = sf.get_vap_transformer(atoms)
-                g2 = sf.get_g2_indexed_slices(atoms)
-                g4 = sf.get_g4_indexed_slices(atoms, g2)
-                indexed_slices.append((g2, g4))
-                positions.append(
-                    clf.map_positions(atoms.positions).astype(np_dtype))
-                cell.append(
-                    atoms.get_cell(complete=True).array.astype(np_dtype))
-                volume.append(np_dtype(atoms.get_volume()))
-                atom_masks.append(np.asarray(clf.atom_masks, dtype=np_dtype))
-
-            batch = _merge_indexed_slices(indexed_slices)
-            batch["positions"] = np.asarray(positions)
-            batch["cell"] = np.asarray(cell)
-            batch["volume"] = volume
-            batch["atom_masks"] = np.asarray(atom_masks)
-
-            # Use a large delta because we use float32 in this test.
-            delta = 1e-5
-
-            g = sf.get_descriptors(batch)
-            with tf.Session(graph=tf.get_default_graph()) as sess:
-                tf.global_variables_initializer().run()
-                results = sess.run(g)
-
-                assert_array_almost_equal(results['C'][0],
-                                          targets['C'].astype(np_dtype),
-                                          delta=delta)
-                assert_array_almost_equal(results['H'][0],
-                                          targets['H'].astype(np_dtype),
-                                          delta=delta)
-                assert_array_almost_equal(results['O'][0],
-                                          targets['O'].astype(np_dtype),
-                                          delta=delta)
-
-
-def test_splits():
-    """
-    Test splitting descriptors into blocks.
-    """
-    symbols = Pd3O2.get_chemical_symbols()
-    rc = 6.0
-    max_occurs = Counter(symbols)
-    elements = sorted(max_occurs.keys())
-    ref, _, _ = legacy_symmetry_function(Pd3O2, rc)
-
-    with precision_scope(Precision.high):
-        with tf.Graph().as_default():
-
-            sf = SymmetryFunctionTransformer(rc, elements, angular=True)
-            g = sf.get_descriptors(sf.get_constant_features(Pd3O2))
-            with tf.Session() as sess:
-                tf.global_variables_initializer().run()
-                values = sess.run(g)
-
-            assert_array_equal(values['O'][0], ref[3:, :20])
-            assert_array_equal(values['Pd'][0], ref[:3, 20:])
-
-
-def test_as_dict():
-    """
-    Test the method `SymmetryFunctionTransformer.as_dict`.
-    """
-    symbols = Pd3O2.get_chemical_symbols()
-    rc = 6.0
-    max_occurs = Counter(symbols)
-    elements = sorted(max_occurs.keys())
-
-    with tf.Graph().as_default():
-        old = SymmetryFunctionTransformer(rc, elements, angular=True)
-        old_g = old.get_descriptors(old.get_constant_features(Pd3O2))
-
-        params = old.as_dict()
-        cls = params.pop('class')
-        assert_equal(cls, "SymmetryFunctionTransformer")
-
-        new = SymmetryFunctionTransformer(**params)
-        new_g = new.get_descriptors(new.get_constant_features(Pd3O2))
-
-        with tf.Session() as sess:
-            tf.global_variables_initializer().run()
-            old_vals = sess.run(old_g)
-            new_vals = sess.run(new_g)
-
-        assert_array_equal(old_vals['O'][0], new_vals['O'][0])
-        assert_array_equal(old_vals['Pd'][0], new_vals['Pd'][0])
-
-
-def test_batch_transformer_as_dict():
-    """
-    Test the method `BatchSymmetryFunctionTransformer.as_dict`.
-    """
-    rc = 6.0
-    max_occurs = Counter({'Ni': 108, 'Mo': 32})
-    nij_max = 300
-    nijk_max = 400
-    angular = True
-    trainable = True
-    use_forces = False
-    old = BatchSymmetryFunctionTransformer(
-        rc, max_occurs, nij_max=nij_max, nijk_max=nijk_max, angular=angular,
-        trainable=trainable, use_forces=use_forces)
-
-    configs = old.as_dict()
-    cls = configs.pop('class')
-    assert_equal(cls, 'BatchSymmetryFunctionTransformer')
-
-    new = BatchSymmetryFunctionTransformer(**configs)
-    assert_dict_equal(old.max_occurs, new.max_occurs)
-    assert_equal(old.nijk_max, new.nijk_max)
-    assert_equal(old.nij_max, new.nij_max)
-    assert_equal(new.trainable, trainable)
-    assert_equal(new.use_forces, use_forces)
-    assert_equal(new.angular, angular)
-
-
-def test_reuse_descriptor_variables():
-    """
-    Check if symmetry function variables can be reused correctly.
-    """
-    with tf.Graph().as_default():
-        sf = SymmetryFunctionTransformer(rc=6.0, elements=['Al', 'Cu'],
-                                         trainable=True, angular=True)
-        sf.get_descriptors(sf.get_placeholder_features())
-        assert_equal(len(tf.model_variables()), 10)
+                g_new = sess.run(op)
+                assert_array_equal(g_new['O'][0], amp[3: 5, 0: 20])
+                assert_array_equal(g_new['Pd'][0], amp[0: 3, 20: 40])
 
 
 if __name__ == "__main__":
-    nose.run()
+    nose.main()

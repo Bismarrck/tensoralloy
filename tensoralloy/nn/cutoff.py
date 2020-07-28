@@ -13,7 +13,8 @@ from tensorflow.python.ops import math_ops
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["cosine_cutoff", "polynomial_cutoff", "meam_cutoff", "deepmd_cutoff"]
+__all__ = ["cosine_cutoff", "polynomial_cutoff", "meam_cutoff", "deepmd_cutoff",
+           "tersoff_cutoff"]
 
 
 def cosine_cutoff(r: tf.Tensor, rc: float, name=None):
@@ -120,3 +121,23 @@ def deepmd_cutoff(r: tf.Tensor, rc: float, rcs: float, name=None):
         zpi = math_ops.multiply(pi, z)
         return math_ops.multiply(recip, half * math_ops.cos(zpi) + half,
                                  name=name)
+
+
+def tersoff_cutoff(r: tf.Tensor, R: float, D: float, name=None):
+    """
+    The Tersoff cutoff function.
+    """
+    with ops.name_scope(name, "TersoffCutoff", [r, R, D]) as name:
+        R = ops.convert_to_tensor(R, dtype=r.dtype, name='R')
+        D = ops.convert_to_tensor(D, dtype=r.dtype, name='D')
+        lb = ops.convert_to_tensor(-1.0, dtype=r.dtype, name='lb')
+        ub = ops.convert_to_tensor(1.0, dtype=r.dtype, name='ub')
+        pi_h = ops.convert_to_tensor(np.pi / 2.0, dtype=r.dtype, name='pi')
+        half = ops.convert_to_tensor(0.5, dtype=r.dtype, name='half')
+        diff = math_ops.subtract(r, R, name='diff')
+        z = math_ops.truediv(diff, D)
+        z = math_ops.minimum(math_ops.maximum(lb, z), ub)
+        z = math_ops.subtract(
+            half,
+            math_ops.multiply(half, math_ops.sin(pi_h * z)), name=name)
+        return z

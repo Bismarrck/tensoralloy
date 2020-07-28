@@ -49,14 +49,15 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
     Return a dict of Ops as the evaluation metrics.
 
     Always required:
-        * 'energy' of shape `[batch_size, ]`.
-        * 'energy_confidence' of shape `[batch_size, ]`
+        * 'energy' of shape `[batch_size, ]`
+
+    Required if finite temperature:
+        * 'eentropy' of shape `[batch_size, ]`
+        * 'free_energy' of shape `[batch_size, ]`
 
     Required if 'forces' should be minimized:
         * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
           required if 'forces' should be minimized.
-        * 'forces_confidence' of shape `[batch_size, ]` is required if
-          'forces' should be minimized.
         * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`
 
     Required if 'stress' or 'total_pressure' should be minimized:
@@ -64,7 +65,6 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
           'stress' should be minimized.
         * 'pulay_stress' of shape `[batch_size, ]`
         * 'total_pressure' of shape `[batch_size, ]`
-        * 'stress_confidence' of shape `[batch_size, ]`
 
     `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
     the number of atoms in each structure.
@@ -76,16 +76,23 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
         n_atoms = tf.cast(n_atoms, labels["energy"].dtype, name='n_atoms')
 
         with tf.name_scope("Energy"):
-            x = labels["energy"]
-            y = predictions["energy"]
-            xn = x / n_atoms
-            yn = y / n_atoms
-            ops_dict = {
-                'Energy/mae': tf.metrics.mean_absolute_error(x, y),
-                'Energy/mse': tf.metrics.mean_squared_error(x, y),
-                'Energy/mae/atom': tf.metrics.mean_absolute_error(xn, yn),
+            name_map = {
+                'energy': 'U',
+                'free_energy': 'F',
+                'eentropy': 'S',
             }
-            metrics.update(ops_dict)
+            for prop, desc in name_map.items():
+                if prop in eval_properties:
+                    x = labels[prop]
+                    y = predictions[prop]
+                    xn = x / n_atoms
+                    yn = y / n_atoms
+                    ops_dict = {
+                        f'{desc}/mae': tf.metrics.mean_absolute_error(x, y),
+                        f'{desc}/mse': tf.metrics.mean_squared_error(x, y),
+                        f'{desc}/mae/atom': tf.metrics.mean_absolute_error(
+                            xn, yn)}
+                    metrics.update(ops_dict)
 
         if 'forces' in eval_properties:
             with tf.name_scope("Forces"):

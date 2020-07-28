@@ -1,7 +1,10 @@
 # This toml file defines the default values of the options.
 
 precision = ['high', 'medium']
-pair_style = ['eam/alloy', 'eam/fs', 'eam/adp', 'atomic/deepmd', 'atomic/sf']
+pair_style = [
+    'eam/alloy', 'eam/fs', 'eam/adp', 'tersoff',
+    'atomic/deepmd', 'atomic/sf', 'atomic/grap'
+]
 
 [nn.atomic]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
@@ -13,10 +16,25 @@ kernel_initializer = [
     'xavier_normal', 'xavier_uniform',
     'truncated_normal']
 
+[nn.atomic.finite_temperature]
+algorithm = ["off", "zero", "semi", "full"]
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
+
 [nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
 
+[nn.atomic.grap]
+algorithm = ['sf', 'density', 'morse', 'pexp']
+cutoff_function = ['cosine', 'polynomial']
+param_space_method = ["pair", "cross"]
+
 [nn.loss.energy]
+method = ["rmse", "logcosh"]
+
+[nn.loss.eentropy]
+method = ["rmse", "logcosh"]
+
+[nn.loss.free_energy]
 method = ["rmse", "logcosh"]
 
 [nn.loss.forces]
@@ -32,7 +50,7 @@ method = ["rmse", "logcosh"]
 method = ["mae", "logcosh"]
 
 [opt]
-method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd']
+method = ["adam", 'rmsprop', 'adadelta', 'nadam', 'sgd', 'adamw']
 decay_function = ["exponential", 'inverse_time', 'natural_exp']
 
 [distribute]

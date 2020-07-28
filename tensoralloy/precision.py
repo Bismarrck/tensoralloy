@@ -15,7 +15,7 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 __all__ = ["Precision", "precision_scope", "get_float_dtype",
-           "get_float_precision"]
+           "get_float_precision", "set_float_precision"]
 
 
 class Precision(enum.Enum):

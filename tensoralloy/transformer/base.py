@@ -14,10 +14,10 @@ from ase import Atoms
 from ase.units import GPa
 from ase.calculators.singlepoint import SinglePointCalculator
 
-from tensoralloy.utils import get_pulay_stress
+from tensoralloy import atoms_utils
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer.vap import VirtualAtomMap
-from tensoralloy.transformer.indexed_slices import G2IndexedSlices
+from tensoralloy.transformer.metadata import RadialMetadata
 
 
 __author__ = 'Xin Chen'
@@ -60,17 +60,6 @@ class BaseTransformer:
         Return a list of str as the ordered elements.
         """
         pass
-
-    def _get_compositions(self, atoms) -> np.ndarray:
-        """
-        Return a vector as the compositions of the `Atoms`.
-        """
-        n_elements = len(self.elements)
-        dtype = get_float_dtype().as_numpy_dtype
-        compositions = np.zeros(n_elements, dtype=dtype)
-        for element, count in Counter(atoms.get_chemical_symbols()).items():
-            compositions[self.elements.index(element)] = float(count)
-        return compositions
 
     @abc.abstractmethod
     def as_dict(self) -> Dict:
@@ -373,20 +362,20 @@ class BatchDescriptorTransformer(BaseTransformer):
         return self._vap_transformers[formula]
 
     @staticmethod
-    def _encode_g2_indexed_slices(g2: G2IndexedSlices):
+    def _encode_radial_metadata(data: RadialMetadata):
         """
-        Encode the indexed slices of G2:
+        Encode the radial metadata:
             * `v2g_map`, `ilist` and `jlist` are merged into a single array
               with key 'g2.indices'.
             * `n1` will be encoded separately with key 'g2.shifts'.
 
         """
         indices = np.concatenate((
-            g2.v2g_map,
-            g2.ilist[..., np.newaxis],
-            g2.jlist[..., np.newaxis]), axis=1)
+            data.v2g_map,
+            data.ilist[..., np.newaxis],
+            data.jlist[..., np.newaxis]), axis=1)
         return {'g2.indices': bytes_feature(indices.tostring()),
-                'g2.shifts': bytes_feature(g2.n1.tostring())}
+                'g2.shifts': bytes_feature(data.n1.tostring())}
 
     def _encode_atoms(self, atoms: Atoms) -> dict:
         """
@@ -394,35 +383,42 @@ class BatchDescriptorTransformer(BaseTransformer):
         """
         if atoms.calc is None:
             # Add a dummy calculator
-            sp = SinglePointCalculator(
+            calc = SinglePointCalculator(
                 atoms, **{'energy': 0.0,
                           'forces': np.zeros((len(atoms), 3)),
                           'stress': np.zeros(6)})
-            atoms.calc = sp
+            atoms.calc = calc
 
         vap = self.get_vap_transformer(atoms)
         np_dtype = get_float_dtype().as_numpy_dtype
         positions = vap.map_positions(atoms.positions).astype(np_dtype)
         cell = atoms.get_cell(complete=True).array.astype(np_dtype)
         volume = np.atleast_1d(atoms.get_volume()).astype(np_dtype)
-        y_true = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
-        compositions = self._get_compositions(atoms)
+        energy = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         mask = vap.atom_masks.astype(np_dtype)
-        pulay = np.atleast_1d(get_pulay_stress(atoms)).astype(np_dtype)
+        pulay_stress = np.atleast_1d(
+            atoms_utils.get_pulay_stress(atoms)).astype(np_dtype)
+        etemp = np.atleast_1d(
+            atoms_utils.get_electron_temperature(atoms)).astype(np_dtype)
+        eentropy = np.atleast_1d(
+            atoms_utils.get_electron_entropy(atoms)).astype(np_dtype)
+        free_energy = energy - etemp * eentropy
 
         feature_list = {
             'positions': bytes_feature(positions.tostring()),
             'cell': bytes_feature(cell.tostring()),
-            'n_atoms': int64_feature(len(atoms)),
+            'n_atoms_vap': int64_feature(len(atoms)),
             'volume': bytes_feature(volume.tostring()),
-            'y_true': bytes_feature(y_true.tostring()),
+            'energy': bytes_feature(energy.tostring()),
+            'free_energy': bytes_feature(free_energy.tostring()),
             'atom_masks': bytes_feature(mask.tostring()),
-            'compositions': bytes_feature(compositions.tostring()),
-            'pulay': bytes_feature(pulay.tostring()),
+            'pulay_stress': bytes_feature(pulay_stress.tostring()),
+            'eentropy': bytes_feature(eentropy.tostring()),
+            'etemperature': bytes_feature(etemp.tostring())
         }
         if self.use_forces:
-            f_true = vap.map_forces(atoms.get_forces()).astype(np_dtype)
-            feature_list['f_true'] = bytes_feature(f_true.tostring())
+            forces = vap.map_forces(atoms.get_forces()).astype(np_dtype)
+            feature_list['forces'] = bytes_feature(forces.tostring())
 
         if self.use_stress:
             # Convert the unit of the stress tensor to 'eV' for simplification:
@@ -452,7 +448,6 @@ class BatchDescriptorTransformer(BaseTransformer):
     @staticmethod
     def _decode_atoms(example: Dict[str, tf.Tensor],
                       max_n_atoms: int,
-                      n_elements: int,
                       use_forces=True,
                       use_stress=False) -> dict:
         """
@@ -468,12 +463,12 @@ class BatchDescriptorTransformer(BaseTransformer):
         decoded["positions"] = tf.reshape(
             positions, (max_n_atoms + 1, 3), name='R')
 
-        n_atoms = tf.identity(example['n_atoms'], name='n_atoms')
-        decoded["n_atoms"] = n_atoms
+        n_atoms = tf.identity(example['n_atoms_vap'], name='n_atoms_vap')
+        decoded["n_atoms_vap"] = n_atoms
 
-        y_true = tf.decode_raw(example['y_true'], float_dtype)
-        y_true.set_shape([1])
-        decoded["y_true"] = tf.squeeze(y_true, name='y_true')
+        energy = tf.decode_raw(example['energy'], float_dtype)
+        energy.set_shape([1])
+        decoded["energy"] = tf.squeeze(energy, name='energy')
 
         cell = tf.decode_raw(example['cell'], float_dtype)
         cell.set_shape([9])
@@ -487,20 +482,28 @@ class BatchDescriptorTransformer(BaseTransformer):
         atom_masks.set_shape([max_n_atoms + 1, ])
         decoded["atom_masks"] = atom_masks
 
-        compositions = tf.decode_raw(example['compositions'], float_dtype)
-        compositions.set_shape([n_elements, ])
-        decoded["compositions"] = compositions
-
-        pulay = tf.decode_raw(example['pulay'], float_dtype)
+        pulay = tf.decode_raw(example['pulay_stress'], float_dtype)
         pulay.set_shape([1])
         decoded["pulay_stress"] = tf.squeeze(pulay, name='pulay_stress')
 
+        etemp = tf.decode_raw(example['etemperature'], float_dtype)
+        etemp.set_shape([1])
+        decoded["etemperature"] = tf.squeeze(etemp, name='etemperature')
+
+        eentropy = tf.decode_raw(example['eentropy'], float_dtype)
+        eentropy.set_shape([1])
+        decoded["eentropy"] = tf.squeeze(eentropy, name='eentropy')
+
+        free_energy = tf.decode_raw(example['free_energy'], float_dtype)
+        free_energy.set_shape([1])
+        decoded["free_energy"] = tf.squeeze(free_energy, name='free_energy')
+
         if use_forces:
-            f_true = tf.decode_raw(example['f_true'], float_dtype)
+            forces = tf.decode_raw(example['forces'], float_dtype)
             # Ignore the forces of the virtual atom
-            f_true.set_shape([length, ])
-            decoded["f_true"] = tf.reshape(
-                f_true, (max_n_atoms + 1, 3), name='f_true')
+            forces.set_shape([length, ])
+            decoded["forces"] = tf.reshape(
+                forces, (max_n_atoms + 1, 3), name='forces')
 
         if use_stress:
             stress = tf.decode_raw(

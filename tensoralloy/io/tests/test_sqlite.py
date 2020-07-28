@@ -17,15 +17,16 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def test_find_neighbor_size_limits():
+def test_find_neighbor_maximums():
     """
-    Test the function `find_neighbor_size_limits`.
+    Test the function `update_neighbor_meta`.
     """
     xyzfile = join(test_dir(), 'examples.extxyz')
     db = read_file(xyzfile, verbose=False)
 
-    db.update_neighbor_meta(angular=True, rc=6.0, n_jobs=1, verbose=False)
-    db.update_neighbor_meta(angular=False, rc=6.5, n_jobs=1, verbose=False)
+    db.update_neighbor_meta(nijk=True, rc=6.0, n_jobs=1, verbose=False)
+    db.update_neighbor_meta(nijk=False, rc=6.5, n_jobs=1, verbose=False)
+    db.update_neighbor_meta(ij2k=True, rc=4.5, n_jobs=1, verbose=False)
 
     assert_equal(db.get_nij_max(rc=6.0), 358)
 

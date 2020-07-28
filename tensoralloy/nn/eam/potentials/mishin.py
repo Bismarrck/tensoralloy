@@ -6,17 +6,12 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from os.path import join
-
 from tensoralloy.nn.eam.potentials.generic import mishin_cutoff, mishin_polar
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.potentials.potentials import EamAlloyPotential
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.extension.grad_ops import safe_pow
-from tensoralloy.extension.interp.cubic import CubicInterpolator
-from tensoralloy.test_utils import test_dir
-from tensoralloy.io.lammps import read_adp_setfl
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -78,12 +73,10 @@ class MishinH(EamAlloyPotential):
         params['PuPu'] = params['FeFe'].copy()
         params['MoMo'] = params['NiNi'].copy()
         params['MoNi'] = params['NiNi'].copy()
-        params['VV'] = params['MoMo'].copy()
-        params['NbNb'] = params['NbNb'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            fixed=False, verbose=False):
+            verbose=False):
         """
         The pairwise potential function.
 
@@ -111,26 +104,22 @@ class MishinH(EamAlloyPotential):
             assert isinstance(variable_scope, str)
             variable_scope = f"{variable_scope}/{kbody_term}"
             key = kbody_term
-            V0 = self._get_variable("V0", dtype, key, variable_scope, fixed)
-            alpha = self._get_variable(
-                "alpha", dtype, key, variable_scope, fixed)
-            beta = self._get_variable("beta", dtype, key, variable_scope, fixed)
-            gamma = self._get_variable(
-                "gamma", dtype, key, variable_scope, fixed)
-            R0 = self._get_variable("R0", dtype, key, variable_scope, fixed)
-            R1 = self._get_variable("R1", dtype, key, variable_scope, fixed)
-            A1 = self._get_variable("A1", dtype, key, variable_scope, fixed)
-            A2 = self._get_variable("A2", dtype, key, variable_scope, fixed)
-            A3 = self._get_variable("A3", dtype, key, variable_scope, fixed)
+            V0 = self._get_variable("V0", dtype, key, variable_scope)
+            alpha = self._get_variable("alpha", dtype, key, variable_scope)
+            beta = self._get_variable("beta", dtype, key, variable_scope)
+            gamma = self._get_variable("gamma", dtype, key, variable_scope)
+            R0 = self._get_variable("R0", dtype, key, variable_scope)
+            R1 = self._get_variable("R1", dtype, key, variable_scope)
+            A1 = self._get_variable("A1", dtype, key, variable_scope)
+            A2 = self._get_variable("A2", dtype, key, variable_scope)
+            A3 = self._get_variable("A3", dtype, key, variable_scope)
 
             if el_a == el_b:
-                rc = self._get_shared_variable('rc', dtype, el_a, fixed)
-                h = self._get_shared_variable('h', dtype, el_a, fixed)
+                rc = self._get_shared_variable('rc', dtype, el_a)
+                h = self._get_shared_variable('h', dtype, el_a)
             else:
-                rc = self._get_variable(
-                    'rc', dtype, kbody_term, variable_scope, fixed)
-                h = self._get_variable(
-                    'h', dtype, kbody_term, variable_scope, fixed)
+                rc = self._get_variable('rc', dtype, kbody_term, variable_scope)
+                h = self._get_variable('h', dtype, kbody_term, variable_scope)
 
             drc = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(drc, h, name='drh')
@@ -151,7 +140,7 @@ class MishinH(EamAlloyPotential):
             return phi
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            fixed=False, verbose=False):
+            verbose=False):
         """
         The electron density function rho(r).
 
@@ -173,15 +162,15 @@ class MishinH(EamAlloyPotential):
 
         """
         with tf.name_scope(f"{self._name}/Rho/{element}"):
-            A0 = self._get_shared_variable('A0', r.dtype, element, fixed)
-            B0 = self._get_shared_variable('B0', r.dtype, element, fixed)
-            C0 = self._get_shared_variable('B0', r.dtype, element, fixed)
-            rc = self._get_shared_variable('rc', r.dtype, element, fixed)
-            z1 = self._get_shared_variable('z1', r.dtype, element, fixed)
-            z2 = self._get_shared_variable('z2', r.dtype, element, fixed)
-            a1 = self._get_shared_variable('a1', r.dtype, element, fixed)
-            a2 = self._get_shared_variable('a2', r.dtype, element, fixed)
-            h = self._get_shared_variable('h', r.dtype, element, fixed)
+            A0 = self._get_shared_variable('A0', r.dtype, element)
+            B0 = self._get_shared_variable('B0', r.dtype, element)
+            C0 = self._get_shared_variable('B0', r.dtype, element)
+            rc = self._get_shared_variable('rc', r.dtype, element)
+            z1 = self._get_shared_variable('z1', r.dtype, element)
+            z2 = self._get_shared_variable('z2', r.dtype, element)
+            a1 = self._get_shared_variable('a1', r.dtype, element)
+            a2 = self._get_shared_variable('a2', r.dtype, element)
+            h = self._get_shared_variable('h', r.dtype, element)
 
             dr = tf.subtract(r, rc, name='dr')
             drh = tf.math.truediv(dr, h, name='drh')
@@ -202,7 +191,7 @@ class MishinH(EamAlloyPotential):
             return rho
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              fixed=False, verbose=False):
+              verbose=False):
         """
         The embedding energy function F(rho).
 
@@ -228,13 +217,13 @@ class MishinH(EamAlloyPotential):
 
         with tf.name_scope(f"{self._name}/Embed/{element}"):
 
-            s1 = self._get_shared_variable('s1', dtype, element, fixed)
-            s2 = self._get_shared_variable('s2', dtype, element, fixed)
-            s3 = self._get_shared_variable('s3', dtype, element, fixed)
-            s4 = self._get_shared_variable('s4', dtype, element, fixed)
-            s5 = self._get_shared_variable('s5', dtype, element, fixed)
-            s6 = self._get_shared_variable('s6', dtype, element, fixed)
-            s7 = self._get_shared_variable('s7', dtype, element, fixed)
+            s1 = self._get_shared_variable('s1', dtype, element)
+            s2 = self._get_shared_variable('s2', dtype, element)
+            s3 = self._get_shared_variable('s3', dtype, element)
+            s4 = self._get_shared_variable('s4', dtype, element)
+            s5 = self._get_shared_variable('s5', dtype, element)
+            s6 = self._get_shared_variable('s6', dtype, element)
+            s7 = self._get_shared_variable('s7', dtype, element)
 
             one = tf.constant(1.0, dtype=dtype, name='one')
             rho2 = tf.square(rho, name='rho2')
@@ -276,7 +265,6 @@ class MishinH(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
-               fixed=False,
                verbose=False):
         """
         The dipole function.
@@ -285,14 +273,11 @@ class MishinH(EamAlloyPotential):
             assert isinstance(variable_scope, str)
             variable_scope = f"{variable_scope}/{kbody_term}"
             dtype = r.dtype
-            d1 = self._get_variable(
-                "d1", dtype, kbody_term, variable_scope, fixed)
-            d2 = self._get_variable(
-                "d2", dtype, kbody_term, variable_scope, fixed)
-            d3 = self._get_variable(
-                "d3", dtype, kbody_term, variable_scope, fixed)
-            rc = self._get_shared_variable('rc', dtype, kbody_term, fixed)
-            h = self._get_shared_variable('h', dtype, kbody_term, fixed)
+            d1 = self._get_variable("d1", dtype, kbody_term, variable_scope)
+            d2 = self._get_variable("d2", dtype, kbody_term, variable_scope)
+            d3 = self._get_variable("d3", dtype, kbody_term, variable_scope)
+            rc = self._get_shared_variable('rc', dtype, kbody_term)
+            h = self._get_shared_variable('h', dtype, kbody_term)
             dipole = mishin_polar(r, d1, d2, d3, rc, h, name="U")
             if verbose:
                 log_tensor(dipole)
@@ -302,7 +287,6 @@ class MishinH(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
-                   fixed=False,
                    verbose=False):
         """
         The quadrupole function.
@@ -311,241 +295,12 @@ class MishinH(EamAlloyPotential):
             assert isinstance(variable_scope, str)
             variable_scope = f"{variable_scope}/{kbody_term}"
             dtype = r.dtype
-            q1 = self._get_variable(
-                "q1", dtype, kbody_term, variable_scope, fixed)
-            q2 = self._get_variable(
-                "q2", dtype, kbody_term, variable_scope, fixed)
-            q3 = self._get_variable(
-                "q3", dtype, kbody_term, variable_scope, fixed)
-            rc = self._get_shared_variable('rc', dtype, kbody_term, fixed)
-            h = self._get_shared_variable('h', dtype, kbody_term, fixed)
+            q1 = self._get_variable("q1", dtype, kbody_term, variable_scope)
+            q2 = self._get_variable("q2", dtype, kbody_term, variable_scope)
+            q3 = self._get_variable("q3", dtype, kbody_term, variable_scope)
+            rc = self._get_shared_variable('rc', dtype, kbody_term)
+            h = self._get_shared_variable('h', dtype, kbody_term)
             quadrupole = mishin_polar(r, q1, q2, q3, rc, h, name='W')
-            if verbose:
-                log_tensor(quadrupole)
-            return quadrupole
-
-
-class MishinTa(EamAlloyPotential):
-    """
-    The ADP potential functions of the Mishin Ta-style.
-
-    References
-    ----------
-    Y. Mishin and A.Y. Lozovoi, Acta Materialia 54 (2006) 5013–5026
-
-    """
-
-    def __init__(self):
-        """
-        Initialization method.
-        """
-        super(MishinTa, self).__init__()
-
-        self._name = 'MishinTa'
-        self._implemented_potentials = ('rho', 'phi', 'embed', 'dipole',
-                                        'quadrupole')
-
-    @property
-    def defaults(self):
-        """
-        Return the default parameters.
-        """
-        return {}
-
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            fixed=False, verbose=False):
-        """
-        The electron density function rho(r).
-
-        Parameters
-        ----------
-        r : tf.Tensor
-            A 5D tensor of shape `[batch_size, max_n_terms, 1, nnl, 1]`.
-        element : str
-            The corresponding element.
-        variable_scope : str
-            The scope for variables of this potential function.
-        verbose : bool
-            A bool. If True, key tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_elements]`.
-
-        """
-        with tf.name_scope(f"{self._name}/Rho/{element}"):
-            A0 = self._get_shared_variable('A0', r.dtype, element, fixed)
-            B0 = self._get_shared_variable('B0', r.dtype, element, fixed)
-            C0 = self._get_shared_variable('B0', r.dtype, element, fixed)
-            rc = self._get_shared_variable('rc', r.dtype, element, fixed)
-            r0 = self._get_shared_variable('r0', r.dtype, element, fixed)
-            y = self._get_shared_variable('y', r.dtype, element, fixed)
-            gamma = self._get_shared_variable('gamma', r.dtype, element, fixed)
-            h = self._get_shared_variable('h', r.dtype, element, fixed)
-            one = tf.constant(1.0, dtype=r.dtype, name='one')
-
-            dr = tf.subtract(r, rc, name='dr')
-            drh = tf.math.truediv(dr, h, name='drh')
-            psi = mishin_cutoff(drh)
-
-            z = tf.math.subtract(r, r0, name='z')
-            egz = tf.exp(-gamma * z)
-            c = tf.add((one + B0 * egz) * A0 * egz * safe_pow(z, y), C0, name='c')
-
-            rho = tf.multiply(c, psi, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
-    def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              fixed=False, verbose=False):
-        """
-        The embedding energy function F(rho).
-
-        Parameters
-        ----------
-        rho : tf.Tensor
-            A 3D tensor of shape `[batch_size, max_n_element, 1]` where
-            `max_n_element` is the maximum occurs of `element`.
-        element : str
-            An element symbol.
-        variable_scope : str
-            The scope for variables of this potential function.
-        verbose : bool
-            A bool. If True, key tensors will be logged.
-
-        Returns
-        -------
-        y : tf.Tensor
-            A 2D tensor of shape `[batch_size, max_n_elements]`.
-
-        """
-        dtype = rho.dtype
-
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-
-            pass
-
-
-class AlCuSplineAdp(EamAlloyPotential):
-    """
-    The Cubic Spline form of the Al-Cu ADP potential.
-
-    References
-    ----------
-    PHYSICAL REVIEW B 83, 054116 (2011)
-
-    """
-
-    def __init__(self, interval=1):
-        """
-        Initialization method.
-        """
-        super(AlCuSplineAdp, self).__init__()
-
-        filename = join(test_dir(), 'lammps', 'AlCu.adp')
-        self._adpfl = read_adp_setfl(filename)
-        self._name = "AlCuAdp"
-        self._interval = interval
-
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            fixed=False, verbose=False):
-        """
-        The electron density function.
-        """
-        with tf.name_scope(f"{self._name}/Rho/{element}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.rho[element][0][0:nr:self._interval]
-            y = self._adpfl.rho[element][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            rho = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            rho = tf.reshape(rho, shape, name='rho')
-            if verbose:
-                log_tensor(rho)
-            return rho
-
-    def embed(self,
-              rho: tf.Tensor,
-              element: str,
-              variable_scope: str,
-              fixed=False,
-              verbose=False):
-        """
-        The embedding function.
-        """
-        with tf.name_scope(f"{self._name}/Embed/{element}"):
-            nrho = self._adpfl.nrho
-            x = self._adpfl.embed[element][0][0:nrho:self._interval]
-            y = self._adpfl.embed[element][1][0:nrho:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(rho, name='shape')
-            frho = f.evaluate(tf.reshape(rho, (-1,), name='rho/flat'))
-            frho = tf.reshape(frho, shape, name='frho')
-            if verbose:
-                log_tensor(frho)
-            return frho
-
-    def phi(self,
-            r: tf.Tensor,
-            kbody_term: str,
-            variable_scope: str,
-            fixed=False,
-            verbose=False):
-        """
-        The pairwise interaction function.
-        """
-        with tf.name_scope(f"{self._name}/Phi/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.phi[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.phi[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            phi = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            phi = tf.reshape(phi, shape, name='phi')
-            if verbose:
-                log_tensor(phi)
-            return phi
-
-    def dipole(self,
-               r: tf.Tensor,
-               kbody_term: str,
-               variable_scope: str,
-               fixed=False,
-               verbose=False):
-        """
-        The dipole function.
-        """
-        with tf.name_scope(f"{self._name}/Dipole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.dipole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.dipole[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            dipole = f.evaluate(tf.reshape(r, (-1, ), name='r/flat'))
-            dipole = tf.reshape(dipole, shape, name='dipole')
-            if verbose:
-                log_tensor(dipole)
-            return dipole
-
-    def quadrupole(self,
-                   r: tf.Tensor,
-                   kbody_term: str,
-                   variable_scope: str,
-                   fixed=False,
-                   verbose=False):
-        """
-        The quadrupole function.
-        """
-        with tf.name_scope(f"{self._name}/Quadrupole/{kbody_term}"):
-            nr = self._adpfl.nr
-            x = self._adpfl.quadrupole[kbody_term][0][0:nr:self._interval]
-            y = self._adpfl.quadrupole[kbody_term][1][0:nr:self._interval]
-            f = CubicInterpolator(x, y, natural_boundary=True, name='Spline')
-            shape = tf.shape(r, name='shape')
-            quadrupole = f.evaluate(tf.reshape(r, (-1,), name='r/flat'))
-            quadrupole = tf.reshape(quadrupole, shape, name='quadrupole')
             if verbose:
                 log_tensor(quadrupole)
             return quadrupole

@@ -21,9 +21,9 @@ __all__ = [
 
 
 try:
-    cubic_op = load_op_library("cubic_op")
+    cubic_ops_lib = load_op_library("cubic_op")
 except Exception:
-    cubic_op = None
+    cubic_ops_lib = None
 
 
 class CubicInterpolator(object):
@@ -38,10 +38,10 @@ class CubicInterpolator(object):
 
         Parameters
         ----------
-        x : tf.Tensor
+        x : tf.Tensor or array_like
             The independent coordinates of the training points. The shape should
             be `[..., N]`.
-        y : tf.Tensor
+        y : tf.Tensor or array_like
             The dependent coordinates of the training points. This must be the
             same shape as ``x`` and the interpolation is always performed along
             the last axis. The shape should be `[..., N]`.
@@ -62,7 +62,14 @@ class CubicInterpolator(object):
         self.bc_end = bc_end
         self.use_natural_boundary = natural_boundary
 
-    def evaluate(self, t, name=None):
+    @classmethod
+    def runnable(cls):
+        """
+        Return True if `cubic_ops_lib` is loaded.
+        """
+        return cubic_ops_lib is not None
+
+    def run(self, t, name=None):
         """
         Interpolate the training points using a cubic spline.
 
@@ -111,11 +118,15 @@ class CubicInterpolator(object):
 
             if self.bc_start is None:
                 bc_start = 0.0
+            else:
+                bc_start = self.bc_start
             bc_start = tf.convert_to_tensor(
                 bc_start, dtype=x.dtype, name='bc_start')
 
             if self.bc_end is None:
                 bc_end = 0.0
+            else:
+                bc_end = self.bc_end
             bc_end = tf.convert_to_tensor(bc_end, dtype=x.dtype, name='bc_end')
 
             two = tf.constant(2.0, dtype=x.dtype, name='two')
@@ -155,7 +166,7 @@ class CubicInterpolator(object):
             b = dy / dx - dx * (c_up + two * c_lo) / three
             d = (c_up - c_lo) / (three * dx)
 
-            res = cubic_op.cubic_gather(t, x, y, b, c_lo, d)
+            res = cubic_ops_lib.cubic_gather(t, x, y, b, c_lo, d)
             tau = t - res.xk
             mod = tf.add_n([res.ak,
                             res.bk * tau,
@@ -169,5 +180,5 @@ def _cubic_gather_rev(op, *grads):
     x = op.inputs[1]
     inds = op.outputs[-1]
     args = [x, inds] + list(grads)
-    results = cubic_op.cubic_gather_rev(*args)
+    results = cubic_ops_lib.cubic_gather_rev(*args)
     return [tf.zeros_like(op.inputs[0])] + list(results)

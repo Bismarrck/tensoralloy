@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import logging
 
-from ase import Atoms
+from dataclasses import fields
 from genericpath import isdir
 from os import makedirs
 from os.path import dirname
@@ -19,25 +19,38 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def get_pulay_stress(atoms: Atoms) -> float:
+def add_slots(cls):
     """
-    Return the pulay stress (eV/Ang**3).
-    """
-    if 'pulay_stress' in atoms.info:
-        return atoms.info.get('pulay_stress')
-    else:
-        # The dict `atoms.info` cannot be written to a sqlite3 database
-        # direclty. `pulay_stress` will be saved in the `key_value_pairs`
-        # (tensoralloy.io.read, line 113).
-        key_value_pairs = atoms.info.get('key_value_pairs', {})
-        return key_value_pairs.get('pulay_stress', 0.0)
+    A decorator to put __slots__ on a dataclass with fields with defaults.
 
+    Need to create a new class, since we can't set __slots__ after a class has
+    been created.
 
-def set_pulay_stress(atoms: Atoms, pulay: float):
+    References
+    ----------
+    https://github.com/ericvsmith/dataclasses/blob/master/dataclass_tools.py
+
     """
-    Set the pulay stress.
-    """
-    atoms.info['pulay_stress'] = pulay
+    # Make sure __slots__ isn't already set.
+    if '__slots__' in cls.__dict__:
+        raise TypeError(f'{cls.__name__} already specifies __slots__')
+
+    # Create a new dict for our new class.
+    cls_dict = dict(cls.__dict__)
+    field_names = tuple(f.name for f in fields(cls))
+    cls_dict['__slots__'] = field_names
+    for field_name in field_names:
+        # Remove our attributes, if present. They'll still be
+        #  available in _MARKER.
+        cls_dict.pop(field_name, None)
+    # Remove __dict__ itself.
+    cls_dict.pop('__dict__', None)
+    # And finally create the class.
+    qualname = getattr(cls, '__qualname__', None)
+    cls = type(cls)(cls.__name__, cls.__bases__, cls_dict)
+    if qualname is not None:
+        cls.__qualname__ = qualname
+    return cls
 
 
 def cantor_pairing(x, y):
@@ -57,6 +70,128 @@ def cantor_pairing(x, y):
     y = np.asarray(y)
     assert np.issubdtype(x.dtype, np.int_) and np.issubdtype(y.dtype, np.int_)
     return (x + y) * (x + y + 1) // 2 + y
+
+
+def szudzik_pairing_scalar(x, y):
+    """
+    The szudzik pairing function for two scalars. This pairing function supports
+    negative numbers.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    xx = x * 2 if x >= 0 else x * -2 - 1
+    yy = y * 2 if y >= 0 else y * -2 - 1
+    return xx * xx + xx + yy if xx >= yy else yy * yy + xx
+
+
+def _szudzik_pairing(x, y):
+    """
+    The szudzik pairing function which supports negative numbers.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    # xx = x * 2 if x >= 0 else x * -2 - 1
+    # yy = y * 2 if y >= 0 else y * -2 - 1
+    # return xx * xx + xx + yy if xx >= yy else yy * yy + xx
+    if np.isscalar(x):
+        return szudzik_pairing_scalar(x, y)
+    else:
+        stack = []
+        for v in (x, y):
+            ind = v >= 0
+            vv = np.zeros_like(v)
+            vv[ind] = v[ind] * 2
+            vv[~ind] = -2 * v[~ind] - 1
+            stack.append(vv)
+        xx, yy = stack
+        ind = xx >= yy
+        result = np.zeros_like(x)
+        result[ind] = xx[ind] * xx[ind] + xx[ind] + yy[ind]
+        result[~ind] = yy[~ind] * yy[~ind] + xx[~ind]
+        return result
+
+
+def szudzik_pairing(x, *args):
+    """
+    The szudzik pairing function.
+
+    See Also
+    --------
+    https://gist.github.com/TheGreatRambler/048f4b38ca561e6566e0e0f6e71b7739
+
+    """
+    if np.isscalar(x):
+        z = x
+        for y in args:
+            assert np.isscalar(y)
+            z = _szudzik_pairing(z, y)
+    else:
+        x = np.asarray(x)
+        if np.ndim(x) == 1:
+            z = x
+            for y in args:
+                y = np.asarray(y)
+                assert np.ndim(y) == 1
+                z = _szudzik_pairing(z, y)
+        elif np.ndim(x) == 2:
+            z = x[:, 0]
+            for col in range(1, x.shape[1]):
+                z = _szudzik_pairing(z, x[:, col])
+        else:
+            raise ValueError("Dimension error")
+    return z
+
+
+def szudzik_pairing_reverse_scalar(z):
+    """
+    The reverse of `szudzik_pairing` for a scalar.
+    """
+    sqrtz = int(np.floor(np.sqrt(z)))
+    sqz = sqrtz**2
+    ab = (sqrtz, z - sqz - sqrtz) if (z - sqz) >= sqrtz else (z - sqz, sqrtz)
+    xx = ab[0] // 2 if ab[0] % 2 == 0 else (ab[0] + 1) // -2
+    yy = ab[1] // 2 if ab[1] % 2 == 0 else (ab[1] + 1) // -2
+    return xx, yy
+
+
+def szudzik_pairing_reverse(z):
+    """
+    The reverse of `szudzik_pairing`.
+    """
+    if np.isscalar(z):
+        return szudzik_pairing_reverse_scalar(z)
+
+    z = np.asarray(z)
+    size = len(z)
+    sqrtz = np.floor(np.sqrt(z)).astype(z.dtype)
+    sqz = sqrtz**2
+    diff = z - sqz
+    ind = diff >= sqrtz
+
+    ab = np.zeros((2, size), dtype=z.dtype)
+    ab[0, ind] = sqrtz[ind]
+    ab[1, ind] = z[ind] - sqz[ind] - sqrtz[ind]
+    ab[0, ~ind] = z[~ind] - sqz[~ind]
+    ab[1, ~ind] = sqrtz[~ind]
+
+    xx = np.zeros_like(z)
+    yy = np.zeros_like(z)
+
+    ind = ab[0] % 2 == 0
+    xx[ind] = ab[0, ind] // 2
+    xx[~ind] = (ab[0, ~ind] + 1) // 2
+
+    ind = ab[1] % 2 == 0
+    yy[ind] = ab[1, ind] // 2
+    yy[~ind] = (ab[1, ~ind] + 1) // -2
+
+    return xx, yy
 
 
 def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
@@ -86,9 +221,20 @@ def get_elements_from_kbody_term(kbody_term: str) -> List[str]:
     return atoms
 
 
-def get_kbody_terms(elements: List[str], angular=False):
+def get_kbody_terms(elements: List[str],
+                    angular=False,
+                    symmetric=True):
     """
     Return ordered k-body terms (k=2 or k=2,3 if angular is True).
+
+    Parameters
+    ----------
+    elements : List[str]
+        A list of str as the target elements.
+    angular : bool
+        If True, 3-body terms will also be included.
+    symmetric : SymmetricMode
+        A boolean flag. If False, both ABA and AAB shall be included.
 
     Returns
     -------
@@ -116,10 +262,15 @@ def get_kbody_terms(elements: List[str], angular=False):
         for i in range(n):
             center = elements[i]
             for j in range(n):
-                for k in range(j, n):
-                    suffix = "".join(sorted([elements[j], elements[k]]))
-                    kbody_term = "{}{}".format(center, suffix)
-                    kbody_terms_for_element[elements[i]].append(kbody_term)
+                if symmetric:
+                    for k in range(j, n):
+                        suffix = "".join(sorted([elements[j], elements[k]]))
+                        kbody_term = f"{center}{suffix}"
+                        kbody_terms_for_element[elements[i]].append(kbody_term)
+                else:
+                    for k in range(n):
+                        kbody_term = f"{center}{elements[j]}{elements[k]}"
+                        kbody_terms_for_element[elements[i]].append(kbody_term)
     all_kbody_terms = [
         x for x in chain(*[kbody_terms_for_element[element]
                            for element in elements])]
@@ -168,6 +319,7 @@ class GraphKeys:
     EAM_FS_NN_VARIABLES = 'eam_fs_nn_variables'
     EAM_POTENTIAL_VARIABLES = 'eam_potential_variables'
     DEEPMD_VARIABLES = "deepmd_variables"
+    TERSOFF_VARIABLES = "tersoff_variables"
 
     # Metrics Keys
     TRAIN_METRICS = 'train_metrics'

@@ -15,21 +15,34 @@ from datetime import datetime
 from nose.tools import assert_almost_equal, assert_equal
 from nose.tools import assert_list_equal, assert_is_not_none, assert_less
 from os.path import join, exists
-from ase.db import connect
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
-from sklearn.metrics import mean_absolute_error
-from sklearn.model_selection import train_test_split
-from pymatgen import Lattice, Structure
-from pymatgen.core.surface import SlabGenerator
-from pymatgen.io.ase import AseAtomsAdaptor
+
+try:
+    from pymatgen import Lattice, Structure
+    from pymatgen.core.surface import SlabGenerator
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.analysis.elasticity.elastic import ElasticTensor
+
+except ImportError:
+    is_pymatgen_avail = False
+
+    ElasticTensor = None
+    Lattice = None
+    Structure = None
+    SlabGenerator = None
+    AseAtomsAdaptor = None
+    SpacegroupAnalyzer = None
+
+else:
+    is_pymatgen_avail = True
 
 from tensoralloy.calculator import TensorAlloyCalculator
-from tensoralloy.transformer import EAMTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn import EamAlloyNN
-from tensoralloy.utils import Defaults
 from tensoralloy.io.lammps import LAMMPS_COMMAND
-from tensoralloy.test_utils import test_dir, datasets_dir
+from tensoralloy.test_utils import test_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 
 __author__ = 'Xin Chen'
@@ -43,7 +56,7 @@ class ModelTimeStampTest(unittest.TestCase):
         """
         Setup this test case.
         """
-        self.pb_file = 'Ni.test.pb'
+        self.pb_file = join(test_dir(), 'Ni.test.pb')
 
     def test_get_model_timestamp(self):
         """
@@ -52,7 +65,7 @@ class ModelTimeStampTest(unittest.TestCase):
         nn = EamAlloyNN(['Ni'], 'zjw04xc',
                         export_properties=['energy', 'forces', 'stress',
                                            'hessian'])
-        nn.attach_transformer(EAMTransformer(6.0, ['Ni']))
+        nn.attach_transformer(UniversalTransformer(rcut=6.0, elements=['Ni']))
         nn.export(self.pb_file, keep_tmp_files=False)
 
         calc = TensorAlloyCalculator(self.pb_file)
@@ -72,33 +85,8 @@ class ModelTimeStampTest(unittest.TestCase):
             os.remove(self.pb_file)
 
 
-def test_calculator_with_qm7():
-    """
-    Test total energy calculation of `TensorAlloyCalculator` using the QM7
-    dataset.
-    """
-    graph_path = join(test_dir(), 'checkpoints', 'qm7-k2', 'qm7.pb')
-    sqlite3_file = join(datasets_dir(), 'qm7.db')
-
-    calc = TensorAlloyCalculator(graph_path)
-
-    db = connect(sqlite3_file)
-    _, tests = train_test_split(np.arange(1, 1 + len(db)),
-                                random_state=Defaults.seed, test_size=1000)
-
-    y_true = []
-    y_pred = []
-    for index in tests:
-        atoms = db.get_atoms(f'id={index}')
-        y_true.append(atoms.get_total_energy())
-        y_pred.append(calc.get_potential_energy(atoms))
-
-    y_mae = mean_absolute_error(y_true, y_pred)
-    assert_almost_equal(y_mae, 0.36505362, delta=1e-6)
-
-
-@skipUnless(os.environ.get('TEST_ELASTIC'),
-            "The flag 'TEST_ELASTIC' is not set")
+@skipUnless(os.environ.get('TEST_ELASTIC') and is_pymatgen_avail,
+            "The flag 'TEST_ELASTIC' is not set or PyMatgen not available")
 def test_elastic_constant_tensor():
     """
     Test elastic properties calculation of `TensorAlloyCalculator`.
@@ -108,6 +96,7 @@ def test_elastic_constant_tensor():
 
     cubic = bulk("Ni", cubic=True)
     tensor = calc.get_elastic_constant_tensor(cubic)
+    tensor = ElasticTensor.from_voigt(tensor)
 
     assert_almost_equal(tensor.voigt[0, 0], 246.61, delta=0.01)
     assert_almost_equal(tensor.voigt[1, 1], 246.61, delta=0.01)
@@ -122,8 +111,13 @@ def test_elastic_constant_tensor():
     assert_almost_equal(tensor.g_vrh, 86.261, delta=0.01)
 
     primitive = bulk("Ni", cubic=False)
-    tensor_p = calc.get_elastic_constant_tensor(primitive,
-                                                auto_conventional_standard=True)
+    structure = AseAtomsAdaptor.get_structure(primitive)
+    analyzer = SpacegroupAnalyzer(structure)
+    primitive = AseAtomsAdaptor.get_atoms(
+        analyzer.get_conventional_standard_structure())
+
+    tensor_p = calc.get_elastic_constant_tensor(primitive)
+    tensor_p = ElasticTensor.from_voigt(tensor_p)
 
     assert_array_almost_equal(tensor, tensor_p, delta=1e-6)
 
@@ -167,6 +161,7 @@ class SurfaceSlabTest(unittest.TestCase):
         if exists(self.tmp_dir):
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
+    @skipUnless(is_pymatgen_avail, "PyMatgen is not available")
     def test_calculator_with_eam_slab(self):
         """
         Test total energy calculation of `TensorAlloyCalculator` with EAM method for

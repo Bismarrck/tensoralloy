@@ -19,6 +19,8 @@ from atsim.potentials import Potential, EAMPotential
 from functools import partial
 from typing import Dict
 
+from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.eam import plot_potential
@@ -34,12 +36,13 @@ class AdpNN(EamAlloyNN):
     quadrupole interactions are introduced to the ADP model.
     """
 
+    scope = "ADP"
+
     def __init__(self, *args, **kwargs):
         """
         Initialization method.
         """
         super(AdpNN, self).__init__(*args, **kwargs)
-        self._nn_scope = "nnADP"
 
     @property
     def tag(self):
@@ -227,22 +230,22 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Rho"):
             for kbody_term, (value, mask) in partitions.items():
                 assert isinstance(value, tf.Tensor)
-                assert value.shape.ndims == 5
+                assert value.shape.ndims == 6
 
                 center, other = get_elements_from_kbody_term(kbody_term)
                 with tf.name_scope(f"{kbody_term}"):
                     # In this class, `value[0]` corresponds to `value` in
                     # `EamAlloyNN._build_rho_nn`.
-                    x = tf.expand_dims(value[0], axis=-1, name='input')
+                    x = tf.squeeze(value[0], axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_rho_fn(other, verbose=verbose)
                     y = comput(x)
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                    y = tf.multiply(y, tf.squeeze(mask, axis=1),
                                     name='masked')
                     values[kbody_term] = y
                     rho = tf.reduce_sum(
-                        y, axis=(1, 3, 4), keepdims=False, name='rho')
+                        y, axis=(2, 3), keepdims=False, name='rho')
                     if verbose:
                         log_tensor(rho)
                     outputs[kbody_term] = rho
@@ -291,16 +294,15 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Phi"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-                    x = tf.expand_dims(value[0], axis=-1, name='input')
+                    x = tf.squeeze(value[0], axis=1, name='input')
                     if verbose:
                         log_tensor(x)
                     comput = self._get_phi_fn(kbody_term, verbose=verbose)
                     y = comput(x)
-                    y = tf.multiply(y, tf.expand_dims(mask, axis=-1),
+                    y = tf.multiply(y, tf.squeeze(mask, axis=1),
                                     name='masked')
                     values[kbody_term] = y
-                    y = tf.reduce_sum(y, axis=(3, 4), keepdims=False)
-                    y = tf.squeeze(y, axis=1)
+                    y = tf.reduce_sum(y, axis=(2, 3), keepdims=False)
                     half = tf.constant(0.5, dtype=x.dtype, name='half')
                     y = tf.multiply(y, half, name='atomic')
                     if verbose:
@@ -351,7 +353,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Dipole"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-                    rij = tf.expand_dims(value[0], axis=-1, name='input')
+                    rij = tf.squeeze(value[0], axis=1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -360,7 +362,7 @@ class AdpNN(EamAlloyNN):
                     uij = comput(rij)
 
                     # Apply the value mask
-                    uij = tf.multiply(uij, tf.expand_dims(mask, axis=-1),
+                    uij = tf.multiply(uij, tf.squeeze(mask, axis=1),
                                       name='uij/masked')
                     values[kbody_term] = uij
 
@@ -368,10 +370,10 @@ class AdpNN(EamAlloyNN):
                     components = []
                     for ia, alpha in enumerate(('x', 'y', 'z')):
                         with tf.name_scope(f"{alpha}"):
-                            dij = tf.expand_dims(value[ia + 1], -1, f'd{alpha}')
+                            dij = tf.squeeze(value[ia + 1], 1, f'd{alpha}')
                             udaij = tf.multiply(uij, dij, name=f'u{alpha}ij')
                             uda = tf.reduce_sum(udaij,
-                                                axis=(3, 4),
+                                                axis=(2, 3),
                                                 keepdims=False,
                                                 name=f'u{alpha}')
                             uda2 = tf.square(uda, name=f'u{alpha}2')
@@ -380,7 +382,6 @@ class AdpNN(EamAlloyNN):
 
                     # `y` here will be reduced to a 2D tensor of shape
                     # `[batch_size, max_n_atoms]`
-                    y = tf.squeeze(y, axis=1)
                     half = tf.constant(0.5, dtype=rij.dtype, name='half')
                     y = tf.multiply(y, half, name='atomic')
                     if verbose:
@@ -434,7 +435,7 @@ class AdpNN(EamAlloyNN):
         with tf.name_scope("Quadrupole"):
             for kbody_term, (value, mask) in partitions.items():
                 with tf.name_scope(f"{kbody_term}"):
-                    rij = tf.expand_dims(value[0], axis=-1, name='input')
+                    rij = tf.squeeze(value[0], axis=1, name='input')
                     if verbose:
                         log_tensor(rij)
 
@@ -444,7 +445,7 @@ class AdpNN(EamAlloyNN):
                     wij = comput(rij)
 
                     # Apply the value mask
-                    wij = tf.multiply(wij, tf.expand_dims(mask, axis=-1),
+                    wij = tf.multiply(wij, tf.squeeze(mask, axis=1),
                                       name='wij/masked')
                     values[kbody_term] = wij
 
@@ -457,15 +458,15 @@ class AdpNN(EamAlloyNN):
                             if ib < ia:
                                 continue
                             with tf.name_scope(f"{alpha}{beta}"):
-                                dija = tf.expand_dims(value[ia + 1], axis=-1,
-                                                      name=f'd{alpha}/a')
-                                dijb = tf.expand_dims(value[ib + 1], axis=-1,
-                                                      name=f'd{beta}/b')
+                                dija = tf.squeeze(value[ia + 1], axis=1,
+                                                  name=f'd{alpha}/a')
+                                dijb = tf.squeeze(value[ib + 1], axis=1,
+                                                  name=f'd{beta}/b')
                                 dab = tf.multiply(dija, dijb, name='dab')
                                 wdabij = tf.multiply(wij, dab,
                                                      f'w{alpha}{beta}ij')
                                 wdab = tf.reduce_sum(wdabij,
-                                                     axis=(3, 4),
+                                                     axis=(2, 3),
                                                      keepdims=False,
                                                      name=f'w{alpha}{beta}')
                                 wdab2 = tf.square(wdab, name=f'w{alpha}{beta}2')
@@ -486,10 +487,8 @@ class AdpNN(EamAlloyNN):
                     half = tf.constant(0.5, dtype=rij.dtype, name='half')
                     three = tf.constant(3.0, dtype=rij.dtype, name='three')
                     isix = tf.math.divide(half, three, name='isix')
-                    y_full = tf.multiply(tf.squeeze(y_full, axis=1), half,
-                                         name='y_full')
-                    y_diag = tf.multiply(tf.squeeze(y_diag, axis=1), isix,
-                                         name='y_diag')
+                    y_full = tf.multiply(y_full, half, name='y_full')
+                    y_diag = tf.multiply(y_diag, isix, name='y_diag')
                     y = tf.math.subtract(y_full, y_diag, name='atomic')
                     if verbose:
                         log_tensor(y)
@@ -498,102 +497,6 @@ class AdpNN(EamAlloyNN):
             if mode == tf_estimator.ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
-
-    def _dynamic_partition(self,
-                           descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
-                           merge_symmetric=True):
-        """
-        Split the descriptors of type `Dict[element, (tensor, mask)]` to `Np`
-        partitions where `Np` is the total number of unique k-body terms.
-
-        If `merge_symmetric` is False, `Np` is equal to `N**2`.
-        If `merge_symmetric` is True, `Np` will be `N * (N + 1) / 2`.
-
-        Here N denotes the total number of elements.
-
-        Parameters
-        ----------
-        descriptors : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are elements and values are tuples of (value, mask)
-            where where `value` represents the descriptors and `mask` is
-            the value mask. `value` and `mask` have the same shape.
-                * If `mode` is TRAIN or EVAL, both should be 4D tensors of shape
-                  `[4, batch_size, max_n_terms, max_n_element, nnl]`.
-                * If `mode` is PREDICT, `value` should be a 4D tensor of shape
-                  `[4, max_n_terms, max_n_element, nnl]` and `mask` should be
-                  a 3D tensor of shape `[max_n_terms, max_n_element, nnl]`.
-            The size of the first axis is fixed to 4. Here 4 denotes:
-                * r  = 0
-                * dx = 1
-                * dy = 2
-                * dz = 3
-            and `r = sqrt(dx * dx + dy * dy + dz * dz)`
-        mode : tf_estimator.ModeKeys
-            Specifies if this is training, evaluation or prediction.
-        merge_symmetric : bool
-            A bool.
-
-        Returns
-        -------
-        partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
-            A dict. The keys are unique kbody terms and values are tuples of
-            (value, mask) where `value` represents the descriptors and `mask` is
-            the value mask. Both `value` and `mask` are 4D tensors of shape
-            `[batch_size, 1 + delta, max_n_element, nnl]`. `delta` will be zero
-            if the corresponding kbody term has only one type of atom; otherwise
-            `delta` will be one.
-        max_occurs : Counter
-            The maximum occurance of each type of element.
-
-        """
-        partitions = dict()
-        max_occurs = {}
-        if merge_symmetric:
-            name_scope = "Partition/Symmetric"
-        else:
-            name_scope = "Partition"
-
-        with tf.name_scope(name_scope):
-
-            for element in self._elements:
-
-                with tf.name_scope(f"{element}"):
-                    kbody_terms = self._kbody_terms[element]
-                    values, masks = descriptors[element]
-                    values = tf.convert_to_tensor(values, name='values')
-                    masks = tf.convert_to_tensor(masks, name='masks')
-
-                    # For the ADP model, the interatomic distances `r` and
-                    # differences `dx`, `dy` and `dz` are all required.
-                    if mode == tf_estimator.ModeKeys.PREDICT:
-                        assert values.shape.ndims == 4
-                        values = tf.expand_dims(values, axis=1)
-                        masks = tf.expand_dims(masks, axis=0)
-                        max_occurs[element] = tf.shape(values)[3]
-                    else:
-                        assert values.shape.ndims == 5
-                        max_occurs[element] = values.shape[3].value
-
-                    num = len(kbody_terms)
-                    glists = tf.split(
-                        values, num_or_size_splits=num, axis=2, name='glist')
-                    mlists = tf.split(
-                        masks, num_or_size_splits=num, axis=1, name='mlist')
-
-                    for i, (value, mask) in enumerate(zip(glists, mlists)):
-                        kbody_term = kbody_terms[i]
-                        if merge_symmetric:
-                            kbody_term = ''.join(
-                                sorted(get_elements_from_kbody_term(
-                                    kbody_term)))
-                            if kbody_term in partitions:
-                                value = tf.concat(
-                                    (partitions[kbody_term][0], value), axis=3)
-                                mask = tf.concat(
-                                    (partitions[kbody_term][1], mask), axis=2)
-                        partitions[kbody_term] = (value, mask)
-            return partitions, Counter(max_occurs)
 
     def _get_model_outputs(self,
                            features: dict,
@@ -628,9 +531,15 @@ class AdpNN(EamAlloyNN):
             energies of atoms. The last axis has the size `max_n_atoms`.
 
         """
-        with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=descriptors,
+        with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
+
+            clf = self.transformer
+            assert isinstance(clf, UniversalTransformer)
+
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=descriptors["radial"],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=mode,
                 merge_symmetric=False)
 
@@ -646,8 +555,10 @@ class AdpNN(EamAlloyNN):
                 mode=mode,
                 verbose=verbose)
 
-            partitions, max_occurs = self._dynamic_partition(
-                descriptors=descriptors,
+            partitions, max_occurs = dynamic_partition(
+                dists_and_masks=descriptors["radial"],
+                elements=clf.elements,
+                kbody_terms_for_element=clf.kbody_terms_for_element,
                 mode=mode,
                 merge_symmetric=True)
 
@@ -718,8 +629,9 @@ class AdpNN(EamAlloyNN):
         rho = np.tile(np.arange(0.0, nrho * drho, drho, dtype=dtype),
                       reps=len(self._elements))
         rho = np.atleast_2d(rho)
-        r = np.arange(0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, -1, 1))
-        r = np.tile(r, [4, 1, 1, 1, 1])
+        r = np.arange(
+            0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, 1, -1, 1))
+        r = np.tile(r, [4, 1, 1, 1, 1, 1])
         elements = self._elements
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
@@ -730,28 +642,22 @@ class AdpNN(EamAlloyNN):
             with tf.name_scope("Inputs"):
                 rho = tf.convert_to_tensor(rho, name='rho')
 
-                descriptors = dict()
-                for element in self._elements:
-                    value = tf.convert_to_tensor(r, name=f'r{element}')
-                    mask = tf.ones_like(value, name=f'm{element}')
-                    descriptors[element] = (value, mask)
-
                 partitions = dict()
                 symmetric_partitions = dict()
                 for kbody_term in all_kbody_terms:
                     value = tf.convert_to_tensor(r, name=f'r{kbody_term}')
-                    mask = tf.ones_like(value, name=f'm{kbody_term}')
+                    mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                     partitions[kbody_term] = (value, mask)
                     a, b = get_elements_from_kbody_term(kbody_term)
                     if a == b:
                         symmetric_partitions[kbody_term] = (value, mask)
                     elif kbody_term in self._unique_kbody_terms:
-                        rr = np.concatenate((r, r), axis=2)
+                        rr = np.concatenate((r, r), axis=3)
                         value = tf.convert_to_tensor(rr, name=f'r{kbody_term}')
-                        mask = tf.ones_like(value, name=f'm{kbody_term}')
+                        mask = tf.ones_like(value[0], name=f'm{kbody_term}')
                         symmetric_partitions[kbody_term] = (value, mask)
 
-            with tf.variable_scope(self._nn_scope, reuse=tf.AUTO_REUSE):
+            with tf.variable_scope(self.scope, reuse=tf.AUTO_REUSE):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
@@ -804,7 +710,7 @@ class AdpNN(EamAlloyNN):
                         """ Return `rho(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
                         _kbody_term = f'{_element}{_element}'
-                        return results["rho"][_kbody_term][0, 0, 0, idx, 0]
+                        return results["rho"][_kbody_term][0, 0, idx, 0]
 
                     return _func
 
@@ -829,7 +735,7 @@ class AdpNN(EamAlloyNN):
                     def _func(_r):
                         """ Return `phi(r)` for the given `r`. """
                         idx = int(round(_r / dr, 6))
-                        return results[_key][_kbody_term][0, 0, 0, idx, 0]
+                        return results[_key][_kbody_term][0, 0, idx, 0]
 
                     return _func
 

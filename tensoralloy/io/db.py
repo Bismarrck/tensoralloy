@@ -17,7 +17,7 @@ from tensoralloy.test_utils import datasets_dir
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["CoreDatabase", "connect"]
+__all__ = ["CoreDatabase", "connect", "qm7", "snap"]
 
 
 def connect(name, use_lock_file=True, append=True, serial=False):

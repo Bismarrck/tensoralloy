@@ -11,6 +11,7 @@ import nose
 from nose.tools import assert_less, assert_equal
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
+from tensoralloy.nn.dataclasses import ForcesLossOptions
 from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
 from tensoralloy.nn.losses import get_stress_loss
 from tensoralloy.precision import precision_scope, get_float_dtype
@@ -81,8 +82,9 @@ def test_forces_loss():
             x = tf.convert_to_tensor(np.insert(x, 0, 0, axis=1))
             y = tf.convert_to_tensor(y)
             mask = tf.convert_to_tensor(mask)
+            options = ForcesLossOptions(weight=10.0)
 
-            rmse = get_forces_loss(x, y, atom_masks=mask, loss_weight=10.0,
+            rmse = get_forces_loss(x, y, atom_masks=mask, options=options,
                                    collections=['UnitTest'])
             mae = tf.get_default_graph().get_tensor_by_name(
                 'Forces/Absolute/mae:0')

@@ -50,21 +50,22 @@ def should_be_serial():
     For Linux if `glibc>=2.17` return False; otherwise return True.
 
     """
-    if platform.system() == 'Darwin':
+    if platform.system() == 'Linux':
+        pattern = re.compile(r'^GLIBC_2.([\d.]+)')
+        p = Popen('strings /lib64/libc.so.6 | grep GLIBC_2.',
+                  shell=True, stdout=PIPE, stderr=PIPE)
+        (stdout, stderr) = p.communicate()
+        if stderr.decode('utf-8') != '':
+            return True
+        glibc_ver = 0.0
+        for line in stdout.decode('utf-8').split('\n'):
+            m = pattern.search(line)
+            if m:
+                glibc_ver = max(float(m.group(1)), glibc_ver)
+        if glibc_ver >= 17.0:
+            return False
+        else:
+            return True
+    else:
         return False
 
-    pattern = re.compile(r'^GLIBC_2.([\d.]+)')
-    p = Popen('strings /lib64/libc.so.6 | grep GLIBC_2.',
-              shell=True, stdout=PIPE, stderr=PIPE)
-    (stdout, stderr) = p.communicate()
-    if stderr.decode('utf-8') != '':
-        return True
-    glibc_ver = 0.0
-    for line in stdout.decode('utf-8').split('\n'):
-        m = pattern.search(line)
-        if m:
-            glibc_ver = max(float(m.group(1)), glibc_ver)
-    if glibc_ver >= 17.0:
-        return False
-    else:
-        return True

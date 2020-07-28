@@ -12,7 +12,7 @@ from nose.tools import assert_dict_equal
 from os.path import join
 
 from tensoralloy.io.read import read_file
-from tensoralloy.utils import get_pulay_stress
+from tensoralloy import atoms_utils
 from tensoralloy.test_utils import test_dir
 
 
@@ -80,7 +80,7 @@ def test_read_pulay_stress():
     database = read_file(xyzfile, verbose=False)
     atoms = database.get_atoms(id=1, add_additional_information=True)
     kbar = atoms.get_stress() / GPa * 10.0
-    pulay = get_pulay_stress(atoms) / GPa * 10.0 * (-1)
+    pulay = atoms_utils.get_pulay_stress(atoms) / GPa * 10.0 * (-1)
     net = kbar[:3].mean() - pulay
     assert_almost_equal(net, -0.78, delta=0.01)
 
@@ -93,6 +93,20 @@ def test_read_stepmax_xyz():
     assert_almost_equal(atoms.positions[0, 2], 3.301309)
     assert_almost_equal(cellpars[2], 6.7942123514756485, delta=1e-6)
     assert_almost_equal(atoms.get_potential_energy(), -32.4 * Ha, delta=1e-6)
+
+
+def test_read_electron_temperature_and_entropy():
+    """
+    Test the `read_file` function for reading electron entropy and electron
+    temperature.
+    """
+    xyzfile = join(test_dir(), 'Be_liquid_4000K_TS.extxyz')
+    database = read_file(xyzfile, num_examples=3)
+    atoms = database.get_atoms(id=1, add_additional_information=True)
+    etemp = atoms_utils.get_electron_temperature(atoms)
+    eentropy = atoms_utils.get_electron_entropy(atoms)
+    assert_almost_equal(etemp, 0.34469373, delta=1e-6)
+    assert_almost_equal(eentropy, 14.939843166274024, delta=1e-6)
 
 
 if __name__ == '__main__':

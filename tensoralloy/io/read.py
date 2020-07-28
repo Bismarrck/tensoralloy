@@ -18,6 +18,7 @@ from enum import Enum
 from tensoralloy.io.sqlite import CoreDatabase
 from tensoralloy.io.db import connect
 from tensoralloy.io.units import get_conversion_units
+from tensoralloy import atoms_utils
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -134,8 +135,13 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             source = atoms.info.get('source', '')
             key_value_pairs = {'source': source}
             if use_stress:
-                pulay_stress = atoms.info.get('pulay_stress', 0.0) * to_eV_Ang3
+                pulay_stress = atoms_utils.get_pulay_stress(atoms) * to_eV_Ang3
                 key_value_pairs['pulay_stress'] = pulay_stress
+
+            eentropy = atoms_utils.get_electron_entropy(atoms)
+            etemp = atoms_utils.get_electron_temperature(atoms)
+            key_value_pairs['eentropy'] = eentropy
+            key_value_pairs['etemperature'] = etemp
 
             database.write(atoms,
                            data={'weights': weights},

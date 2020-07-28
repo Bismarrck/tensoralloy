@@ -1,4 +1,4 @@
-# coding=utf-8
+#!coding=utf-8
 """
 This module is used to train the model
 """
@@ -19,15 +19,15 @@ from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
-from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
+from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
+from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.nn.eam.potentials import available_potentials
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer import BatchEAMTransformer, BatchADPTransformer
-from tensoralloy.transformer import BatchDeePMDTransformer
+from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
@@ -134,7 +134,7 @@ class TrainingManager:
 
     def _get_atomic_nn(self, kwargs: dict):
         """
-        Initialize an `AtomicNN` or one of its variant.
+        Initialize an atomistic neural network potential.
         """
         hidden_sizes = {}
         for element in kwargs['elements']:
@@ -143,6 +143,7 @@ class TrainingManager:
             if value is not None:
                 hidden_sizes[element] = value
 
+        pair_style = self._reader['pair_style']
         configs = self._reader['nn.atomic']
         params = {
             'activation': configs['activation'],
@@ -152,15 +153,26 @@ class TrainingManager:
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
             'use_resnet_dt': configs['use_resnet_dt'],
+            'finite_temperature': configs['finite_temperature'],
         }
         params.update(kwargs)
 
-        if self._reader['pair_style'] == 'atomic/sf':
-            params['minmax_scale'] = configs['minmax_scale']
-            return AtomicNN(**params)
-        else:
+        if pair_style == 'atomic/sf':
+            for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
+                        'cutoff_function', 'minmax_scale'):
+                params[key] = configs['sf'][key]
+            return SymmetryFunctionNN(**params)
+        elif pair_style == 'atomic/deepmd':
             params.update(configs['deepmd'])
             return DeepPotSE(**params)
+        else:
+            for key in ('moment_tensors',
+                        'algorithm',
+                        'cutoff_function',
+                        'param_space_method'):
+                params[key] = configs['grap'][key]
+            params['parameters'] = configs['grap'][params['algorithm']]
+            return GenericRadialAtomicPotential(**params)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN, AdpNN]:
         """
@@ -204,9 +216,19 @@ class TrainingManager:
         else:
             raise ValueError(f"Unknown pair_style {pair_style}")
 
+    def _get_tersoff_nn(self, kwargs: dict) -> Tersoff:
+        """
+        Initialize a `Tersoff` model.
+        """
+        symmetric_mixing = self._reader['nn.tersoff.symmetric_mixing']
+        potential_file = self._reader['nn.tersoff.file']
+        kwargs.update(dict(symmetric_mixing=symmetric_mixing,
+                           custom_potentials=potential_file))
+        return Tersoff(**kwargs)
+
     def _get_nn(self):
         """
-        Initialize a `BasicNN` using the configs of the input file.
+        Initialize a `BasicNN`.
         """
         elements = self._dataset.transformer.elements
         minimize_properties = self._reader['nn.minimize']
@@ -214,12 +236,13 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        if self._reader['pair_style'].startswith("atomic"):
+        pair_style = self._reader['pair_style']
+        if pair_style.startswith("atomic"):
             nn = self._get_atomic_nn(kwargs)
+        elif pair_style == "tersoff":
+            nn = self._get_tersoff_nn(kwargs)
         else:
             nn = self._get_eam_nn(kwargs)
-
-        # Attach the transformer
         nn.attach_transformer(self._dataset.transformer)
         return nn
 
@@ -231,40 +254,34 @@ class TrainingManager:
 
         pair_style = self._reader['pair_style']
         rcut = self._reader['rcut']
+        acut = self._reader['acut']
 
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
+        nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
+        angular = False
+        angular_symmetricity = False
+        ij2k_max = 0
+        nijk_max = 0
 
-        if pair_style == 'atomic/deepmd':
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-            clf = BatchDeePMDTransformer(rc=rcut, max_occurs=max_occurs,
-                                         nij_max=nij_max, nnl_max=nnl_max,
-                                         use_forces=database.has_forces,
-                                         use_stress=database.has_stress)
+        if pair_style == 'atomic/sf' and self._reader['nn.atomic.sf.angular']:
+            angular = True
+            angular_symmetricity = True
+            nijk_max = database.get_nijk_max(acut, allow_calculation=True)
+            ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
 
-        elif pair_style == 'atomic/sf':
-            if self._reader['nn.atomic.sf.angular']:
-                nijk_max = database.get_nijk_max(rcut, allow_calculation=True)
-            else:
-                nijk_max = 0
-            params = self._reader['nn.atomic.sf']
-            clf = BatchSymmetryFunctionTransformer(
-                rc=rcut,
-                max_occurs=max_occurs,
-                nij_max=nij_max,
-                nijk_max=nijk_max,
-                use_stress=database.has_stress,
-                use_forces=database.has_forces,
-                **params)
-        else:
-            nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-            if pair_style == 'adp':
-                cls = BatchADPTransformer
-            else:
-                cls = BatchEAMTransformer
-            clf = cls(rc=rcut, max_occurs=max_occurs, nij_max=nij_max,
-                      nnl_max=nnl_max, use_forces=database.has_forces,
-                      use_stress=database.has_stress)
+        elif pair_style == "tersoff":
+            nijk_max = database.get_nijk_max(
+                acut, allow_calculation=True, symmetric=False)
+            ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
+            angular = True
+            angular_symmetricity = False
+
+        clf = BatchUniversalTransformer(
+            max_occurs=max_occurs, rcut=rcut, angular=angular, nij_max=nij_max,
+            nnl_max=nnl_max, nijk_max=nijk_max, ij2k_max=ij2k_max,
+            symmetric=angular_symmetricity, use_forces=database.has_forces,
+            use_stress=database.has_stress)
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']
@@ -365,6 +382,7 @@ class TrainingManager:
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
 
+                timeout_ms = hparams.debug.meta_optimizer_timeout_ms
                 session_config = tf.ConfigProto(
                     allow_soft_placement=hparams.debug.allow_soft_placement,
                     log_device_placement=hparams.debug.log_device_placement,
@@ -372,7 +390,7 @@ class TrainingManager:
                         allow_growth=hparams.debug.allow_gpu_growth),
                     graph_options=tf.GraphOptions(
                         rewrite_options=RewriterConfig(
-                            meta_optimizer_timeout_ms=hparams.debug.meta_optimizer_timeout_ms,
+                            meta_optimizer_timeout_ms=timeout_ms,
                         )
                     ))
 
@@ -395,7 +413,7 @@ class TrainingManager:
 
                 if debug:
                     system = platform.system().lower()
-                    if system == 'darwin' or system == 'linux':
+                    if system == 'linux':
                         ui_type = 'curses'
                     else:
                         ui_type = 'readline'
@@ -424,7 +442,7 @@ class TrainingManager:
                     estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None, use_ema_variables=True,
-               **kwargs):
+               export_lammps_mpi_pb=False, **kwargs):
         """
         Export the trained model.
         """
@@ -434,17 +452,22 @@ class TrainingManager:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)
 
-            if tag is not None:
-                graph_name = f'{self._dataset.name}.{tag}.pb'
+            if export_lammps_mpi_pb:
+                pb_ext = "lmpb"
             else:
-                graph_name = f'{self._dataset.name}.pb'
+                pb_ext = "pb"
+            if tag is not None:
+                graph_name = f'{self._dataset.name}.{tag}.{pb_ext}'
+            else:
+                graph_name = f'{self._dataset.name}.{pb_ext}'
+            graph_path = join(self._hparams.train.model_dir, graph_name)
 
             self._nn.export(
-                output_graph_path=join(self._hparams.train.model_dir,
-                                       graph_name),
+                output_graph_path=graph_path,
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
-                keep_tmp_files=False)
+                keep_tmp_files=False,
+                export_partial_forces_model=export_lammps_mpi_pb)
 
             if isinstance(self._nn, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']

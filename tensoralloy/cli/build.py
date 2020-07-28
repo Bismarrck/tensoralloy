@@ -4,13 +4,13 @@ Command-line programs under the `build` scope.
 """
 from __future__ import print_function, absolute_import
 
-import pandas as pd
 import numpy as np
 import argparse
+import json
 
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.io.read import read_file
-from tensoralloy.io.lammps import read_eam_alloy_setfl, read_adp_setfl
+from tensoralloy.io import lammps
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -151,65 +151,98 @@ class BuildSplineGuessProgram(CLIProgram):
         The main function.
         """
         def func(args: argparse.Namespace):
-            is_adp = False
-            try:
-                setfl = read_adp_setfl(args.setfl)
-            except Exception:
-                try:
-                    setfl = read_eam_alloy_setfl(args.setfl)
-                except Exception as excp:
-                    raise excp
+            exclude_types = args.exclude_types
+            exclude_pairs = args.exclude_pairs
+            filename = args.filename
+
+            if args.output is None:
+                output = f"{filename}.json"
             else:
-                is_adp = True
+                output = args.output
+
+            if args.format == "meam/spline":
+                if args.old:
+                    if args.element is None:
+                        raise ValueError(
+                            "The arg 'element' must be set if '--old' is true.")
+                    lmp = lammps.read_old_meam_spline_file(
+                        filename, args.element)
+                else:
+                    lmp = lammps.read_meam_spline_file(filename)
+            else:
+                if args.format == "adp":
+                    lmp = lammps.read_adp_setfl(filename)
+                else:
+                    lmp = lammps.read_eam_alloy_setfl(filename)
+
             data = {}
 
             def update_field(key, pot):
                 """
                 A helper function to update the dict `data`.
                 """
-                data[f"{key}.{pot}.x"] = getattr(setfl, pot)[key][0][::step]
-                data[f"{key}.{pot}.y"] = getattr(setfl, pot)[key][1][::step]
+                size = len(getattr(lmp, pot)[key].x)
+                if args.npoints is not None:
+                    if args.npoints < size:
+                        idx = np.round(
+                            np.linspace(0, size - 1, args.npoints)).astype(int)
+                    else:
+                        idx = np.arange(0, size).astype(int)
+                    data[f"{key}.{pot}.x"] = \
+                        getattr(lmp, pot)[key].x[idx].tolist()
+                    data[f"{key}.{pot}.y"] = \
+                        getattr(lmp, pot)[key].y[idx].tolist()
+                else:
+                    if args.interval > size:
+                        step = 1
+                    else:
+                        step = args.interval
+                    data[f"{key}.{pot}.x"] = \
+                        getattr(lmp, pot)[key].x[::step].tolist()
+                    data[f"{key}.{pot}.y"] = \
+                        getattr(lmp, pot)[key].y[::step].tolist()
+                data[f"{key}.{pot}.bc_start"] = getattr(lmp, pot)[key].bc_start
+                data[f"{key}.{pot}.bc_end"] = getattr(lmp, pot)[key].bc_end
+                data[f"{key}.{pot}.natural_boundary"] = \
+                    getattr(lmp, pot)[key].natural_boundary
 
-            if args.exclude_types:
+            if exclude_types:
                 exclude_types = [x.strip().lower()
-                                 for x in args.exclude_types.split(",")]
+                                 for x in exclude_types.split(",")]
             else:
                 exclude_types = []
-            if args.exclude_pairs:
+            if exclude_pairs:
                 exclude_pairs = [x.strip().lower()
-                                 for x in args.exclude_pairs.split(",")]
+                                 for x in exclude_pairs.split(",")]
             else:
                 exclude_pairs = []
-            step = args.interval
-            n = len(setfl.elements)
+
+            n = len(getattr(lmp, "elements"))
             for i in range(n):
-                a = setfl.elements[i]
+                a = getattr(lmp, "elements")[i]
                 if a not in exclude_pairs:
                     for ptype in ("rho", "embed"):
                         if ptype not in exclude_types:
                             update_field(a, ptype)
+                    if args.format == "meam/spline":
+                        if "fs" not in exclude_types:
+                            update_field(a, "fs")
                 for j in range(i, n):
-                    b = setfl.elements[j]
+                    b = getattr(lmp, "elements")[j]
                     ab = "".join(sorted((a, b)))
                     if ab not in exclude_pairs:
                         if "phi" not in exclude_types:
                             update_field(ab, "phi")
-                        if is_adp:
+                        if args.format == "adp":
                             for ptype in ("dipole", "quadrupole"):
                                 if ptype not in exclude_types:
                                     update_field(ab, ptype)
-            if len(set([len(y) for y in data.values()])) == 1:
-                if not args.output:
-                    output = f"{args.setfl}.guess"
-                else:
-                    output = args.output
-                df = pd.DataFrame(data)
-                df.to_csv(output, index=None)
-            else:
-                output = f"{args.setfl}.npz"
-                print(f"Save the guess to {output} because not all arrays have "
-                      f"the same length")
-                np.savez(output, **data)
+                        elif args.format == "meam/spline":
+                            if "gs" not in exclude_types:
+                                update_field(ab, "gs")
+            with open(output, "w") as fp:
+                json.dump(data, fp, indent=2)
+
         return func
 
     def config_subparser(self, subparser: argparse.ArgumentParser):
@@ -217,22 +250,37 @@ class BuildSplineGuessProgram(CLIProgram):
         Config the parser.
         """
         subparser.add_argument(
-            "setfl",
+            "filename",
             type=str,
-            help="A lammps setfl potential file."
+            help="A lammps potential file."
         )
         subparser.add_argument(
-            "-o", "--output",
+            "--output",
             type=str,
             default=None,
             help="The output initial guess csv file."
         )
         subparser.add_argument(
+            "--format",
+            type=str,
+            choices=['eam', 'adp', 'meam/spline'],
+            help="The format of the lammps potential file."
+        )
+        group = subparser.add_mutually_exclusive_group()
+        group.add_argument(
             "--interval",
             type=int,
-            default=100,
+            default=None,
             help="The slice interval for selecting reference data points."
         )
+        group.add_argument(
+            "--npoints",
+            type=int,
+            default=25,
+            help="The number of data points for building spline functions. "
+                 "Has the higher priority."
+        )
+
         subparser.add_argument(
             "--exclude-types",
             default=None,
@@ -247,4 +295,20 @@ class BuildSplineGuessProgram(CLIProgram):
             help="A comma-separated string as the excluded "
                  "elements or interaction types (e.g. 'Ni,NiMo')"
         )
+
+        group = subparser.add_argument_group("meam/spline")
+        group.add_argument(
+            "--element",
+            default=None,
+            type=str,
+            help="Required if `--old` is added."
+        )
+        group.add_argument(
+            "--old",
+            action="store_true",
+            default=False,
+            help="Add this flag if the meam/spline file is the old "
+                 "single-specie format"
+        )
+
         super(BuildSplineGuessProgram, self).config_subparser(subparser)

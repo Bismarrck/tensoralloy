@@ -2,7 +2,7 @@ pair_style = 'atomic/sf'
 rcut = 4.6
 
 [dataset]
-sqlite3 = "../../../datasets/snap-Ni.db"
+sqlite3 = "../../../tensoralloy/data/datasets/snap-Ni.db"
 name = "snap_Ni"
 test_size = 61
 tfrecords_file = '.'

@@ -21,9 +21,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class IndexTransformerTest(TestCase):
+class VirtualAtomMapTest(TestCase):
     """
-    A set of unit tests for the class `IndexTransformer`.
+    A set of unit tests for `VirtualAtomMap`.
     """
 
     def setUp(self):
@@ -32,27 +32,27 @@ class IndexTransformerTest(TestCase):
         """
         symbols = Pd3O2.get_chemical_symbols()
         self.max_occurs = Counter({'Pd': 4, 'O': 5})
-        self.clf = VirtualAtomMap(self.max_occurs, symbols)
+        self.vap = VirtualAtomMap(self.max_occurs, symbols)
 
     def test_forward(self):
-        assert_equal(len(self.clf.vap_symbols), 10)
-        assert_equal(len(self.clf.symbols), 5)
-        assert_equal(self.clf.max_vap_natoms, 10)
+        assert_equal(len(self.vap.vap_symbols), 10)
+        assert_equal(len(self.vap.symbols), 5)
+        assert_equal(self.vap.max_vap_natoms, 10)
 
         array = np.expand_dims([1, 2, 3, 4, 5], axis=1)
-        results = self.clf.map_array(array, reverse=False).flatten().tolist()
+        results = self.vap.map_array(array, reverse=False).flatten().tolist()
         assert_list_equal(results, [0, 4, 5, 0, 0, 0, 1, 2, 3, 0])
 
     def test_reverse(self):
         array = np.expand_dims([0, 4, 5, 0, 0, 0, 1, 2, 3, 0], axis=1)
-        results = self.clf.map_array(array, reverse=True).flatten().tolist()
+        results = self.vap.map_array(array, reverse=True).flatten().tolist()
         assert_list_equal(results, [1, 2, 3, 4, 5])
 
     def test_call(self):
-        assert_equal(self.clf.local_to_gsl_map[1], 6)
+        assert_equal(self.vap.local_to_gsl_map[1], 6)
 
     def test_mask(self):
-        assert_list_equal(self.clf.atom_masks.tolist(),
+        assert_list_equal(self.vap.atom_masks.tolist(),
                           [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
 
     def test_permutation(self):
@@ -61,14 +61,14 @@ class IndexTransformerTest(TestCase):
         assert_list_equal(clf.atom_masks.tolist(),
                           [0, 1, 1, 0, 0, 0, 1, 1, 1, 0])
         assert_less(np.abs(clf.map_array(Pd2O2Pd.positions) -
-                           self.clf.map_array(Pd3O2.positions)).max(), 1e-8)
+                           self.vap.map_array(Pd3O2.positions)).max(), 1e-8)
 
 
 def test_reverse_map_hessian():
     """
     Test the method `VirtualAtomMap.reverse_map_hessian()`.
     """
-    graph_model_path = join(test_dir(), 'datasets', 'Ni', 'Ni.zjw04xc.pb')
+    graph_model_path = join(test_dir(), 'models', 'Ni.zhou04.pb')
     calc = TensorAlloyCalculator(graph_model_path)
     atoms = bulk('Ni', crystalstructure='fcc', cubic=True) * [2, 2, 2]
     atoms.calc = calc

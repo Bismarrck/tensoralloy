@@ -9,7 +9,7 @@ import numpy as np
 import nose
 
 from tensorflow_estimator import estimator as tf_estimator
-from nose.tools import assert_dict_equal, assert_equal, assert_true
+from nose.tools import assert_dict_equal, assert_true
 from nose.tools import assert_almost_equal
 from ase.db import connect
 from ase.build import bulk
@@ -17,20 +17,20 @@ from ase.units import GPa
 from os.path import join
 from collections import Counter
 from typing import List
-from tensorflow.core.framework import graph_pb2
-from tensorflow.python.framework import importer
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.atomic import SymmetryFunctionNN
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.dataclasses import LossParameters
-from tensoralloy.transformer import BatchSymmetryFunctionTransformer
-from tensoralloy.transformer import EAMTransformer
-from tensoralloy.utils import Defaults, set_pulay_stress
-from tensoralloy.test_utils import assert_array_equal, datasets_dir, test_dir
+from tensoralloy.transformer import BatchUniversalTransformer
+from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.utils import Defaults
+from tensoralloy.atoms_utils import set_pulay_stress
+from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.precision import precision_scope
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -52,7 +52,7 @@ def test_energy_pv():
 
             nn = EamAlloyNN(elements, custom_potentials='zjw04',
                             export_properties=['energy', 'forces', 'stress'])
-            clf = EAMTransformer(rc, elements)
+            clf = UniversalTransformer(rcut=rc, elements=elements)
             nn.attach_transformer(clf)
 
             with tf.name_scope("0GPa"):
@@ -147,47 +147,6 @@ def test_convert_to_voigt_stress():
         assert_array_equal(pred_batch_voigt, batch_voigt)
 
 
-def test_graph_model_variables():
-    """
-    Test the exported variables of `BasicNN.export`.
-    """
-    save_dir = join(test_dir(), "checkpoints", "qm7-k2")
-
-    graph = tf.Graph()
-    with graph.as_default():
-        saver = tf.train.import_meta_graph(
-            join(save_dir, "model.ckpt-10000.meta"))
-
-        with tf.Session() as sess:
-            saver.restore(sess, join(save_dir, "model.ckpt-10000"))
-            train_values = {}
-            for var in tf.trainable_variables():
-                train_values[var.op.name] = sess.run(
-                    graph.get_tensor_by_name(
-                        f"{var.op.name}/ExponentialMovingAverage:0"))
-
-
-    graph_path = join(save_dir, "qm7.pb")
-    graph = tf.Graph()
-
-    with graph.as_default():
-
-        output_graph_def = graph_pb2.GraphDef()
-        with open(graph_path, "rb") as fp:
-            output_graph_def.ParseFromString(fp.read())
-            importer.import_graph_def(output_graph_def, name="")
-
-        sess = tf.Session(
-            config=tf.ConfigProto(allow_soft_placement=True),
-            graph=graph)
-
-        with sess:
-            for var_op_name, ref_value in train_values.items():
-                value = sess.run(f"{var_op_name}:0")
-                dmax = np.abs(np.atleast_1d(value - ref_value)).max()
-                assert_equal(dmax, 0)
-
-
 def test_build_nn_with_properties():
     """
     Test the method `BasicNN.build` with different `minimize_properties`.
@@ -197,26 +156,26 @@ def test_build_nn_with_properties():
     batch_size = 1
     db = connect(join(datasets_dir(), 'snap.db'))
     atoms = db.get_atoms(id=1)
-    nij_max = find_neighbor_size_of_atoms(atoms, rc).nij
+    size = find_neighbor_size_of_atoms(atoms, rc)
+    nij_max = size.nij
+    nnl_max = size.nnl
     max_occurs = Counter(atoms.get_chemical_symbols())
 
-    def _get_transformer():
-        """
-        A helper function to return a `BatchSymmetryFunctionTransformer`.
-        """
-        return BatchSymmetryFunctionTransformer(
-            rc=rc, max_occurs=max_occurs, nij_max=nij_max, nijk_max=0,
-            batch_size=batch_size, use_stress=True, use_forces=True)
-
-    def _test_with_properties(list_of_properties: List[str]):
+    def _test_with_properties(list_of_properties: List[str],
+                              finite_temperature=False):
         """
         Run a test.
         """
         with tf.Graph().as_default():
-            nn = AtomicNN(elements=elements,
-                          minmax_scale=False,
-                          minimize_properties=list_of_properties)
-            clf = _get_transformer()
+            algo = "semi" if finite_temperature else "off"
+            nn = SymmetryFunctionNN(elements=elements,
+                                    minmax_scale=False,
+                                    minimize_properties=list_of_properties,
+                                    finite_temperature={"algorithm": algo})
+            clf = BatchUniversalTransformer(
+                rcut=rc, max_occurs=max_occurs, nij_max=nij_max,
+                nnl_max=nnl_max, batch_size=batch_size, use_stress=True,
+                use_forces=True)
             nn.attach_transformer(clf)
             protobuf = tf.convert_to_tensor(
                 clf.encode(atoms).SerializeToString())
@@ -225,8 +184,8 @@ def test_build_nn_with_properties():
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = dict(energy=batch.pop('y_true'))
-            labels['forces'] = batch.pop('f_true')
+            labels = dict(energy=batch.pop('energy'))
+            labels['forces'] = batch.pop('forces')
             labels['stress'] = batch.pop('stress')
             labels['total_pressure'] = batch.pop('total_pressure')
 
@@ -249,7 +208,7 @@ def test_build_nn_with_properties():
             try:
                 nn.get_total_loss(predictions=predictions,
                                   labels=labels,
-                                  n_atoms=batch["n_atoms"],
+                                  n_atoms=batch["n_atoms_vap"],
                                   atom_masks=batch["atom_masks"],
                                   loss_parameters=loss_parameters,
                                   mode=mode)
@@ -260,9 +219,9 @@ def test_build_nn_with_properties():
                 return True
 
     with precision_scope('medium'):
-        for case in (['energy', 'elastic'],
-                     ['energy', 'stress'],
-                     ['energy', 'elastic']):
+        for case, temperature in ((['energy', 'elastic'], False),
+                                  (['energy', 'stress'], False),
+                                  (['free_energy', 'eentropy'], True)):
             assert_true(_test_with_properties(case), msg=f"{case} is failed")
 
 

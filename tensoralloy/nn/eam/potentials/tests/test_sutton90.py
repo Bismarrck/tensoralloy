@@ -18,7 +18,8 @@ from shutil import rmtree
 from unittest import skipUnless
 from nose.tools import assert_almost_equal
 
-from tensoralloy.transformer import BatchEAMTransformer, EAMTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.test_utils import test_dir
@@ -78,10 +79,11 @@ class EamSutton90Test(unittest.TestCase):
 
         with tf.Graph().as_default():
 
-            clf = BatchEAMTransformer(rc=rc,
-                                      max_occurs=max_occurs,
-                                      nij_max=size.nij,
-                                      nnl_max=size.nnl)
+            clf = BatchUniversalTransformer(
+                rcut=rc,
+                max_occurs=max_occurs,
+                nij_max=size.nij,
+                nnl_max=size.nnl)
 
             protobuf = tf.convert_to_tensor(
                 clf.encode(atoms).SerializeToString())
@@ -94,22 +96,24 @@ class EamSutton90Test(unittest.TestCase):
 
             descriptors = clf.get_descriptors(batch)
             features = dict(positions=batch["positions"],
-                            n_atoms=batch["n_atoms"],
+                            n_atoms=batch["n_atoms_vap"],
                             cell=batch["cell"],
-                            compositions=batch["compositions"],
                             atom_masks=batch["atom_masks"],
+                            pulay_stress=batch["pulay_stress"],
                             volume=batch["volume"])
 
             nn = EamAlloyNN(elements=['Ag'], custom_potentials={
                 "Ag": {"rho": "sutton90", "embed": "sutton90"},
                 "AgAg": {"phi": "sutton90"}})
+            nn.attach_transformer(clf)
+
             outputs = nn._get_model_outputs(
                 features=features,
                 descriptors=descriptors,
                 mode=tf_estimator.ModeKeys.EVAL,
                 verbose=False)
             prediction = dict(
-                energy=nn._get_internal_energy_op(outputs, features))
+                energy=nn._get_energy_ops(outputs, features).free_energy)
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -131,7 +135,7 @@ class EamSutton90Test(unittest.TestCase):
         elements = ['Ag']
 
         with tf.Graph().as_default():
-            clf = EAMTransformer(rc=rc, elements=elements)
+            clf = UniversalTransformer(rcut=rc, elements=elements)
             nn = EamAlloyNN(elements=elements,
                             custom_potentials={
                                 "Ag": {"rho": "sutton90", "embed": "sutton90"},

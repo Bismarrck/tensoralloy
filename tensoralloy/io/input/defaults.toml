@@ -15,11 +15,21 @@ serial = false
 
 [nn]
 minimize = ['energy', 'forces']
-export = ['energy', 'forces', 'hessian']
+export = ['energy', 'forces']
 
 [nn.loss]
 
 [nn.loss.energy]
+weight = 1.0
+per_atom_loss = false
+method = "rmse"
+
+[nn.loss.eentropy]
+weight = 1.0
+per_atom_loss = false
+method = "rmse"
+
+[nn.loss.free_energy]
 weight = 1.0
 per_atom_loss = false
 method = "rmse"
@@ -52,8 +62,8 @@ weight = 1.0
 method = "rmse"
 
 [nn.loss.l2]
-weight = 0.01
-decayed = true
+weight = 0.00
+decayed = false
 decay_rate = 0.99
 decay_steps = 10
 
@@ -72,7 +82,14 @@ kernel_initializer = 'he_normal'
 use_resnet_dt = false
 use_atomic_static_energy = true
 fixed_atomic_static_energy = false
-minmax_scale = false
+activation = "softplus"
+
+[nn.atomic.finite_temperature]
+algorithm = "full"
+activation = "softplus"
+layers = [128, 128]
+biased_eentropy = true
+biased_internal_energy = false
 
 [nn.atomic.deepmd]
 rcs = 4.0
@@ -82,14 +99,39 @@ embedding_sizes = [20, 40, 80]
 embedding_activation = 'tanh'
 
 [nn.atomic.sf]
+minmax_scale = false
 angular = false
 cutoff_function = 'cosine'
-trainable = false
 eta = [0.01, 0.1, 0.5, 1.0, 4.0]
 omega = [0.0]
 beta = [0.005]
 gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
+
+[nn.atomic.grap]
+moment_tensors = 0
+algorithm = 'sf'
+cutoff_function = 'cosine'
+minmax_scale = false
+param_space_method = "cross"
+
+[nn.atomic.grap.sf]
+eta = [0.1, 0.5, 1.0, 4.0]
+omega = [0.0]
+
+[nn.atomic.grap.density]
+A = [1.0]
+beta = [1.0, 2.0, 3.0, 4.0]
+re = [4.0]
+
+[nn.atomic.grap.morse]
+D = [1.0]
+gamma = [0.5, 0.6]
+r0 = [1.5, 2.5]
+
+[nn.atomic.grap.pexp]
+rl = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0]
+pl = [5.0, 4.6, 4.2, 3.8, 3.4, 3.0, 2.6, 2.2, 1.8, 1.4, 1.0]
 
 [nn.atomic.layers]
 
@@ -110,6 +152,10 @@ drho = 0.01
 
 [nn.eam.setfl.lattice.constant]
 [nn.eam.setfl.lattice.type]
+
+[nn.tersoff]
+file = "required"
+symmetric_mixing = false
 
 [opt]
 method = "adam"
@@ -137,6 +183,9 @@ rho = 0.95
 [opt.rmsprop]
 decay = 0.9
 momentum = 0.0
+
+[opt.adamw]
+decay = 1e-4
 
 [train]
 reset_global_step = true

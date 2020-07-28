@@ -8,11 +8,11 @@ import tensorflow as tf
 import numpy as np
 import json
 import shutil
-import os
 
+from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
-from os.path import join, dirname, exists
+from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from tensorflow.python.framework.tensor_util import is_tensor
@@ -21,17 +21,17 @@ from ase.units import GPa
 
 from tensoralloy.utils import GraphKeys, Defaults, safe_select
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
+from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
 from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
-from tensoralloy.nn.losses import LossMethod
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
-from tensoralloy.nn.constraint import ediff as ediff_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -68,14 +68,17 @@ class ExportablePropertyError(_PropertyError):
 
 all_properties = (
     StructuralProperty(name='energy'),
+    StructuralProperty(name='eentropy'),
+    StructuralProperty(name='free_energy'),
     StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
+    StructuralProperty(name="partial_forces", exportable=True,
+                       minimizable=False),
     StructuralProperty(name='stress'),
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
     StructuralProperty(name='elastic'),
-    StructuralProperty(name='rose', exportable=False),
-    StructuralProperty(name='ediff', exportable=False)
+    StructuralProperty(name='rose', exportable=False)
 )
 
 exportable_properties = [
@@ -94,6 +97,9 @@ class BasicNN:
 
     # The default collection for model variabls.
     default_collection = None
+
+    # Global scope for this potential model.
+    scope = "Basic"
 
     def __init__(self,
                  elements: List[str],
@@ -146,7 +152,6 @@ class BasicNN:
         self._minimize_properties = list(minimize_properties)
         self._export_properties = list(export_properties)
         self._transformer = None
-        self._y_atomic_op_name = None
 
     @property
     def elements(self):
@@ -176,11 +181,11 @@ class BasicNN:
         """
         return self._export_properties
 
-    def _get_atomic_energy_tensor_name(self) -> str:
+    def _get_atomic_energy_op_name(self) -> str:
         """
         Return the name of the atomic energy tensor.
         """
-        return self._y_atomic_op_name
+        return "Output/Energy/atomic"
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -199,15 +204,15 @@ class BasicNN:
         return results
 
     @property
-    def transformer(self) -> BaseTransformer:
+    def transformer(self) -> UniversalTransformer:
         """
         Get the attached transformer.
         """
         return self._transformer
 
-    def attach_transformer(self, clf: BaseTransformer):
+    def attach_transformer(self, clf: UniversalTransformer):
         """
-        Attach a descriptor transformer to this NN.
+        Attach a descriptor transformer to this potential.
         """
         self._transformer = clf
 
@@ -217,13 +222,16 @@ class BasicNN:
         """
         raise NotImplementedError("This method must be overridden!")
 
-    def _get_internal_energy_op(self,
-                                outputs,
-                                features: dict,
-                                name='energy',
-                                verbose=True) -> tf.Tensor:
+    def _get_energy_ops(self,
+                        outputs,
+                        features: dict,
+                        verbose=True) -> EnergyOps:
         """
-        Return the Op to compute internal energy E.
+        Return the Ops to compute different types of energies:
+            * energy: the internal energy U
+            * entropy: the electron entropy (unitless) S
+            * enthalpy: the enthalpy H = U + PV
+            * free_energy: the electron free energy E(F) = U - T*S
 
         Parameters
         ----------
@@ -234,9 +242,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`.
                 * 'pulay_stress' of dtype `float32` or `float64`.
         name : str
             The name of the output potential energy tensor.
@@ -247,59 +255,25 @@ class BasicNN:
         raise NotImplementedError("This method must be overridden!")
 
     @staticmethod
-    def _get_pv_energy_op(features: dict,
-                          name='pv',
-                          verbose=True) -> tf.Tensor:
+    def _get_enthalpy_op(features: dict,
+                         energy: tf.Tensor,
+                         verbose=True) -> tf.Tensor:
         """
-        Return the Op to compute `E_pv`:
+        Return the Op to compute enthalpy H:
 
-            E(pv) = pulay_stress * volume
+            H = U + PV
 
         """
         v = tf.linalg.det(features["cell"], name='V')
         p = tf.convert_to_tensor(features["pulay_stress"], name='P')
-        pv = tf.multiply(v, p, name=name)
+        pv = tf.multiply(v, p, name='PV')
+        enthalpy = tf.add(pv, energy, name='enthalpy')
         if verbose:
-            log_tensor(pv)
-        return pv
-
-    def _get_total_energy_op(self,
-                             outputs,
-                             features: dict,
-                             name='energy',
-                             verbose=True):
-        """
-        Return the Ops to compute total energy E and enthalpy H:
-
-            H = E + PV
-
-        Returns
-        -------
-        energy : tf.Tensor
-            The Op to compute internal energy E.
-        enthalpy : tf.Tensor
-            The Op to compute enthalpy H.
-
-        """
-        with tf.name_scope("PV"):
-            E_pv = self._get_pv_energy_op(features, verbose=verbose)
-
-        with tf.name_scope("Internal"):
-            E_internal = self._get_internal_energy_op(
-                outputs=outputs,
-                features=features,
-                verbose=verbose)
-
-        E_total = tf.identity(E_internal, name=name)
-        H = tf.add(E_internal, E_pv, name='enthalpy')
-
-        if verbose:
-            log_tensor(H)
-
-        return E_total, H
+            log_tensor(enthalpy)
+        return enthalpy
 
     @staticmethod
-    def _get_forces_op(energy, positions, name='forces', verbose=True):
+    def _get_forces_op(energy, positions, verbose=True):
         """
         Return the Op to compute atomic forces (eV / Angstrom).
         """
@@ -309,10 +283,26 @@ class BasicNN:
         # Please remember: f = -dE/dR
         forces = tf.negative(
             tf.split(dEdR, [1, -1], axis=axis, name='split')[1],
-            name=name)
+            name='forces')
         if verbose:
             log_tensor(forces)
         return forces
+
+    @staticmethod
+    def _get_partial_forces_ops(energy, rij, rijk, verbose=True):
+        """
+        Return the Ops for computing partial forces.
+        """
+        ops = {}
+        dEdrij = tf.gradients(energy, rij, name='dEdrij')[0]
+        ops["dEdrij"] = tf.identity(dEdrij, name='dE/drij')
+        if rijk is not None:
+            dEdrijk = tf.gradients(energy, rijk, name='dEdrijk')[0]
+            ops["dEdrijk"] = tf.identity(dEdrijk, name='dE/drijk')
+        if verbose:
+            for tensor in ops.values():
+                log_tensor(tensor)
+        return ops
 
     @staticmethod
     def _get_reduced_full_stress_tensor(energy: tf.Tensor, cell, volume,
@@ -371,8 +361,7 @@ class BasicNN:
             return tf.identity(stress, name='unit'), total_stress
 
     @staticmethod
-    def _convert_to_voigt_stress(stress, batch_size, name='stress',
-                                 verbose=False):
+    def _convert_to_voigt_stress(stress, batch_size, verbose=False):
         """
         Convert a 3x3 stress tensor or a Nx3x3 stress tensors to corresponding
         Voigt form(s).
@@ -389,14 +378,14 @@ class BasicNN:
                     tf.range(batch_size), [batch_size, 1, 1]),
                     [1, 6, 1])
                 voigt = tf.concat((indices, voigt), axis=2, name='indices')
-            stress = tf.gather_nd(stress, voigt, name=name)
+            stress = tf.gather_nd(stress, voigt, name='stress')
             if verbose:
                 log_tensor(stress)
             return stress
 
     def _get_stress_op(self, energy: tf.Tensor, cell, volume, positions,
-                       forces, pulay_stress, name='stress',
-                       return_pressure=False, verbose=True):
+                       forces, pulay_stress, return_pressure=False,
+                       verbose=True):
         """
         Return the Op to compute the reduced stress (eV) in Voigt format.
         """
@@ -414,7 +403,7 @@ class BasicNN:
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
         voigt = self._convert_to_voigt_stress(
-            stress_per_volume, batch_size, name=name, verbose=verbose)
+            stress_per_volume, batch_size, verbose=verbose)
 
         if return_pressure:
             total_pressure = self._get_total_pressure_op(stress_per_volume,
@@ -442,21 +431,44 @@ class BasicNN:
         return total_pressure
 
     @staticmethod
-    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, name='hessian',
-                        verbose=True):
+    def _get_hessian_op(energy: tf.Tensor, positions: tf.Tensor, verbose=True):
         """
         Return the Op to compute the Hessian matrix:
 
             hessian = d^2E / dR^2 = d(dE / dR) / dR
 
         """
-        hessian = tf.identity(tf.hessians(energy, positions)[0], name=name)
+        hessian = tf.identity(tf.hessians(energy, positions)[0], name='hessian')
         if verbose:
             log_tensor(hessian)
         return hessian
 
-    def get_total_loss(self, predictions, labels, n_atoms, atom_masks,
+    def _get_energy_loss(self,
+                         predictions,
+                         labels,
+                         n_atoms,
+                         max_train_steps,
+                         loss_parameters: LossParameters,
+                         collections) -> Dict[str, tf.Tensor]:
+        """
+        Return energy loss(es).
+        """
+        loss = loss_ops.get_energy_loss(
+            labels=labels["energy"],
+            predictions=predictions["energy"],
+            n_atoms=n_atoms,
+            max_train_steps=max_train_steps,
+            options=loss_parameters.energy,
+            collections=collections)
+        return {"energy": loss}
+
+    def get_total_loss(self,
+                       predictions,
+                       labels,
+                       n_atoms,
+                       atom_masks,
                        loss_parameters: LossParameters,
+                       max_train_steps=None,
                        mode=tf_estimator.ModeKeys.TRAIN):
         """
         Get the total loss tensor.
@@ -476,6 +488,11 @@ class BasicNN:
             The following prediction is included and required for computing
             elastic loss:
                 * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
+
+            For finite temperature systems those are required:
+                * 'eentropy' (electron entropy) of shape `[batch_size, ]`
+                * 'free_energy' (electron free energy) of shape `[batch_size, ]`
+
         labels : dict
             A dict of reference tensors.
 
@@ -495,6 +512,8 @@ class BasicNN:
             A `int64` tensor of shape `[batch_size, ]`.
         atom_masks : tf.Tensor
             A float tensor of shape `[batch_size, n_atoms_max + 1]`.
+        max_train_steps : Union[int, tf.Tensor]
+            The maximum number of training steps.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
         mode : tf_estimator.ModeKeys
@@ -516,14 +535,12 @@ class BasicNN:
             else:
                 collections = None
 
-            losses = dict()
-            losses["energy"] = loss_ops.get_energy_loss(
-                labels=labels["energy"],
-                predictions=predictions["energy"],
+            losses = self._get_energy_loss(
+                predictions=predictions,
+                labels=labels,
                 n_atoms=n_atoms,
-                loss_weight=loss_parameters.energy.weight,
-                per_atom_loss=loss_parameters.energy.per_atom_loss,
-                method=LossMethod[loss_parameters.energy.method],
+                max_train_steps=max_train_steps,
+                loss_parameters=loss_parameters,
                 collections=collections)
 
             if 'forces' in self._minimize_properties:
@@ -531,29 +548,31 @@ class BasicNN:
                     labels=labels["forces"],
                     predictions=predictions["forces"],
                     atom_masks=atom_masks,
-                    loss_weight=loss_parameters.forces.weight,
-                    method=LossMethod[loss_parameters.forces.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.forces,
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses["total_pressure"] = loss_ops.get_total_pressure_loss(
+                losses["total_pressure"] = loss_ops.get_pressure_loss(
                     labels=labels["total_pressure"],
                     predictions=predictions["total_pressure"],
-                    loss_weight=loss_parameters.total_pressure.weight,
-                    method=LossMethod[loss_parameters.total_pressure.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.total_pressure,
                     collections=collections)
 
             if 'stress' in self._minimize_properties:
                 losses["stress"] = loss_ops.get_stress_loss(
                     labels=labels["stress"],
                     predictions=predictions["stress"],
-                    loss_weight=loss_parameters.stress.weight,
-                    method=LossMethod[loss_parameters.stress.method],
+                    max_train_steps=max_train_steps,
+                    options=loss_parameters.stress,
                     collections=collections)
 
-            losses["l2"] = loss_ops.get_l2_regularization_loss(
+            l2_loss = loss_ops.get_l2_regularization_loss(
                 options=loss_parameters.l2,
                 collections=collections)
+            if l2_loss is not None:
+                losses['l2'] = l2_loss
 
             verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)
 
@@ -572,14 +591,6 @@ class BasicNN:
                         base_nn=self,
                         options=loss_parameters.rose,
                         verbose=verbose)
-
-            if 'ediff' in self._minimize_properties:
-                if loss_parameters.ediff.references:
-                    losses['ediff'] = \
-                        ediff_ops.get_energy_difference_constraint_loss(
-                            base_nn=self,
-                            options=loss_parameters.ediff,
-                            verbose=verbose)
 
             for tensor in losses.values():
                 tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -606,9 +617,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
+                * 'etemperature' of dtype `float32` or `float64`
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.'
                 * 'pulay_stress' of dtype `float32` or `float64`.
         descriptors : dict
             A dict of Ops to get atomic descriptors. This should be produced by
@@ -628,12 +639,12 @@ class BasicNN:
         assert 'positions' in features
         assert 'cell' in features
         assert 'atom_masks' in features
-        assert 'n_atoms' in features
+        assert 'n_atoms_vap' in features
         assert 'volume' in features
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop in ('elastic', 'rose', 'ediff'):
+            if prop in ('elastic', 'rose'):
                 continue
             assert prop in labels
 
@@ -651,9 +662,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`
                 * 'pulay_stress' of dtype `float32` or `float64`.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
@@ -694,8 +705,14 @@ class BasicNN:
             mode=mode,
             verbose=verbose)
 
+        export_partial_forces = False
         if mode == tf_estimator.ModeKeys.PREDICT:
-            properties = self._export_properties
+            if isinstance(self._transformer, UniversalTransformer) \
+                    and not self._transformer.use_computed_dists:
+                export_partial_forces = True
+                properties = ["energy", "partial_forces"]
+            else:
+                properties = self._export_properties
         else:
             properties = self._minimize_properties
 
@@ -704,32 +721,37 @@ class BasicNN:
             predictions = dict()
 
             with tf.name_scope("Energy"):
-                energy, enthalpy = self._get_total_energy_op(
-                    outputs, features, name='energy', verbose=verbose)
-                predictions["energy"] = energy
-                predictions["enthalpy"] = enthalpy
+                ops = self._get_energy_ops(
+                    outputs, features, verbose=verbose)
+                predictions.update(ops.__dict__)
 
             if 'forces' in properties or \
                     'stress' in properties or \
                     'total_pressure' in properties:
                 with tf.name_scope("Forces"):
                     predictions["forces"] = self._get_forces_op(
-                        predictions["energy"],
+                        ops.free_energy,
                         features["positions"],
-                        name='forces',
                         verbose=verbose)
+
+            if export_partial_forces:
+                with tf.name_scope("PartialForces"):
+                    predictions.update(
+                        self._get_partial_forces_ops(
+                            ops.free_energy,
+                            rij=features["g2.rij"],
+                            rijk=features.get("g4.rijk", None)))
 
             if 'stress' in properties:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
-                            energy=predictions["energy"],
+                            energy=ops.free_energy,
                             cell=features["cell"],
                             volume=features["volume"],
                             positions=features["positions"],
                             forces=predictions["forces"],
                             pulay_stress=features["pulay_stress"],
-                            name='stress',
                             verbose=verbose)
                     predictions["stress"] = voigt_stress
                     predictions["total_stress"] = total_stress
@@ -738,11 +760,11 @@ class BasicNN:
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
                     predictions["hessian"] = self._get_hessian_op(
-                        predictions["energy"], features["positions"],
-                        name='hessian', verbose=verbose)
+                        ops.free_energy, features["positions"],
+                        verbose=verbose)
 
-            if mode == tf_estimator.ModeKeys.PREDICT and \
-                    'elastic' in properties:
+            if mode == tf_estimator.ModeKeys.PREDICT \
+                    and 'elastic' in properties:
                 with tf.name_scope("Elastic"):
                     predictions["elastic"] = \
                         elastic_ops.get_elastic_constat_tensor_op(
@@ -772,9 +794,9 @@ class BasicNN:
                 * 'positions' of shape `[batch_size, n_atoms_max + 1, 3]`.
                 * 'cell' of shape `[batch_size, 3, 3]`.
                 * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`.
-                * 'compositions' of shape `[batch_size, n_elements]`.
                 * 'volume' of shape `[batch_size, ]`.
-                * 'n_atoms' of dtype `int64`.'
+                * 'n_atoms_vap' of dtype `int64`.
+                * 'etemperature' of dtype `float32` or `float64`.
                 * 'pulay_stress' of dtype `float32` or `float64`.
         labels : dict
             A dict of reference tensors.
@@ -818,8 +840,9 @@ class BasicNN:
         total_loss, losses = self.get_total_loss(
             predictions=predictions,
             labels=labels,
-            n_atoms=features["n_atoms"],
+            n_atoms=features["n_atoms_vap"],
             atom_masks=features["atom_masks"],
+            max_train_steps=params.train.train_steps,
             loss_parameters=params.loss,
             mode=mode)
 
@@ -841,7 +864,7 @@ class BasicNN:
             eval_properties=self._minimize_properties,
             predictions=predictions,
             labels=labels,
-            n_atoms=features["n_atoms"],
+            n_atoms=features["n_atoms_vap"],
             atom_masks=features["atom_masks"],
         )
         evaluation_hooks = get_evaluation_hooks(
@@ -853,7 +876,8 @@ class BasicNN:
                                           evaluation_hooks=evaluation_hooks)
 
     def export(self, output_graph_path: str, checkpoint=None,
-               keep_tmp_files=False, use_ema_variables=True):
+               keep_tmp_files=False, use_ema_variables=True,
+               export_partial_forces_model=False):
         """
         Freeze the graph and export the model to a pb file.
 
@@ -867,17 +891,20 @@ class BasicNN:
             If False, the intermediate files will be deleted.
         use_ema_variables : bool
             If True, exponentially moving averaged variables will be used.
+        export_partial_forces_model : bool
+            A boolean. If True, tensoralloy will try to export a model with
+            partial forces ops.
 
         """
 
         graph = tf.Graph()
 
-        logdir = join(dirname(output_graph_path), 'export')
-        if not exists(logdir):
-            os.makedirs(logdir)
+        logdir = Path(dirname(output_graph_path)).joinpath('export')
+        if not logdir.exists():
+            logdir.mkdir()
 
         input_graph_name = 'input_graph.pb'
-        saved_model_ckpt = join(logdir, 'saved_model')
+        saved_model_ckpt = logdir.joinpath('saved_model')
         saved_model_meta = f"{saved_model_ckpt}.meta"
 
         with graph.as_default():
@@ -892,11 +919,17 @@ class BasicNN:
                 if 'class' in serialized:
                     serialized.pop('class')
                 clf = self._transformer.__class__(**serialized)
+            else:
+                raise ValueError(f"Unknown transformer: {self._transformer}")
 
             configs = self.as_dict()
             configs.pop('class')
-
             nn = self.__class__(**configs)
+
+            if export_partial_forces_model \
+                    and isinstance(clf, UniversalTransformer):
+                clf.use_computed_dists = False
+
             nn.attach_transformer(clf)
             predictions = nn.build(clf.get_placeholder_features(),
                                    mode=tf_estimator.ModeKeys.PREDICT,
@@ -904,19 +937,21 @@ class BasicNN:
 
             # Encode the JSON dict of the serialized transformer into the graph.
             with tf.name_scope("Transformer/"):
-                transformer_params = tf.constant(
+                params_node = tf.constant(
                     json.dumps(clf.as_dict()), name='params')
 
             # Add a timestamp to the graph
             with tf.name_scope("Metadata/"):
-                timestamp = tf.constant(str(datetime.today()), name='timestamp')
-                y_atomic = tf.constant(nn._get_atomic_energy_tensor_name(),
-                                       name="y_atomic")
-                fp_prec = get_float_precision()
-                fp_prec_op = tf.constant(fp_prec.name, name='precision')
-                tf_version_op = tf.constant(tf.__version__, name='tf_version')
-                use_legacy_keys_op = tf.constant(
-                    "false", name="use_legacy_keys")
+                timestamp_node = tf.constant(
+                    str(datetime.today()), name='timestamp')
+                y_atomic_node = tf.constant(nn._get_atomic_energy_op_name(),
+                                            name="atomic")
+                fp_prec_node = tf.constant(
+                    get_float_precision().name, name='precision')
+                tf_version_node = tf.constant(tf.__version__, name='tf_version')
+
+                ops = {key: tensor.name for key, tensor in predictions.items()}
+                ops_node = tf.constant(json.dumps(ops), name='ops')
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
@@ -936,7 +971,7 @@ class BasicNN:
                 checkpoint_path = saver.save(
                     sess, saved_model_ckpt, global_step=0)
                 graph_io.write_graph(graph_or_graph_def=graph,
-                                     logdir=logdir,
+                                     logdir=str(logdir),
                                      name=input_graph_name)
 
             input_graph_path = join(logdir, input_graph_name)
@@ -948,12 +983,12 @@ class BasicNN:
             input_meta_graph = saved_model_meta
 
             output_node_names = [
-                transformer_params.op.name,
-                timestamp.op.name,
-                y_atomic.op.name,
-                fp_prec_op.op.name,
-                tf_version_op.op.name,
-                use_legacy_keys_op.op.name
+                params_node.op.name,
+                timestamp_node.op.name,
+                y_atomic_node.op.name,
+                fp_prec_node.op.name,
+                tf_version_node.op.name,
+                ops_node.op.name,
             ]
 
             for tensor in predictions.values():

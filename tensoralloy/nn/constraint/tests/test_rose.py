@@ -21,7 +21,7 @@ from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.nn import EamAlloyNN
 from tensoralloy.nn.dataclasses import TrainParameters, OptParameters
 from tensoralloy.nn.dataclasses import LossParameters, RoseLossOptions
-from tensoralloy.transformer import BatchEAMTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.calculator import TensorAlloyCalculator
@@ -81,7 +81,9 @@ def test_rose_eos_constraint():
             elements = ['Mo', 'Ni']
             max_occurs = Counter({'Mo': len(atoms), 'Ni': 1})
             size = find_neighbor_size_of_atoms(atoms, rc, False)
-            clf = BatchEAMTransformer(rc, max_occurs, size.nij, size.nnl, 1)
+            clf = BatchUniversalTransformer(rcut=rc, max_occurs=max_occurs,
+                                            nij_max=size.nij, nnl_max=size.nnl,
+                                            batch_size=1)
             nn = EamAlloyNN(elements, 'zjw04', minimize_properties=['energy'])
             nn.attach_transformer(clf)
 
@@ -93,7 +95,7 @@ def test_rose_eos_constraint():
             for key, tensor in example.items():
                 batch[key] = tf.expand_dims(
                     tensor, axis=0, name=tensor.op.name + '/batch')
-            labels = dict(energy=batch.pop('y_true'))
+            labels = dict(energy=batch.pop('energy'))
 
             train_params = TrainParameters()
             train_params.profile_steps = 0
@@ -118,7 +120,7 @@ def test_rose_eos_constraint():
             get_rose_constraint_loss(base_nn=nn, options=options)
 
             zjw04_vars = [var for var in tf.global_variables()
-                          if var.op.name.startswith('nnEAM/Shared/Mo')
+                          if var.op.name.startswith('EAM/Shared/Mo')
                           and 'ExponentialMovingAverage' not in var.op.name
                           and 'Adam' not in var.op.name]
 

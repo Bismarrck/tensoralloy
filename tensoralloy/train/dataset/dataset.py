@@ -17,7 +17,7 @@ from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.utils import Defaults, check_path
 from tensoralloy.train.dataset.utils import should_be_serial
 from tensoralloy.train.dataset.utils import brange
@@ -40,7 +40,7 @@ class Dataset:
     def __init__(self,
                  database: Union[CoreDatabase, str],
                  name: str,
-                 transformer: BatchDescriptorTransformer,
+                 transformer: BatchUniversalTransformer,
                  serial=False):
         """
         Initialization method.
@@ -118,9 +118,9 @@ class Dataset:
         return self._database.max_occurs
 
     @property
-    def transformer(self) -> BatchDescriptorTransformer:
+    def transformer(self) -> BatchUniversalTransformer:
         """
-        Return the assigned batch version of an atomic descriptor transformer.
+        Return the attached universal transformer.
         """
         return self._transformer
 
@@ -264,7 +264,10 @@ class Dataset:
             k_max = 3
         else:
             k_max = 2
-        rc = self._transformer.rc
+        if hasattr(self._transformer, "rcut"):
+            rc = self._transformer.rcut
+        else:
+            rc = self._transformer.rc
         sig = "k{:d}-rc{:.2f}".format(k_max, rc)
         dtype = get_float_dtype()
         if dtype == tf.float32:
@@ -433,10 +436,12 @@ class Dataset:
                     shape = tensor.shape.as_list()
                     if shape[0] is None:
                         tensor.set_shape([batch_size] + shape[1:])
-                labels = dict(energy=features.pop('y_true'))
+                labels = dict(energy=features.pop('energy'),
+                              eentropy=features.pop('eentropy'),
+                              free_energy=features.pop('free_energy'))
 
                 if self._database.has_forces:
-                    labels['forces'] = features.pop('f_true')
+                    labels['forces'] = features.pop('forces')
                 if self._database.has_stress:
                     labels['stress'] = features.pop('stress')
 
@@ -490,7 +495,7 @@ class Dataset:
                 dataset = dataset.repeat(count=num_epochs)
 
             # Setup the batch
-            dataset = dataset.batch(batch_size)
+            dataset = dataset.batch(batch_size, drop_remainder=True)
             dataset = dataset.prefetch(buffer_size=1)
 
             # Return the iterator
