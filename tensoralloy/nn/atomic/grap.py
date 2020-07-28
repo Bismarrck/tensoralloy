@@ -12,7 +12,7 @@ from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.utils import get_elements_from_kbody_term
-from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
+from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.atomic.atomic import AtomicNN
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors

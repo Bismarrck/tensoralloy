@@ -10,7 +10,7 @@ from typing import List, Dict
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.descriptor.cutoff import deepmd_cutoff
+from tensoralloy.nn.cutoff import deepmd_cutoff
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.utils import log_tensor, get_activation_fn

@@ -19,7 +19,7 @@ from sklearn.model_selection import ParameterGrid
 from itertools import product
 from typing import Union, List
 
-from tensoralloy.descriptor.cutoff import cosine_cutoff
+from tensoralloy.nn.cutoff import cosine_cutoff
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
 from tensoralloy.precision import precision_scope

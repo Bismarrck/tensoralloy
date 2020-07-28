@@ -19,7 +19,7 @@ from tensoralloy.nn.atomic.dataclasses import FiniteTemperatureOptions
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.extension.grad_ops import safe_pow
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.descriptor.cutoff import cosine_cutoff, polynomial_cutoff
+from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'

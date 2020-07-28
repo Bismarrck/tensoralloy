@@ -12,7 +12,7 @@ from collections import Counter
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
-from tensoralloy.descriptor.cutoff import tersoff_cutoff
+from tensoralloy.nn.cutoff import tersoff_cutoff
 from tensoralloy.io.lammps import read_tersoff_file
 from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.basic import BasicNN

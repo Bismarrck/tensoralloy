@@ -10,10 +10,10 @@ import nose
 
 from nose.tools import assert_less
 
-from tensoralloy.descriptor.cutoff import cosine_cutoff
-from tensoralloy.descriptor.cutoff import polynomial_cutoff
-from tensoralloy.descriptor.cutoff import meam_cutoff
-from tensoralloy.descriptor.cutoff import tersoff_cutoff
+from tensoralloy.nn.cutoff import cosine_cutoff
+from tensoralloy.nn.cutoff import polynomial_cutoff
+from tensoralloy.nn.cutoff import meam_cutoff
+from tensoralloy.nn.cutoff import tersoff_cutoff
 from tensoralloy.precision import get_float_dtype, set_float_precision
 from tensoralloy.precision import Precision
 
