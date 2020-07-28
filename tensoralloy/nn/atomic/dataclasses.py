@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from typing import Dict, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections import Counter
 
 __author__ = 'Xin Chen'
@@ -28,7 +28,6 @@ class FiniteTemperatureOptions:
     """
     Options for modeling finite-temperature systems.
     """
-    on: bool = field(init=False)
     algorithm: str = "full"
     activation: str = "softplus"
     layers: List[int] = (128, 128)
@@ -38,4 +37,10 @@ class FiniteTemperatureOptions:
     def __post_init__(self):
         if self.algorithm not in ("off", "zero", "semi", "full"):
             raise ValueError(f"Algorithm {self.algorithm} is unknown!")
-        self.on = self.algorithm != "off"
+
+    @property
+    def on(self):
+        """
+        Return True if finite-temperature is enabled.
+        """
+        return self.algorithm != "off"
