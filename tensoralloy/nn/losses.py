@@ -116,7 +116,7 @@ def _get_static_or_dyn_weight_tensor(weight: Union[float, Tuple[float, float]],
     Create the static or dynamic loss weight tensor.
     """
     if isinstance(weight, float):
-        return tf.convert_to_tensor(weight, name='weight')
+        return tf.convert_to_tensor(weight, dtype=dtype, name='weight')
     else:
         assert len(weight) == 2
         global_step = tf.train.get_or_create_global_step()
@@ -135,8 +135,8 @@ def _get_static_or_dyn_weight_tensor(weight: Union[float, Tuple[float, float]],
 def get_energy_loss(labels,
                     predictions,
                     n_atoms,
-                    max_train_steps,
-                    options: EnergyLossOptions,
+                    max_train_steps: Union[None, int, tf.Tensor] = None,
+                    options: EnergyLossOptions = EnergyLossOptions(),
                     collections=None,
                     name_scope="Energy"):
     """
@@ -151,7 +151,7 @@ def get_energy_loss(labels,
     n_atoms : tf.Tensor
         A `int64` tensor of shape `[batch_size, ]` as the number of atoms of
         each structure.
-    max_train_steps : Union[int, tf.Tensor]
+    max_train_steps : Union[int, tf.Tensor, None]
         The maximum number of training steps.
     options : EnergyLossOptions
         Options for computing energy loss.
@@ -229,8 +229,8 @@ def _absolute_forces_loss(labels: tf.Tensor,
 def get_forces_loss(labels,
                     predictions,
                     atom_masks,
-                    max_train_steps: Union[int, tf.Tensor],
-                    options: ForcesLossOptions,
+                    max_train_steps: Union[None, int, tf.Tensor] = None,
+                    options: ForcesLossOptions = ForcesLossOptions(),
                     collections=None):
     """
     Return the loss tensor of the atomic forces.
@@ -246,7 +246,7 @@ def get_forces_loss(labels,
     atom_masks : tf.Tensor
         A float tensor of shape `[batch_size, ]` as the atom masks of each
         structure.
-    max_train_steps : Union[int, tf.Tensor]
+    max_train_steps : Union[None, int, tf.Tensor]
         The maximum number of training steps.
     options : ForcesLossOptions
         Options for computing force loss.
@@ -276,8 +276,8 @@ def get_forces_loss(labels,
 
 def get_stress_loss(labels,
                     predictions,
-                    max_train_steps: Union[int, tf.Tensor],
-                    options: StressLossOptions,
+                    max_train_steps: Union[None, int, tf.Tensor] = None,
+                    options: StressLossOptions = StressLossOptions(),
                     collections=None):
     """
     Return the (relative) RMSE loss of the stress.
@@ -288,7 +288,7 @@ def get_stress_loss(labels,
         A float tensor of shape `[batch_size, 6]` as the reference stress.
     predictions : tf.Tensor
         A float tensor of shape `[batch_size, 6]` as the predicted stress.
-    max_train_steps : Union[int, tf.Tensor]
+    max_train_steps : Union[None, int, tf.Tensor]
         The maximum number of training steps.
     options : StressLossOptions
         Options for computing stress loss.
@@ -325,11 +325,11 @@ def get_stress_loss(labels,
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
-def get_total_pressure_loss(labels,
-                            predictions,
-                            max_train_steps: Union[int, tf.Tensor],
-                            options: PressureLossOptions,
-                            collections=None):
+def get_pressure_loss(labels,
+                      predictions,
+                      max_train_steps: Union[None, int, tf.Tensor] = None,
+                      options: PressureLossOptions = PressureLossOptions(),
+                      collections=None):
     """
     Return the RMSE loss of the total pressure.
 
@@ -340,7 +340,7 @@ def get_total_pressure_loss(labels,
         energies.
     predictions : tf.Tensor
         A float tensor of shape `[batch_size, ]` as the predicted pressure.
-    max_train_steps : Union[int, tf.Tensor]
+    max_train_steps : Union[None, int, tf.Tensor]
         The maximum number of training steps.
     options : StressLossOptions
         Options for computing pressure loss.
@@ -390,7 +390,7 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
     """
     with tf.name_scope("L2"):
         name = 'total_regularization_loss'
-        losses = tf.compat.v1.losses.get_regularization_losses()
+        losses = tf.losses.get_regularization_losses()
         if losses:
             l2 = tf.add_n(losses, name=name)
         else:
@@ -398,9 +398,9 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
         loss_weight = tf.convert_to_tensor(
             options.weight, l2.dtype, name='weight')
         if options.decayed:
-            loss_weight = tf.compat.v1.train.exponential_decay(
+            loss_weight = tf.train.exponential_decay(
                 learning_rate=loss_weight,
-                global_step=tf.compat.v1.train.get_global_step(),
+                global_step=tf.train.get_global_step(),
                 decay_steps=options.decay_steps,
                 decay_rate=options.decay_rate,
                 name='weight/decayed')

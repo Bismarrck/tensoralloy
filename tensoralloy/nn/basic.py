@@ -553,7 +553,7 @@ class BasicNN:
                     collections=collections)
 
             if 'total_pressure' in self._minimize_properties:
-                losses["total_pressure"] = loss_ops.get_total_pressure_loss(
+                losses["total_pressure"] = loss_ops.get_pressure_loss(
                     labels=labels["total_pressure"],
                     predictions=predictions["total_pressure"],
                     max_train_steps=max_train_steps,
