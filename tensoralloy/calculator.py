@@ -19,7 +19,6 @@ from tensorflow.python.framework import importer
 from typing import List, Tuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
-from tensoralloy.transformer import SymmetryFunctionTransformer, EAMTransformer
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.precision import precision_scope
@@ -120,22 +119,15 @@ class TensorAlloyCalculator(Calculator):
         """
         params = json.loads(self._sess.run(
             self._graph.get_tensor_by_name('Transformer/params:0')))
-        if 'class' in params:
-            cls = params.pop('class')
-        else:
-            cls = 'SymmetryFunctionTransformer'
         if 'predict_properties' in params:
             self._predict_properties = params.pop('predict_properties')
         else:
             self._predict_properties = []
-        if cls == 'SymmetryFunctionTransformer':
-            return SymmetryFunctionTransformer(**params)
-        elif cls == 'EAMTransformer':
-            return EAMTransformer(**params)
-        elif cls == 'UniversalTransformer':
+        cls = params.pop('class')
+        if cls == 'UniversalTransformer':
             return UniversalTransformer(**params)
         else:
-            raise ValueError(f"Unknown transformer: {cls}")
+            raise ValueError(f"Unsupported transformer: {cls}")
 
     def _get_y_atomic_tensor_name(self):
         """
