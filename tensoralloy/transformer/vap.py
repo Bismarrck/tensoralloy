@@ -29,7 +29,7 @@ class VirtualAtomMap:
         """
         self._symbols = symbols
         self._max_occurs = max_occurs
-        self._max_vap_natoms = sum(max_occurs.values()) + 1
+        self._max_vap_natoms = int(sum(max_occurs.values()) + 1)
 
         istart = VirtualAtomMap.REAL_ATOM_START
         elements = sorted(max_occurs.keys())

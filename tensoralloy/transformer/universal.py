@@ -942,7 +942,7 @@ class BatchUniversalTransformer(UniversalTransformer,
         self._nnl_max = nnl_max
         self._ij2k_max = ij2k_max
         self._batch_size = batch_size
-        self._max_occurs = max_occurs
+        self._max_occurs = max_occurs.copy()
         self._max_n_atoms = sum(max_occurs.values())
 
         radial_interactions = {}
@@ -1024,6 +1024,13 @@ class BatchUniversalTransformer(UniversalTransformer,
         Return the corresponding `ij2k_max`.
         """
         return self._ij2k_max
+
+    @property
+    def max_occurs(self):
+        """
+        Maximum
+        """
+        return self._max_occurs
 
     def as_descriptor_transformer(self) -> UniversalTransformer:
         """

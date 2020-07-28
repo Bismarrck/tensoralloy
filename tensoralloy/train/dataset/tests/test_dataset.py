@@ -16,7 +16,7 @@ from nose.tools import assert_less, assert_true
 from os.path import join, exists
 from os import remove
 
-from tensoralloy.transformer.behler import BatchSymmetryFunctionTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.transformer import VirtualAtomMap
 from tensoralloy.train.dataset.dataset import Dataset
 from tensoralloy.utils import Defaults
@@ -35,18 +35,18 @@ def qm7m_compute():
     """
     qm7m = get_qm7m_test_dict()
     batch_size = len(qm7m["trajectory"])
-    sf = BatchSymmetryFunctionTransformer(rc=Defaults.rc,
-                                          max_occurs=qm7m["max_occurs"],
-                                          nij_max=qm7m["nij_max"],
-                                          nijk_max=0,
-                                          angular=False)
+    sf = BatchUniversalTransformer(rcut=Defaults.rc,
+                                   max_occurs=qm7m["max_occurs"],
+                                   nij_max=qm7m["nij_max"],
+                                   nijk_max=0,
+                                   angular=False)
     max_n_atoms = sum(qm7m["max_occurs"].values()) + 1
     g2 = []
     positions = np.zeros((batch_size, max_n_atoms, 3))
     for i, atoms in enumerate(qm7m["trajectory"]):
-        positions[i] = sf.get_vap_transformer(atoms).map_positions(
-            atoms.positions)
-        g2.append(sf.get_g2_indexed_slices(atoms))
+        vap = sf.get_vap_transformer(atoms)
+        positions[i] = vap.map_positions(atoms.positions)
+        g2.append(sf.get_indexed_slices(atoms, vap)[0])
 
     return dict(positions=positions, g2=g2)
 
@@ -105,8 +105,8 @@ class Qm7mTest(DatasetTest):
                 rc = Defaults.rc
                 nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-                clf = BatchSymmetryFunctionTransformer(
-                    rc=rc,
+                clf = BatchUniversalTransformer(
+                    rcut=rc,
                     max_occurs=database.max_occurs,
                     nij_max=nij_max,
                     nijk_max=0,
@@ -164,8 +164,8 @@ class EthanolTest(DatasetTest):
                 rc = Defaults.rc
                 nijk_max = database.get_nijk_max(rc, allow_calculation=True)
                 nij_max = database.get_nij_max(rc)
-                clf = BatchSymmetryFunctionTransformer(
-                    rc=rc, max_occurs=database.max_occurs, nij_max=nij_max,
+                clf = BatchUniversalTransformer(
+                    rcut=rc, max_occurs=database.max_occurs, nij_max=nij_max,
                     nijk_max=nijk_max, angular=True
                 )
 
@@ -222,8 +222,8 @@ class NickelTest(DatasetTest):
                 rc = Defaults.rc
                 nij_max = database.get_nij_max(rc, allow_calculation=True)
 
-                clf = BatchSymmetryFunctionTransformer(
-                    rc=rc, max_occurs=database.max_occurs, nij_max=nij_max,
+                clf = BatchUniversalTransformer(
+                    rcut=rc, max_occurs=database.max_occurs, nij_max=nij_max,
                     nijk_max=0, angular=False
                 )
 

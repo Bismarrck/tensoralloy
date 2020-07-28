@@ -72,7 +72,7 @@ class CoreDatabase(SQLite3Database):
             False).
         add_additional_information: bool
             Put key-value pairs and data into Atoms.info dictionary.
-        kwargs : dict
+        kwargs
             Specific key-value pairs.
 
         """

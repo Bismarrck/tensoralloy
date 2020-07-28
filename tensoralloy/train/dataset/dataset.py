@@ -17,7 +17,7 @@ from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.transformer.base import BatchDescriptorTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.utils import Defaults, check_path
 from tensoralloy.train.dataset.utils import should_be_serial
 from tensoralloy.train.dataset.utils import brange
@@ -40,7 +40,7 @@ class Dataset:
     def __init__(self,
                  database: Union[CoreDatabase, str],
                  name: str,
-                 transformer: BatchDescriptorTransformer,
+                 transformer: BatchUniversalTransformer,
                  serial=False):
         """
         Initialization method.
@@ -118,9 +118,9 @@ class Dataset:
         return self._database.max_occurs
 
     @property
-    def transformer(self) -> BatchDescriptorTransformer:
+    def transformer(self) -> BatchUniversalTransformer:
         """
-        Return the assigned batch version of an atomic descriptor transformer.
+        Return the attached universal transformer.
         """
         return self._transformer
 
