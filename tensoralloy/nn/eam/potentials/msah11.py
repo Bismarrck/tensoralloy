@@ -20,6 +20,11 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+def _check_dtype():
+    if get_float_dtype() == tf.float32:
+        warnings.warn("It's not recommended to use float32 for MSAH11.")
+
+
 class AlFeMsah11(EamFSPotential):
     """
     The Al-Fe proposed by Mendelev et al. at 2011.
@@ -35,9 +40,6 @@ class AlFeMsah11(EamFSPotential):
         Initialization method.
         """
         super(AlFeMsah11, self).__init__()
-
-        if get_float_dtype() == tf.float32:
-            warnings.warn("It's not recommended to use float32 for MSAH11.")
 
     @property
     def defaults(self):
@@ -172,6 +174,7 @@ class AlFeMsah11(EamFSPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
+        _check_dtype()
 
         with tf.name_scope("Mash11/Phi") as scope:
             r = tf.convert_to_tensor(r, name='r')
@@ -306,6 +309,8 @@ class AlFeMsah11(EamFSPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
+        _check_dtype()
+
         with tf.name_scope("Mash11/Rho") as scope:
 
             r = tf.convert_to_tensor(r, name='r')
@@ -381,6 +386,8 @@ class AlFeMsah11(EamFSPotential):
             A 2D tensor of shape `[batch_size, max_n_elements]`.
 
         """
+        _check_dtype()
+
         with tf.name_scope("Mash11/Embed") as scope:
 
             rho = tf.convert_to_tensor(rho, name='r')

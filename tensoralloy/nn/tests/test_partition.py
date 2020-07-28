@@ -43,12 +43,14 @@ class AlCuFakeData:
                     self.batch_size,
                     self.max_n_terms,
                     self.max_n_al,
-                    self.nnl)
+                    self.nnl,
+                    1)
         shape_cu = (4,
                     self.batch_size,
                     self.max_n_terms,
                     self.max_n_cu,
-                    self.nnl)
+                    self.nnl,
+                    1)
 
         self.g_al = np.random.randn(*shape_al)
         self.g_cu = np.random.randn(*shape_cu)

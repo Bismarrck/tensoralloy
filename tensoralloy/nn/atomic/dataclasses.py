@@ -28,7 +28,7 @@ class FiniteTemperatureOptions:
     """
     Options for modeling finite-temperature systems.
     """
-    algorithm: str = "full"
+    algorithm: str = "off"
     activation: str = "softplus"
     layers: List[int] = (128, 128)
     biased_eentropy: bool = True

@@ -471,7 +471,7 @@ class Tersoff(BasicNN):
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
         atomic_energy = tf.multiply(atomic_energy, mask, name='atomic')
         energy = tf.reduce_sum(
-            atomic_energy, axis=axis, keepdims=False, name=name)
+            atomic_energy, axis=axis, keepdims=False, name='energy')
         enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)

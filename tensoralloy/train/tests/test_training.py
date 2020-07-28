@@ -102,7 +102,8 @@ class EamSgdTrainingTest(unittest.TestCase):
         if exists(self.tfrecords_dir):
             shutil.rmtree(self.tfrecords_dir, ignore_errors=True)
 
-    def test(self):
+    @staticmethod
+    def test():
         """
         Test initializing an EAM training experiment.
         """
@@ -181,7 +182,7 @@ def teardown_warm_start():
     if exists(second_dir):
         shutil.rmtree(second_dir)
 
-    files = list(glob.glob(join(top_dir, "*.behler.tfrecords")))
+    files = list(glob.glob(join(top_dir, "*.tfrecords")))
     for afile in files:
         os.remove(afile)
 
