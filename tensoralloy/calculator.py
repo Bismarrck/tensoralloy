@@ -129,16 +129,6 @@ class TensorAlloyCalculator(Calculator):
         else:
             raise ValueError(f"Unsupported transformer: {cls}")
 
-    def _get_y_atomic_tensor_name(self):
-        """
-        Decode the name of the atomic energy tensor.
-        """
-        try:
-            op = self._graph.get_tensor_by_name('Metadata/y_atomic:0')
-        except Exception:
-            return None
-        return self._sess.run(op).decode('utf-8')
-
     def _get_ops(self):
         """
         Return a dict of output Ops.
@@ -165,10 +155,14 @@ class TensorAlloyCalculator(Calculator):
             else:
                 ops[prop] = tensor
         self._predict_properties = list(ops.keys())
-        if ops['energy'].dtype == tf.float32:
-            fp_precision = 'medium'
+        for name, tensor in ops.items():
+            if tensor.dtype == tf.float32:
+                fp_precision = 'medium'
+            else:
+                fp_precision = 'high'
+            break
         else:
-            fp_precision = 'high'
+            raise Exception("Validated Ops cannot be found")
         return ops, fp_precision
 
     def get_magnetic_moment(self, atoms=None):
