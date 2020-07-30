@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import
 import nose
 
 from os.path import join
-from nose.tools import assert_equal, assert_in
+from nose.tools import assert_equal, assert_in, assert_dict_equal
 
 from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.nn.constraint.data import read_external_crystal
@@ -27,6 +27,7 @@ def test_read_external_crystal():
 
     assert_equal(builtin.name, crystal.name)
     assert_equal(builtin.phase, crystal.phase)
+    assert_dict_equal(crystal.bulk_modulus, {})
     assert_equal(7, len(crystal.elastic_constants))
 
     for elastic_constant in crystal.elastic_constants:
