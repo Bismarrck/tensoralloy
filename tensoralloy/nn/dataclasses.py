@@ -169,6 +169,7 @@ class RoseLossOptions(_LossOptions):
     delta: float = 0.01
     crystals: List[str] = None
     beta: List[float] = None
+    use_free_energy: bool = False
 
 
 @add_slots

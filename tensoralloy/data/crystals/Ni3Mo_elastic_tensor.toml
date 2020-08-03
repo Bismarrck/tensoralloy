@@ -2,7 +2,8 @@ name = "Ni3Mo"
 file = "./Ni3Mo_mp-11506_conventional_standard.cif"
 format = "cif"
 phase = 'cubic'
-bulk_modulus = {}
+bulk_modulus = 0
+temperature = 0
 
 c11 = 385
 c12 = 166

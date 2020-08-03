@@ -9,13 +9,15 @@ import toml
 
 from dataclasses import dataclass
 from os.path import join, realpath, dirname
-from typing import Union, List, Tuple, Dict
+from typing import Union, List, Tuple
 from ase import Atoms
 from ase.build import bulk
 from ase.io import read
 
 from tensoralloy.nn.constraint.voigt import voigt_to_ijkl
 from tensoralloy.test_utils import data_dir
+from tensoralloy import atoms_utils
+
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -61,34 +63,32 @@ class Crystal:
     name: str
     phase: str
     atoms: Atoms
-    bulk_modulus: Dict[float, float]
+    bulk_modulus: float
     elastic_constants: List[ElasticConstant]
+    temperature: float = 0.0
 
     def __post_init__(self):
-        _dict = {}
-        for t, v in self.bulk_modulus.items():
-            _dict[np.round(t, 8)] = v
-        self.__dict__['bulk_modulus'] = _dict
+        atoms_utils.set_electron_temperature(self.atoms, self.temperature)
 
 
 built_in_crystals = {
     "Be": Crystal(name='Be',
                   phase='hcp',
-                  bulk_modulus={0: 120},
+                  bulk_modulus=120,
                   atoms=bulk('Be'),
                   elastic_constants=[ElasticConstant((0, 0, 0, 0), 322),
                                      ElasticConstant((0, 2, 0, 2), 378),
                                      ElasticConstant((1, 2, 1, 2), 162)]),
     "Al": Crystal(name="Al",
                   phase="fcc",
-                  bulk_modulus={0: 76},
+                  bulk_modulus=76,
                   atoms=bulk('Al', cubic=True, crystalstructure='fcc'),
                   elastic_constants=[ElasticConstant((0, 0, 0, 0), 104),
                                      ElasticConstant((0, 0, 1, 1), 73),
                                      ElasticConstant((1, 2, 1, 2), 32)]),
     "Al/bcc": Crystal(name='Al',
                       phase='bcc',
-                      bulk_modulus={},
+                      bulk_modulus=0,
                       atoms=read(join(data_dir(),
                                       'crystals',
                                       f'Al_bcc_{_identifier}.cif')),
@@ -97,21 +97,21 @@ built_in_crystals = {
                                          ElasticConstant((1, 2, 1, 2), 42)]),
     "Ni": Crystal(name="Ni",
                   phase="fcc",
-                  bulk_modulus={0: 188},
+                  bulk_modulus=188,
                   atoms=bulk("Ni", cubic=True, crystalstructure='fcc'),
                   elastic_constants=[ElasticConstant((0, 0, 0, 0), 276),
                                      ElasticConstant((0, 0, 1, 1), 159),
                                      ElasticConstant((1, 2, 1, 2), 132)]),
     "Mo": Crystal(name="Mo",
                   phase="bcc",
-                  bulk_modulus={0: 259},
+                  bulk_modulus=259,
                   atoms=bulk("Mo", cubic=True, crystalstructure='bcc'),
                   elastic_constants=[ElasticConstant((0, 0, 0, 0), 472),
                                      ElasticConstant((0, 0, 1, 1), 158),
                                      ElasticConstant((1, 2, 1, 2), 106)]),
     "Mo/dft": Crystal(name="Mo/dft",
                       phase="bcc",
-                      bulk_modulus={0: 259},
+                      bulk_modulus=259,
                       atoms=bulk("Mo", cubic=True, a=3.168,
                                  crystalstructure='bcc'),
                       elastic_constants=[ElasticConstant((0, 0, 0, 0), 472),
@@ -119,7 +119,7 @@ built_in_crystals = {
                                          ElasticConstant((1, 2, 1, 2), 106)]),
     "Ni4Mo": Crystal(name="Ni4Mo",
                      phase="cubic",
-                     bulk_modulus={},
+                     bulk_modulus=0,
                      atoms=read(join(data_dir(),
                                      'crystals',
                                      f'Ni4Mo_mp-11507_{_identifier}.cif')),
@@ -133,7 +133,7 @@ built_in_crystals = {
                                         ElasticConstant((0, 1, 0, 1), 130)]),
     "Ni3Mo": Crystal(name="Ni3Mo",
                      phase="cubic",
-                     bulk_modulus={},
+                     bulk_modulus=0,
                      atoms=read(join(data_dir(),
                                      'crystals',
                                      f'Ni3Mo_mp-11506_{_identifier}.cif')),
@@ -161,15 +161,7 @@ def read_external_crystal(toml_file: str) -> Crystal:
         real_path = realpath(join(dirname(toml_file),
                                   key_value_pairs.pop('file')))
         bulk_modulus = key_value_pairs.pop('bulk_modulus')
-        if isinstance(bulk_modulus, (int, float)):
-            bulk_modulus = {0: bulk_modulus}
-        elif bulk_modulus is None:
-            bulk_modulus = {}
-        elif isinstance(bulk_modulus, dict):
-            _dict = {float(key): value for key, value in bulk_modulus.items()}
-            bulk_modulus = _dict
-        else:
-            raise ValueError(f"Unknown bulk modulus: {bulk_modulus}")
+        temperature = key_value_pairs.pop('temperature', 0)
 
         atoms = read(real_path,
                      format=key_value_pairs.pop('format'))
@@ -196,6 +188,7 @@ def read_external_crystal(toml_file: str) -> Crystal:
         return Crystal(name=name,
                        phase=phase,
                        bulk_modulus=bulk_modulus,
+                       temperature=temperature,
                        atoms=atoms,
                        elastic_constants=constants)
 

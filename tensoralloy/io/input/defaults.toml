@@ -40,6 +40,7 @@ crystals = []
 beta = []
 dx = 0.10
 delta = 0.01
+use_free_energy = false
 
 [nn.loss.ediff]
 references = []

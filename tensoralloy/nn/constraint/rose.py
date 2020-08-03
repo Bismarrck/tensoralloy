@@ -9,7 +9,7 @@ import numpy as np
 
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
-from ase.units import GPa
+from ase.units import GPa, kB, eV
 from typing import List
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
@@ -20,6 +20,7 @@ from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.utils import GraphKeys
+from tensoralloy import atoms_utils
 from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
@@ -120,6 +121,11 @@ def get_rose_constraint_loss(base_nn,
 
         losses = []
 
+        if options.use_free_energy:
+            prop = "free_energy"
+        else:
+            prop = "energy"
+
         for idx, crystal_or_name_or_file in enumerate(options.crystals):
             crystal = get_crystal(crystal_or_name_or_file)
             if crystal.bulk_modulus == 0:
@@ -131,7 +137,12 @@ def get_rose_constraint_loss(base_nn,
             three = tf.convert_to_tensor(3.0, dtype=dtype, name='three')
             nine = tf.convert_to_tensor(9.0, dtype=dtype, name='nine')
 
-            with tf.name_scope(f"{crystal.name}/{crystal.phase}"):
+            scope_name = f"{crystal.name}/{crystal.phase}"
+            if crystal.temperature > 0:
+                kelvin = np.round(crystal.temperature * eV / kB, 0)
+                scope_name = f"{scope_name}/{kelvin:.0f}K"
+
+            with tf.name_scope(scope_name):
 
                 nn = base_nn.__class__(**configs)
 
@@ -152,7 +163,7 @@ def get_rose_constraint_loss(base_nn,
                         features=features,
                         mode=tf_estimator.ModeKeys.PREDICT,
                         verbose=verbose)
-                    e0 = tf.identity(output["energy"], name='E0')
+                    e0 = tf.identity(output[prop], name='E0')
                     v0 = tf.identity(features["volume"], name='V0')
 
                 dx = options.dx
@@ -177,6 +188,8 @@ def get_rose_constraint_loss(base_nn,
 
                     for scale in eqx:
                         atoms = crystal.atoms.copy()
+                        atoms_utils.set_electron_temperature(
+                            atoms, crystal.temperature)
                         atoms.set_cell(crystal.atoms.cell * (1.0 + scale),
                                        scale_atoms=True)
                         atoms.calc = SinglePointCalculator(
@@ -214,7 +227,7 @@ def get_rose_constraint_loss(base_nn,
                         verbose=verbose)
 
                     predictions = tf.identity(
-                        outputs["energy"], name='predictions')
+                        outputs[prop], name='predictions')
 
                     with tf.name_scope("Ei"):
                         c12 = tf.math.add(one, ax, name='c12')
