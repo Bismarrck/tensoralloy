@@ -247,6 +247,7 @@ class GenericRadialAtomicPotential(AtomicNN):
         """
         d = super(GenericRadialAtomicPotential, self).as_dict()
         d["moment_tensors"] = self._moment_tensors
+        d["cutoff_function"] = self._cutoff_function
         d.update(self._algorithm.as_dict())
         return d
 
