@@ -9,7 +9,7 @@ import numpy as np
 import argparse
 import re
 
-from os.path import exists, dirname, join
+from os.path import exists, dirname, join, basename
 
 from tensoralloy.cli.build import BuildProgram
 from tensoralloy.cli.cli import CLIProgram
@@ -48,16 +48,27 @@ class PrintEvaluationSummaryProgram(CLIProgram):
         subparser.add_argument(
             'logfile',
             type=str,
-            help="The logfile of an experiment."
+            help="The logfile of an experiment or a generated summary.csv"
         )
 
         super(PrintEvaluationSummaryProgram, self).config_subparser(subparser)
 
     @staticmethod
-    def print_evaluation_summary(logfile) -> pd.DataFrame:
+    def print_summary_csv(csvfile: str):
+        """
+        Print the existing `summary.csv`.
+        """
+        df = pd.read_csv(csvfile)
+        df.set_index("global_step", inplace=True)
+        print(df.to_string())
+        return df
+
+    def print_evaluation_summary(self, logfile: str) -> pd.DataFrame:
         """
         Summarize the evalutaion results of the logfile.
         """
+        if basename(logfile) == 'summary.csv':
+            return self.print_summary_csv(logfile)
 
         global_step_patt = re.compile(r".*tensorflow\s+INFO\s+Saving\sdict"
                                       r"\sfor\sglobal\sstep\s(\d+):(.*)")
