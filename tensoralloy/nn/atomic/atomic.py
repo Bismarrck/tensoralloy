@@ -269,6 +269,59 @@ class AtomicNN(BasicNN):
                     log_tensor(eentropy)
             return eentropy
 
+    def _get_free_electron_entropy(self,
+                                   h: tf.Tensor,
+                                   t: tf.Tensor,
+                                   element: str,
+                                   collections: List[str],
+                                   verbose=True):
+        """
+        Model electron entropy S with the free electron model.
+
+        Parameters
+        ----------
+        h : tf.Tensor
+            Input features.
+        t : tf.Tensor
+            The electron temperature tensor.
+        element : str
+            The target element.
+        collections : List[str]
+            A list of str as the collections where the variables should be
+            added.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        """
+        with tf.variable_scope("S"):
+            t2 = tf.square(t, name='T2')
+            a = tf.constant(-0.5718444, dtype=h.dtype, name='a')
+            b = tf.constant(0.83744317, dtype=h.dtype, name='b')
+            c = tf.constant(-0.2110962, dtype=h.dtype, name='c')
+            d = tf.constant(1.45, dtype=h.dtype, name='d')
+            dt = tf.multiply(d, t, name='dt')
+            one = tf.constant(1.0, dtype=h.dtype, name='one')
+            ft = tf.square(one - dt, name='ft')
+            eentropy = tf.add(a * t2 * ft, b * t + c * ft, name='eentropy')
+            deviation = convolution1x1(
+                h,
+                activation_fn=get_activation_fn(self._activation),
+                hidden_sizes=self._hidden_sizes[element],
+                num_out=1,
+                l2_weight=1.0,
+                collections=collections,
+                output_bias=False,
+                output_bias_mean=0.0,
+                use_resnet_dt=self._use_resnet_dt,
+                kernel_initializer=self._kernel_initializer,
+                variable_scope=None,
+                verbose=verbose)
+            deviation = tf.squeeze(deviation, axis=2, name='deviation')
+            eentropy = tf.multiply(eentropy, deviation, name='atomic')
+            if verbose:
+                log_tensor(eentropy)
+            return eentropy
+
     def _get_internal_energy_outputs(self,
                                      h: tf.Tensor,
                                      t: tf.Tensor,
@@ -315,6 +368,56 @@ class AtomicNN(BasicNN):
                 energy = self._apply_temperature_bias(energy, t)
                 if verbose:
                     log_tensor(energy)
+            return energy
+
+    def _get_cold_energy_outputs(self,
+                                 h: tf.Tensor,
+                                 t: tf.Tensor,
+                                 element: str,
+                                 atomic_static_energy: float,
+                                 collections: List[str],
+                                 verbose=True):
+        """
+        Model static lattice energy E(sigma->0) using the given features 'h'.
+
+        Parameters
+        ----------
+        h : tf.Tensor
+            Input features.
+        t : tf.Tensor
+            The electron temperature tensor.
+        element : str
+            The target element.
+        atomic_static_energy : float
+            Atomic static energy, used as the bias unit of the output layer.
+        collections : List[str]
+            A list of str as the collections where the variables should be
+            added.
+        verbose : bool
+            If True, the prediction tensors will be logged.
+
+        """
+        with tf.variable_scope("C"):
+            energy = convolution1x1(
+                h,
+                activation_fn=get_activation_fn(self._activation),
+                hidden_sizes=self._hidden_sizes[element],
+                num_out=1,
+                l2_weight=1.0,
+                collections=collections,
+                output_bias=True,
+                output_bias_mean=atomic_static_energy,
+                use_resnet_dt=self._use_resnet_dt,
+                kernel_initializer=self._kernel_initializer,
+                variable_scope=None,
+                verbose=verbose)
+            a = tf.constant(0.0932767, name='a', dtype=energy.dtype)
+            b = tf.constant(-0.02985598, name='b', dtype=energy.dtype)
+            de = tf.nn.relu(a * t + b, name='de')
+            energy = tf.squeeze(energy, axis=2, name="atomic")
+            energy = tf.add(energy, de, name='atomic/de')
+            if verbose:
+                log_tensor(energy)
             return energy
 
     def _get_model_outputs(self,
@@ -414,15 +517,15 @@ class AtomicNN(BasicNN):
                             else:
                                 outputs['energy'].append(y)
                         else:
-                            x, t = self._add_electron_temperature(
-                                x=x,
-                                etemperature=features["etemperature"],
-                                element=element,
-                                mode=mode,
-                                max_occurs=atomic_descriptors.max_occurs)
-                            t = tf.squeeze(t, axis=2, name='T')
-                            if verbose:
-                                log_tensor(x)
+                            # x, t = self._add_electron_temperature(
+                            #     x=x,
+                            #     etemperature=features["etemperature"],
+                            #     element=element,
+                            #     mode=mode,
+                            #     max_occurs=atomic_descriptors.max_occurs)
+                            # t = tf.squeeze(t, axis=2, name='T')
+                            # if verbose:
+                            #     log_tensor(x)
 
                             etemp_fn = get_activation_fn(
                                 self._finite_temperature.activation)
@@ -440,21 +543,31 @@ class AtomicNN(BasicNN):
                                 use_resnet_dt=self._use_resnet_dt,
                                 variable_scope="H",
                                 verbose=verbose)
-                            s = self._get_eentropy_outputs(
-                                h=h,
+                            ht, t = self._add_electron_temperature(
+                                x=h,
+                                etemperature=features["etemperature"],
+                                element=element,
+                                mode=mode,
+                                max_occurs=atomic_descriptors.max_occurs)
+                            t = tf.squeeze(t, axis=2, name='T')
+                            s = self._get_free_electron_entropy(
+                                h=ht,
                                 t=t,
                                 element=element,
                                 collections=collections,
                                 verbose=verbose)
-                            u = self._get_internal_energy_outputs(
+                            sta = self._get_cold_energy_outputs(
                                 h=h,
                                 t=t,
                                 element=element,
                                 atomic_static_energy=bias_mean,
                                 collections=collections,
                                 verbose=verbose)
+                            half = tf.constant(0.5, dtype=h.dtype, name='half')
                             ts = tf.multiply(t, s, name='TS')
-                            y = tf.subtract(u, ts, name="F")
+                            delta = tf.multiply(half, ts, name='delta')
+                            y = tf.subtract(sta, delta, name='F')
+                            u = tf.add(sta, delta, name='U')
                             outputs['energy'].append(u)
                             outputs['eentropy'].append(s)
                             outputs['free_energy'].append(y)
