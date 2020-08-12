@@ -134,26 +134,10 @@ class TensorAlloyCalculator(Calculator):
         Return a dict of output Ops.
         """
         graph = self._graph
-        props_and_names = {
-            'energy': 'Output/Energy/energy:0',
-            'enthalpy': 'Output/Energy/enthalpy:0',
-            'atomic': 'Output/Energy/atomic:0',
-            'free_energy': 'Output/Energy/free_energy:0',
-            'eentropy': 'Output/Energy/eentropy:0',
-            'pv': 'Output/Energy/PV/pv:0',
-            'forces': 'Output/Forces/forces:0',
-            'stress': 'Output/Stress/Voigt/stress:0',
-            'hessian': 'Output/Hessian/hessian:0',
-            'elastic': 'Output/Elastic/Cijkl/elastic:0'
-        }
-        ops = {}
-        for prop, name in props_and_names.items():
-            try:
-                tensor = graph.get_tensor_by_name(name)
-            except KeyError:
-                continue
-            else:
-                ops[prop] = tensor
+        ops = json.loads(
+            self._sess.run(self._graph.get_tensor_by_name("Metadata/ops:0")))
+        ops = {prop: graph.get_tensor_by_name(name)
+               for prop, name in ops.items() if name.endswith(":0")}
         self._predict_properties = list(ops.keys())
         for name, tensor in ops.items():
             if tensor.dtype == tf.float32:
