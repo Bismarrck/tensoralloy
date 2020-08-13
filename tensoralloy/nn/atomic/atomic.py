@@ -301,8 +301,9 @@ class AtomicNN(BasicNN):
             d = tf.constant(1.45, dtype=h.dtype, name='d')
             dt = tf.multiply(d, t, name='dt')
             one = tf.constant(1.0, dtype=h.dtype, name='one')
-            ft = tf.square(one - dt, name='ft')
-            eentropy = tf.add(a * t2 * ft, b * t + c * ft, name='eentropy')
+            ft = tf.square(tf.nn.relu(one - dt), name='ft')
+            eentropy = tf.add(a * t2 * ft, b * t + c * (one - ft),
+                              name='eentropy')
             deviation = convolution1x1(
                 h,
                 activation_fn=get_activation_fn(self._activation),
@@ -316,7 +317,8 @@ class AtomicNN(BasicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            deviation = tf.squeeze(deviation, axis=2, name='deviation')
+            deviation = tf.nn.softplus(
+                tf.squeeze(deviation, axis=2), name='deviation')
             eentropy = tf.multiply(eentropy, deviation, name='atomic')
             if verbose:
                 log_tensor(eentropy)
@@ -542,20 +544,15 @@ class AtomicNN(BasicNN):
                             use_resnet_dt=self._use_resnet_dt,
                             variable_scope="H",
                             verbose=verbose)
-                        ht, t = self._add_electron_temperature(
-                            x=h,
-                            etemperature=features["etemperature"],
-                            element=element,
-                            mode=mode,
-                            max_occurs=atomic_descriptors.max_occurs)
-                        t = tf.squeeze(t, axis=2, name='T')
+                        t = tf.reshape(
+                            features["etemperature"], (-1, 1), name='T')
                         s = self._get_free_electron_entropy(
-                            h=ht,
+                            h=h,
                             t=t,
                             element=element,
                             collections=collections,
                             verbose=verbose)
-                        sta = self._get_cold_energy_outputs(
+                        cold = self._get_cold_energy_outputs(
                             h=h,
                             t=t,
                             element=element,
@@ -565,8 +562,8 @@ class AtomicNN(BasicNN):
                         half = tf.constant(0.5, dtype=h.dtype, name='half')
                         ts = tf.multiply(t, s, name='TS')
                         delta = tf.multiply(half, ts, name='delta')
-                        y = tf.subtract(sta, delta, name='F')
-                        u = tf.add(sta, delta, name='U')
+                        y = tf.subtract(cold, delta, name='F')
+                        u = tf.add(cold, delta, name='U')
                         outputs['energy'].append(u)
                         outputs['eentropy'].append(s)
                         outputs['free_energy'].append(y)
