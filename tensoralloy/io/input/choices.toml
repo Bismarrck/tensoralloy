@@ -32,7 +32,7 @@ param_space_method = ["pair", "cross"]
 method = ["rmse", "logcosh"]
 
 [nn.loss.eentropy]
-method = ["rmse", "logcosh", "rrmse"]
+method = ["rmse", "logcosh", "rrmse", "ylogy"]
 
 [nn.loss.free_energy]
 method = ["rmse", "logcosh"]

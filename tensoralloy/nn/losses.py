@@ -32,11 +32,13 @@ class LossMethod(Enum):
     rmse : the standard RMSE loss
     rrmse : the relative RMSE loss, rrmse = mean(norm(x - y, -1) / norm(y, -1)).
     logcosh : the Log-Cosh loss.
+    ylogy : the log loss.
 
     """
     rmse = 0
     rrmse = 1
     logcosh = 2
+    ylogy = 3
 
 
 def _logcosh(x, dtype=None, name=None):
@@ -95,6 +97,27 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     dtype = get_float_dtype()
     z = tf.reduce_mean(_logcosh(diff, dtype), name='logcosh' + suffix)
     return z, mae
+
+
+def _get_ylogy_loss(labels: tf.Tensor, predictions: tf.Tensor,
+                    is_per_atom_loss=False):
+    """
+    Return the log loss:
+
+        L = 1/N * sum(yi * (log(yi) - log(yp))**2)
+
+    """
+    if is_per_atom_loss:
+        suffix = "/atom"
+    else:
+        suffix = ""
+    eps = tf.constant(1e-12, dtype=labels.dtype, name='epx')
+    logx = tf.log(tf.maximum(labels, eps), name='logx')
+    logy = tf.log(tf.maximum(predictions, eps), name='logy')
+    loss = tf.reduce_mean(tf.square(logx - logy) * labels,
+                          name='ylogy' + suffix)
+    mae = tf.reduce_mean(tf.abs(labels - predictions), name='mae' + suffix)
+    return loss, mae
 
 
 def _get_weighted_loss(loss_weight: tf.Tensor,
@@ -188,9 +211,12 @@ def get_energy_loss(labels,
         elif method == LossMethod.logcosh:
             raw_loss, mae = _get_logcosh_loss(x, y,
                                               is_per_atom_loss=per_atom_loss)
-        else:
+        elif method == LossMethod.rrmse:
             raw_loss = _get_relative_rmse_loss(x, y)
             mae = None
+        else:
+            raw_loss, mae = _get_ylogy_loss(x, y,
+                                            is_per_atom_loss=per_atom_loss)
         weight = _get_static_or_dyn_weight_tensor(
             options.weight, max_train_steps, dtype=raw_loss.dtype)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
