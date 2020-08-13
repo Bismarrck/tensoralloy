@@ -53,6 +53,9 @@ def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
     Return the relative RMSE as the loss of atomic forces.
     """
     with tf.name_scope("Relative"):
+        if labels.shape.ndims == 1:
+            labels = tf.reshape(labels, (-1, 1), name='x')
+            predictions = tf.reshape(predictions, (-1, 1), name='y')
         diff = tf.subtract(labels, predictions)
         upper = tf.linalg.norm(diff, axis=1, keepdims=False, name='upper')
         lower = tf.linalg.norm(labels, axis=1, keepdims=False, name='lower')
@@ -168,7 +171,6 @@ def get_energy_loss(labels,
     """
     method = LossMethod[options.method]
     per_atom_loss = options.per_atom_loss
-    assert method != LossMethod.rrmse
 
     with tf.name_scope(name_scope):
         assert labels.shape.ndims == 1
@@ -183,11 +185,14 @@ def get_energy_loss(labels,
 
         if method == LossMethod.rmse:
             raw_loss, mae = _get_rmse_loss(x, y, is_per_atom_loss=per_atom_loss)
-        else:
+        elif method == LossMethod.logcosh:
             raw_loss, mae = _get_logcosh_loss(x, y,
                                               is_per_atom_loss=per_atom_loss)
+        else:
+            raw_loss = _get_relative_rmse_loss(x, y)
+            mae = None
         weight = _get_static_or_dyn_weight_tensor(
-            options.weight, max_train_steps, dtype=mae.dtype)
+            options.weight, max_train_steps, dtype=raw_loss.dtype)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
