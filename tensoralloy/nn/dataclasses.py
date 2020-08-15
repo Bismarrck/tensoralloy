@@ -174,6 +174,15 @@ class RoseLossOptions(_LossOptions):
 
 @add_slots
 @dataclass
+class EEntropyConstraintOptions(_LossOptions):
+    """
+    Special options for the eentropy constraint loss.
+    """
+    crystals: List[str] = None
+
+
+@add_slots
+@dataclass
 class EnergyDifferenceLossOptions(_LossOptions):
     """
     Special options for the energy difference loss.
@@ -210,6 +219,7 @@ class LossParameters(_HyperParameters):
     elastic: ElasticLossOptions = ElasticLossOptions()
     rose: RoseLossOptions = RoseLossOptions()
     ediff: EnergyDifferenceLossOptions = EnergyDifferenceLossOptions()
+    eentropy_constraint: EEntropyConstraintOptions = EEntropyConstraintOptions()
 
     def __getitem__(self, item):
         return getattr(self, item)

@@ -28,6 +28,7 @@ from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
+from tensoralloy.nn.constraint import eentropy as eentropy_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.transformer.base import DescriptorTransformer
@@ -78,7 +79,8 @@ all_properties = (
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
     StructuralProperty(name='elastic'),
-    StructuralProperty(name='rose', exportable=False)
+    StructuralProperty(name='rose', exportable=False),
+    StructuralProperty(name='eentropy/c', exportable=False)
 )
 
 exportable_properties = [
@@ -180,12 +182,6 @@ class BasicNN:
         Return a list of str as the properties to predict.
         """
         return self._export_properties
-
-    def _get_atomic_energy_op_name(self) -> str:
-        """
-        Return the name of the atomic energy tensor.
-        """
-        return "Output/Energy/atomic"
 
     def _get_hidden_sizes(self, hidden_sizes):
         """
@@ -592,6 +588,15 @@ class BasicNN:
                         options=loss_parameters.rose,
                         verbose=verbose)
 
+            if 'eentropy/c' in self._minimize_properties:
+                if loss_parameters.eentropy_constraint.crystals is not None:
+                    loss = eentropy_ops.get_eentropy_constraint_loss(
+                        base_nn=self,
+                        options=loss_parameters.eentropy_constraint,
+                        verbose=verbose)
+                    if loss is not None:
+                        losses['eentropy/c'] = loss
+
             for tensor in losses.values():
                 tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
 
@@ -644,9 +649,9 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop in ('elastic', 'rose'):
+            if prop in ('elastic', 'rose', 'eentropy/c'):
                 continue
-            assert prop in labels
+            assert prop in labels, f"{prop} is missing"
 
     def build(self,
               features: dict,
@@ -944,8 +949,6 @@ class BasicNN:
             with tf.name_scope("Metadata/"):
                 timestamp_node = tf.constant(
                     str(datetime.today()), name='timestamp')
-                y_atomic_node = tf.constant(nn._get_atomic_energy_op_name(),
-                                            name="atomic")
                 fp_prec_node = tf.constant(
                     get_float_precision().name, name='precision')
                 tf_version_node = tf.constant(tf.__version__, name='tf_version')
@@ -985,7 +988,6 @@ class BasicNN:
             output_node_names = [
                 params_node.op.name,
                 timestamp_node.op.name,
-                y_atomic_node.op.name,
                 fp_prec_node.op.name,
                 tf_version_node.op.name,
                 ops_node.op.name,

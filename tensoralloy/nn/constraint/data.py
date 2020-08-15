@@ -13,6 +13,7 @@ from typing import Union, List, Tuple
 from ase import Atoms
 from ase.build import bulk
 from ase.io import read
+from ase.units import kB
 
 from tensoralloy.nn.constraint.voigt import voigt_to_ijkl
 from tensoralloy.test_utils import data_dir
@@ -66,6 +67,7 @@ class Crystal:
     bulk_modulus: float
     elastic_constants: List[ElasticConstant]
     temperature: float = 0.0
+    eentropy: float = 0.0
 
     def __post_init__(self):
         atoms_utils.set_electron_temperature(self.atoms, self.temperature)
@@ -160,8 +162,19 @@ def read_external_crystal(toml_file: str) -> Crystal:
         phase = key_value_pairs.pop('phase')
         real_path = realpath(join(dirname(toml_file),
                                   key_value_pairs.pop('file')))
-        bulk_modulus = key_value_pairs.pop('bulk_modulus')
-        temperature = key_value_pairs.pop('temperature', 0)
+        bulk_modulus = key_value_pairs.pop('bulk_modulus', 0)
+        eentropy = key_value_pairs.pop('eentropy', 0.0)
+
+        val = key_value_pairs.pop('temperature', 0)
+        if isinstance(val, str):
+            if val.endswith('eV'):
+                temperature = float(val[:-2].strip())
+            elif val.endswith('k') or val.endswith('K'):
+                temperature = float(val[:-1].strip()) * kB
+            else:
+                temperature = float(val)
+        else:
+            temperature = val
 
         atoms = read(real_path,
                      format=key_value_pairs.pop('format'))
@@ -185,11 +198,13 @@ def read_external_crystal(toml_file: str) -> Crystal:
 
             constants.append(ElasticConstant(ijkl, value=cijkl, weight=weight))
 
+        atoms_utils.set_electron_temperature(atoms, temperature)
         return Crystal(name=name,
                        phase=phase,
                        bulk_modulus=bulk_modulus,
                        temperature=temperature,
                        atoms=atoms,
+                       eentropy=eentropy,
                        elastic_constants=constants)
 
 
