@@ -100,15 +100,6 @@ class AtomicNN(BasicNN):
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
-    def _get_atomic_energy_op_name(self):
-        """
-        The Op for calculating atomic energies.
-        """
-        if self._finite_temperature.on:
-            return "Output/Energy/E/atomic"
-        else:
-            return "Output/Energy/U/atomic"
-
     def _get_atomic_descriptors(self,
                                 universal_descriptors,
                                 mode: tf_estimator.ModeKeys,
@@ -324,54 +315,6 @@ class AtomicNN(BasicNN):
                 log_tensor(eentropy)
             return eentropy
 
-    def _get_internal_energy_outputs(self,
-                                     h: tf.Tensor,
-                                     t: tf.Tensor,
-                                     element: str,
-                                     atomic_static_energy: float,
-                                     collections: List[str],
-                                     verbose=True):
-        """
-        Model internal energy U using the given features 'h'.
-
-        Parameters
-        ----------
-        h : tf.Tensor
-            Input features.
-        t : tf.Tensor
-            The electron temperature tensor.
-        element : str
-            The target element.
-        atomic_static_energy : float
-            Atomic static energy, used as the bias unit of the output layer.
-        collections : List[str]
-            A list of str as the collections where the variables should be
-            added.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        """
-        with tf.variable_scope("U"):
-            energy = convolution1x1(
-                h,
-                activation_fn=get_activation_fn(self._activation),
-                hidden_sizes=self._hidden_sizes[element],
-                num_out=1,
-                l2_weight=1.0,
-                collections=collections,
-                output_bias=True,
-                output_bias_mean=atomic_static_energy,
-                use_resnet_dt=self._use_resnet_dt,
-                kernel_initializer=self._kernel_initializer,
-                variable_scope=None,
-                verbose=verbose)
-            energy = tf.squeeze(energy, axis=2, name="atomic")
-            if self._finite_temperature.biased_internal_energy:
-                energy = self._apply_temperature_bias(energy, t)
-                if verbose:
-                    log_tensor(energy)
-            return energy
-
     def _get_cold_energy_outputs(self,
                                  h: tf.Tensor,
                                  t: tf.Tensor,
@@ -413,11 +356,7 @@ class AtomicNN(BasicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            a = tf.constant(0.0932767, name='a', dtype=energy.dtype)
-            b = tf.constant(-0.02985598, name='b', dtype=energy.dtype)
-            de = tf.nn.relu(a * t + b, name='de')
             energy = tf.squeeze(energy, axis=2, name="atomic")
-            energy = tf.add(energy, de, name='atomic/de')
             if verbose:
                 log_tensor(energy)
             return energy
@@ -518,22 +457,12 @@ class AtomicNN(BasicNN):
                         else:
                             outputs['energy'].append(y)
                     else:
-                        # x, t = self._add_electron_temperature(
-                        #     x=x,
-                        #     etemperature=features["etemperature"],
-                        #     element=element,
-                        #     mode=mode,
-                        #     max_occurs=atomic_descriptors.max_occurs)
-                        # t = tf.squeeze(t, axis=2, name='T')
-                        # if verbose:
-                        #     log_tensor(x)
-
-                        etemp_fn = get_activation_fn(
+                        inner_activation_fn = get_activation_fn(
                             self._finite_temperature.activation)
                         layers = self._finite_temperature.layers
                         h = convolution1x1(
                             x,
-                            activation_fn=etemp_fn,
+                            activation_fn=inner_activation_fn,
                             hidden_sizes=layers[:-1],
                             num_out=layers[-1],
                             l2_weight=1.0,
