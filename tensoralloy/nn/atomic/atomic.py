@@ -178,7 +178,7 @@ class AtomicNN(BasicNN):
                                   mode: tf_estimator.ModeKeys,
                                   max_occurs: Counter):
         """
-        Add electron temperature to the atomic descriptor tensor for element.
+        Add electron temperature to the atomic descriptor tensor `x`.
         """
         with tf.name_scope("Temperature"):
             if mode == tf_estimator.ModeKeys.PREDICT:
@@ -187,11 +187,8 @@ class AtomicNN(BasicNN):
             else:
                 d0, d1 = x.shape.as_list()[0: 2]
             etemp = tf.reshape(
-                etemperature, [1, d0], name='etemp/0')
-            etemp = tf.transpose(etemp, name='T')
-            etemp = tf.tile(etemp, [d1, 1], name='tiled')
-            etemp = tf.reshape(
-                etemp, [d0, d1, 1], name='etemp')
+                etemperature, [d0, 1, 1], name='etemp')
+            etemp = tf.tile(etemp, [1, d1, 1], name='etemp/tiled')
             x = tf.concat((x, etemp), axis=2, name='x')
         return x, etemp
 
@@ -214,51 +211,6 @@ class AtomicNN(BasicNN):
             aggregation=tf.VariableAggregation.MEAN)
         bias = tf.multiply(bias, t, name='b')
         return tf.add(bias, atomic, name=name)
-
-    def _get_eentropy_outputs(self,
-                              h: tf.Tensor,
-                              t: tf.Tensor,
-                              element: str,
-                              collections: List[str],
-                              verbose=True):
-        """
-        Model electron entropy S using the given features 'h'.
-
-        Parameters
-        ----------
-        h : tf.Tensor
-            Input features.
-        t : tf.Tensor
-            The electron temperature tensor.
-        element : str
-            The target element.
-        collections : List[str]
-            A list of str as the collections where the variables should be
-            added.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        """
-        with tf.variable_scope("S"):
-            eentropy = convolution1x1(
-                h,
-                activation_fn=get_activation_fn(self._activation),
-                hidden_sizes=self._hidden_sizes[element],
-                num_out=1,
-                l2_weight=1.0,
-                collections=collections,
-                output_bias=False,
-                output_bias_mean=0.0,
-                use_resnet_dt=self._use_resnet_dt,
-                kernel_initializer=self._kernel_initializer,
-                variable_scope=None,
-                verbose=verbose)
-            eentropy = tf.squeeze(eentropy, axis=2, name="atomic")
-            if self._finite_temperature.biased_eentropy:
-                eentropy = self._apply_temperature_bias(eentropy, t)
-                if verbose:
-                    log_tensor(eentropy)
-            return eentropy
 
     def _get_free_electron_entropy(self,
                                    h: tf.Tensor,
@@ -315,22 +267,20 @@ class AtomicNN(BasicNN):
                 log_tensor(eentropy)
             return eentropy
 
-    def _get_cold_energy_outputs(self,
-                                 h: tf.Tensor,
-                                 t: tf.Tensor,
-                                 element: str,
-                                 atomic_static_energy: float,
-                                 collections: List[str],
-                                 verbose=True):
+    def _get_internal_energy_outputs(self,
+                                     h: tf.Tensor,
+                                     element: str,
+                                     atomic_static_energy: float,
+                                     collections: List[str],
+                                     verbose=True):
         """
-        Model static lattice energy E(sigma->0) using the given features 'h'.
+        Model internal energy U using the temperature-dependent atomic
+        descriptor 'h'.
 
         Parameters
         ----------
         h : tf.Tensor
             Input features.
-        t : tf.Tensor
-            The electron temperature tensor.
         element : str
             The target element.
         atomic_static_energy : float
@@ -342,7 +292,7 @@ class AtomicNN(BasicNN):
             If True, the prediction tensors will be logged.
 
         """
-        with tf.variable_scope("C"):
+        with tf.variable_scope("U"):
             energy = convolution1x1(
                 h,
                 activation_fn=get_activation_fn(self._activation),
@@ -473,29 +423,31 @@ class AtomicNN(BasicNN):
                             use_resnet_dt=self._use_resnet_dt,
                             variable_scope="H",
                             verbose=verbose)
-                        t = tf.reshape(
-                            features["etemperature"], (-1, 1), name='T')
-                        s = self._get_free_electron_entropy(
+                        ht, t = self._add_electron_temperature(
+                            x=h,
+                            etemperature=features["etemperature"],
+                            element=element,
+                            mode=mode,
+                            max_occurs=atomic_descriptors.max_occurs)
+                        T = tf.squeeze(t, axis=2, name='T')
+                        S = self._get_free_electron_entropy(
                             h=h,
-                            t=t,
+                            t=T,
                             element=element,
                             collections=collections,
                             verbose=verbose)
-                        cold = self._get_cold_energy_outputs(
-                            h=h,
-                            t=t,
+                        U = self._get_internal_energy_outputs(
+                            h=ht,
                             element=element,
                             atomic_static_energy=bias_mean,
                             collections=collections,
                             verbose=verbose)
-                        half = tf.constant(0.5, dtype=h.dtype, name='half')
-                        ts = tf.multiply(t, s, name='TS')
-                        delta = tf.multiply(half, ts, name='delta')
-                        y = tf.subtract(cold, delta, name='F')
-                        u = tf.add(cold, delta, name='U')
-                        outputs['energy'].append(u)
-                        outputs['eentropy'].append(s)
-                        outputs['free_energy'].append(y)
+                        U = tf.identity(U, name='U')
+                        TS = tf.multiply(T, S, name='TS')
+                        E = tf.subtract(U, TS, name='F')
+                        outputs['energy'].append(U)
+                        outputs['eentropy'].append(S)
+                        outputs['free_energy'].append(E)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
