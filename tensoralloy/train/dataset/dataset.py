@@ -460,7 +460,7 @@ class Dataset:
             A `ModeKeys` selecting between the training and validation data.
         batch_size : int
             A `int` as the number of examples per batch.
-        num_epochs : int
+        num_epochs : Union[int, None]
             A `int` as the maximum number of epochs to run.
         shuffle : bool
             A `bool` indicating whether the batches shall be shuffled or not.

@@ -48,6 +48,7 @@ class ComputeMetricsProgram(CLIProgram):
 
         self._programs = [
             ComputeEvaluationPercentileProgram(),
+            ComputePTErrorProgram(),
             EquationOfStateProgram(),
             ComputeElasticTensorProgram(),
         ]
@@ -170,8 +171,7 @@ class ComputeElasticTensorProgram(CLIProgram):
             crystal.calc = calc
 
             if args.analytic and "elastic" in calc.implemented_properties:
-                tensor = calc.get_elastic_constant_tensor(
-                    crystal, auto_conventional_standard=True)
+                tensor = calc.get_elastic_constant_tensor(crystal)
                 lattyp, brav, sg_name, sg_nr = get_lattice_type(crystal)
             else:
                 systems = get_elementary_deformations(
@@ -191,6 +191,175 @@ class ComputeElasticTensorProgram(CLIProgram):
             print(f"SpaceGroup: {sg_name}({sg_nr})")
             print("The elastic constants tensor: ")
             print(tensor.voigt)
+
+        return func
+
+
+class ComputePTErrorProgram(CLIProgram):
+    """
+    Compute MAEs with respect to (P, T) using a checkpoint.
+    """
+
+    @property
+    def name(self):
+        """
+        The name of this CLI program.
+        """
+        return "pt"
+
+    @property
+    def help(self):
+        """
+        The help message.
+        """
+        return "Compute MAEs with respect to (P, T) using a checkpoint"
+
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'ckpt',
+            type=str,
+            help="The checkpoint file to use."
+        )
+        subparser.add_argument(
+            '--target-prop',
+            choices=['energy', 'free_energy', 'eentropy', 'forces'],
+            default='free_energy',
+            help="The target property"
+        )
+        subparser.add_argument(
+            '--tf-records-dir',
+            type=str,
+            default='..',
+            help="The directory where tfrecord files should be found."
+        )
+        subparser.add_argument(
+            '--no-ema',
+            action='store_true',
+            default=False,
+            help="If this flag is given, EMA variables will be disabled."
+        )
+        subparser.add_argument(
+            '--use-train-data',
+            default=False,
+            action='store_true',
+            help="Use training data instead of test data."
+        )
+
+        super(ComputePTErrorProgram, self).config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function.
+        """
+        def func(args: argparse.Namespace):
+            model_dir = dirname(args.ckpt)
+            candidates = list(glob.glob(join(model_dir, "*.toml")))
+            if len(candidates) > 1:
+                warnings.warn(f"More than one TOML file in {model_dir}. "
+                              f"Only {candidates[0]} will be used.")
+            filename = candidates[0]
+            config = InputReader(filename)
+            config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
+            config['dataset.tfrecords_dir'] = args.tf_records_dir
+
+            properties = ['total_pressure', 'stress', args.target_prop]
+            config['nn.minimize'] = properties
+            precision = config['precision']
+
+            with precision_scope(precision):
+                with tf.Graph().as_default():
+                    manager = TrainingManager(config, validate_tfrecords=True)
+                    if args.use_train_data:
+                        mode = tf_estimator.ModeKeys.TRAIN
+                        size = manager.dataset.train_size
+                        batch_size = manager.hparams.train.batch_size
+                    else:
+                        mode = tf_estimator.ModeKeys.EVAL
+                        size = manager.dataset.test_size
+                        batch_size = manager.hparams.train.batch_size
+                        batch_size = min(size, batch_size)
+                        if size % batch_size != 0:
+                            batch_size = 1
+                    n_used = size - divmod(size, batch_size)[1]
+                    input_fn = manager.dataset.input_fn(
+                        mode=mode,
+                        batch_size=batch_size,
+                        num_epochs=1,
+                        shuffle=False
+                    )
+                    features, labels = input_fn()
+                    predictions = manager.nn.build(features=features,
+                                                   mode=mode,
+                                                   verbose=True)
+                    if args.no_ema:
+                        saver = tf.train.Saver(tf.trainable_variables())
+                    else:
+                        ema = tf.train.ExponentialMovingAverage(
+                            Defaults.variable_moving_average_decay)
+                        saver = tf.train.Saver(ema.variables_to_restore())
+
+                    with tf.Session() as sess:
+                        tf.global_variables_initializer().run()
+                        saver.restore(sess, args.ckpt)
+
+                        true_vals = {prop: [] for prop in properties}
+                        pred_vals = {prop: [] for prop in properties}
+                        etemp_vals = []
+                        volume_vals = []
+                        n_atoms_vals = []
+
+                        for i in range(size // batch_size):
+                            (predictions_, labels_, n_atoms_,
+                             volume_, etemp_, mask_) = sess.run([
+                                predictions,
+                                labels,
+                                features["n_atoms"],
+                                features["volume"],
+                                features["etemperature"],
+                                features["atom_masks"]])
+                            mask_ = mask_[:, 1:].astype(bool)
+                            etemp_vals.extend(etemp_)
+                            volume_vals.extend(volume_)
+                            n_atoms_vals.extend(n_atoms_)
+
+                            for prop in properties:
+                                if prop in ('energy',
+                                            'free_energy',
+                                            'eentropy'):
+                                    true_vals[prop].extend(
+                                        labels_[prop] / n_atoms_)
+                                    pred_vals[prop].extend(
+                                        predictions_[prop] / n_atoms_)
+                                elif prop == 'forces':
+                                    f_true = labels_[prop][:, 1:, :]
+                                    f_pred = predictions_[prop]
+                                    for j in range(batch_size):
+                                        true_vals[prop].extend(
+                                            f_true[j, mask_[j], :].flatten())
+                                        pred_vals[prop].extend(
+                                            f_pred[j, mask_[j], :].flatten())
+                                elif prop == 'stress':
+                                    true_vals[prop].extend(labels_[prop] / GPa)
+                                    pred_vals[prop].extend(
+                                        predictions_[prop] / GPa)
+                                else:
+                                    true_vals[prop].extend(labels_[prop])
+                                    pred_vals[prop].extend(predictions_[prop])
+
+                target = 'free_energy'
+                pt = np.zeros((n_used, 5))
+                for i in range(n_used):
+                    p = np.round(true_vals['total_pressure'][i], 0)
+                    t = np.round(etemp_vals[i] / kB, 0)
+                    rho = np.round(volume_vals[i] / n_atoms_vals[i], 2)
+                    vtrue = true_vals[target][i]
+                    vpred = pred_vals[target][i]
+                    pt[i] = (p, t, rho, vtrue, vpred)
+                np.savez(f"pt_{target}.npz", pt=pt)
 
         return func
 
