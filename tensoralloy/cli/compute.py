@@ -266,7 +266,7 @@ class ComputePTErrorProgram(CLIProgram):
             config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
             config['dataset.tfrecords_dir'] = args.tf_records_dir
 
-            properties = ['total_pressure', 'stress', args.target_prop]
+            properties = ['stress', args.target_prop]
             config['nn.minimize'] = properties
             precision = config['precision']
 
@@ -306,8 +306,12 @@ class ComputePTErrorProgram(CLIProgram):
                         tf.global_variables_initializer().run()
                         saver.restore(sess, args.ckpt)
 
-                        true_vals = {prop: [] for prop in properties}
-                        pred_vals = {prop: [] for prop in properties}
+                        true_vals = {
+                            prop: []
+                            for prop in properties + ['total_pressure']}
+                        pred_vals = {
+                            prop: []
+                            for prop in properties + ['total_pressure']}
                         etemp_vals = []
                         volume_vals = []
                         n_atoms_vals = []
@@ -317,7 +321,7 @@ class ComputePTErrorProgram(CLIProgram):
                              volume_, etemp_, mask_) = sess.run([
                                 predictions,
                                 labels,
-                                features["n_atoms"],
+                                features["n_atoms_vap"],
                                 features["volume"],
                                 features["etemperature"],
                                 features["atom_masks"]])
@@ -346,20 +350,21 @@ class ComputePTErrorProgram(CLIProgram):
                                     true_vals[prop].extend(labels_[prop] / GPa)
                                     pred_vals[prop].extend(
                                         predictions_[prop] / GPa)
-                                else:
-                                    true_vals[prop].extend(labels_[prop])
-                                    pred_vals[prop].extend(predictions_[prop])
+                                    p = -labels_[prop][:, :3].mean(axis=1) / GPa
+                                    true_vals['total_pressure'].extend(p)
+                                    p = -predictions_[prop][:, :3].mean(
+                                        axis=1) / GPa
+                                    pred_vals['total_pressure'].extend(p)
 
-                target = 'free_energy'
                 pt = np.zeros((n_used, 5))
                 for i in range(n_used):
                     p = np.round(true_vals['total_pressure'][i], 0)
                     t = np.round(etemp_vals[i] / kB, 0)
                     rho = np.round(volume_vals[i] / n_atoms_vals[i], 2)
-                    vtrue = true_vals[target][i]
-                    vpred = pred_vals[target][i]
+                    vtrue = true_vals[args.target_prop][i]
+                    vpred = pred_vals[args.target_prop][i]
                     pt[i] = (p, t, rho, vtrue, vpred)
-                np.savez(f"pt_{target}.npz", pt=pt)
+                np.savez(f"pt_{mode}_{args.target_prop}.npz", pt=pt)
 
         return func
 
