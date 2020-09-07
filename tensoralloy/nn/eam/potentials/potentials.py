@@ -322,6 +322,8 @@ class EamEmpiricalPotential:
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 

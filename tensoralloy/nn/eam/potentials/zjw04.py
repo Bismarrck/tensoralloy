@@ -185,7 +185,7 @@ class Zjw04(EamAlloyPotential):
         return zjw04_defaults
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The pairwise potential function.
 
@@ -197,6 +197,8 @@ class Zjw04(EamAlloyPotential):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -209,13 +211,14 @@ class Zjw04(EamAlloyPotential):
         el_a, el_b = get_elements_from_kbody_term(kbody_term)
         if el_a == el_b:
             with tf.name_scope(f"{self._name}/Phi/{el_a}"):
-                r_eq = self._get_shared_variable('r_eq', r.dtype, el_a)
-                A = self._get_shared_variable('A', r.dtype, el_a)
-                B = self._get_shared_variable('B', r.dtype, el_a)
-                alpha = self._get_shared_variable('alpha', r.dtype, el_a)
-                beta = self._get_shared_variable('beta', r.dtype, el_a, )
-                kappa = self._get_shared_variable('kappa', r.dtype, el_a)
-                lamda = self._get_shared_variable('lamda', r.dtype, el_a)
+                dtype = r.dtype
+                r_eq = self._get_shared_variable('r_eq', dtype, el_a, fixed)
+                A = self._get_shared_variable('A', dtype, el_a, fixed)
+                B = self._get_shared_variable('B', dtype, el_a, fixed)
+                alpha = self._get_shared_variable('alpha', dtype, el_a, fixed)
+                beta = self._get_shared_variable('beta', dtype, el_a, fixed)
+                kappa = self._get_shared_variable('kappa', dtype, el_a, fixed)
+                lamda = self._get_shared_variable('lamda', dtype, el_a, fixed)
                 phi = tf.subtract(
                     zhou_exp(r, a=A, b=alpha, c=kappa, re=r_eq, name='A'),
                     zhou_exp(r, a=B, b=beta, c=lamda, re=r_eq, name='B'),
@@ -240,7 +243,7 @@ class Zjw04(EamAlloyPotential):
             return phi
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The electron density function rho(r).
 
@@ -252,6 +255,8 @@ class Zjw04(EamAlloyPotential):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -262,17 +267,17 @@ class Zjw04(EamAlloyPotential):
 
         """
         with tf.name_scope(f"{self._name}/Rho/{element}"):
-            r_eq = self._get_shared_variable('r_eq', r.dtype, element)
-            f_eq = self._get_shared_variable('f_eq', r.dtype, element)
-            beta = self._get_shared_variable('beta', r.dtype, element)
-            lamda = self._get_shared_variable('lamda', r.dtype, element)
+            r_eq = self._get_shared_variable('r_eq', r.dtype, element, fixed)
+            f_eq = self._get_shared_variable('f_eq', r.dtype, element, fixed)
+            beta = self._get_shared_variable('beta', r.dtype, element, fixed)
+            lamda = self._get_shared_variable('lamda', r.dtype, element, fixed)
             rho = zhou_exp(r, a=f_eq, b=beta, c=lamda, re=r_eq)
             if verbose:
                 log_tensor(rho)
             return rho
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
+              fixed=False, verbose=False):
         """
         The embedding energy function F(rho).
 
@@ -285,6 +290,8 @@ class Zjw04(EamAlloyPotential):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -297,18 +304,18 @@ class Zjw04(EamAlloyPotential):
         dtype = rho.dtype
 
         with tf.name_scope(f"{self._name}/Embed/{element}"):
-            Fn0 = self._get_shared_variable('Fn0', dtype, element)
-            Fn1 = self._get_shared_variable('Fn1', dtype, element)
-            Fn2 = self._get_shared_variable('Fn2', dtype, element)
-            Fn3 = self._get_shared_variable('Fn3', dtype, element)
-            F0 = self._get_shared_variable('F0', dtype, element)
-            F1 = self._get_shared_variable('F1', dtype, element)
-            F2 = self._get_shared_variable('F2', dtype, element)
-            F3 = self._get_shared_variable('F3', dtype, element)
-            eta = self._get_shared_variable('eta', dtype, element)
-            rho_e = self._get_shared_variable('rho_e', dtype, element)
-            rho_s = self._get_shared_variable('rho_s', dtype, element)
-            Fe = self._get_shared_variable('Fe', dtype, element)
+            Fn0 = self._get_shared_variable('Fn0', dtype, element, fixed)
+            Fn1 = self._get_shared_variable('Fn1', dtype, element, fixed)
+            Fn2 = self._get_shared_variable('Fn2', dtype, element, fixed)
+            Fn3 = self._get_shared_variable('Fn3', dtype, element, fixed)
+            F0 = self._get_shared_variable('F0', dtype, element, fixed)
+            F1 = self._get_shared_variable('F1', dtype, element, fixed)
+            F2 = self._get_shared_variable('F2', dtype, element, fixed)
+            F3 = self._get_shared_variable('F3', dtype, element, fixed)
+            eta = self._get_shared_variable('eta', dtype, element, fixed)
+            rho_e = self._get_shared_variable('rho_e', dtype, element, fixed)
+            rho_s = self._get_shared_variable('rho_s', dtype, element, fixed)
+            Fe = self._get_shared_variable('Fe', dtype, element, fixed)
             rho_n = tf.multiply(tf.constant(0.85, dtype=dtype, name='lb'),
                                 rho_e, name='rho_n')
             rho_0 = tf.multiply(tf.constant(1.15, dtype=dtype, name='ub'),
@@ -385,6 +392,7 @@ class Zjw04(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         Zjw04 does not support calculating dipole.
@@ -396,6 +404,7 @@ class Zjw04(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         Zjw04 does not support calculating dipole.
@@ -425,11 +434,11 @@ class Zjw04xc(Zjw04):
         The default parameters of Zjw04xc.
         """
         params = zjw04_defaults.copy()
-        params['Pu'] = zjw04_defaults['Zr'].copy()
+        params['Be'] = params['Mo'].copy()
         return params
 
     def embed(self, rho: tf.Tensor, element: str, variable_scope: str,
-              verbose=False):
+              fixed=False, verbose=False):
         """
         The embedding energy function F(rho).
 
@@ -442,6 +451,8 @@ class Zjw04xc(Zjw04):
             An element symbol.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -457,18 +468,18 @@ class Zjw04xc(Zjw04):
             one = tf.constant(1.0, dtype=dtype, name='one')
             two = tf.constant(2.0, dtype=dtype, name='two')
             three = tf.constant(3.0, dtype=dtype, name='three')
-            Fn0 = self._get_shared_variable('Fn0', dtype, element)
-            Fn1 = self._get_shared_variable('Fn1', dtype, element)
-            Fn2 = self._get_shared_variable('Fn2', dtype, element)
-            Fn3 = self._get_shared_variable('Fn3', dtype, element)
-            F0 = self._get_shared_variable('F0', dtype, element)
-            F1 = self._get_shared_variable('F1', dtype, element)
-            F2 = self._get_shared_variable('F2', dtype, element)
-            F3 = self._get_shared_variable('F3', dtype, element)
-            eta = self._get_shared_variable('eta', dtype, element)
-            rho_e = self._get_shared_variable('rho_e', dtype, element)
-            rho_s = self._get_shared_variable('rho_s', dtype, element)
-            Fe = self._get_shared_variable('Fe', dtype, element)
+            Fn0 = self._get_shared_variable('Fn0', dtype, element, fixed)
+            Fn1 = self._get_shared_variable('Fn1', dtype, element, fixed)
+            Fn2 = self._get_shared_variable('Fn2', dtype, element, fixed)
+            Fn3 = self._get_shared_variable('Fn3', dtype, element, fixed)
+            F0 = self._get_shared_variable('F0', dtype, element, fixed)
+            F1 = self._get_shared_variable('F1', dtype, element, fixed)
+            F2 = self._get_shared_variable('F2', dtype, element, fixed)
+            F3 = self._get_shared_variable('F3', dtype, element, fixed)
+            eta = self._get_shared_variable('eta', dtype, element, fixed)
+            rho_e = self._get_shared_variable('rho_e', dtype, element, fixed)
+            rho_s = self._get_shared_variable('rho_s', dtype, element, fixed)
+            Fe = self._get_shared_variable('Fe', dtype, element, fixed)
             rho_n = tf.multiply(tf.constant(0.85, dtype=dtype, name='lb'),
                                 rho_e, name='rho_n')
             rho_0 = tf.multiply(tf.constant(1.15, dtype=dtype, name='ub'),
@@ -629,7 +640,7 @@ class Zjw04xcp(Zjw04xc):
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The pairwise potential function.
 
@@ -641,6 +652,8 @@ class Zjw04xcp(Zjw04xc):
             The corresponding k-body term.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            If True, values of variables of this function will be fixed.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -656,17 +669,17 @@ class Zjw04xcp(Zjw04xc):
             r = tf.convert_to_tensor(r, name='r')
             dtype = r.dtype
             if aa == bb:
-                r_eq = self._get_shared_variable('r_eq', dtype, aa)
-                A = self._get_shared_variable('A', dtype, aa)
-                B = self._get_shared_variable('B', dtype, aa)
-                alpha = self._get_shared_variable('alpha', dtype, aa)
-                beta = self._get_shared_variable('beta', dtype, aa, )
-                kappa = self._get_shared_variable('kappa', dtype, aa)
-                lamda = self._get_shared_variable('lamda', dtype, aa)
+                r_eq = self._get_shared_variable('r_eq', dtype, aa, fixed)
+                A = self._get_shared_variable('A', dtype, aa, fixed)
+                B = self._get_shared_variable('B', dtype, aa, fixed)
+                alpha = self._get_shared_variable('alpha', dtype, aa, fixed)
+                beta = self._get_shared_variable('beta', dtype, aa, fixed)
+                kappa = self._get_shared_variable('kappa', dtype, aa, fixed)
+                lamda = self._get_shared_variable('lamda', dtype, aa, fixed)
             else:
                 assert isinstance(variable_scope, str)
                 variable_scope = f"{variable_scope}/{kbody_term}"
-                args = (kbody_term, variable_scope)
+                args = (kbody_term, variable_scope, fixed)
                 r_eq = self._get_variable('r_eq', dtype, *args)
                 A = self._get_variable('A', dtype, *args)
                 B = self._get_variable('B', dtype, *args)

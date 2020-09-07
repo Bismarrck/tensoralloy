@@ -96,11 +96,13 @@ class EamNN(BasicNN):
                  elements: List[str],
                  custom_potentials=None,
                  hidden_sizes=None,
+                 fixed_functions=None,
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces', 'hessian')):
         """
         Initialization method.
         """
+        self._fixed_functions = fixed_functions or []
         self._unique_kbody_terms = None
         self._kbody_terms = None
 
@@ -147,6 +149,7 @@ class EamNN(BasicNN):
                 "elements": self._elements,
                 "custom_potentials": self._potentials,
                 "hidden_sizes": self._hidden_sizes,
+                "fixed_functions": self._fixed_functions,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties}
 
@@ -229,6 +232,8 @@ class EamNN(BasicNN):
                 variable_scope=f"{variable_scope}/{element}",
                 verbose=verbose)
         else:
+            fixed = f"{element}.embed" in self._fixed_functions
+            kwargs["fixed"] = fixed
             return partial(self._empirical_functions[name].embed,
                            **kwargs)
 
@@ -247,16 +252,19 @@ class EamNN(BasicNN):
                 variable_scope=f"{variable_scope}/{element_or_kbody_term}",
                 verbose=verbose)
         else:
+            fixed = f"{element_or_kbody_term}.rho" in self._fixed_functions
             pot = self._empirical_functions[name]
             if isinstance(pot, EamAlloyPotential):
                 return partial(pot.rho,
                                element=element_or_kbody_term,
                                variable_scope=variable_scope,
+                               fixed=fixed,
                                verbose=verbose)
             elif isinstance(pot, EamFSPotential):
                 return partial(pot.rho,
                                kbody_term=element_or_kbody_term,
                                variable_scope=variable_scope,
+                               fixed=fixed,
                                verbose=verbose)
             else:
                 raise ValueError(
@@ -275,9 +283,11 @@ class EamNN(BasicNN):
                 variable_scope=f"{variable_scope}/{kbody_term}",
                 verbose=verbose)
         else:
+            fixed = f"{kbody_term}.phi" in self._fixed_functions
             return partial(self._empirical_functions[name].phi,
                            kbody_term=kbody_term,
                            variable_scope=variable_scope,
+                           fixed=fixed,
                            verbose=verbose)
 
     def _get_energy_ops(self, outputs: tf.Tensor, features: dict, verbose=True):

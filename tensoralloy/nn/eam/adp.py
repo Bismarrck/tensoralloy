@@ -161,7 +161,7 @@ class AdpNN(EamAlloyNN):
                 variable_scope=f"{variable_scope}/{kbody_term}",
                 verbose=verbose)
         else:
-            fixed = f"{kbody_term}.dipole" in self.fixed_functions
+            fixed = f"{kbody_term}.dipole" in self._fixed_functions
             return partial(self._empirical_functions[name].dipole,
                            kbody_term=kbody_term,
                            variable_scope=variable_scope,
@@ -183,7 +183,7 @@ class AdpNN(EamAlloyNN):
                 variable_scope=f"{variable_scope}/{kbody_term}",
                 verbose=verbose)
         else:
-            fixed = f"{kbody_term}.quadrupole" in self.fixed_functions
+            fixed = f"{kbody_term}.quadrupole" in self._fixed_functions
             return partial(self._empirical_functions[name].quadrupole,
                            kbody_term=kbody_term,
                            variable_scope=variable_scope,

@@ -79,7 +79,7 @@ class CubicSplinePotential(EamAlloyPotential):
         return val
 
     def rho(self, r: tf.Tensor, element: str, variable_scope: str,
-            verbose=False):
+            fixed=False, verbose=False):
         """
         The electron density function rho(r).
 
@@ -91,6 +91,8 @@ class CubicSplinePotential(EamAlloyPotential):
             The corresponding element.
         variable_scope : str
             The scope for variables of this potential function.
+        fixed : bool
+            This param is disabled for spline functions.
         verbose : bool
             A bool. If True, key tensors will be logged.
 
@@ -113,6 +115,7 @@ class CubicSplinePotential(EamAlloyPotential):
               rho: tf.Tensor,
               element: str,
               variable_scope: str,
+              fixed=False,
               verbose=False):
         """
         The embedding function.
@@ -130,6 +133,7 @@ class CubicSplinePotential(EamAlloyPotential):
             r: tf.Tensor,
             kbody_term: str,
             variable_scope: str,
+            fixed=False,
             verbose=False):
         """
         The pairwise interaction function.
@@ -147,6 +151,7 @@ class CubicSplinePotential(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         The dipole function.
@@ -164,6 +169,7 @@ class CubicSplinePotential(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         The quadrupole function.
