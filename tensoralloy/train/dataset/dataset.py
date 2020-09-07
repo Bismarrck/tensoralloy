@@ -185,7 +185,7 @@ class Dataset:
         if not exists(write_dir):
             os.makedirs(write_dir)
 
-        with tf.python_io.TFRecordWriter(filename) as writer:
+        with tf.io.TFRecordWriter(filename) as writer:
 
             num_examples = len(indices)
 

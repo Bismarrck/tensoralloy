@@ -23,7 +23,7 @@ class MishinH(EamAlloyPotential):
 
     References
     ----------
-    F. Apostol and Y. Mishin, PHYSICAL REVIEW B 82, 144115 2010
+    F. Apostol and Y. Mishin, PHYSICAL REVIEW B 82, 144115 (2010)
 
     """
 
@@ -73,6 +73,7 @@ class MishinH(EamAlloyPotential):
         params['PuPu'] = params['FeFe'].copy()
         params['MoMo'] = params['NiNi'].copy()
         params['MoNi'] = params['NiNi'].copy()
+        params['BeBe'] = params['MoMo'].copy()
         return params
 
     def phi(self, r: tf.Tensor, kbody_term: str, scope: str,
