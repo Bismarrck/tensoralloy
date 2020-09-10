@@ -79,7 +79,7 @@ built_in_crystals = {
                   bulk_modulus=120,
                   atoms=bulk('Be'),
                   elastic_constants=[ElasticConstant((0, 0, 0, 0), 322),
-                                     ElasticConstant((0, 2, 0, 2), 378),
+                                     ElasticConstant((2, 2, 2, 2), 378),
                                      ElasticConstant((1, 2, 1, 2), 162),
                                      ElasticConstant((0, 1, 0, 1), 151),
                                      ElasticConstant((0, 0, 1, 1), 21)]),
