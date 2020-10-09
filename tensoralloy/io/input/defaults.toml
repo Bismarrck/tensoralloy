@@ -38,8 +38,9 @@ method = "rmse"
 weight = 1.0
 crystals = []
 beta = []
-dx = 0.10
-delta = 0.01
+dx = 0.01
+xlo = 0.90
+xhi = 0.90
 use_free_energy = false
 
 [nn.loss.ediff]

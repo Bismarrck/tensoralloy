@@ -165,8 +165,9 @@ class RoseLossOptions(_LossOptions):
     """
     Special options for the Rose Equation of State loss.
     """
-    dx: float = 0.10
-    delta: float = 0.01
+    xlo: float = 0.90
+    xhi: float = 1.10
+    dx: float = 0.01
     crystals: List[str] = None
     beta: List[float] = None
     use_free_energy: bool = False

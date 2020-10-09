@@ -48,15 +48,16 @@ def test_rose_eos_constraint():
     v0 = atoms.get_volume()
     alpha = np.sqrt(np.abs(9.0 * v0 * bulk_modulus / e0))
     beta = 0.5e-2
-    dx = 0.10
-    delta = 0.01
+    dx = 0.01
+    xlo = 0.90
+    xhi = 1.10
 
     y_rose_list = []
     y_list = []
     vol_list = []
     ax_list = []
 
-    for ratio in np.linspace(1.0 - dx, 1.0 + dx, num=21, endpoint=True):
+    for ratio in np.linspace(xlo, xhi, num=21, endpoint=True):
         atomsi = atoms.copy()
         atomsi.set_cell(cell * ratio, scale_atoms=True)
 
@@ -116,7 +117,8 @@ def test_rose_eos_constraint():
                 crystals=[built_in_crystals['Mo']],
                 beta=[beta],
                 dx=dx,
-                delta=delta)
+                xlo=xlo,
+                xhi=xhi)
             get_rose_constraint_loss(base_nn=nn, options=options)
 
             zjw04_vars = [var for var in tf.global_variables()

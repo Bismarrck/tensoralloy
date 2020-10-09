@@ -167,9 +167,11 @@ def get_rose_constraint_loss(base_nn,
                     v0 = tf.identity(features["volume"], name='V0')
 
                 dx = options.dx
-                delta = options.delta
+                xlo = options.xlo
+                xhi = options.xhi
+                num = int((xhi - xlo) / dx) + 1
                 beta = options.beta[idx]
-                eqx = np.arange(-dx, dx + delta, delta)
+                eqx = np.linspace(xlo, xhi, num=num, endpoint=True) - 1.0
 
                 with tf.name_scope("Params"):
                     bulk_modulus = tf.convert_to_tensor(
