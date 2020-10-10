@@ -655,7 +655,7 @@ class EquationOfStateProgram(CLIProgram):
             default="birchmurnaghan",
             choices=['birchmurnaghan', 'birch', 'murnaghan', 'sj',
                      'pouriertarantola', 'vinet', 'p3', 'taylor',
-                     'antonschmidt'],
+                     'antonschmidt', 'rose'],
             help="The equation to use.",
         )
         subparser.add_argument(
@@ -669,6 +669,18 @@ class EquationOfStateProgram(CLIProgram):
             type=float,
             default=1.05,
             help="The upper bound to scale the cell."
+        )
+        subparser.add_argument(
+            "--dx",
+            type=float,
+            default=0.01,
+            help="The scaling step"
+        )
+        subparser.add_argument(
+            "--beta",
+            type=float,
+            default=0.005,
+            help="The parameter beta for Rose Universal EoS"
         )
         subparser.add_argument(
             '--fig',
@@ -697,8 +709,8 @@ class EquationOfStateProgram(CLIProgram):
         The main function.
         """
         def func(args: argparse.Namespace):
-            assert 0.80 <= args.xlo <= 0.99
-            assert 1.01 <= args.xhi <= 1.20
+            assert 0.70 <= args.xlo
+            assert args.xlo < args.xhi <= 1.25
             assert 0.00 <= args.etemp
 
             crystal = _get_atoms(args.crystal)
@@ -726,7 +738,7 @@ class EquationOfStateProgram(CLIProgram):
             volumes = []
             energies = []
             eentropies = []
-            num = int(np.round(args.xhi - args.xlo, 2) / 0.005) + 1
+            num = int(np.round(args.xhi - args.xlo, 2) / args.dx) + 1
             for x in np.linspace(args.xlo, args.xhi, num, True):
                 crystal.set_cell(cell * x, scale_atoms=True)
                 volumes.append(crystal.get_volume())
@@ -741,7 +753,8 @@ class EquationOfStateProgram(CLIProgram):
                 else:
                     eentropies.append(0.0) 
 
-            eos = EquationOfState(volumes, energies, eos=args.eos)
+            eos = EquationOfState(volumes, energies, eos=args.eos,
+                                  beta=args.beta)
             v0, e0, bulk_modulus, residual = eos.fit()
             eos.plot(figname, show=False)
 
