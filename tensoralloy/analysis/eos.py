@@ -11,7 +11,7 @@ import ase.eos
 from scipy.optimize import curve_fit
 from ase.eos import parabola, p3, birchmurnaghan, birch, murnaghan, antonschmidt
 from ase.eos import vinet, pouriertarantola
-from ase.units import GPa
+from ase.units import GPa, kJ
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -27,6 +27,25 @@ def rose(V, E0, B0, BP, V0, beta=0.005):
     return E0 * (1 + ax + beta * ax**3 * (2 * x + 3) / (x + 1)**2) * np.exp(-ax)
 
 
+def plot(eos_string, e0, v0, B, x, y, v, e, ax=None, pv=False):
+    if ax is None:
+        import matplotlib.pyplot as plt
+        ax = plt.gca()
+
+    ax.plot(x, y, ls='-', color='C3')  # By default red line
+    ax.plot(v, e, ls='', marker='o', mec='C0', mfc='C0')
+
+    ax.set_xlabel(u'Volume (Å$^3$)')
+    if pv:
+        ax.set_ylabel(u'Pressure (GPa)')
+        ax.set_title(u'%s: V: %.3f Å$^3$' % (eos_string, v0))
+    else:
+        ax.set_ylabel(u'Energy [eV]')
+        ax.set_title(u'%s: E: %.3f eV, V: %.3f Å$^3$, B: %.3f GPa' %
+                     (eos_string, e0, v0, B / kJ * 1.e24))
+    return ax
+
+
 class EquationOfState(ase.eos.EquationOfState):
     """
     A modified implementation of EquationOfState.
@@ -40,6 +59,26 @@ class EquationOfState(ase.eos.EquationOfState):
 
         self.func = None
         self.beta = beta
+
+    def plot(self, filename=None, show=False, ax=None, pv=False):
+        """Plot fitted energy curve.
+
+        Uses Matplotlib to plot the energy curve.  Use *show=True* to
+        show the figure and *filename='abc.png'* or
+        *filename='abc.eps'* to save the figure to a file."""
+
+        import matplotlib.pyplot as plt
+
+        plotdata = self.getplotdata()
+
+        ax = plot(*plotdata, ax=ax, pv=pv)
+
+        if show:
+            plt.show()
+        if filename is not None:
+            fig = ax.get_figure()
+            fig.savefig(filename)
+        return ax
 
     def fit(self, warn=False):
         """

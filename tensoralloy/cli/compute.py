@@ -14,7 +14,7 @@ import warnings
 
 from os.path import dirname, join, basename, exists
 from ase.build import bulk
-from ase.io import read
+from ase.io import read, write
 from ase.units import GPa, kB
 from tensorflow_estimator import estimator as tf_estimator
 
@@ -695,6 +695,11 @@ class EquationOfStateProgram(CLIProgram):
             help="The electron temperature in Kelvin."
         )
         subparser.add_argument(
+            '--pv',
+            action="store_true",
+            default=False,
+        )
+        subparser.add_argument(
             '--use-free-energy',
             action='store_true',
             default=False,
@@ -719,7 +724,7 @@ class EquationOfStateProgram(CLIProgram):
             crystal.calc = calc
             cell = crystal.cell.copy()
             formula = crystal.get_chemical_formula()
-            properties = ['energy']
+            properties = ['energy', 'stress']
             label = "E"
             if args.etemp > 0:
                 formula = f"{formula}_{args.etemp:.0f}K"
@@ -743,33 +748,44 @@ class EquationOfStateProgram(CLIProgram):
                 crystal.set_cell(cell * x, scale_atoms=True)
                 volumes.append(crystal.get_volume())
                 calc.calculate(crystal, properties=properties)
-                if args.use_free_energy:
-                    energies.append(calc.results['free_energy'])
-                    label = "F"
+                if args.pv:
+                    energies.append(-calc.results['stress'][:3].mean() / GPa)
                 else:
-                    energies.append(calc.results['energy']) 
+                    if args.use_free_energy:
+                        energies.append(calc.results['free_energy'])
+                        label = "F"
+                    else:
+                        energies.append(calc.results['energy'])
                 if args.etemp > 0:
                     eentropies.append(calc.results['eentropy'])
                 else:
-                    eentropies.append(0.0) 
+                    eentropies.append(0.0)
 
             eos = EquationOfState(volumes, energies, eos=args.eos,
                                   beta=args.beta)
             v0, e0, bulk_modulus, residual = eos.fit()
-            eos.plot(figname, show=False)
+            eos.plot(figname, show=False, pv=args.pv)
 
-            df = pd.DataFrame({label: energies, "V": volumes, "S": eentropies,
-                               "T(K)": np.ones_like(energies) * args.etemp})
-            df.to_csv(csvname)
+            if not args.pv:
+                df = pd.DataFrame({label: energies,
+                                   "V": volumes,
+                                   "S": eentropies,
+                                   "T(K)": np.ones_like(energies) * args.etemp})
+                df.to_csv(csvname)
 
-            print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
-                formula,
-                args.eos,
-                v0, e0, bulk_modulus))
-            print("Residual Norm = {:.3f} eV".format(residual))
+                print("{}/{}, V0 = {:.3f}, E0 = {:.3f} eV, B = {} GPa".format(
+                    formula,
+                    args.eos,
+                    v0, e0, bulk_modulus))
+                print("Residual Norm = {:.3f} eV".format(residual))
 
-            np.set_printoptions(precision=3, suppress=True)
-            print("New cell: ")
-            print((v0 / np.linalg.det(cell))**(1.0/3.0) * cell)
+                np.set_printoptions(precision=3, suppress=True)
+                new_cell = (v0 / np.linalg.det(cell))**(1.0/3.0) * cell
+                print("New cell: ")
+                print(new_cell)
+
+                eq = crystal.copy()
+                eq.set_cell(new_cell, True)
+                write(f"{formula}_Eq.extxyz", eq)
 
         return func
