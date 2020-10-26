@@ -54,7 +54,7 @@ class AlCuSplineAdp(EamAlloyPotential):
         self._name = "AlCuAdp"
         self._interval = interval
 
-    def rho(self, r: tf.Tensor, element: str, variable_scope: str,
+    def rho(self, r: tf.Tensor, element: str, variable_scope: str, fixed=False,
             verbose=False):
         """
         The electron density function.
@@ -75,6 +75,7 @@ class AlCuSplineAdp(EamAlloyPotential):
               rho: tf.Tensor,
               element: str,
               variable_scope: str,
+              fixed=False,
               verbose=False):
         """
         The embedding function.
@@ -95,6 +96,7 @@ class AlCuSplineAdp(EamAlloyPotential):
             r: tf.Tensor,
             kbody_term: str,
             variable_scope: str,
+            fixed=False,
             verbose=False):
         """
         The pairwise interaction function.
@@ -115,6 +117,7 @@ class AlCuSplineAdp(EamAlloyPotential):
                r: tf.Tensor,
                kbody_term: str,
                variable_scope: str,
+               fixed=False,
                verbose=False):
         """
         The dipole function.
@@ -135,6 +138,7 @@ class AlCuSplineAdp(EamAlloyPotential):
                    r: tf.Tensor,
                    kbody_term: str,
                    variable_scope: str,
+                   fixed=False,
                    verbose=False):
         """
         The quadrupole function.
