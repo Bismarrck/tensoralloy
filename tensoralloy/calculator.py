@@ -300,7 +300,7 @@ class TensorAlloyCalculator(Calculator):
         ----------
         atoms : `Atoms`
             An `ase.Atoms` object to calculate.
-        properties : Tuple[str]
+        properties : Tuple[str] or List[str]
             A list of str as the properties to calculate. Available options
             are: 'energy', 'atomic', '1body' and 'kbody'.
         system_changes: List[str]
