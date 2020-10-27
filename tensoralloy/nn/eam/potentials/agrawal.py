@@ -158,7 +158,7 @@ class AgrawalBe(EamAlloyPotential):
                fixed=False,
                verbose=False):
         """ The dipole function. """
-        raise NotImplemented()
+        raise NotImplementedError
 
     def quadrupole(self,
                    r: tf.Tensor,
@@ -167,4 +167,4 @@ class AgrawalBe(EamAlloyPotential):
                    fixed=False,
                    verbose=False):
         """ The quadrupole function. """
-        raise NotImplemented()
+        raise NotImplementedError
