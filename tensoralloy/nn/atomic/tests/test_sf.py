@@ -21,7 +21,8 @@ from typing import Union, List
 
 from tensoralloy.nn.cutoff import cosine_cutoff
 from tensoralloy.transformer.universal import UniversalTransformer
-from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.nn.atomic.sf import SymmetryFunction
+from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_equal, Pd3O2
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
@@ -614,13 +615,16 @@ def test_monoatomic_molecule():
     with tf.Graph().as_default():
         clf = UniversalTransformer(['B'], rcut=rc, acut=rc, angular=True,
                                    periodic=False)
-        nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=Defaults.omega,
-                                gamma=Defaults.gamma, zeta=Defaults.zeta, beta=Defaults.beta)
+        sf = SymmetryFunction(['B'], eta=Defaults.eta, omega=Defaults.omega,
+                              gamma=Defaults.gamma, zeta=Defaults.zeta,
+                              beta=Defaults.beta)
+        nn = AtomicNN(['B'], sf)
         nn.attach_transformer(clf)
-        op = nn.get_symmetry_function_descriptors(
-            clf.get_descriptors(
+        op = sf.calculate(
+            transformer=clf,
+            universal_descriptors=clf.get_descriptors(
                 clf.get_constant_features(atoms)),
-            mode=tf_estimator.ModeKeys.PREDICT)[0]
+            mode=tf_estimator.ModeKeys.PREDICT).descriptors
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             g_new = sess.run(op)
@@ -646,12 +650,14 @@ def test_monoatomic_molecule_with_omega():
         with tf.Graph().as_default():
             clf = UniversalTransformer(['B'], rcut=rc, angular=False,
                                        periodic=False)
-            nn = SymmetryFunctionNN(['B'], eta=Defaults.eta, omega=omega)
+            sf = SymmetryFunction(['B'], eta=Defaults.eta, omega=omega)
+            nn = AtomicNN(['B'], sf)
             nn.attach_transformer(clf)
-            op = nn.get_symmetry_function_descriptors(
-                clf.get_descriptors(
+            op = sf.calculate(
+                transformer=clf,
+                universal_descriptors=clf.get_descriptors(
                     clf.get_constant_features(atoms)),
-                mode=tf_estimator.ModeKeys.PREDICT)[0]
+                mode=tf_estimator.ModeKeys.PREDICT).descriptors
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 assert_array_equal(sess.run(op)['B'], z)
@@ -670,12 +676,14 @@ def test_single_structure():
             rc = 6.5
             clf = UniversalTransformer(elements, rcut=rc, angular=True,
                                        periodic=True)
-            nn = SymmetryFunctionNN(elements)
+            sf = SymmetryFunction(elements)
+            nn = AtomicNN(elements, sf)
             nn.attach_transformer(clf)
-            op = nn.get_symmetry_function_descriptors(
-                clf.get_descriptors(
+            op = sf.calculate(
+                transformer=clf,
+                universal_descriptors=clf.get_descriptors(
                     clf.get_constant_features(Pd3O2)),
-                mode=tf_estimator.ModeKeys.PREDICT)[0]
+                mode=tf_estimator.ModeKeys.PREDICT).descriptors
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 g_new = sess.run(op)

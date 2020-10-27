@@ -5,12 +5,15 @@ This module defines various atomic neural networks.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import json
 
-from typing import List, Dict
+from monty.json import MSONable, MontyDecoder
+from typing import List, Dict, Union
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.dataclasses import EnergyOps, LossParameters
 from tensoralloy.nn import losses as loss_ops
@@ -23,6 +26,38 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+class Descriptor(MSONable):
+    """
+    The base class for all atomistic descriptors.
+    """
+
+    def __init__(self, elements: List[str]):
+        """
+        Initialization method.
+
+        Parameters
+        ----------
+        elements : List[str]
+            A list of str as the ordered elements.
+        """
+        self._elements = elements
+
+    def calculate(self,
+                  transformer: UniversalTransformer,
+                  universal_descriptors,
+                  mode: tf_estimator.ModeKeys,
+                  verbose=False) -> AtomicDescriptors:
+        """
+        Calculate atomic descriptors with the unversal descriptors.
+        """
+        pass
+
+    @property
+    def name(self):
+        """ Return the name of this descriptor. """
+        raise NotImplementedError
+
+
 class AtomicNN(BasicNN):
     """
     This class represents a general atomic neural network.
@@ -33,6 +68,7 @@ class AtomicNN(BasicNN):
 
     def __init__(self,
                  elements: List[str],
+                 descriptor: Union[Descriptor, dict],
                  hidden_sizes=None,
                  activation=None,
                  kernel_initializer='he_normal',
@@ -43,7 +79,7 @@ class AtomicNN(BasicNN):
                  fixed_atomic_static_energy=False,
                  finite_temperature=FiniteTemperatureOptions(),
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'hessian')):
+                 export_properties=('energy', 'forces')):
         """
         Initialization method.
         """
@@ -60,6 +96,10 @@ class AtomicNN(BasicNN):
         self._atomic_static_energy = atomic_static_energy or {}
         self._use_atomic_static_energy = use_atomic_static_energy
         self._fixed_atomic_static_energy = fixed_atomic_static_energy
+
+        if isinstance(descriptor, dict):
+            descriptor = json.loads(json.dumps(descriptor, cls=MontyDecoder))
+        self._descriptor = descriptor
 
         if isinstance(finite_temperature, FiniteTemperatureOptions):
             self._finite_temperature = finite_temperature
@@ -82,6 +122,13 @@ class AtomicNN(BasicNN):
         """
         return self._finite_temperature
 
+    @property
+    def descriptor(self) -> Descriptor:
+        """
+        Return the attached atomistic descriptor for this potential.
+        """
+        return self._descriptor
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this `BasicNN`.
@@ -98,17 +145,8 @@ class AtomicNN(BasicNN):
                 'atomic_static_energy': self._atomic_static_energy,
                 'finite_temperature': self._finite_temperature.__dict__,
                 "minimize_properties": self._minimize_properties,
-                "export_properties": self._export_properties}
-
-    def _get_atomic_descriptors(self,
-                                universal_descriptors,
-                                mode: tf_estimator.ModeKeys,
-                                verbose=True) -> AtomicDescriptors:
-        """
-        Return the atomic descriptors calaculated based on the universal
-        descriptors.
-        """
-        raise NotImplementedError("")
+                "export_properties": self._export_properties,
+                "descriptor": self._descriptor.as_dict()}
 
     @staticmethod
     def _apply_minmax_normalization(x: tf.Tensor,
@@ -342,10 +380,11 @@ class AtomicNN(BasicNN):
         collections = [self.default_collection]
         activation_fn = get_activation_fn(self._activation)
 
-        with tf.variable_scope(self.__class__.scope):
+        with tf.variable_scope(self.scope):
 
             outputs = {'energy': [], 'eentropy': [], 'free_energy': []}
-            atomic_descriptors = self._get_atomic_descriptors(
+            atomic_descriptors = self._descriptor.calculate(
+                transformer=self._transformer,
                 universal_descriptors=descriptors,
                 mode=mode)
             for element, x in atomic_descriptors.descriptors.items():

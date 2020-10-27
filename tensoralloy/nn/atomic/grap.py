@@ -11,12 +11,12 @@ from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
 
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term
-from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
+from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 
@@ -188,26 +188,13 @@ class PowerExpAlgorithm(Algorithm):
         return power_exp(rij, rl, pl)
 
 
-class GenericRadialAtomicPotential(AtomicNN):
+class GenericRadialAtomicPotential(Descriptor):
     """
     The generic atomic potential with polarized radial interactions.
     """
 
-    scope = "GRAP"
-    
     def __init__(self,
                  elements: List[str],
-                 hidden_sizes=None,
-                 activation=None,
-                 minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
-                 kernel_initializer="he_normal",
-                 minmax_scale=False,
-                 use_atomic_static_energy=True,
-                 fixed_atomic_static_energy=False,
-                 atomic_static_energy=None,
-                 use_resnet_dt=True,
-                 finite_temperature=FiniteTemperatureOptions(),
                  algorithm='sf',
                  parameters=None,
                  param_space_method="cross",
@@ -216,19 +203,7 @@ class GenericRadialAtomicPotential(AtomicNN):
         """
         Initialization method.
         """
-        super(GenericRadialAtomicPotential, self).__init__(
-            elements=elements,
-            hidden_sizes=hidden_sizes,
-            activation=activation,
-            kernel_initializer=kernel_initializer,
-            use_atomic_static_energy=use_atomic_static_energy,
-            fixed_atomic_static_energy=fixed_atomic_static_energy,
-            atomic_static_energy=atomic_static_energy,
-            use_resnet_dt=use_resnet_dt,
-            minmax_scale=minmax_scale,
-            finite_temperature=finite_temperature,
-            minimize_properties=minimize_properties,
-            export_properties=export_properties)
+        super(GenericRadialAtomicPotential, self).__init__(elements=elements)
         
         if isinstance(moment_tensors, int):
             moment_tensors = [moment_tensors]
@@ -240,14 +215,19 @@ class GenericRadialAtomicPotential(AtomicNN):
             algorithm, parameters, param_space_method)
         self._moment_tensors = moment_tensors
         self._cutoff_function = cutoff_function
-    
+
+    @property
+    def name(self):
+        """ Return the name of this descriptor. """
+        return "GRAP"
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of GRAP.
         """
         d = super(GenericRadialAtomicPotential, self).as_dict()
-        d["moment_tensors"] = self._moment_tensors
-        d["cutoff_function"] = self._cutoff_function
+        d.update({"moment_tensors": self._moment_tensors,
+                  "cutoff_function": self._cutoff_function})
         d.update(self._algorithm.as_dict())
         return d
 
@@ -278,7 +258,9 @@ class GenericRadialAtomicPotential(AtomicNN):
         else:
             return polynomial_cutoff(x, rc, name=name)
     
-    def apply_pairwise_descriptor_functions(self, partitions: dict):
+    def apply_pairwise_descriptor_functions(self,
+                                            clf: UniversalTransformer,
+                                            partitions: dict):
         """
         Apply the descriptor functions to all partitions.
         """
@@ -289,8 +271,6 @@ class GenericRadialAtomicPotential(AtomicNN):
             1: [0, 1, 2],
             2: [(0, 1), (0, 2), (1, 2)]
         }
-        
-        clf = self._transformer
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
         outputs = {element: [None] * len(self._elements)
@@ -355,21 +335,22 @@ class GenericRadialAtomicPotential(AtomicNN):
                     outputs[element], axis=-1, name=element)
             return results
 
-    def _get_atomic_descriptors(self,
-                                universal_descriptors,
-                                mode: tf_estimator.ModeKeys,
-                                verbose=True):
+    def calculate(self,
+                  transformer: UniversalTransformer,
+                  universal_descriptors,
+                  mode: tf_estimator.ModeKeys,
+                  verbose=False) -> AtomicDescriptors:
         """
         Construct the computation graph for calculating descriptors.
         """
-        clf = self._transformer
         with tf.name_scope("Radial"):
             partitions, max_occurs = dynamic_partition(
                 dists_and_masks=universal_descriptors['radial'],
-                elements=clf.elements,
-                kbody_terms_for_element=clf.kbody_terms_for_element,
+                elements=transformer.elements,
+                kbody_terms_for_element=transformer.kbody_terms_for_element,
                 mode=mode,
                 angular=False,
                 merge_symmetric=False)
-            descriptors = self.apply_pairwise_descriptor_functions(partitions)
+            descriptors = self.apply_pairwise_descriptor_functions(
+                transformer, partitions)
         return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)

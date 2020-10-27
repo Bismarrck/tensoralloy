@@ -14,7 +14,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy import atoms_utils
 from tensoralloy.io.db import snap
 from tensoralloy.nn.atomic import AtomicNN
-from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.nn.atomic.sf import SymmetryFunction
 from tensoralloy.transformer.universal import UniversalTransformer
 
 __author__ = 'Xin Chen'
@@ -28,7 +28,9 @@ def test_as_dict():
     """
     elements = ['Al', 'Cu']
     hidden_sizes = 32
-    old_nn = AtomicNN(elements, hidden_sizes,
+    sf = SymmetryFunction(elements)
+
+    old_nn = AtomicNN(elements, sf, hidden_sizes,
                       activation='tanh',
                       use_atomic_static_energy=False,
                       minimize_properties=['energy', ],
@@ -42,6 +44,7 @@ def test_as_dict():
 
     new_nn = AtomicNN(**d)
 
+    assert_equal(new_nn.descriptor.name, "SF")
     assert_list_equal(new_nn.elements, old_nn.elements)
     assert_list_equal(new_nn.minimize_properties, old_nn.minimize_properties)
     assert_equal(new_nn.hidden_sizes, old_nn.hidden_sizes)
@@ -58,12 +61,13 @@ def test_tdsf():
     atoms_utils.set_electron_temperature(atoms, etemp)
 
     elements = sorted(list(set(atoms.get_chemical_symbols())))
-    nn = SymmetryFunctionNN(elements=elements,
-                            hidden_sizes=[64, 64],
-                            activation='softplus',
-                            finite_temperature={"algorithm": "full"})
     clf = UniversalTransformer(elements, rcut=4.5, acut=4.5, angular=True,
                                use_computed_dists=True)
+    sf = SymmetryFunction(elements=elements)
+    nn = AtomicNN(elements, sf,
+                  hidden_sizes=[64, 64],
+                  activation='softplus',
+                  finite_temperature={"algorithm": "full"})
     nn.attach_transformer(clf)
 
     with tf.Graph().as_default():

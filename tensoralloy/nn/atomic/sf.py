@@ -11,12 +11,11 @@ from tensorflow_estimator import estimator as tf_estimator
 from typing import List
 from sklearn.model_selection import ParameterGrid
 
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.partition import dynamic_partition
-from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
-from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.extension.grad_ops import safe_pow
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
@@ -25,45 +24,20 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class SymmetryFunctionNN(AtomicNN):
+class SymmetryFunction(Descriptor):
     """
     Symmetry function based atomistic neural network potential.
     """
 
-    scope = "SF"
-
     def __init__(self,
                  elements: List[str],
-                 hidden_sizes=None,
-                 activation=None,
-                 minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces'),
-                 kernel_initializer="he_normal",
-                 minmax_scale=False,
-                 use_atomic_static_energy=True,
-                 fixed_atomic_static_energy=False,
-                 atomic_static_energy=None,
-                 use_resnet_dt=True,
-                 finite_temperature=FiniteTemperatureOptions(),
                  eta=np.array([0.05, 4.0, 20.0, 80.0]),
                  omega=np.asarray([0.0]),
                  beta=np.asarray([0.005]),
                  gamma=np.asarray([1.0, -1.0]),
                  zeta=np.asarray([1.0, 4.0]),
                  cutoff_function="cosine"):
-        super(SymmetryFunctionNN, self).__init__(
-            elements=elements,
-            hidden_sizes=hidden_sizes,
-            activation=activation,
-            kernel_initializer=kernel_initializer,
-            use_atomic_static_energy=use_atomic_static_energy,
-            fixed_atomic_static_energy=fixed_atomic_static_energy,
-            atomic_static_energy=atomic_static_energy,
-            use_resnet_dt=use_resnet_dt,
-            minmax_scale=minmax_scale,
-            finite_temperature=finite_temperature,
-            minimize_properties=minimize_properties,
-            export_properties=export_properties)
+        super(SymmetryFunction, self).__init__(elements=elements)
 
         self._eta = eta
         self._omega = omega
@@ -77,17 +51,20 @@ class SymmetryFunctionNN(AtomicNN):
                                                   'zeta': self._zeta,
                                                   'gamma': self._gamma})
 
+    @property
+    def name(self):
+        """ Return the name of this descriptor. """
+        return "SF"
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this `BasicNN`.
         """
-        d = super(SymmetryFunctionNN, self).as_dict()
-        d["eta"] = self._eta
-        d["omega"] = self._omega
-        d["gamma"] = self._gamma
-        d["zeta"] = self._zeta
-        d["beta"] = self._beta
-        d["cutoff_function"] = self._cutoff_function
+        d = super(SymmetryFunction, self).as_dict()
+        d.update({
+            "eta": self._eta, "omega": self._omega, "gamma": self._gamma,
+            "zeta": self._zeta, "beta": self._beta,
+            "cutoff_function": self._cutoff_function})
         return d
 
     def _apply_cutoff(self, x, rc, name=None):
@@ -99,11 +76,10 @@ class SymmetryFunctionNN(AtomicNN):
         else:
             return polynomial_cutoff(x, rc, name=name)
 
-    def _apply_g2_functions(self, partitions: dict):
+    def _apply_g2_functions(self, clf: UniversalTransformer, partitions: dict):
         """
         Apply the G2 symmetry functions on the partitions.
         """
-        clf = self._transformer
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
         rc2 = tf.convert_to_tensor(clf.rcut**2, dtype=dtype, name='rc2')
@@ -142,12 +118,10 @@ class SymmetryFunctionNN(AtomicNN):
                     outputs[element], axis=-1, name=element)
             return results
 
-    def _apply_g4_functions(self, partitions: dict):
+    def _apply_g4_functions(self, clf: UniversalTransformer, partitions: dict):
         """
         Apply the G4 symmetry functions on the partitions.
         """
-        clf = self._transformer
-        assert isinstance(clf, UniversalTransformer)
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.acut, name='rc', dtype=dtype)
         rc2 = tf.convert_to_tensor(clf.acut**2, dtype=dtype, name='rc2')
@@ -207,46 +181,35 @@ class SymmetryFunctionNN(AtomicNN):
                     outputs[element], axis=-1, name=element)
             return results
 
-    def get_symmetry_function_descriptors(self,
-                                          universal_descriptors: dict,
-                                          mode: tf_estimator.ModeKeys):
+    def calculate(self,
+                  transformer: UniversalTransformer,
+                  universal_descriptors,
+                  mode: tf_estimator.ModeKeys,
+                  verbose=False):
         """
         Construct the computation graph for calculating symmetry function
         descriptors.
         """
-        clf = self._transformer
-        assert isinstance(clf, UniversalTransformer)
         with tf.name_scope("Radial"):
             partitions, max_occurs = dynamic_partition(
                 dists_and_masks=universal_descriptors['radial'],
-                elements=clf.elements,
-                kbody_terms_for_element=clf.kbody_terms_for_element,
+                elements=transformer.elements,
+                kbody_terms_for_element=transformer.kbody_terms_for_element,
                 mode=mode,
                 angular=False,
                 merge_symmetric=False)
-            g = self._apply_g2_functions(partitions)
-        if clf.angular:
+            g = self._apply_g2_functions(transformer, partitions)
+        if transformer.angular:
             with tf.name_scope("Angular"):
                 partitions = dynamic_partition(
                     dists_and_masks=universal_descriptors['angular'],
-                    elements=clf.elements,
-                    kbody_terms_for_element=clf.kbody_terms_for_element,
+                    elements=transformer.elements,
+                    kbody_terms_for_element=transformer.kbody_terms_for_element,
                     mode=mode,
                     angular=True,
                     merge_symmetric=False)[0]
-                g4 = self._apply_g4_functions(partitions)
+                g4 = self._apply_g4_functions(transformer, partitions)
 
             for e, tensor in g4.items():
                 g[e] = tf.concat((g[e], tensor), axis=-1)
-        return g, max_occurs
-
-    def _get_atomic_descriptors(self,
-                                universal_descriptors,
-                                mode: tf_estimator.ModeKeys,
-                                verbose=True):
-        """
-        A wrapper.
-        """
-        descriptors, max_occurs = self.get_symmetry_function_descriptors(
-            universal_descriptors, mode)
-        return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)
+        return AtomicDescriptors(descriptors=g, max_occurs=max_occurs)

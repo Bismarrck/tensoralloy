@@ -10,63 +10,38 @@ from typing import List, Dict
 from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.nn.cutoff import deepmd_cutoff
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
+from tensoralloy.nn.cutoff import deepmd_cutoff
 from tensoralloy.nn.utils import log_tensor, get_activation_fn
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.partition import dynamic_partition
-from tensoralloy.nn.atomic.atomic import AtomicNN
+from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-class DeepPotSE(AtomicNN):
+class DeepPotSE(Descriptor):
     """
     The tensorflow based implementation of the DeepPot-SE model.
     """
 
     default_collection = GraphKeys.DEEPMD_VARIABLES
-    scope = "DPMD"
 
     def __init__(self,
                  elements: List[str],
-                 rcs: float,
+                 rcs=5.0,
                  m1=100,
                  m2=4,
-                 hidden_sizes=None,
-                 activation=None,
-                 kernel_initializer='he_normal',
                  embedding_activation='tanh',
-                 embedding_sizes=(20, 40, 80),
-                 use_resnet_dt=False,
-                 use_atomic_static_energy=True,
-                 fixed_atomic_static_energy=False,
-                 atomic_static_energy=None,
-                 finite_temperature=FiniteTemperatureOptions(),
-                 minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'hessian')):
+                 embedding_sizes=(20, 40, 80)):
         """
         Initialization method.
         """
-        self._nn_scope = "DeepPotSE"
-
-        super(DeepPotSE, self).__init__(
-            elements=elements,
-            hidden_sizes=hidden_sizes,
-            activation=activation,
-            kernel_initializer=kernel_initializer,
-            minmax_scale=False,
-            use_resnet_dt=use_resnet_dt,
-            use_atomic_static_energy=use_atomic_static_energy,
-            fixed_atomic_static_energy=fixed_atomic_static_energy,
-            atomic_static_energy=atomic_static_energy,
-            finite_temperature=finite_temperature,
-            minimize_properties=minimize_properties,
-            export_properties=export_properties)
+        super(DeepPotSE, self).__init__(elements=elements)
 
         self._m1 = m1
         self._m2 = m2
@@ -74,6 +49,11 @@ class DeepPotSE(AtomicNN):
         self._embedding_activation = embedding_activation
         self._embedding_sizes = embedding_sizes
         self._kbody_terms = get_kbody_terms(self._elements, angular=False)[1]
+
+    @property
+    def name(self):
+        """ Return the name of this descriptor. """
+        return "DPMD"
 
     def as_dict(self):
         """
@@ -88,6 +68,7 @@ class DeepPotSE(AtomicNN):
         return d
 
     def _build_embedding_nn(self,
+                            transformer: UniversalTransformer,
                             partitions: dict,
                             max_occurs: Counter,
                             verbose=False):
@@ -96,6 +77,8 @@ class DeepPotSE(AtomicNN):
 
         Parameters
         ----------
+        transformer : UniversalTransformer
+            The attached universal transformer.
         partitions : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
             A dict. The keys are kbody terms and values are tuples of
             (value, mask) where `value` represents the descriptors and `mask` is
@@ -120,7 +103,7 @@ class DeepPotSE(AtomicNN):
                 ijy = tf.squeeze(value[2], axis=1, name='ijy')
                 ijz = tf.squeeze(value[3], axis=1, name='ijz')
                 rij = tf.squeeze(value[0], axis=1, name='rij')
-                sij = deepmd_cutoff(rij, self._transformer.rc, self._rcs,
+                sij = deepmd_cutoff(rij, transformer.rc, self._rcs,
                                     name="sij")
                 if verbose:
                     log_tensor(sij)
@@ -198,22 +181,23 @@ class DeepPotSE(AtomicNN):
                     stacks[element], axis=-1, name=element)
             return results
 
-    def _get_atomic_descriptors(self,
-                                universal_descriptors,
-                                mode: tf_estimator.ModeKeys,
-                                verbose=True):
+    def calculate(self,
+                  transformer: UniversalTransformer,
+                  universal_descriptors,
+                  mode: tf_estimator.ModeKeys,
+                  verbose=False) -> AtomicDescriptors:
         """
         A wrapper function.
         """
-        clf = self.transformer
         partitions, max_occurs = dynamic_partition(
                 dists_and_masks=universal_descriptors['radial'],
-                elements=clf.elements,
-                kbody_terms_for_element=clf.kbody_terms_for_element,
+                elements=transformer.elements,
+                kbody_terms_for_element=transformer.kbody_terms_for_element,
                 mode=mode,
                 angular=False,
                 merge_symmetric=False)
         embeddings = self._build_embedding_nn(
+            transformer=transformer,
             partitions=partitions,
             max_occurs=max_occurs,
             verbose=verbose)

@@ -17,6 +17,7 @@ from tensorflow_estimator import estimator as tf_estimator
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
+from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.io.db import snap
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 
@@ -32,8 +33,8 @@ def test_init():
         atoms = snap().get_atoms(id=1)
 
         clf = UniversalTransformer(elements, rcut=rc, angular=False)
-        nn = DeepPotSE(elements, rcs, hidden_sizes=[64, 32],
-                       activation='softplus')
+        dp = DeepPotSE(elements, rcs)
+        nn = AtomicNN(elements, dp, hidden_sizes=[64, 32])
         nn.attach_transformer(clf)
         predictions = nn.build(features=clf.get_constant_features(atoms),
                                mode=tf_estimator.ModeKeys.PREDICT,
@@ -54,8 +55,9 @@ def test_batch_init():
         elements = ["Mo", "Ni"]
         atoms = snap().get_atoms(id=1)
 
-        nn = DeepPotSE(elements, rcs, activation='softplus',
-                       hidden_sizes=[64, 32])
+        dp = DeepPotSE(elements, rcs)
+        nn = AtomicNN(elements, dp, activation='softplus',
+                      hidden_sizes=[64, 32])
 
         size = find_neighbor_size_of_atoms(atoms, rc)
         max_occurs = Counter(atoms.get_chemical_symbols())
