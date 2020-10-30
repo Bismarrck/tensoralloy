@@ -39,11 +39,11 @@ class SymmetryFunction(Descriptor):
                  cutoff_function="cosine"):
         super(SymmetryFunction, self).__init__(elements=elements)
 
-        self._eta = eta
-        self._omega = omega
-        self._gamma = gamma
-        self._zeta = zeta
-        self._beta = beta
+        self._eta = np.asarray(eta)
+        self._omega = np.asarray(omega)
+        self._gamma = np.asarray(gamma)
+        self._zeta = np.asarray(zeta)
+        self._beta = np.asarray(beta)
         self._cutoff_function = cutoff_function
         self._radial_parameters = ParameterGrid({'eta': self._eta,
                                                  'omega': self._omega})
@@ -62,8 +62,9 @@ class SymmetryFunction(Descriptor):
         """
         d = super(SymmetryFunction, self).as_dict()
         d.update({
-            "eta": self._eta, "omega": self._omega, "gamma": self._gamma,
-            "zeta": self._zeta, "beta": self._beta,
+            "eta": self._eta.tolist(), "omega": self._omega.tolist(),
+            "gamma": self._gamma.tolist(), "zeta": self._zeta.tolist(),
+            "beta": self._beta.tolist(),
             "cutoff_function": self._cutoff_function})
         return d
 

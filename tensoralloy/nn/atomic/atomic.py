@@ -94,7 +94,7 @@ class AtomicNN(BasicNN):
         self._fixed_atomic_static_energy = fixed_atomic_static_energy
 
         if isinstance(descriptor, dict):
-            descriptor = json.loads(json.dumps(descriptor, cls=MontyDecoder))
+            descriptor = json.loads(json.dumps(descriptor), cls=MontyDecoder)
         self._descriptor = descriptor
 
     @property
@@ -295,7 +295,7 @@ class AtomicNN(BasicNN):
                 y_atomic = tf.squeeze(y_atomic, axis=0)
             y_atomic = tf.multiply(y_atomic, mask, name='atomic')
         y_sum = tf.reduce_sum(
-            y_atomic, axis=axis, keepdims=False, name=name)
+            y_atomic, axis=axis, keepdims=False, name='energy')
         enthalpy = self._get_enthalpy_op(features, y_sum, verbose=verbose)
         if verbose:
             log_tensor(y_sum)
