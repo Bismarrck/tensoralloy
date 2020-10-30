@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from typing import Dict
+from typing import Dict, List
 from dataclasses import dataclass
 from collections import Counter
 
@@ -21,3 +21,12 @@ class AtomicDescriptors:
     """
     descriptors: Dict[str, tf.Tensor]
     max_occurs: Counter
+
+
+@dataclass
+class FiniteTemperatureOptions:
+    """
+    Options for modeling finite-temperature systems.
+    """
+    activation: str = "softplus"
+    layers: List[int] = (128, 128)

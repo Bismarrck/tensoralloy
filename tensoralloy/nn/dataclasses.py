@@ -41,22 +41,66 @@ def nested_dataclass(*args, **kwargs):
 
 
 @dataclass(frozen=True)
+class EnergyOp:
+    """
+    An energy op. `total` is the total energy (scalar) while `atomic` is a
+    vector. `total = sum(atomic)`
+    """
+    total: tf.Tensor
+    atomic: tf.Tensor
+
+
+@dataclass(frozen=True)
 class EnergyOps:
     """
     Different types of energy ops.
 
     energy: the internal energy U
-    eentropy: the electron entropy S
     enthalpy: the enthalpy H = U + PV
-    free_energy: electron free energy F = U - T*S
-    atomic: energy for each atom
 
     """
-    energy: tf.Tensor
-    eentropy: tf.Tensor
+    energy: EnergyOp
     enthalpy: tf.Tensor
-    free_energy: tf.Tensor
-    atomic: tf.Tensor
+
+    def as_dict(self):
+        """ Dict representation of the ops. """
+        return {"energy": self.energy.total, "energy/atom": self.energy.atomic,
+                "enthalpy": self.enthalpy}
+
+    @property
+    def variational_energy(self):
+        """ The energy op corresponding to forces. By default E(sigma->0)
+        corresponds to forces. """
+        return self.energy
+
+
+@dataclass(frozen=True)
+class FiniteTemperatureEnergyOps(EnergyOps):
+    """
+    Energy ops for finite temperature potentials.
+
+    eentropy: the electron entropy S
+    free_energy: electron free energy F = U - T*S
+
+    """
+    eentropy: EnergyOp
+    free_energy: EnergyOp
+
+    def as_dict(self):
+        """ Dict representation of the ops. """
+        adict = super(FiniteTemperatureEnergyOps, self).as_dict()
+        adict.update({
+            "free_energy": self.free_energy.total,
+            "free_energy/atom": self.free_energy.atomic,
+            "eentropy": self.eentropy.total,
+            "eentropy/atom": self.eentropy.atomic})
+        return adict
+
+    @property
+    def variational_energy(self):
+        """ For finite temperature calculations with Fermi-Dirac smearing,
+        electron free energy is consistent with forces. """
+        return self.free_energy
 
 
 @add_slots

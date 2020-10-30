@@ -16,7 +16,7 @@ from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term
 from tensoralloy.nn.convolutional import convolution1x1
-from tensoralloy.nn.dataclasses import EnergyOps
+from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.partition import dynamic_partition
@@ -325,8 +325,8 @@ class EamNN(BasicNN):
         if verbose:
             log_tensor(energy)
             log_tensor(enthalpy)
-        return EnergyOps(energy, tf.no_op(name='eentropy'), enthalpy, energy,
-                         atomic_energy)
+        return EnergyOps(energy=EnergyOp(energy, atomic_energy),
+                         enthalpy=enthalpy)
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
                       mode: tf_estimator.ModeKeys, verbose=False):

@@ -27,14 +27,10 @@ def get_eentropy_constraint_loss(base_nn,
     """
     Return the simple electron entropy constraint.
     """
-    from tensoralloy.nn.atomic import AtomicNN
-    if not isinstance(base_nn, AtomicNN):
+    from tensoralloy.nn.atomic import TemperatureDependentAtomicNN
+    if not isinstance(base_nn, TemperatureDependentAtomicNN):
         warnings.warn(
-            "Pair style 'atomic' is required for the eentropy constraint")
-        return None
-    if not base_nn.finite_temperature_options.algorithm == 'full':
-        warnings.warn("The finite temperature algorithm 'full' is required "
-                      "for the eentropy constraint")
+            "Pair style 'atomic/ft' is required for the eentropy constraint")
         return None
 
     if options is None:

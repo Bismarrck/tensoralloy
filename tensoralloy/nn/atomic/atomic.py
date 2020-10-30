@@ -9,18 +9,15 @@ import json
 
 from monty.json import MSONable, MontyDecoder
 from typing import List, Dict, Union
-from collections import Counter
 from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import GraphKeys
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
-from tensoralloy.nn.dataclasses import EnergyOps, LossParameters
-from tensoralloy.nn import losses as loss_ops
+from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
-from tensoralloy.nn.atomic.finite_temperature import FiniteTemperatureOptions
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -77,7 +74,6 @@ class AtomicNN(BasicNN):
                  atomic_static_energy=None,
                  use_atomic_static_energy=True,
                  fixed_atomic_static_energy=False,
-                 finite_temperature=FiniteTemperatureOptions(),
                  minimize_properties=('energy', 'forces'),
                  export_properties=('energy', 'forces')):
         """
@@ -101,26 +97,12 @@ class AtomicNN(BasicNN):
             descriptor = json.loads(json.dumps(descriptor, cls=MontyDecoder))
         self._descriptor = descriptor
 
-        if isinstance(finite_temperature, FiniteTemperatureOptions):
-            self._finite_temperature = finite_temperature
-        else:
-            assert isinstance(finite_temperature, dict)
-            self._finite_temperature = FiniteTemperatureOptions(
-                **finite_temperature)
-
     @property
     def hidden_sizes(self) -> Dict[str, List[int]]:
         """
         Return the sizes of hidden layers for each element.
         """
         return self._hidden_sizes
-
-    @property
-    def finite_temperature_options(self):
-        """
-        Return the options for modeling finite temperature systems.
-        """
-        return self._finite_temperature
 
     @property
     def descriptor(self) -> Descriptor:
@@ -143,7 +125,6 @@ class AtomicNN(BasicNN):
                 'use_atomic_static_energy': self._use_atomic_static_energy,
                 'fixed_atomic_static_energy': self._fixed_atomic_static_energy,
                 'atomic_static_energy': self._atomic_static_energy,
-                'finite_temperature': self._finite_temperature.__dict__,
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties,
                 "descriptor": self._descriptor.as_dict()}
@@ -209,146 +190,6 @@ class AtomicNN(BasicNN):
             with tf.control_dependencies(update_ops):
                 return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
 
-    @staticmethod
-    def _add_electron_temperature(x: tf.Tensor,
-                                  etemperature: tf.Tensor,
-                                  element: str,
-                                  mode: tf_estimator.ModeKeys,
-                                  max_occurs: Counter):
-        """
-        Add electron temperature to the atomic descriptor tensor `x`.
-        """
-        with tf.name_scope("Temperature"):
-            if mode == tf_estimator.ModeKeys.PREDICT:
-                d0 = 1
-                d1 = max_occurs[element]
-            else:
-                d0, d1 = x.shape.as_list()[0: 2]
-            etemp = tf.reshape(
-                etemperature, [d0, 1, 1], name='etemp')
-            etemp = tf.tile(etemp, [1, d1, 1], name='etemp/tiled')
-            x = tf.concat((x, etemp), axis=2, name='x')
-        return x, etemp
-
-    @staticmethod
-    def _apply_temperature_bias(atomic: tf.Tensor,
-                                t: tf.Tensor,
-                                name='atomic/bias'):
-        """
-        Add a temperature-depedent bias unit to the target atomic tensor.
-        """
-        bias = tf.get_variable(
-            name="bias_t", shape=(), dtype=atomic.dtype,
-            trainable=True, collections=[
-                tf.GraphKeys.GLOBAL_VARIABLES,
-                tf.GraphKeys.MODEL_VARIABLES,
-                tf.GraphKeys.TRAINABLE_VARIABLES,
-                GraphKeys.TRAIN_METRICS
-            ],
-            initializer=tf.constant_initializer(0.0, dtype=atomic.dtype),
-            aggregation=tf.VariableAggregation.MEAN)
-        bias = tf.multiply(bias, t, name='b')
-        return tf.add(bias, atomic, name=name)
-
-    def _get_free_electron_entropy(self,
-                                   h: tf.Tensor,
-                                   t: tf.Tensor,
-                                   element: str,
-                                   collections: List[str],
-                                   verbose=True):
-        """
-        Model electron entropy S with the free electron model.
-
-        Parameters
-        ----------
-        h : tf.Tensor
-            Input features.
-        t : tf.Tensor
-            The electron temperature tensor.
-        element : str
-            The target element.
-        collections : List[str]
-            A list of str as the collections where the variables should be
-            added.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        """
-        with tf.variable_scope("S"):
-            t2 = tf.square(t, name='T2')
-            a = tf.constant(-0.5718444, dtype=h.dtype, name='a')
-            b = tf.constant(0.83744317, dtype=h.dtype, name='b')
-            c = tf.constant(-0.2110962, dtype=h.dtype, name='c')
-            d = tf.constant(1.45, dtype=h.dtype, name='d')
-            dt = tf.multiply(d, t, name='dt')
-            one = tf.constant(1.0, dtype=h.dtype, name='one')
-            ft = tf.square(tf.nn.relu(one - dt), name='ft')
-            eentropy = tf.add(a * t2 * ft, b * t + c * (one - ft),
-                              name='eentropy')
-            deviation = convolution1x1(
-                h,
-                activation_fn=get_activation_fn(self._activation),
-                hidden_sizes=self._hidden_sizes[element],
-                num_out=1,
-                l2_weight=1.0,
-                collections=collections,
-                output_bias=False,
-                output_bias_mean=0.0,
-                use_resnet_dt=self._use_resnet_dt,
-                kernel_initializer=self._kernel_initializer,
-                variable_scope=None,
-                verbose=verbose)
-            deviation = tf.nn.softplus(
-                tf.squeeze(deviation, axis=2), name='deviation')
-            eentropy = tf.multiply(eentropy, deviation, name='atomic')
-            if verbose:
-                log_tensor(eentropy)
-            return eentropy
-
-    def _get_internal_energy_outputs(self,
-                                     h: tf.Tensor,
-                                     element: str,
-                                     atomic_static_energy: float,
-                                     collections: List[str],
-                                     verbose=True):
-        """
-        Model internal energy U using the temperature-dependent atomic
-        descriptor 'h'.
-
-        Parameters
-        ----------
-        h : tf.Tensor
-            Input features.
-        element : str
-            The target element.
-        atomic_static_energy : float
-            Atomic static energy, used as the bias unit of the output layer.
-        collections : List[str]
-            A list of str as the collections where the variables should be
-            added.
-        verbose : bool
-            If True, the prediction tensors will be logged.
-
-        """
-        with tf.variable_scope("U"):
-            energy = convolution1x1(
-                h,
-                activation_fn=get_activation_fn(self._activation),
-                hidden_sizes=self._hidden_sizes[element],
-                num_out=1,
-                l2_weight=1.0,
-                collections=collections,
-                output_bias=True,
-                output_bias_mean=atomic_static_energy,
-                use_resnet_dt=self._use_resnet_dt,
-                kernel_initializer=self._kernel_initializer,
-                variable_scope=None,
-                verbose=verbose)
-            energy = tf.squeeze(energy, axis=2, name="atomic")
-            if verbose:
-                log_tensor(energy)
-            return energy
-
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -382,7 +223,7 @@ class AtomicNN(BasicNN):
 
         with tf.variable_scope(self.scope):
 
-            outputs = {'energy': [], 'eentropy': [], 'free_energy': []}
+            outputs = {'energy': []}
             atomic_descriptors = self._descriptor.calculate(
                 transformer=self._transformer,
                 universal_descriptors=descriptors,
@@ -404,89 +245,25 @@ class AtomicNN(BasicNN):
                             collections=collections)
                         if verbose:
                             log_tensor(x)
-                    if self._finite_temperature.algorithm != "full":
-                        if self._finite_temperature.on:
-                            xp, t = self._add_electron_temperature(
-                                x=x,
-                                etemperature=features["etemperature"],
-                                element=element,
-                                mode=mode,
-                                max_occurs=atomic_descriptors.max_occurs)
-                            if self._finite_temperature.algorithm == "semi":
-                                x = xp
-                            t = tf.squeeze(t, axis=2, name='T')
-                            if verbose:
-                                log_tensor(x)
-                        else:
-                            t = None
-                        output_bias = self._fixed_atomic_static_energy
-                        y = convolution1x1(
-                            x,
-                            activation_fn=activation_fn,
-                            hidden_sizes=self._hidden_sizes[element],
-                            num_out=1,
-                            l2_weight=1.0,
-                            collections=collections,
-                            output_bias=self._use_atomic_static_energy,
-                            output_bias_mean=bias_mean,
-                            fixed_output_bias=output_bias,
-                            use_resnet_dt=self._use_resnet_dt,
-                            kernel_initializer=self._kernel_initializer,
-                            variable_scope=None,
-                            verbose=verbose)
-                        y = tf.squeeze(y, axis=2, name="atomic")
-                        if verbose:
-                            log_tensor(y)
-                        if self._finite_temperature.on:
-                            if self._finite_temperature.biased_free_energy:
-                                y = self._apply_temperature_bias(y, t)
-                                if verbose:
-                                    log_tensor(y)
-                            outputs['free_energy'].append(y)
-                        else:
-                            outputs['energy'].append(y)
-                    else:
-                        inner_activation_fn = get_activation_fn(
-                            self._finite_temperature.activation)
-                        layers = self._finite_temperature.layers
-                        h = convolution1x1(
-                            x,
-                            activation_fn=inner_activation_fn,
-                            hidden_sizes=layers[:-1],
-                            num_out=layers[-1],
-                            l2_weight=1.0,
-                            collections=collections,
-                            kernel_initializer=self._kernel_initializer,
-                            output_bias=True,
-                            output_bias_mean=0.0,
-                            use_resnet_dt=self._use_resnet_dt,
-                            variable_scope="H",
-                            verbose=verbose)
-                        ht, t = self._add_electron_temperature(
-                            x=h,
-                            etemperature=features["etemperature"],
-                            element=element,
-                            mode=mode,
-                            max_occurs=atomic_descriptors.max_occurs)
-                        T = tf.squeeze(t, axis=2, name='T')
-                        S = self._get_free_electron_entropy(
-                            h=h,
-                            t=T,
-                            element=element,
-                            collections=collections,
-                            verbose=verbose)
-                        U = self._get_internal_energy_outputs(
-                            h=ht,
-                            element=element,
-                            atomic_static_energy=bias_mean,
-                            collections=collections,
-                            verbose=verbose)
-                        U = tf.identity(U, name='U')
-                        TS = tf.multiply(T, S, name='TS')
-                        E = tf.subtract(U, TS, name='F')
-                        outputs['energy'].append(U)
-                        outputs['eentropy'].append(S)
-                        outputs['free_energy'].append(E)
+                    output_bias = self._fixed_atomic_static_energy
+                    y = convolution1x1(
+                        x,
+                        activation_fn=activation_fn,
+                        hidden_sizes=self._hidden_sizes[element],
+                        num_out=1,
+                        l2_weight=1.0,
+                        collections=collections,
+                        output_bias=self._use_atomic_static_energy,
+                        output_bias_mean=bias_mean,
+                        fixed_output_bias=output_bias,
+                        use_resnet_dt=self._use_resnet_dt,
+                        kernel_initializer=self._kernel_initializer,
+                        variable_scope=None,
+                        verbose=verbose)
+                    y = tf.squeeze(y, axis=2, name="atomic")
+                    if verbose:
+                        log_tensor(y)
+                    outputs['energy'].append(y)
             return outputs
 
     def _get_energy_ops(self, outputs, features, verbose=True) -> EnergyOps:
@@ -499,8 +276,6 @@ class AtomicNN(BasicNN):
             A list of `tf.Tensor` as the outputs of the ANNs.
         features : dict
             A dict of input tensors.
-        name : str
-            The name of the output tensor.
         verbose : bool
             If True, the total energy tensor will be logged.
 
@@ -515,89 +290,13 @@ class AtomicNN(BasicNN):
         with tf.name_scope("Mask"):
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-
-        def _apply_mask(name: str):
-            name_map = {
-                'energy': 'U',
-                'eentropy': 'S',
-                'free_energy': 'E'
-            }
-            with tf.name_scope(name_map[name]):
-                y_atomic = tf.concat(outputs[name], axis=1, name='atomic/raw')
-                if ndims == 1:
-                    y_atomic = tf.squeeze(y_atomic, axis=0)
-                y_atomic = tf.multiply(y_atomic, mask, name='atomic')
-            y_sum = tf.reduce_sum(
-                y_atomic, axis=axis, keepdims=False, name=name)
-            return y_sum, y_atomic
-
-        if not self._finite_temperature.on:
-            eentropy = tf.no_op("eentropy")
-            energy, atomic_energy = _apply_mask('energy')
-            free_energy = energy
-        elif self._finite_temperature.algorithm == "full":
-            free_energy, atomic_energy = _apply_mask('free_energy')
-            eentropy = _apply_mask('eentropy')[0]
-            energy = _apply_mask('energy')[0]
-        else:
-            eentropy = tf.no_op("eentropy")
-            free_energy, atomic_energy = _apply_mask('free_energy')
-            energy = free_energy
-
-        enthalpy = self._get_enthalpy_op(features, free_energy, verbose=verbose)
+            y_atomic = tf.concat(outputs["energy"], axis=1, name='atomic/raw')
+            if ndims == 1:
+                y_atomic = tf.squeeze(y_atomic, axis=0)
+            y_atomic = tf.multiply(y_atomic, mask, name='atomic')
+        y_sum = tf.reduce_sum(
+            y_atomic, axis=axis, keepdims=False, name=name)
+        enthalpy = self._get_enthalpy_op(features, y_sum, verbose=verbose)
         if verbose:
-            if self._finite_temperature.on:
-                log_tensor(free_energy)
-                if self._finite_temperature.algorithm == 'full':
-                    log_tensor(eentropy)
-                    log_tensor(energy)
-            else:
-                log_tensor(energy)
-        return EnergyOps(energy, eentropy, enthalpy, free_energy, atomic_energy)
-
-    def _get_energy_loss(self,
-                         predictions,
-                         labels,
-                         n_atoms,
-                         max_train_steps,
-                         loss_parameters: LossParameters,
-                         collections) -> Dict[str, tf.Tensor]:
-        """
-        The energy loss or energy losses if temperature effect is considered.
-        """
-        if not self._finite_temperature.on:
-            return super(AtomicNN, self)._get_energy_loss(
-                predictions=predictions,
-                labels=labels,
-                n_atoms=n_atoms,
-                max_train_steps=max_train_steps,
-                loss_parameters=loss_parameters,
-                collections=collections)
-
-        elif self._finite_temperature.algorithm == "full":
-            losses = {}
-            with tf.name_scope("Energy"):
-                for scope_name, prop in {"U": "energy",
-                                         "F": "free_energy",
-                                         "S": "eentropy"}.items():
-                    if prop in self._minimize_properties:
-                        loss = loss_ops.get_energy_loss(
-                            labels=labels[prop],
-                            predictions=predictions[prop],
-                            n_atoms=n_atoms,
-                            max_train_steps=max_train_steps,
-                            options=loss_parameters[prop],
-                            collections=collections,
-                            name_scope=scope_name)
-                        losses[prop] = loss
-            return losses
-
-        else:
-            loss = loss_ops.get_energy_loss(
-                labels=labels["free_energy"],
-                predictions=predictions["free_energy"],
-                n_atoms=n_atoms,
-                max_train_steps=max_train_steps,
-                options=loss_parameters.energy,
-                collections=collections)
-            return {"free_energy": loss}
+            log_tensor(y_sum)
+        return EnergyOps(energy=EnergyOp(y_sum, y_atomic), enthalpy=enthalpy)

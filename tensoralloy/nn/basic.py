@@ -726,16 +726,15 @@ class BasicNN:
             predictions = dict()
 
             with tf.name_scope("Energy"):
-                ops = self._get_energy_ops(
-                    outputs, features, verbose=verbose)
-                predictions.update(ops.__dict__)
+                ops = self._get_energy_ops(outputs, features, verbose)
+                predictions.update(ops.as_dict())
 
             if 'forces' in properties or \
                     'stress' in properties or \
                     'total_pressure' in properties:
                 with tf.name_scope("Forces"):
                     predictions["forces"] = self._get_forces_op(
-                        ops.free_energy,
+                        ops.variational_energy.total,
                         features["positions"],
                         verbose=verbose)
 
@@ -743,7 +742,7 @@ class BasicNN:
                 with tf.name_scope("PartialForces"):
                     predictions.update(
                         self._get_partial_forces_ops(
-                            ops.free_energy,
+                            ops.variational_energy.total,
                             rij=features["g2.rij"],
                             rijk=features.get("g4.rijk", None)))
 
@@ -751,7 +750,7 @@ class BasicNN:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
-                            energy=ops.free_energy,
+                            energy=ops.variational_energy.total,
                             cell=features["cell"],
                             volume=features["volume"],
                             positions=features["positions"],
@@ -765,7 +764,7 @@ class BasicNN:
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
                     predictions["hessian"] = self._get_hessian_op(
-                        ops.free_energy, features["positions"],
+                        ops.variational_energy.total, features["positions"],
                         verbose=verbose)
 
             if mode == tf_estimator.ModeKeys.PREDICT \
