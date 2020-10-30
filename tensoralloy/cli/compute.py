@@ -292,9 +292,9 @@ class ComputePTErrorProgram(CLIProgram):
                         shuffle=False
                     )
                     features, labels = input_fn()
-                    predictions = manager.nn.build(features=features,
-                                                   mode=mode,
-                                                   verbose=True)
+                    predictions = manager.model.build(features=features,
+                                                      mode=mode,
+                                                      verbose=True)
                     if args.no_ema:
                         saver = tf.train.Saver(tf.trainable_variables())
                     else:
@@ -491,9 +491,9 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         shuffle=False
                     )
                     features, labels = input_fn()
-                    predictions = manager.nn.build(features=features,
-                                                   mode=mode,
-                                                   verbose=True)
+                    predictions = manager.model.build(features=features,
+                                                      mode=mode,
+                                                      verbose=True)
 
                     if args.no_ema:
                         saver = tf.train.Saver(tf.trainable_variables())

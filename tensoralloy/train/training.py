@@ -19,13 +19,15 @@ from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
-from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.nn.atomic import TemperatureDependentAtomicNN, AtomicNN
+from tensoralloy.nn.atomic.sf import SymmetryFunction
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.tersoff import Tersoff
+from tensoralloy.nn.atomic.special import BeNN
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
@@ -36,6 +38,75 @@ from tensoralloy.train.dataclasses import EstimatorHyperParams
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+class PairStyle:
+    """
+    The pair style.
+    """
+
+    def __init__(self, pair_style: str):
+        """
+        Initialization.
+        """
+        self._pair_style = pair_style
+        self._angular = False
+        self._td = False
+        self._special = False
+
+        keys = pair_style.split("/")
+        if keys[0] == 'special':
+            if keys[1] == 'Be':
+                self._td = True
+                self._model = "grap"
+                self._angular = False
+                self._category = pair_style
+            self._special = True
+        else:
+            self._category = keys[0]
+            self._model = keys[1] if len(keys) > 1 else pair_style
+            if len(keys) == 1:
+                assert pair_style == "tersoff"
+                self._angular = True
+                self._td = False
+                self._model = pair_style
+            elif len(keys) == 3:
+                assert keys[1] == 'sf' and keys[2] == 'angular'
+                self._angular = True
+                self._td = keys[0] == 'td'
+
+    def __eq__(self, other):
+        return self._pair_style == other
+
+    def __str__(self):
+        return self._pair_style
+
+    @property
+    def temperature_dependent(self):
+        """ Return True if the pair style is temperature-depenedent. """
+        return self._td
+
+    @property
+    def category(self):
+        """ Return the category of the pair style (atomic, td, tersoff, eam) """
+        return self._category
+
+    @property
+    def model(self):
+        """
+        Return the name of the potential of the pair style (sf, adp, eam, etc).
+        """
+        return self._model
+
+    @property
+    def angular(self):
+        """ Return True if angular interactions should be used. """
+        return self._angular
+
+    @property
+    def special(self):
+        """ Return True if this is a special pair style. """
+        return self._special
 
 
 class TrainingManager:
@@ -67,19 +138,25 @@ class TrainingManager:
             raise ValueError("`input_file` should be a str or InputReader!")
 
         self._float_precision = self._reader['precision']
+        self._pair_style = PairStyle(self._reader["pair_style"])
 
         with precision_scope(self._float_precision):
             self._dataset = self._get_dataset(validate_tfrecords)
             self._hparams = self._get_hparams()
-            self._nn = self._get_nn()
+            self._model = self._get_model()
             self._input_file = input_file
 
     @property
-    def nn(self):
+    def model(self):
         """
         Return a `BasicNN`.
         """
-        return self._nn
+        return self._model
+
+    @property
+    def pair_style(self):
+        """ Return the corresponding pair style. """
+        return self._pair_style
 
     @property
     def dataset(self) -> Dataset:
@@ -136,6 +213,7 @@ class TrainingManager:
         """
         Initialize an atomistic neural network potential.
         """
+        elements = kwargs['elements']
         hidden_sizes = {}
         for element in kwargs['elements']:
             keypath = f'nn.atomic.layers.{element}'
@@ -143,7 +221,6 @@ class TrainingManager:
             if value is not None:
                 hidden_sizes[element] = value
 
-        pair_style = self._reader['pair_style']
         configs = self._reader['nn.atomic']
         params = {
             'activation': configs['activation'],
@@ -152,27 +229,30 @@ class TrainingManager:
             'use_atomic_static_energy': configs['use_atomic_static_energy'],
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
-            'use_resnet_dt': configs['use_resnet_dt'],
-            'finite_temperature': configs['finite_temperature'],
+            'use_resnet_dt': configs['use_resnet_dt']
         }
         params.update(kwargs)
 
-        if pair_style == 'atomic/sf':
-            for key in ('eta', 'omega', 'gamma', 'zeta', 'beta',
-                        'cutoff_function', 'minmax_scale'):
-                params[key] = configs['sf'][key]
-            return SymmetryFunctionNN(**params)
-        elif pair_style == 'atomic/deepmd':
-            params.update(configs['deepmd'])
-            return DeepPotSE(**params)
+        if self._pair_style.model == 'sf':
+            descriptor = SymmetryFunction(elements, **configs["sf"])
+        elif self._pair_style.model == 'deepmd':
+            descriptor = DeepPotSE(elements, **configs['deepmd'])
         else:
-            for key in ('moment_tensors',
-                        'algorithm',
-                        'cutoff_function',
-                        'param_space_method'):
-                params[key] = configs['grap'][key]
-            params['parameters'] = configs['grap'][params['algorithm']]
-            return GenericRadialAtomicPotential(**params)
+            algo = configs["grap"]["algorithm"]
+            grap_kwargs = configs["grap"]
+            grap_kwargs["parameters"] = configs["grap"][algo]
+            descriptor = GenericRadialAtomicPotential(elements, **grap_kwargs)
+
+        if self._pair_style.category == "td":
+            cls = TemperatureDependentAtomicNN
+            params['finite_temperature'] = configs['finite_temperature']
+        elif self._pair_style.category == "special/Be":
+            cls = BeNN
+            params['finite_temperature'] = configs['finite_temperature']
+        else:
+            cls = AtomicNN
+        params["descriptor"] = descriptor
+        return cls(**params)
 
     def _get_eam_nn(self, kwargs: dict) -> Union[EamAlloyNN, EamFsNN, AdpNN]:
         """
@@ -206,15 +286,14 @@ class TrainingManager:
                            custom_potentials=custom_potentials,
                            fixed_functions=fixed_functions))
 
-        pair_style = self._reader['pair_style']
-        if pair_style == "eam/alloy":
+        if self._pair_style.model == "alloy":
             return EamAlloyNN(**kwargs)
-        elif pair_style == "eam/fs":
+        elif self._pair_style.model == "fs":
             return EamFsNN(**kwargs)
-        elif pair_style == "eam/adp":
+        elif self._pair_style.model == "adp":
             return AdpNN(**kwargs)
         else:
-            raise ValueError(f"Unknown pair_style {pair_style}")
+            raise ValueError(f"Unknown pair_style {self._pair_style}")
 
     def _get_tersoff_nn(self, kwargs: dict) -> Tersoff:
         """
@@ -226,7 +305,7 @@ class TrainingManager:
                            custom_potentials=potential_file))
         return Tersoff(**kwargs)
 
-    def _get_nn(self):
+    def _get_model(self):
         """
         Initialize a `BasicNN`.
         """
@@ -236,13 +315,12 @@ class TrainingManager:
         kwargs = {'elements': elements,
                   'minimize_properties': minimize_properties,
                   'export_properties': export_properties}
-        pair_style = self._reader['pair_style']
-        if pair_style.startswith("atomic"):
-            nn = self._get_atomic_nn(kwargs)
-        elif pair_style == "tersoff":
+        if self._pair_style == "tersoff":
             nn = self._get_tersoff_nn(kwargs)
-        else:
+        elif self._pair_style.category == "eam":
             nn = self._get_eam_nn(kwargs)
+        else:
+            nn = self._get_atomic_nn(kwargs)
         nn.attach_transformer(self._dataset.transformer)
         return nn
 
@@ -252,30 +330,20 @@ class TrainingManager:
         """
         database = connect(self._reader['dataset.sqlite3'])
 
-        pair_style = self._reader['pair_style']
         rcut = self._reader['rcut']
         acut = self._reader['acut']
 
         max_occurs = database.max_occurs
         nij_max = database.get_nij_max(rcut, allow_calculation=True)
         nnl_max = database.get_nnl_max(rcut, allow_calculation=True)
-        angular = False
-        angular_symmetricity = False
-        ij2k_max = 0
-        nijk_max = 0
-
-        if pair_style == 'atomic/sf' and self._reader['nn.atomic.sf.angular']:
-            angular = True
-            angular_symmetricity = True
+        angular = self._pair_style.angular
+        angular_symmetricity = self._pair_style != "tersoff"
+        if angular:
             nijk_max = database.get_nijk_max(acut, allow_calculation=True)
             ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
-
-        elif pair_style == "tersoff":
-            nijk_max = database.get_nijk_max(
-                acut, allow_calculation=True, symmetric=False)
-            ij2k_max = database.get_ij2k_max(acut, allow_calculation=True)
-            angular = True
-            angular_symmetricity = False
+        else:
+            ij2k_max = 0
+            nijk_max = 0
 
         clf = BatchUniversalTransformer(
             max_occurs=max_occurs, rcut=rcut, angular=angular, nij_max=nij_max,
@@ -347,7 +415,7 @@ class TrainingManager:
             with graph.as_default():
 
                 dataset = self._dataset
-                nn = self._nn
+                nn = self._model
                 hparams = self._hparams
 
                 self._check_before_training(hparams)
@@ -462,14 +530,14 @@ class TrainingManager:
                 graph_name = f'{self._dataset.name}.{pb_ext}'
             graph_path = join(self._hparams.train.model_dir, graph_name)
 
-            self._nn.export(
+            self._model.export(
                 output_graph_path=graph_path,
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
                 keep_tmp_files=False,
                 export_partial_forces_model=export_lammps_mpi_pb)
 
-            if isinstance(self._nn, (EamAlloyNN, EamFsNN, AdpNN)):
+            if isinstance(self._model, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']
 
                 if 'lattice' in setfl_kwargs:
@@ -480,18 +548,18 @@ class TrainingManager:
                     lattice_constants = None
                     lattice_types = None
 
-                if isinstance(self._nn, AdpNN):
+                if isinstance(self._model, AdpNN):
                     if tag is not None:
                         setfl = f'{self._dataset.name}.{tag}.adp'
                     else:
                         setfl = f'{self._dataset.name}.adp'
                 else:
                     if tag is not None:
-                        setfl = f'{self._dataset.name}.{self._nn.tag}.{tag}.eam'
+                        setfl = f'{self._dataset.name}.{self._model.tag}.{tag}.eam'
                     else:
-                        setfl = f'{self._dataset.name}.{self._nn.tag}.eam'
+                        setfl = f'{self._dataset.name}.{self._model.tag}.eam'
 
-                self._nn.export_to_setfl(
+                self._model.export_to_setfl(
                     setfl=join(self._hparams.train.model_dir, setfl),
                     checkpoint=checkpoint,
                     lattice_constants=lattice_constants,

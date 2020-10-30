@@ -20,7 +20,7 @@ from nose.tools import with_setup, assert_dict_equal, assert_true
 from tensoralloy.io.read import read_file
 from tensoralloy.utils import Defaults
 from tensoralloy.train.training import TrainingManager
-from tensoralloy.nn.atomic.sf import SymmetryFunctionNN
+from tensoralloy.nn.atomic.sf import SymmetryFunction
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import BatchUniversalTransformer
 
@@ -61,7 +61,7 @@ class InitializationTest(unittest.TestCase):
         manager = TrainingManager(input_file)
         transformer = manager.dataset.transformer
         hparams = manager.hparams
-        nn = manager.nn
+        nn = manager.model
 
         assert_equal(manager.dataset.transformer.descriptor, 'universal')
         assert_equal(manager.dataset.test_size, 1)
@@ -77,7 +77,7 @@ class InitializationTest(unittest.TestCase):
         assert_dict_equal(hparams.opt.additional_kwargs,
                           {'use_nesterov': True, 'momentum': 0.8})
 
-        assert_true(isinstance(nn, SymmetryFunctionNN))
+        assert_true(isinstance(nn.descriptor, SymmetryFunction))
         assert_equal(getattr(nn, "_kernel_initializer"), "he_uniform")
 
 
@@ -110,7 +110,7 @@ class EamSgdTrainingTest(unittest.TestCase):
         input_file = join(test_dir(), 'inputs', 'snap_Ni.zjw04.toml')
         manager = TrainingManager(input_file)
         assert_equal(manager.dataset.transformer.rc, 6.0)
-        assert_dict_equal(getattr(manager.nn, "potentials"),
+        assert_dict_equal(getattr(manager.model, "potentials"),
                           {"Ni": {"rho": "zjw04", "embed": "zjw04"},
                            "NiNi": {"phi": "zjw04"}})
         manager.train_and_evaluate()
@@ -224,7 +224,7 @@ def test_warm_start():
 
     with tf.Graph().as_default():
         dataset = second.dataset
-        nn = second.nn
+        nn = second.model
         hparams = second.hparams
 
         if exists(hparams.train.model_dir):

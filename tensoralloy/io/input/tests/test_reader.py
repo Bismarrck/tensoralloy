@@ -26,7 +26,6 @@ def test_read_sf_angular_toml():
     configs = reader.configs
 
     assert_equal(reader['precision'], 'medium')
-    assert_equal(reader['nn.atomic.sf.trainable'], True)
 
     assert_equal(realpath(reader['dataset.sqlite3']),
                  realpath(join(datasets_dir(True), 'qm7.db')))
@@ -36,14 +35,13 @@ def test_read_sf_angular_toml():
                  realpath(join(project_dir(True), 'experiments/qm7-k3/train')))
     assert_equal(reader['train.ckpt.checkpoint_filename'], False)
 
-    assert_equal(nested_get(configs, 'pair_style'), 'atomic/sf')
+    assert_equal(nested_get(configs, 'pair_style'), 'atomic/sf/angular')
     assert_equal(nested_get(configs, 'nn.atomic.kernel_initializer'),
                  'truncated_normal')
     assert_list_equal(nested_get(configs, 'nn.atomic.sf.eta'),
                       [0.01, 0.1, 0.5, 1.0, 2.0, 4.0, 20.0, 40.0])
     assert_list_equal(reader['nn.atomic.sf.omega'],
                       [0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
-    assert_equal(nested_get(configs, 'nn.atomic.sf.angular'), True)
     assert_equal(nested_get(configs, 'nn.atomic.sf.cutoff_function'),
                  'polynomial')
     assert_not_in('eam', configs['nn'])
