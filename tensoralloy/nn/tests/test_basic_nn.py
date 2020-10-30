@@ -20,7 +20,8 @@ from typing import List
 
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
-from tensoralloy.nn.atomic import SymmetryFunctionNN
+from tensoralloy.nn.atomic import AtomicNN, TemperatureDependentAtomicNN
+from tensoralloy.nn.atomic import SymmetryFunction
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchUniversalTransformer
@@ -167,15 +168,20 @@ def test_build_nn_with_properties():
         Run a test.
         """
         with tf.Graph().as_default():
-            algo = "semi" if finite_temperature else "off"
-            nn = SymmetryFunctionNN(elements=elements,
-                                    minmax_scale=False,
-                                    minimize_properties=list_of_properties,
-                                    finite_temperature={"algorithm": algo})
+            sf = SymmetryFunction(elements=elements)
             clf = BatchUniversalTransformer(
                 rcut=rc, max_occurs=max_occurs, nij_max=nij_max,
                 nnl_max=nnl_max, batch_size=batch_size, use_stress=True,
                 use_forces=True)
+            kwargs = dict(
+                elements=elements,
+                descriptor=sf,
+                minmax_scale=False,
+                minimize_properties=list_of_properties)
+            if finite_temperature:
+                nn = TemperatureDependentAtomicNN(**kwargs)
+            else:
+                nn = AtomicNN(**kwargs)
             nn.attach_transformer(clf)
             protobuf = tf.convert_to_tensor(
                 clf.encode(atoms).SerializeToString())

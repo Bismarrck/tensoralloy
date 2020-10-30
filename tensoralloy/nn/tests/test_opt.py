@@ -19,7 +19,7 @@ from tensoralloy.io.db import connect
 from tensoralloy.io.read import read_file
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.opt import get_train_op
-from tensoralloy.nn.atomic import SymmetryFunctionNN
+from tensoralloy.nn.atomic import SymmetryFunction, AtomicNN
 from tensoralloy.nn.dataclasses import OptParameters, LossParameters
 
 __author__ = 'Xin Chen'
@@ -65,7 +65,9 @@ def run_case():
                                    decay_rate=0.9, staircase=False,
                                    method='Adam')
 
-    nn = SymmetryFunctionNN(elements=dataset.transformer.elements)
+    elements = dataset.transformer.elements
+    sf = SymmetryFunction(elements=elements)
+    nn = AtomicNN(elements=elements, descriptor=sf, minmax_scale=False)
     nn.attach_transformer(dataset.transformer)
 
     predictions = nn.build(features, tf_estimator.ModeKeys.TRAIN)
@@ -109,6 +111,7 @@ def test_get_train_op():
 
         assert_equal(len(tf.trainable_variables()), 6)
         assert_equal(len(tf.moving_average_variables()), 6)
+        print(tf.model_variables())
         assert_equal(len(tf.model_variables()), 6)
 
 
