@@ -21,6 +21,9 @@ from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 
 
+GRAP_algorithms = ["pexp", "density", "morse", "sf"]
+
+
 class Algorithm:
     """
     The base class for all radial descriptors.
@@ -210,11 +213,14 @@ class GenericRadialAtomicPotential(Descriptor):
         moment_tensors = list(set(moment_tensors))
         for moment_tensor in moment_tensors:
             assert 0 <= moment_tensor <= 2
-        
-        self._algorithm = self.initialize_algorithm(
+
+        self._algorithm = algorithm
+        self._algorithm_fn = self.initialize_algorithm(
             algorithm, parameters, param_space_method)
         self._moment_tensors = moment_tensors
         self._cutoff_function = cutoff_function
+        self._parameters = parameters
+        self._param_space_method = param_space_method
 
     @property
     def name(self):
@@ -228,7 +234,6 @@ class GenericRadialAtomicPotential(Descriptor):
         d = super(GenericRadialAtomicPotential, self).as_dict()
         d.update({"moment_tensors": self._moment_tensors,
                   "cutoff_function": self._cutoff_function})
-        d.update(self._algorithm.as_dict())
         return d
 
     @staticmethod
@@ -298,7 +303,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 
                 for tau in range(len(self._algorithm)):
                     with tf.name_scope(f"{tau}"):
-                        v = self._algorithm.compute(
+                        v = self._algorithm_fn.compute(
                             tau, rij, rc, dtype=dtype)
                         # The standard central-force model
                         if 0 in self._moment_tensors:

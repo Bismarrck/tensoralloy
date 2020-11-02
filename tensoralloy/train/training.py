@@ -23,6 +23,7 @@ from tensoralloy.nn.atomic import TemperatureDependentAtomicNN, AtomicNN
 from tensoralloy.nn.atomic.sf import SymmetryFunction
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
+from tensoralloy.nn.atomic.grap import GRAP_algorithms
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
@@ -241,12 +242,15 @@ class TrainingManager:
             algo = configs["grap"]["algorithm"]
             grap_kwargs = configs["grap"]
             grap_kwargs["parameters"] = configs["grap"][algo]
+            for key in GRAP_algorithms:
+                if key in grap_kwargs:
+                    grap_kwargs.pop(key)
             descriptor = GenericRadialAtomicPotential(elements, **grap_kwargs)
 
         if self._pair_style.category == "td":
             cls = TemperatureDependentAtomicNN
             params['finite_temperature'] = configs['finite_temperature']
-        elif self._pair_style.category == "special/Be":
+        elif self._pair_style == "special/Be":
             cls = BeNN
             params['finite_temperature'] = configs['finite_temperature']
         else:

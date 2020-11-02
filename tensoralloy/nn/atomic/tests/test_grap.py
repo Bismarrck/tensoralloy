@@ -8,7 +8,7 @@ import nose
 
 from nose.tools import assert_equal
 
-from tensoralloy.nn.atomic.grap import Algorithm
+from tensoralloy.nn.atomic.grap import Algorithm, GenericRadialAtomicPotential
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -29,6 +29,12 @@ def test_gen_algorithm():
         assert_equal(row['y'], params['y'][i])
 
     Algorithm.required_keys = []
+
+
+def test_serialization():
+    grap = GenericRadialAtomicPotential(
+        elements=['Be'], parameters={"eta": [1.0, 2.0], "omega": [0.0]})
+    grap.as_dict()
 
 
 if __name__ == "__main__":

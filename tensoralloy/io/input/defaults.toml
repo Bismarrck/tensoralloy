@@ -27,7 +27,7 @@ method = "rmse"
 [nn.loss.eentropy]
 weight = 1.0
 per_atom_loss = false
-method = "rmse"
+method = "ylogy"
 
 [nn.loss.free_energy]
 weight = 1.0
@@ -112,9 +112,9 @@ zeta = [1.0, 4.0]
 
 [nn.atomic.grap]
 moment_tensors = 0
-algorithm = 'sf'
-cutoff_function = 'cosine'
-param_space_method = "cross"
+algorithm = 'pexp'
+cutoff_function = 'polynomial'
+param_space_method = "pair"
 
 [nn.atomic.grap.sf]
 eta = [0.1, 0.5, 1.0, 4.0]
@@ -162,8 +162,8 @@ symmetric_mixing = false
 method = "adam"
 learning_rate = 0.01
 decay_function = false
-decay_rate = 0.95
-decay_steps = 1000
+decay_rate = 0.98
+decay_steps = 2500
 staircase = false
 
 [opt.sgd]
@@ -190,7 +190,7 @@ decay = 1e-4
 
 [train]
 reset_global_step = true
-batch_size = 50
+batch_size = 25
 shuffle = true
 model_dir = "train"
 max_checkpoints_to_keep = 20
@@ -198,7 +198,7 @@ train_steps = 10000
 eval_steps = 1000
 summary_steps = 100
 log_steps = 100
-profile_steps = 2000
+profile_steps = 0
 
 [train.ckpt]
 checkpoint_filename = false

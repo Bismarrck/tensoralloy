@@ -160,18 +160,13 @@ class InputReader:
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
 
+        layers = nested_get(configs, 'nn.atomic.layers')
+        if isinstance(layers, dict):
+            for key, val in layers.items():
+                nested_set(results, f'nn.atomic.layers.{key}', val)
+
         pair_style = nested_get(configs, 'pair_style')
-
-        if pair_style.startswith("atomic"):
-            layers = nested_get(configs, 'nn.atomic.layers')
-            if isinstance(layers, dict):
-                for key, val in layers.items():
-                    nested_set(results, f'nn.atomic.layers.{key}', val)
-
-            if 'eam' in results['nn']:
-                del results['nn']['eam']
-
-        else:
+        if pair_style.startswith("eam"):
             for attr in ('constant', 'type'):
                 values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")
                 if isinstance(values, dict):
@@ -190,9 +185,6 @@ class InputReader:
                         else:
                             dst = None
                         _safe_update(src, dst)
-
-            if 'atomic' in results['nn']:
-                del results['nn']['atomic']
 
         # Convert the paths
         for keypath in ("dataset.sqlite3",
