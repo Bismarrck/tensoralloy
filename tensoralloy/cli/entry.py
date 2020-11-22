@@ -72,7 +72,7 @@ class PrintEvaluationSummaryProgram(CLIProgram):
 
         global_step_patt = re.compile(r".*tensorflow\s+INFO\s+Saving\sdict"
                                       r"\sfor\sglobal\sstep\s(\d+):(.*)")
-        key_value_pair_patt = re.compile(r"\s+(.*)\s=\s([0-9.-]+)")
+        key_value_pair_patt = re.compile(r"\s+(.*)\s=\s([0-9.\-eE]+)")
         pid_patt = re.compile(r".*tensorflow\s+INFO\s+pid=(\d+)")
         results = {}
 

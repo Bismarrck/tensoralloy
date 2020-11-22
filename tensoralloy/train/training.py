@@ -9,6 +9,7 @@ import shutil
 import os
 import platform
 import logging
+import warnings
 
 from os.path import join, exists, dirname, basename, realpath
 from typing import Union
@@ -16,7 +17,7 @@ from tensorflow.python import debug as tf_debug
 from tensorflow_estimator import estimator as tf_estimator
 from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
 
-from tensoralloy.train.dataset import Dataset
+from tensoralloy.train.dataset.dataset import PolarDataset, Dataset
 from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic import TemperatureDependentAtomicNN, AtomicNN
@@ -28,9 +29,10 @@ from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
 from tensoralloy.nn.tersoff import Tersoff
-from tensoralloy.nn.atomic.special import BeNN
+from tensoralloy.nn.atomic import special
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
+from tensoralloy.transformer.polar import BatchPolarTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
 from tensoralloy.utils import check_path
 from tensoralloy.precision import precision_scope
@@ -59,6 +61,11 @@ class PairStyle:
         if keys[0] == 'special':
             if keys[1] == 'Be':
                 self._td = True
+                self._model = "grap"
+                self._angular = False
+                self._category = pair_style
+            elif keys[1] == 'polar':
+                self._td = False
                 self._model = "grap"
                 self._angular = False
                 self._category = pair_style
@@ -251,8 +258,12 @@ class TrainingManager:
             cls = TemperatureDependentAtomicNN
             params['finite_temperature'] = configs['finite_temperature']
         elif self._pair_style == "special/Be":
-            cls = BeNN
+            cls = special.BeNN
             params['finite_temperature'] = configs['finite_temperature']
+        elif self._pair_style == "special/polar":
+            cls = special.PolarNN
+            params['inner_layers'] = configs['polar']['inner_layers']
+            params['polar_loss_weight'] = configs['polar']['polar_loss_weight']
         else:
             cls = AtomicNN
         params["descriptor"] = descriptor
@@ -349,7 +360,11 @@ class TrainingManager:
             ij2k_max = 0
             nijk_max = 0
 
-        clf = BatchUniversalTransformer(
+        if self._pair_style == "special/polar":
+            cls = BatchPolarTransformer
+        else:
+            cls = BatchUniversalTransformer
+        clf = cls(
             max_occurs=max_occurs, rcut=rcut, angular=angular, nij_max=nij_max,
             nnl_max=nnl_max, nijk_max=nijk_max, ij2k_max=ij2k_max,
             symmetric=angular_symmetricity, use_forces=database.has_forces,
@@ -357,8 +372,13 @@ class TrainingManager:
 
         name = self._reader['dataset.name']
         serial = self._reader['dataset.serial']
-        dataset = Dataset(database=database, transformer=clf,
-                          name=name, serial=serial)
+
+        if self._pair_style == "special/polar":
+            cls = PolarDataset
+        else:
+            cls = Dataset
+        dataset = cls(database=database, transformer=clf, name=name,
+                      serial=serial)
 
         test_size = self._reader['dataset.test_size']
         tfrecords_dir = self._reader['dataset.tfrecords_dir']
@@ -414,6 +434,7 @@ class TrainingManager:
 
         graph = tf.Graph()
         precision = self._float_precision
+        warnings.filterwarnings("ignore")
 
         with precision_scope(precision):
             with graph.as_default():

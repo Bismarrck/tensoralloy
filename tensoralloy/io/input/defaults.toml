@@ -95,6 +95,10 @@ activation = "softplus"
 activation = "softplus"
 layers = [128, 128]
 
+[nn.atomic.polar]
+inner_layers = [128, 128]
+polar_loss_weight = 1.0
+
 [nn.atomic.deepmd]
 rcs = 4.0
 m1 = 100
@@ -111,7 +115,7 @@ gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
 
 [nn.atomic.grap]
-moment_tensors = 0
+moment_tensors = [0, 1]
 algorithm = 'pexp'
 cutoff_function = 'polynomial'
 param_space_method = "pair"

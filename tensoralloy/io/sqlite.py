@@ -241,7 +241,7 @@ class CoreDatabase(SQLite3Database):
                              n_jobs=-1,
                              verbose=False) -> NeighborSize:
         """
-        Update the metadata of neighbor properties.
+        Rebuild the metadata of neighbor properties.
         """
         def _find(aid):
             nl = find_neighbor_size_of_atoms(
@@ -299,6 +299,31 @@ class CoreDatabase(SQLite3Database):
 
         return NeighborSize(nij=maxvals.nij, nijk=maxvals.nijk, nnl=maxvals.nnl,
                             ij2k=maxvals.ij2k)
+
+    def may_update_neighbor_meta(self, rc: float, newval: NeighborSize,
+                                 angular=False):
+        """
+        Compare the current neighbor properties with the given `newval` and
+        update any property if `newval > current_val`.
+
+        Returns
+        -------
+        updated : bool
+            Return True if metadata is updated.
+
+        """
+        metadata = self._metadata
+        k_max = 2 + int(angular)
+        updated = False
+        for prop in NeighborProperty:
+            keypath = _get_keypath(k_max, rc, prop)
+            val = nested_get(metadata, keypath)
+            if newval[prop] > val:
+                updated = True
+                nested_set(metadata, keypath, max(val, newval[prop]))
+        if updated:
+            self._write_metadata()
+        return updated
 
 
 def _compute_atomic_static_energy(database: SQLite3Database,

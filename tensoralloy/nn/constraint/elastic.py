@@ -78,7 +78,7 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
         for vi in range(6):
             i, j = voigt_to_ij(vi, is_py_index=True)
             pairs = []
-            for vj in range(vi, 6):
+            for vj in range(6):
                 k, l = voigt_to_ij(vj, is_py_index=True)
                 pairs.append((k, l))
             ops = _get_cijkl_op(total_stress, cell, volume, i, j, pairs)

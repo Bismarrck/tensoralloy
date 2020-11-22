@@ -1283,6 +1283,8 @@ class BatchUniversalTransformer(UniversalTransformer,
             use_forces=self._use_forces,
             use_stress=self._use_stress
         )
+        decoded.update(self._decode_additional_properties(example))
+
         radial_metadata = self._decode_radial_metadata(example)
         decoded.update(radial_metadata.as_dict())
         if self._angular:
@@ -1297,20 +1299,8 @@ class BatchUniversalTransformer(UniversalTransformer,
         """
         with tf.name_scope("decoding"):
 
-            feature_list = {
-                'positions': tf.FixedLenFeature([], tf.string),
-                'n_atoms_vap': tf.FixedLenFeature([], tf.int64),
-                'cell': tf.FixedLenFeature([], tf.string),
-                'volume': tf.FixedLenFeature([], tf.string),
-                'energy': tf.FixedLenFeature([], tf.string),
-                'free_energy': tf.FixedLenFeature([], tf.string),
-                'atom_masks': tf.FixedLenFeature([], tf.string),
-                'pulay_stress': tf.FixedLenFeature([], tf.string),
-                'etemperature': tf.FixedLenFeature([], tf.string),
-                'eentropy': tf.FixedLenFeature([], tf.string),
-                'g2.indices': tf.FixedLenFeature([], tf.string),
-                'g2.shifts': tf.FixedLenFeature([], tf.string)
-            }
+            feature_list = self.get_decode_feature_list()
+
             if self._use_forces:
                 feature_list['forces'] = tf.FixedLenFeature([], tf.string)
 

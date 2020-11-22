@@ -377,6 +377,9 @@ class BatchDescriptorTransformer(BaseTransformer):
         return {'g2.indices': bytes_feature(indices.tostring()),
                 'g2.shifts': bytes_feature(data.n1.tostring())}
 
+    def _encode_additional_properties(self, atoms) -> dict:
+        return {}
+
     def _encode_atoms(self, atoms: Atoms) -> dict:
         """
         Encode the basic properties of an `Atoms` object.
@@ -416,6 +419,8 @@ class BatchDescriptorTransformer(BaseTransformer):
             'eentropy': bytes_feature(eentropy.tostring()),
             'etemperature': bytes_feature(etemp.tostring())
         }
+        feature_list.update(self._encode_additional_properties(atoms))
+
         if self.use_forces:
             forces = vap.map_forces(atoms.get_forces()).astype(np_dtype)
             feature_list['forces'] = bytes_feature(forces.tostring())
@@ -444,6 +449,10 @@ class BatchDescriptorTransformer(BaseTransformer):
             The target `Atoms` object to encode.
         """
         pass
+
+    @staticmethod
+    def _decode_additional_properties(example: Dict[str, tf.Tensor]):
+        return {}
 
     @staticmethod
     def _decode_atoms(example: Dict[str, tf.Tensor],
@@ -518,6 +527,23 @@ class BatchDescriptorTransformer(BaseTransformer):
                 total_pressure, name='total_pressure')
 
         return decoded
+
+    def get_decode_feature_list(self):
+        feature_list = {
+            'positions': tf.FixedLenFeature([], tf.string),
+            'n_atoms_vap': tf.FixedLenFeature([], tf.int64),
+            'cell': tf.FixedLenFeature([], tf.string),
+            'volume': tf.FixedLenFeature([], tf.string),
+            'energy': tf.FixedLenFeature([], tf.string),
+            'free_energy': tf.FixedLenFeature([], tf.string),
+            'atom_masks': tf.FixedLenFeature([], tf.string),
+            'pulay_stress': tf.FixedLenFeature([], tf.string),
+            'etemperature': tf.FixedLenFeature([], tf.string),
+            'eentropy': tf.FixedLenFeature([], tf.string),
+            'g2.indices': tf.FixedLenFeature([], tf.string),
+            'g2.shifts': tf.FixedLenFeature([], tf.string)
+        }
+        return feature_list
 
     @abc.abstractmethod
     def decode_protobuf(self, example_proto: tf.Tensor) -> dict:

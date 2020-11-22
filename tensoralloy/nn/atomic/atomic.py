@@ -3,6 +3,7 @@
 This module defines various atomic neural networks.
 """
 from __future__ import print_function, absolute_import
+from tensoralloy.precision import get_float_dtype
 
 import tensorflow as tf
 import json
@@ -128,12 +129,34 @@ class AtomicNN(BasicNN):
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties,
                 "descriptor": self._descriptor.as_dict()}
+    
+    def _create_variable(self, name, shape, trainable=True, init_val=0.0,
+                         monitoring=0):
+        """
+        Create a variable.
+        """
+        collections = [
+            tf.GraphKeys.GLOBAL_VARIABLES, 
+            tf.GraphKeys.MODEL_VARIABLES,
+            self.default_collection,
+        ]
+        if trainable:
+            collections.append(tf.GraphKeys.TRAINABLE_VARIABLES)
+        if monitoring >= 1:
+            collections.append(GraphKeys.EVAL_METRICS)
+        if monitoring >= 2:
+            collections.append(GraphKeys.TRAIN_METRICS)
+        dtype = get_float_dtype()
+        init = tf.constant_initializer(init_val, dtype)
+        return tf.get_variable(name=name, shape=shape, dtype=dtype, 
+                               trainable=trainable, collections=collections,
+                               initializer=init, 
+                               aggregation=tf.VariableAggregation.MEAN)
 
-    @staticmethod
-    def _apply_minmax_normalization(x: tf.Tensor,
+    def _apply_minmax_normalization(self,
+                                    x: tf.Tensor,
                                     mask: tf.Tensor,
-                                    mode: tf_estimator.ModeKeys,
-                                    collections=None):
+                                    mode: tf_estimator.ModeKeys):
         """
         Apply the min-max normalization to raw symmetry function descriptors.
 
@@ -145,8 +168,6 @@ class AtomicNN(BasicNN):
             The atom mask.
         mode : tf_estimator.ModeKeys
 
-        collections : List[str]
-            Additional collections to place the variables.
 
         Returns
         -------
@@ -155,27 +176,9 @@ class AtomicNN(BasicNN):
 
         """
         with tf.name_scope("MinMax"):
-            _collections = [
-                tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.MODEL_VARIABLES
-            ]
-            if collections is not None:
-                _collections += collections
-            _shape = [1, 1, x.shape[-1]]
-            _dtype = x.dtype
-            _get_initializer = \
-                lambda val: tf.constant_initializer(val, _dtype)
-
-            xlo = tf.get_variable(
-                name="xlo", shape=_shape, dtype=_dtype,
-                trainable=False, collections=_collections,
-                initializer=_get_initializer(1000.0),
-                aggregation=tf.VariableAggregation.MEAN)
-            xhi = tf.get_variable(
-                name="xhi", shape=_shape, dtype=_dtype,
-                trainable=False, collections=_collections,
-                initializer=_get_initializer(0.0),
-                aggregation=tf.VariableAggregation.MEAN)
-
+            shape = [1, 1, x.shape[-1]]
+            xlo = self._create_variable("xlo", shape, False, init_val=1000.)
+            xhi = self._create_variable("xhi", shape, False, init_val=0.)
             if mode == tf_estimator.ModeKeys.TRAIN:
                 xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
                 xmin = tf.reshape(
@@ -234,15 +237,13 @@ class AtomicNN(BasicNN):
                         bias_mean = self._atomic_static_energy.get(element, 0.0)
                     else:
                         bias_mean = 0.0
-
                     if verbose:
                         log_tensor(x)
                     if self._minmax_scale:
                         x = self._apply_minmax_normalization(
                             x=x,
                             mask=descriptors['atom_masks'][element],
-                            mode=mode,
-                            collections=collections)
+                            mode=mode)
                         if verbose:
                             log_tensor(x)
                     output_bias = self._fixed_atomic_static_energy

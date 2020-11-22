@@ -37,6 +37,8 @@ class Dataset:
     This class is used to manipulate data examples for this project.
     """
 
+    default_input_keys = ['energy', 'eentropy', 'free_energy']
+
     def __init__(self,
                  database: Union[CoreDatabase, str],
                  name: str,
@@ -436,9 +438,10 @@ class Dataset:
                     shape = tensor.shape.as_list()
                     if shape[0] is None:
                         tensor.set_shape([batch_size] + shape[1:])
-                labels = dict(energy=features.pop('energy'),
-                              eentropy=features.pop('eentropy'),
-                              free_energy=features.pop('free_energy'))
+
+                labels = {}
+                for key in self.default_input_keys:
+                    labels[key] = features.pop(key)
 
                 if self._database.has_forces:
                     labels['forces'] = features.pop('forces')
@@ -500,3 +503,8 @@ class Dataset:
 
             # Return the iterator
             return dataset.make_one_shot_iterator().get_next()
+
+
+class PolarDataset(Dataset):
+
+    default_input_keys = ['energy', 'free_energy', 'eentropy', 'polar']

@@ -81,6 +81,7 @@ class TensorAlloyCalculator(Calculator):
             self._ops, self._fp_precision = self._get_ops()
             self.implemented_properties = self._predict_properties
             self._ncalls = 0
+            self._prerequisite_properties = []
 
     @property
     def elements(self) -> List[str]:
@@ -291,6 +292,14 @@ class TensorAlloyCalculator(Calculator):
                 elastic[j, i] = elastic[i, j]
         return elastic
 
+    def set_prerequisite_properties(self, properties: List[str]):
+        """
+        Properties that must be calculated for each `calculate` call.
+        """
+        for prop in properties:
+            if prop in self.implemented_properties:
+                self._prerequisite_properties.append(prop)
+
     def calculate(self, atoms=None, properties=('energy', 'forces'),
                   system_changes=all_changes, debug_mode=False):
         """
@@ -314,6 +323,8 @@ class TensorAlloyCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         with precision_scope(self._fp_precision):
             with self._graph.as_default():
+                properties = set(properties).union(
+                    self._prerequisite_properties)
                 ops = {target: self._ops[target] for target in properties}
                 if debug_mode:
                     sess = tf_debug.LocalCLIDebugWrapperSession(

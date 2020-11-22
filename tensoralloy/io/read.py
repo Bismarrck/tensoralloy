@@ -31,6 +31,14 @@ class XyzFormat(Enum):
     normal = 0
     ext = 1
     stepmax = 2
+    polar = 3
+
+    @classmethod
+    def has(cls, fmt) -> bool:
+        """ Return True if `` """
+        if isinstance(fmt, cls):
+            fmt = fmt.name
+        return fmt in ('normal', 'ext', 'stepmax', 'polar')
 
 
 def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
@@ -72,9 +80,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
 
     with open(filename) as fp:
         index = slice(0, num_examples, 1)
-        if xyz_format == XyzFormat.ext:
-            reader = read_xyz(fp, index)
-        elif xyz_format == XyzFormat.normal:
+        if xyz_format == XyzFormat.normal:
             # The default parser for normal xyz files will ignore the energies.
             # So here we implement a single parser just converting the second
             # line of each XYZ block to a float.
@@ -82,7 +88,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
                 return {'energy': float(line.strip())}
             reader = read_xyz(fp, index, properties_parser=_parser)
 
-        else:
+        elif xyz_format == XyzFormat.stepmax:
             # Stepmax xyz files
             # The second lines contains the energy (a.u.), cell pararameters and
             # a label (should be 'Cartesian').
@@ -94,6 +100,9 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
                 return {'energy': float(_splits[0]) * Hartree,
                         'Lattice': np.transpose(cellpar_to_cell(_cellpars))}
             reader = read_xyz(fp, index, properties_parser=_parser)
+        
+        else:
+            reader = read_xyz(fp, index)
 
         for atoms in reader:
 
@@ -110,7 +119,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             # energies are in 'eV', forces in 'eV/Angstrom' and stress in 'kB'.
             atoms.calc.results['energy'] *= to_eV
 
-            if xyz_format == XyzFormat.ext:
+            if xyz_format == XyzFormat.ext or xyz_format == XyzFormat.polar:
                 atoms.calc.results['forces'] *= to_eV_Angstrom
             else:
                 # Structures without forces are considered to be local minima so
@@ -130,8 +139,6 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             periodic = any(atoms.pbc) or periodic
 
             # Write the `Atoms` object to the database.
-            weights = atoms.info.get('weights', np.ones(3))
-            assert len(weights) == 3
             source = atoms.info.get('source', '')
             key_value_pairs = {'source': source}
             if use_stress:
@@ -143,9 +150,12 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             key_value_pairs['eentropy'] = eentropy
             key_value_pairs['etemperature'] = etemp
 
-            database.write(atoms,
-                           data={'weights': weights},
-                           key_value_pairs=key_value_pairs)
+            if xyz_format == XyzFormat.polar:
+                data = {"polar": atoms_utils.get_polar_tensor(atoms)}
+            else:
+                data = None
+
+            database.write(atoms, data=data, key_value_pairs=key_value_pairs)
             count += 1
 
             # Update the dict of `max_occurs` and print the parsing progress.
@@ -189,7 +199,7 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
     num_examples : int
         An `int` indicating the maximum number of examples to read.
     file_type : str
-        The type of the file. 'db', 'extxyz', 'xyz' or 'stepmax' are supported.
+        The type of the file. Maybe 'db', 'extxyz', 'xyz', 'stepmax' or 'polar'.
     verbose : bool
         If True, the reading progress shall be logged.
 
@@ -213,17 +223,9 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
                 print("Warning: the key '{}' is missing!".format(key))
         return database
 
-    elif file_type == 'extxyz':
+    elif XyzFormat.has(file_type):
         return _read_extxyz(
-            filename, units, XyzFormat.ext, num_examples, verbose)
-
-    elif file_type == 'xyz':
-        return _read_extxyz(
-            filename, units, XyzFormat.normal, num_examples, verbose)
-
-    elif file_type == 'stepmax':
-        return _read_extxyz(
-            filename, units, XyzFormat.stepmax, num_examples, verbose)
+            filename, units, XyzFormat[file_type], num_examples, verbose)
 
     else:
         raise ValueError("Unknown file type: {}".format(file_type))

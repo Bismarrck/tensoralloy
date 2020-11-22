@@ -24,7 +24,7 @@ from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
 from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.opt import get_train_op, get_training_hooks
-from tensoralloy.nn.eval import get_eval_metrics_ops, get_evaluation_hooks
+from tensoralloy.nn.eval import get_evaluation_hooks
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
@@ -73,6 +73,7 @@ all_properties = (
     StructuralProperty(name='free_energy'),
     StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
+    StructuralProperty(name='polar'),
     StructuralProperty(name="partial_forces", exportable=True,
                        minimizable=False),
     StructuralProperty(name='stress'),
@@ -779,6 +780,121 @@ class BasicNN:
 
             return predictions
 
+    def get_eval_metrics(self, labels, predictions, n_atoms, atom_masks):
+        """
+        Return a dict of Ops as the evaluation metrics.
+
+        Always required:
+            * 'energy' of shape `[batch_size, ]`
+
+        Required if finite temperature:
+            * 'eentropy' of shape `[batch_size, ]`
+            * 'free_energy' of shape `[batch_size, ]`
+
+        Required if 'forces' should be minimized:
+            * 'forces' of shape `[batch_size, n_atoms_max + 1, 3]` is
+              required if 'forces' should be minimized.
+            * 'atom_masks' of shape `[batch_size, n_atoms_max + 1]`
+
+        Required if 'stress' or 'total_pressure' should be minimized:
+            * 'stress' of shape `[batch_size, 6]` is required if
+              'stress' should be minimized.
+            * 'pulay_stress' of shape `[batch_size, ]`
+            * 'total_pressure' of shape `[batch_size, ]`
+
+        `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
+        the number of atoms in each structure.
+
+        """
+        with tf.name_scope("Metrics"):
+            n_atoms = tf.cast(n_atoms, labels["energy"].dtype, name='n_atoms')
+
+            metrics = self._get_eval_energy_metrics(
+                labels, predictions, n_atoms)
+            if 'forces' in self._minimize_properties:
+                metrics.update(self._get_eval_forces_metrocs(
+                    labels, predictions, atom_masks))
+            if 'stress' in self._minimize_properties:
+                metrics.update(self._get_eval_stress_metrics(
+                    labels, predictions))
+            metrics.update(self._get_eval_constraints_metrics())
+
+            return metrics
+
+    def _get_eval_energy_metrics(self, labels, predictions, n_atoms):
+        with tf.name_scope("Energy"):
+            name_map = {
+                'energy': 'U',
+                'free_energy': 'F',
+                'eentropy': 'S',
+            }
+            metrics = {}
+            for prop, desc in name_map.items():
+                if prop in self._minimize_properties:
+                    x = labels[prop]
+                    y = predictions[prop]
+                    xn = x / n_atoms
+                    yn = y / n_atoms
+                    ops_dict = {
+                        f'{desc}/mae': tf.metrics.mean_absolute_error(x, y),
+                        f'{desc}/mse': tf.metrics.mean_squared_error(x, y),
+                        f'{desc}/mae/atom': tf.metrics.mean_absolute_error(
+                            xn, yn)}
+                    metrics.update(ops_dict)
+            return metrics
+
+    def _get_eval_forces_metrocs(self, labels, predictions, atom_masks):
+        with tf.name_scope("Forces"):
+            with tf.name_scope("Split"):
+                x = tf.split(labels["forces"], [1, -1], axis=1)[1]
+                mask = tf.cast(tf.split(atom_masks, [1, -1], axis=1)[1],
+                               tf.bool)
+            x = tf.boolean_mask(x, mask, axis=0, name='x')
+            y = tf.boolean_mask(
+                predictions["forces"], mask, axis=0, name='y')
+            with tf.name_scope("Flatten"):
+                x = tf.reshape(x, (-1, ), name='x')
+                y = tf.reshape(y, (-1, ), name='y')
+            return {'Forces/mae': tf.metrics.mean_absolute_error(x, y),
+                    'Forces/mse': tf.metrics.mean_squared_error(x, y)}
+
+    def _get_eval_stress_metrics(self, labels, predictions):
+        with tf.name_scope("Stress"):
+            x = labels["stress"]
+            y = predictions["stress"]
+            ops_dict = {
+                'Stress/mae': tf.metrics.mean_absolute_error(x, y),
+                'Stress/mse': tf.metrics.mean_squared_error(x, y)}
+            with tf.name_scope("rRMSE"):
+                upper = tf.linalg.norm(x - y, axis=-1)
+                lower = tf.linalg.norm(x, axis=-1)
+                ops_dict['Stress/relative'] = \
+                    tf.metrics.mean(upper / lower)
+            return ops_dict
+
+    def _get_eval_constraints_metrics(self):
+        metrics = {}
+        for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
+            slist = tensor.op.name.split("/")
+            if "Elastic" in tensor.op.name:
+                istart = slist.index('Elastic')
+                key = "/".join(slist[istart:])
+                metrics[key] = (tensor, tf.no_op())
+            elif "Rose" in tensor.op.name:
+                istart = slist.index('Rose')
+                istop = slist.index('EOS')
+                key = "/".join(slist[istart: istop])
+                metrics[key] = (tensor, tf.no_op())
+            elif "Diff" in tensor.op.name:
+                if 'pred' in tensor.op.name:
+                    key = "/".join(slist[-3:])
+                else:
+                    istart = slist.index('Diff')
+                    istop = slist.index('mae')
+                    key = "/".join(slist[istart: istop - 1])
+                metrics[key] = (tensor, tf.no_op())
+        return metrics
+
     def model_fn(self,
                  features: dict,
                  labels: dict,
@@ -864,8 +980,7 @@ class BasicNN:
                                               train_op=train_op,
                                               training_hooks=training_hooks)
 
-        eval_metrics_ops = get_eval_metrics_ops(
-            eval_properties=self._minimize_properties,
+        eval_metrics_ops = self.get_eval_metrics(
             predictions=predictions,
             labels=labels,
             n_atoms=features["n_atoms_vap"],

@@ -85,6 +85,7 @@ class BuildDatabaseProgram(CLIProgram):
         """
         def func(args: argparse.Namespace):
             read_file(args.filename,
+                      file_type=args.format,
                       units={'energy': args.energy_unit,
                              'forces': args.forces_unit,
                              'stress': args.stress_unit},
@@ -100,6 +101,13 @@ class BuildDatabaseProgram(CLIProgram):
             'filename',
             type=str,
             help="Specify the xyz or extxyz file to read.",
+        )
+        subparser.add_argument(
+            '--format',
+            type=str,
+            default=None,
+            choices=['db', 'polar', 'extxyz', 'xyz', 'stepmax'],
+            help="The file format"
         )
         subparser.add_argument(
             '--num-examples',
