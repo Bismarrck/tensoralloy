@@ -215,7 +215,7 @@ class GenericRadialAtomicPotential(Descriptor):
             assert 0 <= moment_tensor <= 2
 
         self._algorithm = algorithm
-        self._algorithm_fn = self.initialize_algorithm(
+        self._algorithm_instance = self.initialize_algorithm(
             algorithm, parameters, param_space_method)
         self._moment_tensors = moment_tensors
         self._cutoff_function = cutoff_function
@@ -274,7 +274,8 @@ class GenericRadialAtomicPotential(Descriptor):
         }
         moment_tensors_indices = {
             1: [0, 1, 2],
-            2: [(0, 1), (0, 2), (1, 2)]
+            2: [(0, 0), (1, 1), (2, 2),
+                (0, 1), (0, 2), (1, 2), (1, 0), (2, 0), (2, 1)]
         }
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
@@ -289,7 +290,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 gtau = []
                 
-                def _post_compute(fx):
+                def _post_compute(fx, square=False):
                     """
                     Apply the smooth cutoff values and zero masks to `fx`.
                     Then sum `fx` for each atom.
@@ -299,11 +300,13 @@ class GenericRadialAtomicPotential(Descriptor):
                     gx = tf.expand_dims(
                         tf.reduce_sum(gx, axis=[-1, -2], keep_dims=False),
                         axis=-1, name='gx')
+                    if square:
+                        gx = tf.square(gx, name='gx2')
                     return gx
                 
-                for tau in range(len(self._algorithm)):
+                for tau in range(len(self._algorithm_instance)):
                     with tf.name_scope(f"{tau}"):
-                        v = self._algorithm_fn.compute(
+                        v = self._algorithm_instance.compute(
                             tau, rij, rc, dtype=dtype)
                         # The standard central-force model
                         if 0 in self._moment_tensors:
@@ -311,25 +314,31 @@ class GenericRadialAtomicPotential(Descriptor):
                                 gtau.append(_post_compute(v))
                         # Dipole effect
                         if 1 in self._moment_tensors:
+                            dtau = []
                             for i in moment_tensors_indices[1]:
                                 itag = xyz_map[i]
                                 with tf.name_scope(f"r{itag}"):
                                     coef = tf.div_no_nan(
                                         dij[i], rij, name='coef')
-                                    gtau.append(
+                                    dtau.append(
                                         _post_compute(
-                                            tf.multiply(v, coef, name='fx')))
+                                            tf.multiply(v, coef, name='fx'),
+                                            square=True))
+                            gtau.append(tf.add_n(dtau, name='u2'))
                         # Quadrupole effect
                         if 2 in self._moment_tensors:
+                            qtau = []
                             for (i, j) in moment_tensors_indices[2]:
                                 itag = xyz_map[i]
                                 jtag = xyz_map[j]
                                 with tf.name_scope(f"r{itag}{jtag}"):
                                     coef = tf.div_no_nan(
                                         dij[i] * dij[j], rij * rij, name='coef')
-                                    gtau.append(
-                                        _post_compute(
-                                            tf.multiply(v, coef, name='fx')))
+                                    vij = _post_compute(
+                                        tf.multiply(v, coef, name='fx'),
+                                        square=True)
+                                    qtau.append(vij)
+                        gtau.append(tf.add_n(qtau, name='q2'))
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
