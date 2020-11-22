@@ -80,6 +80,7 @@ def get_eval_metrics_ops(eval_properties, predictions, labels, n_atoms,
                 'energy': 'U',
                 'free_energy': 'F',
                 'eentropy': 'S',
+                'polar': 'P',
             }
             for prop, desc in name_map.items():
                 if prop in eval_properties:

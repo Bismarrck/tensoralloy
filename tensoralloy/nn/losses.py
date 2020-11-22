@@ -196,8 +196,8 @@ def get_energy_loss(labels,
     per_atom_loss = options.per_atom_loss
 
     with tf.name_scope(name_scope):
-        assert labels.shape.ndims == 1
-        assert predictions.shape.ndims == 1
+        # assert labels.shape.ndims == 1
+        # assert predictions.shape.ndims == 1
         if per_atom_loss:
             n_atoms = tf.cast(n_atoms, labels.dtype, name='n_atoms')
             x = tf.math.truediv(labels, n_atoms, name='labels')
