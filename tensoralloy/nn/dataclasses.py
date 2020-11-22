@@ -40,7 +40,7 @@ def nested_dataclass(*args, **kwargs):
     return wrapper(args[0]) if args else wrapper
 
 
-@dataclass(frozen=True)
+@dataclass
 class EnergyOp:
     """
     An energy op. `total` is the total energy (scalar) while `atomic` is a
@@ -50,7 +50,7 @@ class EnergyOp:
     atomic: tf.Tensor
 
 
-@dataclass(frozen=True)
+@dataclass
 class EnergyOps:
     """
     Different types of energy ops.
@@ -74,7 +74,7 @@ class EnergyOps:
         return self.energy
 
 
-@dataclass(frozen=True)
+@dataclass
 class FiniteTemperatureEnergyOps(EnergyOps):
     """
     Energy ops for finite temperature potentials.
