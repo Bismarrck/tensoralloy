@@ -67,12 +67,6 @@ class EnergyOps:
         return {"energy": self.energy.total, "energy/atom": self.energy.atomic,
                 "enthalpy": self.enthalpy}
 
-    @property
-    def variational_energy(self):
-        """ The energy op corresponding to forces. By default E(sigma->0)
-        corresponds to forces. """
-        return self.energy
-
 
 @dataclass
 class FiniteTemperatureEnergyOps(EnergyOps):
@@ -95,12 +89,6 @@ class FiniteTemperatureEnergyOps(EnergyOps):
             "eentropy": self.eentropy.total,
             "eentropy/atom": self.eentropy.atomic})
         return adict
-
-    @property
-    def variational_energy(self):
-        """ For finite temperature calculations with Fermi-Dirac smearing,
-        electron free energy is consistent with forces. """
-        return self.free_energy
 
 
 @add_slots

@@ -78,8 +78,10 @@ class TensorAlloyCalculator(Calculator):
             self._sess = tf.Session(config=config, graph=graph)
             self._graph = graph
             self._transformer = self._get_transformer()
-            self._ops, self._fp_precision = self._get_ops()
+            self._get_ops()
+
             self.implemented_properties = self._predict_properties
+            print(self.implemented_properties)
             self._ncalls = 0
             self._prerequisite_properties = []
 
@@ -148,7 +150,35 @@ class TensorAlloyCalculator(Calculator):
             break
         else:
             raise Exception("Validated Ops cannot be found")
-        return ops, fp_precision
+        self._ops = ops
+        self._fp_precision = fp_precision
+        self._is_finite_temperature = bool(
+            int(self._sess.run(self._graph.get_tensor_by_name(
+                "Metadata/is_finite_temperature:0"))))
+        self._variational_energy = self._sess.run(
+            self._graph.get_tensor_by_name("Metadata/variational_energy:0"))
+        self._api_version = self._sess.run(
+            self._graph.get_tensor_by_name("Metadata/api:0"))
+
+    @property
+    def api_version(self):
+        """ Return the API version of the graph model. """
+        return self._api_version
+
+    @property
+    def variational_energy(self):
+        """
+        Return the variational energy.
+        """
+        return self._variational_energy
+
+    def get_potential_energy(self, atoms=None, force_consistent=False):
+        """
+        Retuen the potential energy.
+        """
+        energy = super(TensorAlloyCalculator, self).get_potential_energy(
+            atoms, force_consistent)
+        return float(energy)
 
     def get_magnetic_moment(self, atoms=None):
         """
@@ -168,12 +198,6 @@ class TensorAlloyCalculator(Calculator):
         """
         return self.get_property('enthalpy', atoms=atoms)
 
-    def get_pv_energy(self, atoms=None):
-        """
-        Return the PV energy (eV).
-        """
-        return self.get_property('pv', atoms=atoms)
-
     def get_electron_entropy(self, atoms=None):
         """
         Return the electron entropy S.
@@ -187,11 +211,11 @@ class TensorAlloyCalculator(Calculator):
         """
         return self.get_property('free_energy', atoms=atoms)
 
-    def get_atomic_energy(self, atoms=None):
+    def get_atomic(self, atoms=None, prop="energy"):
         """
         Return an array as the atomic energies.
         """
-        values = self.get_property('atomic', atoms=atoms)
+        values = self.get_property(f'{prop}/atom', atoms=atoms)
         values = np.insert(values, 0, 0, 0)
         clf = self.transformer.get_vap_transformer(atoms)
         return clf.map_array(values.reshape((-1, 1)), reverse=True).flatten()

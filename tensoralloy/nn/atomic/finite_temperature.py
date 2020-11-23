@@ -74,6 +74,11 @@ class TemperatureDependentAtomicNN(AtomicNN):
         """
         return self._finite_temperature
 
+    @property
+    def is_finite_temperature(self) -> bool:
+        """ Override this method. """
+        return True
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this `BasicNN`.
@@ -239,8 +244,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
                         x = self._apply_minmax_normalization(
                             x=x,
                             mask=descriptors['atom_masks'][element],
-                            mode=mode,
-                            collections=collections)
+                            mode=mode)
                         if verbose:
                             log_tensor(x)
                     activation_fn = get_activation_fn(

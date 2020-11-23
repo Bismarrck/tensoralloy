@@ -184,6 +184,27 @@ class BasicNN:
         """
         return self._export_properties
 
+    @property
+    def variational_energy(self) -> str:
+        """
+        The energy op corresponding to forces. By default E(sigma->0)
+        corresponds to forces.
+
+        For finite temperature models with Fermi-Dirac smearing, free_energy
+        should be used as variational energy.
+        """
+        if self.is_finite_temperature:
+            return "free_energy"
+        else:
+            return "energy"
+
+    @property
+    def is_finite_temperature(self) -> bool:
+        """
+        Return True if this is a finite temperature model.
+        """
+        return False
+
     def _get_hidden_sizes(self, hidden_sizes):
         """
         Convert `hidden_sizes` to a dict if needed.
@@ -713,10 +734,11 @@ class BasicNN:
 
         export_partial_forces = False
         if mode == tf_estimator.ModeKeys.PREDICT:
-            if isinstance(self._transformer, UniversalTransformer) \
-                    and not self._transformer.use_computed_dists:
+            if not self._transformer.use_computed_dists:
                 export_partial_forces = True
                 properties = ["energy", "partial_forces"]
+                if self.is_finite_temperature:
+                    properties.extend(["eentropy", "free_energy"])
             else:
                 properties = self._export_properties
         else:
@@ -735,15 +757,15 @@ class BasicNN:
                     'total_pressure' in properties:
                 with tf.name_scope("Forces"):
                     predictions["forces"] = self._get_forces_op(
-                        ops.variational_energy.total,
-                        features["positions"],
+                        energy=predictions[self.variational_energy],
+                        positions=features["positions"],
                         verbose=verbose)
 
             if export_partial_forces:
                 with tf.name_scope("PartialForces"):
                     predictions.update(
                         self._get_partial_forces_ops(
-                            ops.variational_energy.total,
+                            energy=predictions[self.variational_energy],
                             rij=features["g2.rij"],
                             rijk=features.get("g4.rijk", None)))
 
@@ -751,7 +773,7 @@ class BasicNN:
                 with tf.name_scope("Stress"):
                     voigt_stress, total_stress, total_pressure = \
                         self._get_stress_op(
-                            energy=ops.variational_energy.total,
+                            energy=predictions[self.variational_energy],
                             cell=features["cell"],
                             volume=features["volume"],
                             positions=features["positions"],
@@ -765,7 +787,8 @@ class BasicNN:
             if 'hessian' in properties:
                 with tf.name_scope("Hessian"):
                     predictions["hessian"] = self._get_hessian_op(
-                        ops.variational_energy.total, features["positions"],
+                        energy=predictions[self.variational_energy],
+                        positions=features["positions"],
                         verbose=verbose)
 
             if mode == tf_estimator.ModeKeys.PREDICT \
@@ -1066,7 +1089,11 @@ class BasicNN:
                 fp_prec_node = tf.constant(
                     get_float_precision().name, name='precision')
                 tf_version_node = tf.constant(tf.__version__, name='tf_version')
-
+                variational_energy_node = tf.constant(
+                    nn.variational_energy, name='variational_energy')
+                is_finite_temperature_node = tf.constant(
+                    int(nn.is_finite_temperature), name="is_finite_temperature")
+                api_version_node = tf.constant("1.0", name="api")
                 ops = {key: tensor.name for key, tensor in predictions.items()}
                 ops_node = tf.constant(json.dumps(ops), name='ops')
 
@@ -1104,6 +1131,9 @@ class BasicNN:
                 timestamp_node.op.name,
                 fp_prec_node.op.name,
                 tf_version_node.op.name,
+                is_finite_temperature_node.op.name,
+                variational_energy_node.op.name,
+                api_version_node.op.name,
                 ops_node.op.name,
             ]
 

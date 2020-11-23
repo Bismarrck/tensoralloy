@@ -98,7 +98,7 @@ class EamNN(BasicNN):
                  hidden_sizes=None,
                  fixed_functions=None,
                  minimize_properties=('energy', 'forces'),
-                 export_properties=('energy', 'forces', 'hessian')):
+                 export_properties=('energy', 'forces', 'stress')):
         """
         Initialization method.
         """
