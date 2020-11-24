@@ -237,6 +237,7 @@ class TrainingManager:
             'use_atomic_static_energy': configs['use_atomic_static_energy'],
             'fixed_atomic_static_energy': configs['fixed_atomic_static_energy'],
             'atomic_static_energy': self._dataset.atomic_static_energy,
+            'minmax_scale': configs['minmax_scale'],
             'use_resnet_dt': configs['use_resnet_dt']
         }
         params.update(kwargs)
