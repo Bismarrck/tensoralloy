@@ -247,7 +247,7 @@ def get_rose_constraint_loss(base_nn,
                         labels = tf.multiply(e0, coef, name='labels')
 
                     with tf.name_scope("Loss"):
-                        pd = tf.norm(p0 - pref, name='loss/kbar')
+                        pd = tf.norm(p0 - pref, name='loss/GPa')
 
                         diff = tf.math.subtract(predictions, labels, 'diff')
                         mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
@@ -259,7 +259,7 @@ def get_rose_constraint_loss(base_nn,
                         weight = tf.convert_to_tensor(
                             options.weight, dtype, name='weight')
                         residual = tf.sqrt(sds + eps, name='residual')
-                        loss = tf.multiply(residual, weight + pd, name='loss')
+                        loss = tf.multiply(residual + pd, weight, name='loss')
                         losses.append(loss)
 
                     if is_first_replica():
