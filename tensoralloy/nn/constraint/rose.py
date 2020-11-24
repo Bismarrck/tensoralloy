@@ -111,8 +111,6 @@ def get_rose_constraint_loss(base_nn,
 
     configs = base_nn.as_dict()
     configs.pop('class')
-    configs['export_properties'] = ['energy']
-    configs['minimize_properties'] = ['energy']
 
     if options is None:
         options = RoseLossOptions()
@@ -121,10 +119,12 @@ def get_rose_constraint_loss(base_nn,
 
         losses = []
 
-        if options.use_free_energy:
-            prop = "free_energy"
-        else:
-            prop = "energy"
+        from tensoralloy.nn.basic import BasicNN
+        assert isinstance(base_nn, BasicNN)
+
+        prop = base_nn.variational_energy
+        configs['export_properties'] = [prop, 'forces', 'stress']
+        configs['minimize_properties'] = [prop, 'forces', 'stress']
 
         for idx, crystal_or_name_or_file in enumerate(options.crystals):
             crystal = get_crystal(crystal_or_name_or_file)
@@ -165,6 +165,12 @@ def get_rose_constraint_loss(base_nn,
                         verbose=verbose)
                     e0 = tf.identity(output[prop], name='E0')
                     v0 = tf.identity(features["volume"], name='V0')
+                    p0 = tf.negative(output['stress'][:3] / GPa,
+                                     name='P0')
+                    gpa = tf.reduce_mean(p0, name='GPa')
+                    f0 = tf.norm(output['forces'], name='F')
+                    pref = tf.convert_to_tensor(options.p_target[idx],
+                                                dtype=dtype, name='P')
 
                 dx = options.dx
                 xlo = options.xlo
@@ -241,21 +247,26 @@ def get_rose_constraint_loss(base_nn,
                         labels = tf.multiply(e0, coef, name='labels')
 
                     with tf.name_scope("Loss"):
+                        pd = tf.norm(p0 - pref, name='loss/kbar')
+
                         diff = tf.math.subtract(predictions, labels, 'diff')
                         mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
 
                         sds = tf.reduce_sum(tf.math.square(diff), name='sds')
                         eps = tf.convert_to_tensor(
                             get_float_dtype().eps, dtype, 'eps')
+
                         weight = tf.convert_to_tensor(
                             options.weight, dtype, name='weight')
                         residual = tf.sqrt(sds + eps, name='residual')
-                        loss = tf.multiply(residual, weight, name='loss')
+                        loss = tf.multiply(residual, weight + pd, name='loss')
                         losses.append(loss)
 
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, gpa)
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, f0)
                         tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
 
         return tf.add_n(losses, name='total_loss')

@@ -118,7 +118,8 @@ def test_rose_eos_constraint():
                 beta=[beta],
                 dx=dx,
                 xlo=xlo,
-                xhi=xhi)
+                xhi=xhi,
+                p_target=[0])
             get_rose_constraint_loss(base_nn=nn, options=options)
 
             zjw04_vars = [var for var in tf.global_variables()
