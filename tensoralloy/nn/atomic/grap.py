@@ -272,11 +272,9 @@ class GenericRadialAtomicPotential(Descriptor):
         xyz_map = {
             0: 'x', 1: 'y', 2: 'z'
         }
-        moment_tensors_indices = {
-            1: [0, 1, 2],
-            2: [(0, 0), (1, 1), (2, 2),
-                (0, 1), (0, 2), (1, 2), (1, 0), (2, 0), (2, 1)]
-        }
+        moment_tensors_indices = {1: [0, 1, 2],
+                                  2: [(0, 0), (1, 1), (2, 2),
+                                      (0, 1), (0, 2), (1, 2)]}
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
         outputs = {element: [None] * len(self._elements)
@@ -332,8 +330,12 @@ class GenericRadialAtomicPotential(Descriptor):
                                 itag = xyz_map[i]
                                 jtag = xyz_map[j]
                                 with tf.name_scope(f"r{itag}{jtag}"):
+                                    multi = tf.convert_to_tensor(
+                                        1.0 + float(i != j),
+                                        dtype=dtype, name='multi')
                                     coef = tf.div_no_nan(
-                                        dij[i] * dij[j], rij * rij, name='coef')
+                                        multi * dij[i] * dij[j], rij * rij,
+                                        name='coef')
                                     vij = _post_compute(
                                         tf.multiply(v, coef, name='fx'),
                                         square=True)
