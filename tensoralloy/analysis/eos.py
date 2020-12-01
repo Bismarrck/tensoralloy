@@ -149,7 +149,7 @@ class EquationOfState(ase.eos.EquationOfState):
 
         # now fit the equation of state
         p0 = initial_guess
-        popt, pcov = curve_fit(self.func, self.v, self.e, p0)
+        popt, pcov = curve_fit(self.func, self.v, self.e, p0, maxfev=10000)
 
         self.eos_parameters = popt
 

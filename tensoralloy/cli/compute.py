@@ -726,17 +726,20 @@ class EquationOfStateProgram(CLIProgram):
             formula = crystal.get_chemical_formula()
             properties = ['energy', 'stress']
             label = "E"
+            fit_tag = "eos"
+            if args.pv:
+                fit_tag = "PV"
             if args.etemp > 0:
                 formula = f"{formula}_{args.etemp:.0f}K"
                 properties.extend(['eentropy', 'free_energy'])
             if args.fig is None:
                 work_dir = "."
-                figname = join(work_dir, f"{formula}_eos.png")
-                csvname = join(work_dir, f"{formula}_EV.csv")
+                figname = join(work_dir, f"{formula}_{fit_tag}.png")
+                csvname = join(work_dir, f"{formula}_{fit_tag}.csv")
             else:
                 work_dir = dirname(args.fig)
                 figname = args.fig
-                csvname = f"{basename(figname)}_EV.csv"
+                csvname = f"{basename(figname)}_{fit_tag}.csv"
                 if work_dir and not exists(work_dir):
                     os.makedirs(work_dir)
 
