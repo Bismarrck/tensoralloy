@@ -321,12 +321,9 @@ class EamNN(BasicNN):
         atomic_energy = tf.multiply(atomic_energy, mask, name='atomic')
         energy = tf.reduce_sum(
             atomic_energy, axis=axis, keepdims=False, name='energy')
-        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
-            log_tensor(enthalpy)
-        return EnergyOps(energy=EnergyOp(energy, atomic_energy),
-                         enthalpy=enthalpy)
+        return EnergyOps(energy=EnergyOp(energy, atomic_energy))
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
                       mode: tf_estimator.ModeKeys, verbose=False):

@@ -33,7 +33,7 @@ class PolarOps(EnergyOps):
     def as_dict(self):
         adict = super(PolarOps, self).as_dict()
         adict['polar'] = self.polar.total
-        adict['polar/atomic'] = self.polar.atomic
+        adict['polar/atom'] = self.polar.atomic
         return adict
 
 
@@ -235,12 +235,11 @@ class PolarNN(AtomicNN):
         energy = tf.reduce_sum(
             energies, axis=axis, keepdims=False, name='energy')
         polar = tf.reduce_sum(polars, axis=axis, keepdims=False, name='polar')
-        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
         if verbose:
             log_tensor(energy)
             log_tensor(polar)
         return PolarOps(energy=EnergyOp(energy, energies),
-                        enthalpy=enthalpy, polar=EnergyOp(polar, polars))
+                        polar=EnergyOp(polar, polars))
 
     def _get_energy_loss(self,
                          predictions,

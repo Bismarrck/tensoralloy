@@ -324,25 +324,23 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 'free_energy': 'E'
             }
             with tf.name_scope(name_map[name]):
-                y_atomic = tf.concat(outputs[name], axis=1, name='atomic/raw')
+                eatom = tf.concat(outputs[name], axis=1, name='atomic/raw')
                 if ndims == 1:
-                    y_atomic = tf.squeeze(y_atomic, axis=0)
-                y_atomic = tf.multiply(y_atomic, mask, name='atomic')
-            y_sum = tf.reduce_sum(
-                y_atomic, axis=axis, keepdims=False, name=name)
-            return EnergyOp(total=y_sum, atomic=y_atomic)
+                    eatom = tf.squeeze(eatom, axis=0)
+                eatom = tf.multiply(eatom, mask, name='atomic')
+            etotal = tf.reduce_sum(
+                eatom, axis=axis, keepdims=False, name=name)
+            return EnergyOp(total=etotal, atomic=eatom)
 
         free_energy = _build_energy_op('free_energy')
         eentropy = _build_energy_op('eentropy')
         energy = _build_energy_op('energy')
-        enthalpy = self._get_enthalpy_op(features, free_energy.total, verbose)
         if verbose:
             log_tensor(free_energy.total)
             log_tensor(eentropy.total)
             log_tensor(energy.total)
         return FiniteTemperatureEnergyOps(
-            energy=energy, enthalpy=enthalpy,
-            eentropy=eentropy, free_energy=free_energy)
+            energy=energy, eentropy=eentropy, free_energy=free_energy)
 
     def _get_energy_loss(self,
                          predictions,

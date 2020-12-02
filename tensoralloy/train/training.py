@@ -561,7 +561,7 @@ class TrainingManager:
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
                 keep_tmp_files=False,
-                export_partial_forces_model=export_lammps_mpi_pb)
+                to_lammps=export_lammps_mpi_pb)
 
             if isinstance(self._model, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']

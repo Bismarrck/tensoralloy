@@ -56,16 +56,13 @@ class EnergyOps:
     Different types of energy ops.
 
     energy: the internal energy U
-    enthalpy: the enthalpy H = U + PV
 
     """
     energy: EnergyOp
-    enthalpy: tf.Tensor
 
     def as_dict(self):
         """ Dict representation of the ops. """
-        return {"energy": self.energy.total, "energy/atom": self.energy.atomic,
-                "enthalpy": self.enthalpy}
+        return {"energy": self.energy.total, "energy/atom": self.energy.atomic}
 
 
 @dataclass

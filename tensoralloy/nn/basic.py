@@ -248,7 +248,6 @@ class BasicNN:
         Return the Ops to compute different types of energies:
             * energy: the internal energy U
             * entropy: the electron entropy (unitless) S
-            * enthalpy: the enthalpy H = U + PV
             * free_energy: the electron free energy E(F) = U - T*S
 
         Parameters
@@ -271,24 +270,6 @@ class BasicNN:
 
         """
         raise NotImplementedError("This method must be overridden!")
-
-    @staticmethod
-    def _get_enthalpy_op(features: dict,
-                         energy: tf.Tensor,
-                         verbose=True) -> tf.Tensor:
-        """
-        Return the Op to compute enthalpy H:
-
-            H = U + PV
-
-        """
-        v = tf.linalg.det(features["cell"], name='V')
-        p = tf.convert_to_tensor(features["pulay_stress"], name='P')
-        pv = tf.multiply(v, p, name='PV')
-        enthalpy = tf.add(pv, energy, name='enthalpy')
-        if verbose:
-            log_tensor(enthalpy)
-        return enthalpy
 
     @staticmethod
     def _get_forces_op(energy, positions, verbose=True):
@@ -746,20 +727,9 @@ class BasicNN:
 
         with tf.name_scope("Output"):
 
-            predictions = dict()
-
             with tf.name_scope("Energy"):
                 ops = self._get_energy_ops(outputs, features, verbose)
-                predictions.update(ops.as_dict())
-
-            if 'forces' in properties or \
-                    'stress' in properties or \
-                    'total_pressure' in properties:
-                with tf.name_scope("Forces"):
-                    predictions["forces"] = self._get_forces_op(
-                        energy=predictions[self.variational_energy],
-                        positions=features["positions"],
-                        verbose=verbose)
+                predictions = ops.as_dict()
 
             if export_partial_forces:
                 with tf.name_scope("PartialForces"):
@@ -769,37 +739,47 @@ class BasicNN:
                             rij=features["g2.rij"],
                             rijk=features.get("g4.rijk", None)))
 
-            if 'stress' in properties:
-                with tf.name_scope("Stress"):
-                    voigt_stress, total_stress, total_pressure = \
-                        self._get_stress_op(
+            else:
+                if 'forces' in properties or \
+                        'stress' in properties or \
+                        'total_pressure' in properties:
+                    with tf.name_scope("Forces"):
+                        predictions["forces"] = self._get_forces_op(
                             energy=predictions[self.variational_energy],
-                            cell=features["cell"],
-                            volume=features["volume"],
                             positions=features["positions"],
-                            forces=predictions["forces"],
-                            pulay_stress=features["pulay_stress"],
                             verbose=verbose)
-                    predictions["stress"] = voigt_stress
-                    predictions["total_stress"] = total_stress
-                    predictions["total_pressure"] = total_pressure
 
-            if 'hessian' in properties:
-                with tf.name_scope("Hessian"):
-                    predictions["hessian"] = self._get_hessian_op(
-                        energy=predictions[self.variational_energy],
-                        positions=features["positions"],
-                        verbose=verbose)
+                if 'stress' in properties:
+                    with tf.name_scope("Stress"):
+                        voigt_stress, total_stress, total_pressure = \
+                            self._get_stress_op(
+                                energy=predictions[self.variational_energy],
+                                cell=features["cell"],
+                                volume=features["volume"],
+                                positions=features["positions"],
+                                forces=predictions["forces"],
+                                pulay_stress=features["pulay_stress"],
+                                verbose=verbose)
+                        predictions["stress"] = voigt_stress
+                        predictions["total_stress"] = total_stress
+                        predictions["total_pressure"] = total_pressure
 
-            if mode == tf_estimator.ModeKeys.PREDICT \
-                    and 'elastic' in properties:
-                with tf.name_scope("Elastic"):
-                    predictions["elastic"] = \
-                        elastic_ops.get_elastic_constat_tensor_op(
-                            predictions["total_stress"],
-                            features["cell"],
-                            features["volume"],
-                            name='elastic', verbose=verbose)
+                if 'hessian' in properties:
+                    with tf.name_scope("Hessian"):
+                        predictions["hessian"] = self._get_hessian_op(
+                            energy=predictions[self.variational_energy],
+                            positions=features["positions"],
+                            verbose=verbose)
+
+                if mode == tf_estimator.ModeKeys.PREDICT \
+                        and 'elastic' in properties:
+                    with tf.name_scope("Elastic"):
+                        predictions["elastic"] = \
+                            elastic_ops.get_elastic_constat_tensor_op(
+                                predictions["total_stress"],
+                                features["cell"],
+                                features["volume"],
+                                name='elastic', verbose=verbose)
 
             return predictions
 
@@ -845,6 +825,9 @@ class BasicNN:
             return metrics
 
     def _get_eval_energy_metrics(self, labels, predictions, n_atoms):
+        """
+        Default evaluation metrics for energy predictions.
+        """
         with tf.name_scope("Energy"):
             name_map = {
                 'energy': 'U',
@@ -867,6 +850,9 @@ class BasicNN:
             return metrics
 
     def _get_eval_forces_metrocs(self, labels, predictions, atom_masks):
+        """
+        Default evaluation metrics for forces predictions.
+        """
         with tf.name_scope("Forces"):
             with tf.name_scope("Split"):
                 x = tf.split(labels["forces"], [1, -1], axis=1)[1]
@@ -882,6 +868,9 @@ class BasicNN:
                     'Forces/mse': tf.metrics.mean_squared_error(x, y)}
 
     def _get_eval_stress_metrics(self, labels, predictions):
+        """
+        Default evaluation metrics for stress predictions.
+        """
         with tf.name_scope("Stress"):
             x = labels["stress"]
             y = predictions["stress"]
@@ -891,11 +880,14 @@ class BasicNN:
             with tf.name_scope("rRMSE"):
                 upper = tf.linalg.norm(x - y, axis=-1)
                 lower = tf.linalg.norm(x, axis=-1)
-                ops_dict['Stress/relative'] = \
+                ops_dict['Stress/Rel'] = \
                     tf.metrics.mean(upper / lower)
             return ops_dict
 
     def _get_eval_constraints_metrics(self):
+        """
+        Default evaluation metrics for constraints.
+        """
         metrics = {}
         for tensor in tf.get_collection(GraphKeys.EVAL_METRICS):
             slist = tensor.op.name.split("/")
@@ -1019,7 +1011,7 @@ class BasicNN:
 
     def export(self, output_graph_path: str, checkpoint=None,
                keep_tmp_files=False, use_ema_variables=True,
-               export_partial_forces_model=False):
+               to_lammps=False):
         """
         Freeze the graph and export the model to a pb file.
 
@@ -1033,9 +1025,8 @@ class BasicNN:
             If False, the intermediate files will be deleted.
         use_ema_variables : bool
             If True, exponentially moving averaged variables will be used.
-        export_partial_forces_model : bool
-            A boolean. If True, tensoralloy will try to export a model with
-            partial forces ops.
+        to_lammps : bool
+            If True, a LAMMPS model will be exported.
 
         """
 
@@ -1068,7 +1059,7 @@ class BasicNN:
             configs.pop('class')
             nn = self.__class__(**configs)
 
-            if export_partial_forces_model \
+            if to_lammps \
                     and isinstance(clf, UniversalTransformer):
                 clf.use_computed_dists = False
 

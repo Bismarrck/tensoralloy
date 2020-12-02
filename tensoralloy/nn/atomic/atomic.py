@@ -291,13 +291,12 @@ class AtomicNN(BasicNN):
         with tf.name_scope("Mask"):
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-            y_atomic = tf.concat(outputs["energy"], axis=1, name='atomic/raw')
+            eatom = tf.concat(outputs["energy"], axis=1, name='atomic/raw')
             if ndims == 1:
-                y_atomic = tf.squeeze(y_atomic, axis=0)
-            y_atomic = tf.multiply(y_atomic, mask, name='atomic')
-        y_sum = tf.reduce_sum(
-            y_atomic, axis=axis, keepdims=False, name='energy')
-        enthalpy = self._get_enthalpy_op(features, y_sum, verbose=verbose)
+                eatom = tf.squeeze(eatom, axis=0)
+            eatom = tf.multiply(eatom, mask, name='atomic')
+        energy = tf.reduce_sum(
+            eatom, axis=axis, keepdims=False, name='energy')
         if verbose:
-            log_tensor(y_sum)
-        return EnergyOps(energy=EnergyOp(y_sum, y_atomic), enthalpy=enthalpy)
+            log_tensor(energy)
+        return EnergyOps(energy=EnergyOp(energy, eatom))

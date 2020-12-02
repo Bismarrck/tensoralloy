@@ -192,12 +192,6 @@ class TensorAlloyCalculator(Calculator):
         """
         return None
 
-    def get_enthalpy(self, atoms=None):
-        """
-        Return the enthalpy energy (eV).
-        """
-        return self.get_property('enthalpy', atoms=atoms)
-
     def get_electron_entropy(self, atoms=None):
         """
         Return the electron entropy S.

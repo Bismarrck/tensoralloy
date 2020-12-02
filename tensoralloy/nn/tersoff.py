@@ -14,7 +14,7 @@ from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import GraphKeys
 from tensoralloy.nn.cutoff import tersoff_cutoff
 from tensoralloy.io.lammps import read_tersoff_file
-from tensoralloy.nn.dataclasses import EnergyOps
+from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.utils import log_tensor
@@ -463,18 +463,15 @@ class Tersoff(BasicNN):
             The energy tensors.
 
         """
-        atomic_energy = tf.identity(outputs, name='atomic/raw')
+        eatom = tf.identity(outputs, name='atomic/raw')
         ndims = features["atom_masks"].shape.ndims
         axis = ndims - 1
         with tf.name_scope("Mask"):
             mask = tf.split(
                 features["atom_masks"], [1, -1], axis=axis, name='split')[1]
-        atomic_energy = tf.multiply(atomic_energy, mask, name='atomic')
+        eatom = tf.multiply(eatom, mask, name='atomic')
         energy = tf.reduce_sum(
-            atomic_energy, axis=axis, keepdims=False, name='energy')
-        enthalpy = self._get_enthalpy_op(features, energy, verbose=verbose)
+            eatom, axis=axis, keepdims=False, name='energy')
         if verbose:
             log_tensor(energy)
-            log_tensor(enthalpy)
-        return EnergyOps(
-            energy, tf.no_op('eentropy'), enthalpy, energy, atomic_energy)
+        return EnergyOps(EnergyOp(total=energy, atomic=eatom))

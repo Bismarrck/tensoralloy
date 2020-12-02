@@ -75,8 +75,6 @@ def test_energy_pv():
                 zero, ten, hundred = sess.run([zero_ops, ten_ops, hundred_ops])
 
             assert_almost_equal(zero["energy"], hundred["energy"], delta=1e-8)
-            assert_almost_equal(zero["enthalpy"] - hundred["enthalpy"],
-                                -100 * GPa * volume, delta=1e-8)
 
             # Only diag elements are affected by pulay stress.
             assert_array_almost_equal(

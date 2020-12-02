@@ -551,15 +551,16 @@ class UniversalTransformer(DescriptorTransformer):
         """
         Make sure `placeholders` contains enough keys.
         """
-        assert 'positions' in features
-        assert 'cell' in features
-        assert 'volume' in features
         assert 'n_atoms_vap' in features
         assert 'nnl_max' in features
         assert 'row_splits' in features
         assert 'g2.v2g_map' in features
+        assert 'etemperature' in features
 
         if self._use_computed_dists:
+            assert 'volume' in features
+            assert 'positions' in features
+            assert 'cell' in features
             assert 'g2.ilist' in features
             assert 'g2.jlist' in features
             assert 'g2.n1' in features
@@ -732,22 +733,26 @@ class UniversalTransformer(DescriptorTransformer):
         with tf.name_scope("Placeholders/"):
             dtype = get_float_dtype()
 
-            self._placeholders["positions"] = self._create_float_2d(
-                dtype=dtype, d0=None, d1=3, name='positions')
-            self._placeholders["cell"] = self._create_float_2d(
-                dtype=dtype, d0=3, d1=3, name='cell')
+            if self._use_computed_dists:
+                self._placeholders["positions"] = self._create_float_2d(
+                    dtype=dtype, d0=None, d1=3, name='positions')
+                self._placeholders["cell"] = self._create_float_2d(
+                    dtype=dtype, d0=3, d1=3, name='cell')
+                self._placeholders["volume"] = self._create_float(
+                    dtype=dtype, name='volume')
+                self._placeholders["pulay_stress"] = self._create_float(
+                    dtype=dtype, name='pulay_stress')
+
             self._placeholders["n_atoms_vap"] = self._create_int('n_atoms_vap')
             self._placeholders["nnl_max"] = self._create_int('nnl_max')
-            self._placeholders["volume"] = self._create_float(
-                dtype=dtype, name='volume')
             self._placeholders["atom_masks"] = self._create_float_1d(
                 dtype=dtype, name='atom_masks')
-            self._placeholders["pulay_stress"] = self._create_float(
-                dtype=dtype, name='pulay_stress')
             self._placeholders["etemperature"] = self._create_float(
                 dtype=dtype, name='etemperature')
             self._placeholders["row_splits"] = self._create_int_1d(
                 name='row_splits', d0=self.n_elements + 1)
+            self._placeholders["g2.v2g_map"] = self._create_int_2d(
+                d0=None, d1=5, name='g2.v2g_map')
 
             if self._use_computed_dists:
                 self._placeholders["g2.ilist"] = self._create_int_1d('g2.ilist')
@@ -757,8 +762,6 @@ class UniversalTransformer(DescriptorTransformer):
             else:
                 self._placeholders["g2.rij"] = self._create_float_2d(
                     d0=4, d1=None, dtype=dtype, name="g2.rij")
-            self._placeholders["g2.v2g_map"] = self._create_int_2d(
-                d0=None, d1=5, name='g2.v2g_map')
 
             if self._angular:
                 self._placeholders["ij2k_max"] = self._create_int('ij2k_max')
@@ -870,13 +873,15 @@ class UniversalTransformer(DescriptorTransformer):
 
         feed_dict = dict()
 
-        feed_dict["positions"] = positions.astype(np_dtype)
+        if self._use_computed_dists:
+            feed_dict["positions"] = positions.astype(np_dtype)
+            feed_dict["cell"] = cell.array.astype(np_dtype)
+            feed_dict["volume"] = np_dtype(volume)
+            feed_dict["pulay_stress"] = np_dtype(pulay_stress)
+
         feed_dict["n_atoms_vap"] = np.int32(vap.max_vap_natoms)
         feed_dict["nnl_max"] = np.int32(radial_metadata.v2g_map[:, 2].max() + 1)
         feed_dict["atom_masks"] = atom_masks.astype(np_dtype)
-        feed_dict["cell"] = cell.array.astype(np_dtype)
-        feed_dict["volume"] = np_dtype(volume)
-        feed_dict["pulay_stress"] = np_dtype(pulay_stress)
         feed_dict["etemperature"] = np_dtype(etemp)
         feed_dict["row_splits"] = np.int32(splits)
         feed_dict.update(
