@@ -39,6 +39,9 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
+API_VERSION = "1.1"
+
+
 class _PropertyError(ValueError):
     """
     This error shall be raised if the given property is not valid.
@@ -1084,7 +1087,7 @@ class BasicNN:
                     nn.variational_energy, name='variational_energy')
                 is_finite_temperature_node = tf.constant(
                     int(nn.is_finite_temperature), name="is_finite_temperature")
-                api_version_node = tf.constant("1.0", name="api")
+                api_version_node = tf.constant(API_VERSION, name="api")
                 ops = {key: tensor.name for key, tensor in predictions.items()}
                 ops_node = tf.constant(json.dumps(ops), name='ops')
 
