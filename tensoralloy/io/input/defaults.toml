@@ -116,6 +116,7 @@ zeta = [1.0, 4.0]
 
 [nn.atomic.grap]
 moment_tensors = [0, 1]
+dipole_scale_factor = 1.0
 algorithm = 'pexp'
 cutoff_function = 'polynomial'
 param_space_method = "pair"

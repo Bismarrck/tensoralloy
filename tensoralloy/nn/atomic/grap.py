@@ -202,6 +202,7 @@ class GenericRadialAtomicPotential(Descriptor):
                  parameters=None,
                  param_space_method="cross",
                  moment_tensors: Union[int, List[int]] = 0,
+                 dipole_scale_factor=1.0,
                  cutoff_function="cosine"):
         """
         Initialization method.
@@ -221,6 +222,7 @@ class GenericRadialAtomicPotential(Descriptor):
         self._cutoff_function = cutoff_function
         self._parameters = parameters
         self._param_space_method = param_space_method
+        self._dipole_scale_factor = dipole_scale_factor
 
     @property
     def name(self):
@@ -233,7 +235,8 @@ class GenericRadialAtomicPotential(Descriptor):
         """
         d = super(GenericRadialAtomicPotential, self).as_dict()
         d.update({"moment_tensors": self._moment_tensors,
-                  "cutoff_function": self._cutoff_function})
+                  "cutoff_function": self._cutoff_function,
+                  "dipole_scale_factor": self._dipole_scale_factor})
         return d
 
     @staticmethod
@@ -274,7 +277,8 @@ class GenericRadialAtomicPotential(Descriptor):
         }
         moment_tensors_indices = {1: [0, 1, 2],
                                   2: [(0, 0), (1, 1), (2, 2),
-                                      (0, 1), (0, 2), (1, 2)]}
+                                      (0, 1), (0, 2), (1, 2),
+                                      (1, 0), (2, 0), (2, 1)]}
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
         outputs = {element: [None] * len(self._elements)
@@ -322,7 +326,12 @@ class GenericRadialAtomicPotential(Descriptor):
                                         _post_compute(
                                             tf.multiply(v, coef, name='fx'),
                                             square=True))
-                            gtau.append(tf.add_n(dtau, name='u2'))
+                            scale = tf.constant(
+                                self._dipole_scale_factor,
+                                name='factor',
+                                dtype=dtype)
+                            gtau.append(tf.multiply(scale, tf.add_n(dtau),
+                                                    name='u2'))
                         # Quadrupole effect
                         if 2 in self._moment_tensors:
                             qtau = []
@@ -330,11 +339,8 @@ class GenericRadialAtomicPotential(Descriptor):
                                 itag = xyz_map[i]
                                 jtag = xyz_map[j]
                                 with tf.name_scope(f"r{itag}{jtag}"):
-                                    multi = tf.convert_to_tensor(
-                                        1.0 + float(i != j),
-                                        dtype=dtype, name='multi')
                                     coef = tf.div_no_nan(
-                                        multi * dij[i] * dij[j], rij * rij,
+                                        dij[i] * dij[j], rij * rij,
                                         name='coef')
                                     vij = _post_compute(
                                         tf.multiply(v, coef, name='fx'),
