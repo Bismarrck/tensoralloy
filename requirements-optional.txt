@@ -1,6 +1,5 @@
 scipy>=1.0
 pymatgen>=2018.6
 seekpath>=1.8.4
-phonopy==1.14.2
+phonopy
 spglib
-dscribe
