@@ -38,6 +38,17 @@ __email__ = 'Bismarrck@me.com'
 _identifier = "conventional_standard"
 
 
+_hcp_Be = Atoms(
+    symbols="Be2",
+    cell=np.asarray([[ 2.26440844, 0.00000000, 0.00000000],
+                     [-1.13220422, 1.96103450, 0.00000000],
+                     [ 0.00000000, 0.00000000, 3.56733004]]),
+    scaled_positions=[[0.66666667, 0.33333333, 0.75000000],
+                      [0.33333333, 0.66666667, 0.25000000]],
+    pbc=True
+)
+
+
 @dataclass(frozen=True)
 class ElasticConstant:
     """
@@ -76,14 +87,24 @@ class Crystal:
 built_in_crystals = {
     "Be": Crystal(name='Be',
                   phase='hcp',
-                  bulk_modulus=120,
+                  bulk_modulus=117,
                   atoms=bulk('Be'),
-                  elastic_constants=[ElasticConstant((0, 0, 0, 0), 322),
-                                     ElasticConstant((2, 2, 2, 2), 378),
+                  elastic_constants=[ElasticConstant((0, 0, 0, 0), 294),
+                                     ElasticConstant((2, 2, 2, 2), 357),
                                      ElasticConstant((1, 2, 1, 2), 162),
-                                     ElasticConstant((0, 1, 0, 1), 151),
-                                     ElasticConstant((0, 0, 1, 1), 21),
-                                     ElasticConstant((0, 0, 2, 2), 8)]),
+                                     ElasticConstant((0, 1, 0, 1), 133),
+                                     ElasticConstant((0, 0, 1, 1), 27),
+                                     ElasticConstant((0, 0, 2, 2), 14)]),
+    "Be/dft": Crystal(name="Be",
+                      phase="hcp",
+                      bulk_modulus=120,
+                      atoms=_hcp_Be,
+                      elastic_constants=[ElasticConstant((0, 0, 0, 0), 322),
+                                         ElasticConstant((2, 2, 2, 2), 378),
+                                         ElasticConstant((1, 2, 1, 2), 162),
+                                         ElasticConstant((0, 1, 0, 1), 151),
+                                         ElasticConstant((0, 0, 1, 1), 21),
+                                         ElasticConstant((0, 0, 2, 2), 8)]),
     "Al": Crystal(name="Al",
                   phase="fcc",
                   bulk_modulus=76,
