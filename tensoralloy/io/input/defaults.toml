@@ -39,9 +39,10 @@ weight = 1.0
 crystals = []
 beta = []
 p_target = []
+E_target = []
 dx = 0.01
 xlo = 0.90
-xhi = 0.90
+xhi = 1.02
 
 [nn.loss.ediff]
 references = []

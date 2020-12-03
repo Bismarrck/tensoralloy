@@ -116,6 +116,8 @@ def get_rose_constraint_loss(base_nn,
         options = RoseLossOptions()
 
     with tf.name_scope("Rose"):
+        dtype = get_float_dtype()
+        zero = tf.constant(0.0, dtype=dtype, name='zero')
 
         losses = []
 
@@ -131,7 +133,6 @@ def get_rose_constraint_loss(base_nn,
             if crystal.bulk_modulus == 0:
                 continue
 
-            dtype = get_float_dtype()
             one = tf.convert_to_tensor(1.0, dtype=dtype, name='one')
             two = tf.convert_to_tensor(2.0, dtype=dtype, name='two')
             three = tf.convert_to_tensor(3.0, dtype=dtype, name='three')
@@ -168,9 +169,13 @@ def get_rose_constraint_loss(base_nn,
                     p0 = tf.negative(output['stress'][:3] / GPa,
                                      name='P0')
                     gpa = tf.reduce_mean(p0, name='GPa')
-                    f0 = tf.norm(output['forces'], name='F')
                     pref = tf.convert_to_tensor(options.p_target[idx],
                                                 dtype=dtype, name='P')
+                    if options.E_target is not None:
+                        eref = tf.convert_to_tensor(options.E_target[idx],
+                                                    dtype=dtype, name='E')
+                    else:
+                        eref = None
 
                 dx = options.dx
                 xlo = options.xlo
@@ -247,7 +252,11 @@ def get_rose_constraint_loss(base_nn,
                         labels = tf.multiply(e0, coef, name='labels')
 
                     with tf.name_scope("Loss"):
-                        pd = tf.norm(p0 - pref, name='loss/GPa')
+                        ploss = tf.norm(p0 - pref, name='loss/GPa')
+                        if eref is not None:
+                            eloss = tf.abs(e0 - eref, name='loss/E')
+                        else:
+                            eloss = zero
 
                         diff = tf.math.subtract(predictions, labels, 'diff')
                         mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
@@ -259,14 +268,15 @@ def get_rose_constraint_loss(base_nn,
                         weight = tf.convert_to_tensor(
                             options.weight, dtype, name='weight')
                         residual = tf.sqrt(sds + eps, name='residual')
-                        loss = tf.multiply(residual + pd, weight, name='loss')
+                        loss = tf.multiply(residual + ploss + eloss,
+                                           weight, name='loss')
                         losses.append(loss)
 
                     if is_first_replica():
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, mae)
                         tf.add_to_collection(GraphKeys.TRAIN_METRICS, gpa)
-                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, f0)
+                        tf.add_to_collection(GraphKeys.TRAIN_METRICS, e0)
                         tf.add_to_collection(GraphKeys.EVAL_METRICS, residual)
 
         return tf.add_n(losses, name='total_loss')

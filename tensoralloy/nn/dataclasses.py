@@ -200,6 +200,7 @@ class RoseLossOptions(_LossOptions):
     crystals: List[str] = None
     beta: List[float] = None
     p_target: List[float] = None
+    E_target: List[float] = None
 
 
 @add_slots
