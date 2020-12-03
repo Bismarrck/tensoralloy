@@ -292,7 +292,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 gtau = []
                 
-                def _post_compute(fx, square=False):
+                def compute(fx, square=False):
                     """
                     Apply the smooth cutoff values and zero masks to `fx`.
                     Then sum `fx` for each atom.
@@ -313,7 +313,7 @@ class GenericRadialAtomicPotential(Descriptor):
                         # The standard central-force model
                         if 0 in self._moment_tensors:
                             with tf.name_scope("r"):
-                                gtau.append(_post_compute(v))
+                                gtau.append(compute(v))
                         # Dipole effect
                         if 1 in self._moment_tensors:
                             dtau = []
@@ -323,9 +323,8 @@ class GenericRadialAtomicPotential(Descriptor):
                                     coef = tf.div_no_nan(
                                         dij[i], rij, name='coef')
                                     dtau.append(
-                                        _post_compute(
-                                            tf.multiply(v, coef, name='fx'),
-                                            square=True))
+                                        compute(tf.multiply(v, coef, name='fx'),
+                                                square=True))
                             scale = tf.constant(
                                 self._dipole_scale_factor,
                                 name='factor',
@@ -342,11 +341,11 @@ class GenericRadialAtomicPotential(Descriptor):
                                     coef = tf.div_no_nan(
                                         dij[i] * dij[j], rij * rij,
                                         name='coef')
-                                    vij = _post_compute(
+                                    vij = compute(
                                         tf.multiply(v, coef, name='fx'),
                                         square=True)
                                     qtau.append(vij)
-                        gtau.append(tf.add_n(qtau, name='q2'))
+                            gtau.append(tf.add_n(qtau, name='q2'))
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
