@@ -202,7 +202,7 @@ class GenericRadialAtomicPotential(Descriptor):
                  parameters=None,
                  param_space_method="cross",
                  moment_tensors: Union[int, List[int]] = 0,
-                 dipole_scale_factor=1.0,
+                 moment_scale_factors: Union[float, List[float]] = 1.0,
                  cutoff_function="cosine"):
         """
         Initialization method.
@@ -214,15 +214,19 @@ class GenericRadialAtomicPotential(Descriptor):
         moment_tensors = list(set(moment_tensors))
         for moment_tensor in moment_tensors:
             assert 0 <= moment_tensor <= 2
+        if np.isscalar(moment_scale_factors):
+            moment_scale_factors = [moment_scale_factors] * len(moment_tensors)
+        else:
+            assert len(moment_scale_factors) == len(moment_tensors)
 
         self._algorithm = algorithm
         self._algorithm_instance = self.initialize_algorithm(
             algorithm, parameters, param_space_method)
         self._moment_tensors = moment_tensors
+        self._moment_scale_factors = moment_scale_factors
         self._cutoff_function = cutoff_function
         self._parameters = parameters
         self._param_space_method = param_space_method
-        self._dipole_scale_factor = dipole_scale_factor
 
     @property
     def name(self):
@@ -236,7 +240,7 @@ class GenericRadialAtomicPotential(Descriptor):
         d = super(GenericRadialAtomicPotential, self).as_dict()
         d.update({"moment_tensors": self._moment_tensors,
                   "cutoff_function": self._cutoff_function,
-                  "dipole_scale_factor": self._dipole_scale_factor})
+                  "moment_scale_factors": self._moment_scale_factors})
         return d
 
     @staticmethod
@@ -310,42 +314,46 @@ class GenericRadialAtomicPotential(Descriptor):
                     with tf.name_scope(f"{tau}"):
                         v = self._algorithm_instance.compute(
                             tau, rij, rc, dtype=dtype)
-                        # The standard central-force model
-                        if 0 in self._moment_tensors:
-                            with tf.name_scope("r"):
-                                gtau.append(compute(v))
-                        # Dipole effect
-                        if 1 in self._moment_tensors:
-                            dtau = []
-                            for i in moment_tensors_indices[1]:
-                                itag = xyz_map[i]
-                                with tf.name_scope(f"r{itag}"):
-                                    coef = tf.div_no_nan(
-                                        dij[i], rij, name='coef')
-                                    dtau.append(
-                                        compute(tf.multiply(v, coef, name='fx'),
-                                                square=True))
+                        for idx, moment_tensor in \
+                                enumerate(self._moment_tensors):
                             scale = tf.constant(
-                                self._dipole_scale_factor,
-                                name='factor',
+                                self._moment_scale_factors[idx],
+                                name=f'factor{idx}',
                                 dtype=dtype)
-                            gtau.append(tf.multiply(scale, tf.add_n(dtau),
-                                                    name='u2'))
-                        # Quadrupole effect
-                        if 2 in self._moment_tensors:
-                            qtau = []
-                            for (i, j) in moment_tensors_indices[2]:
-                                itag = xyz_map[i]
-                                jtag = xyz_map[j]
-                                with tf.name_scope(f"r{itag}{jtag}"):
-                                    coef = tf.div_no_nan(
-                                        dij[i] * dij[j], rij * rij,
-                                        name='coef')
-                                    vij = compute(
-                                        tf.multiply(v, coef, name='fx'),
-                                        square=True)
-                                    qtau.append(vij)
-                            gtau.append(tf.add_n(qtau, name='q2'))
+                            if moment_tensor == 0:
+                                # The standard central-force part
+                                with tf.name_scope("r"):
+                                    gtau.append(compute(v))
+                            elif moment_tensor == 1:
+                                # Dipole moment
+                                dtau = []
+                                for i in moment_tensors_indices[1]:
+                                    itag = xyz_map[i]
+                                    with tf.name_scope(f"r{itag}"):
+                                        coef = tf.div_no_nan(
+                                            dij[i], rij, name='coef')
+                                        vi = compute(
+                                            tf.multiply(v, coef, name='fx'),
+                                            square=True)
+                                        dtau.append(vi)
+                                gtau.append(tf.multiply(scale, tf.add_n(dtau),
+                                                        name='u2'))
+                            elif moment_tensor == 2:
+                                # Quadrupole moment
+                                qtau = []
+                                for (i, j) in moment_tensors_indices[2]:
+                                    itag = xyz_map[i]
+                                    jtag = xyz_map[j]
+                                    with tf.name_scope(f"r{itag}{jtag}"):
+                                        coef = tf.div_no_nan(
+                                            dij[i] * dij[j], rij * rij,
+                                            name='coef')
+                                        vij = compute(
+                                            tf.multiply(v, coef, name='fx'),
+                                            square=True)
+                                        qtau.append(vij)
+                                gtau.append(tf.multiply(scale, tf.add_n(qtau),
+                                                        name='q2'))
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
