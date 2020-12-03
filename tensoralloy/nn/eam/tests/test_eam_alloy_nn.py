@@ -389,8 +389,7 @@ def test_batch_stress():
                         n_atoms_vap=batch["n_atoms_vap"],
                         cell=batch["cell"],
                         atom_masks=batch["atom_masks"],
-                        volume=batch["volume"],
-                        pulay_stress=batch["pulay_stress"])
+                        volume=batch["volume"])
 
         outputs = nn._get_model_outputs(
             features=features,
@@ -400,18 +399,17 @@ def test_batch_stress():
         ops = nn._get_energy_ops(outputs, features, verbose=False)
         forces = nn._get_forces_op(ops.energy, batch["positions"],
                                    verbose=False)
-        stress, total_stress, _ = nn._get_stress_op(
-            energy=ops.energy,
+        stress, virial, _ = nn._get_stress_ops(
+            energy=ops.energy.total,
             cell=batch["cell"],
             volume=batch["volume"],
             positions=batch["positions"],
-            pulay_stress=batch["pulay_stress"],
             forces=forces,
             verbose=False)
 
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
-            y1, y2 = sess.run([stress, total_stress])
+            y1, y2 = sess.run([stress, virial])
             y2 = y2[0][[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
 
         assert_array_almost_equal(s_true, y1 * volume, delta=1e-8)

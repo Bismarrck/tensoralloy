@@ -399,8 +399,6 @@ class BatchDescriptorTransformer(BaseTransformer):
         volume = np.atleast_1d(atoms.get_volume()).astype(np_dtype)
         energy = np.atleast_1d(atoms.get_total_energy()).astype(np_dtype)
         mask = vap.atom_masks.astype(np_dtype)
-        pulay_stress = np.atleast_1d(
-            atoms_utils.get_pulay_stress(atoms)).astype(np_dtype)
         etemp = np.atleast_1d(
             atoms_utils.get_electron_temperature(atoms)).astype(np_dtype)
         eentropy = np.atleast_1d(
@@ -415,7 +413,6 @@ class BatchDescriptorTransformer(BaseTransformer):
             'energy': bytes_feature(energy.tostring()),
             'free_energy': bytes_feature(free_energy.tostring()),
             'atom_masks': bytes_feature(mask.tostring()),
-            'pulay_stress': bytes_feature(pulay_stress.tostring()),
             'eentropy': bytes_feature(eentropy.tostring()),
             'etemperature': bytes_feature(etemp.tostring())
         }
@@ -491,10 +488,6 @@ class BatchDescriptorTransformer(BaseTransformer):
         atom_masks.set_shape([max_n_atoms + 1, ])
         decoded["atom_masks"] = atom_masks
 
-        pulay = tf.decode_raw(example['pulay_stress'], float_dtype)
-        pulay.set_shape([1])
-        decoded["pulay_stress"] = tf.squeeze(pulay, name='pulay_stress')
-
         etemp = tf.decode_raw(example['etemperature'], float_dtype)
         etemp.set_shape([1])
         decoded["etemperature"] = tf.squeeze(etemp, name='etemperature')
@@ -537,7 +530,6 @@ class BatchDescriptorTransformer(BaseTransformer):
             'energy': tf.FixedLenFeature([], tf.string),
             'free_energy': tf.FixedLenFeature([], tf.string),
             'atom_masks': tf.FixedLenFeature([], tf.string),
-            'pulay_stress': tf.FixedLenFeature([], tf.string),
             'etemperature': tf.FixedLenFeature([], tf.string),
             'eentropy': tf.FixedLenFeature([], tf.string),
             'g2.indices': tf.FixedLenFeature([], tf.string),

@@ -740,8 +740,6 @@ class UniversalTransformer(DescriptorTransformer):
                     dtype=dtype, d0=3, d1=3, name='cell')
                 self._placeholders["volume"] = self._create_float(
                     dtype=dtype, name='volume')
-                self._placeholders["pulay_stress"] = self._create_float(
-                    dtype=dtype, name='pulay_stress')
 
             self._placeholders["n_atoms_vap"] = self._create_int('n_atoms_vap')
             self._placeholders["nnl_max"] = self._create_int('nnl_max')
@@ -867,7 +865,6 @@ class UniversalTransformer(DescriptorTransformer):
         cell = atoms.get_cell(complete=True)
         volume = atoms.get_volume()
         atom_masks = vap.atom_masks.astype(np_dtype)
-        pulay_stress = atoms_utils.get_pulay_stress(atoms)
         etemp = atoms_utils.get_electron_temperature(atoms)
         splits = [1] + [vap.max_occurs[e] for e in self._elements]
 
@@ -877,7 +874,6 @@ class UniversalTransformer(DescriptorTransformer):
             feed_dict["positions"] = positions.astype(np_dtype)
             feed_dict["cell"] = cell.array.astype(np_dtype)
             feed_dict["volume"] = np_dtype(volume)
-            feed_dict["pulay_stress"] = np_dtype(pulay_stress)
 
         feed_dict["n_atoms_vap"] = np.int32(vap.max_vap_natoms)
         feed_dict["nnl_max"] = np.int32(radial_metadata.v2g_map[:, 2].max() + 1)

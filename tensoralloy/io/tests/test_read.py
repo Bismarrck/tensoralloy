@@ -72,19 +72,6 @@ def test_read_snap_stress():
     assert_equal(source, "Ni.AIMD.0")
 
 
-def test_read_pulay_stress():
-    """
-    Test reading `Pu4_60GPa.extxyz`.
-    """
-    xyzfile = join(test_dir(), 'Pu4_60GPa.extxyz')
-    database = read_file(xyzfile, verbose=False)
-    atoms = database.get_atoms(id=1, add_additional_information=True)
-    kbar = atoms.get_stress() / GPa * 10.0
-    pulay = atoms_utils.get_pulay_stress(atoms) / GPa * 10.0 * (-1)
-    net = kbar[:3].mean() - pulay
-    assert_almost_equal(net, -0.78, delta=0.01)
-
-
 def test_read_stepmax_xyz():
     xyzfile = join(test_dir(), "Pu8.stepmax.xyz")
     database = read_file(xyzfile, num_examples=1, file_type='stepmax')

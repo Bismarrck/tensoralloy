@@ -265,7 +265,6 @@ class BasicNN:
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms_vap' of dtype `int64`.
                 * 'etemperature' of dtype `float32` or `float64`.
-                * 'pulay_stress' of dtype `float32` or `float64`.
         name : str
             The name of the output potential energy tensor.
         verbose : bool
@@ -307,12 +306,12 @@ class BasicNN:
         return ops
 
     @staticmethod
-    def _get_reduced_full_stress_tensor(energy: tf.Tensor, cell, volume,
-                                        positions, forces, pulay_stress):
+    def _get_full_stress_and_virial(energy: tf.Tensor, cell, volume,
+                                    positions, forces):
         """
-        Return the Op to compute the virial stress tensor.
+        Return the Ops to compute the 3x3 virial and stress tensors.
 
-            (stress - pulay_stress) * volume = -F^T @ R + (dE/dh)^T @ h
+            virial = stress * volume = -F^T @ R + (dE/dh)^T @ h
 
         where `E` denotes the total energy, `h` is the 3x3 row-major lattice
         matrix, `R` and `F` are positions and total forces of the atoms.
@@ -321,7 +320,6 @@ class BasicNN:
             # The cell tensors in Python/ASE are row-major. So `dE/dh` must be
             # transposed.
             dEdh = tf.identity(tf.gradients(energy, cell)[0], name='dEdh')
-            dtype = dEdh.dtype
             if cell.shape.ndims == 2:
                 with tf.name_scope("Right"):
                     right = tf.matmul(tf.transpose(dEdh, name='dEdhT'), cell,
@@ -331,13 +329,8 @@ class BasicNN:
                         positions, [1, -1], axis=0, name='split')[1]
                     left = tf.matmul(tf.transpose(forces), positions)
                     left = tf.negative(left, name='left')
-                internal = tf.add(left, right, name='internal')
-                with tf.name_scope("PV"):
-                    pv = tf.multiply(tf.eye(3, dtype=dtype),
-                                     pulay_stress * volume,
-                                     name='pv')
-                total_stress = tf.subtract(internal, pv, name='stress')
-                stress = tf.math.truediv(total_stress, volume, name='ase')
+                virial = tf.add(left, right, name='virial')
+                stress = tf.math.truediv(virial, volume, name='ase')
             else:
                 with tf.name_scope("Right"):
                     right = tf.einsum('ikj,ikl->ijl', dEdh, cell, name='right')
@@ -347,26 +340,17 @@ class BasicNN:
                     left = tf.einsum('ijk,ijl->ijlk', positions, forces)
                     left = tf.reduce_sum(left, axis=1, keepdims=False)
                     left = tf.negative(left, name='left')
-                internal = tf.add(left, right, name='internal')
-
-                with tf.name_scope("PV"):
-                    batch_shape = [energy.shape.as_list()[0]]
-                    pv = tf.multiply(volume, pulay_stress, name='pv')
-                    pv = tf.multiply(
-                        tf.eye(3, batch_shape=batch_shape, dtype=dtype),
-                        tf.reshape(pv, [-1, 1, 1]),
-                        name='pv')
-                total_stress = tf.subtract(internal, pv, name='stress')
-                stress = tf.math.truediv(tf.reshape(total_stress, (-1, 9)),
+                virial = tf.add(left, right, name='virial')
+                stress = tf.math.truediv(tf.reshape(virial, (-1, 9)),
                                          tf.reshape(volume, (-1, 1)))
                 stress = tf.reshape(stress, (-1, 3, 3), name='ase')
-            return tf.identity(stress, name='unit'), total_stress
+            return stress, virial
 
     @staticmethod
     def _convert_to_voigt_stress(stress, batch_size, verbose=False):
         """
-        Convert a 3x3 stress tensor or a Nx3x3 stress tensors to corresponding
-        Voigt form(s).
+        Convert a 3x3 stress tensor or a Nx3x3 stress tensor to corresponding
+        Voigt form.
         """
         ndims = stress.shape.ndims
         with tf.name_scope("Voigt"):
@@ -385,47 +369,54 @@ class BasicNN:
                 log_tensor(stress)
             return stress
 
-    def _get_stress_op(self, energy: tf.Tensor, cell, volume, positions,
-                       forces, pulay_stress, return_pressure=False,
-                       verbose=True):
+    def _get_stress_ops(self, energy: tf.Tensor, cell, volume, positions,
+                        forces, return_pressure=False, verbose=True):
         """
-        Return the Op to compute the reduced stress (eV) in Voigt format.
+        Return stress Ops:
+
+            voigt_stress: the stress (eV/Ang^3) in Voigt form.
+            virial: the 3x3 virial tensor (eV)
+            total_pressure: the total pressure scalar (GPa)
+
         """
 
         # Get the 3x3 full stress tensor
-        stress_per_volume, total_stress = \
-            self._get_reduced_full_stress_tensor(
-                energy, cell, volume, positions, forces, pulay_stress)
+        stress, virial = self._get_full_stress_and_virial(
+            energy=energy,
+            cell=cell,
+            volume=volume,
+            positions=positions,
+            forces=forces)
         if verbose:
-            log_tensor(total_stress)
+            log_tensor(virial)
 
         # Get the Voigt stress tensor
-        ndims = stress_per_volume.shape.ndims
+        ndims = virial.shape.ndims
         batch_size = cell.shape[0].value or energy.shape[0].value
         if ndims == 3 and batch_size is None:
             raise ValueError("The batch size cannot be inferred.")
-        voigt = self._convert_to_voigt_stress(
-            stress_per_volume, batch_size, verbose=verbose)
+        voigt_stress = self._convert_to_voigt_stress(
+            stress, batch_size, verbose=verbose)
 
         if return_pressure:
-            total_pressure = self._get_total_pressure_op(stress_per_volume,
-                                                         verbose=verbose)
+            total_pressure = self._get_total_pressure_op(
+                stress, verbose=verbose)
         else:
             total_pressure = tf.no_op()
 
-        return voigt, total_stress, total_pressure
+        return voigt_stress, virial, total_pressure
 
     @staticmethod
-    def _get_total_pressure_op(stress_per_volume: tf.Tensor, name='pressure',
+    def _get_total_pressure_op(stress: tf.Tensor, name='pressure',
                                verbose=True):
         """
-        Return the Op to compute the reduced total pressure (eV).
+        Return the Op to compute the reduced total pressure (GPa).
 
-            reduced_total_pressure = -trace(full_stress) / 3.0
+            total_pressure = -trace(stress) / 3.0
 
         """
-        dtype = stress_per_volume.dtype
-        total_pressure = tf.math.truediv(tf.trace(stress_per_volume),
+        dtype = stress.dtype
+        total_pressure = tf.math.truediv(tf.trace(stress),
                                          tf.constant(-3.0 * GPa, dtype=dtype),
                                          name=f"{name}/GPa")
         if verbose:
@@ -489,7 +480,7 @@ class BasicNN:
 
             The following prediction is included and required for computing
             elastic loss:
-                * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
+                * 'virial' of shape `[batch_size, 3, 3]` with unit `eV`.
 
             For finite temperature systems those are required:
                 * 'eentropy' (electron entropy) of shape `[batch_size, ]`
@@ -508,7 +499,6 @@ class BasicNN:
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
-                * 'pulay_stress' of shape `[batch_size, ]`
 
         n_atoms : tf.Tensor
             A `int64` tensor of shape `[batch_size, ]`.
@@ -631,7 +621,6 @@ class BasicNN:
                 * 'etemperature' of dtype `float32` or `float64`
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms_vap' of dtype `int64`.'
-                * 'pulay_stress' of dtype `float32` or `float64`.
         descriptors : dict
             A dict of Ops to get atomic descriptors. This should be produced by
             an overrided `BaseTransformer.get_descriptors()`.
@@ -676,7 +665,6 @@ class BasicNN:
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms_vap' of dtype `int64`.
                 * 'etemperature' of dtype `float32` or `float64`
-                * 'pulay_stress' of dtype `float32` or `float64`.
         mode : tf_estimator.ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
@@ -698,7 +686,7 @@ class BasicNN:
 
             The following prediction is included and required for computing
             elastic constants:
-                * 'total_stress' of shape `[batch_size, 3, 3]` with unit `eV`.
+                * 'virial' of shape `[batch_size, 3, 3]` with unit `eV`.
 
         """
 
@@ -754,17 +742,16 @@ class BasicNN:
 
                 if 'stress' in properties:
                     with tf.name_scope("Stress"):
-                        voigt_stress, total_stress, total_pressure = \
-                            self._get_stress_op(
+                        voigt_stress, virial, total_pressure = \
+                            self._get_stress_ops(
                                 energy=predictions[self.variational_energy],
                                 cell=features["cell"],
                                 volume=features["volume"],
                                 positions=features["positions"],
                                 forces=predictions["forces"],
-                                pulay_stress=features["pulay_stress"],
                                 verbose=verbose)
                         predictions["stress"] = voigt_stress
-                        predictions["total_stress"] = total_stress
+                        predictions["virial"] = virial
                         predictions["total_pressure"] = total_pressure
 
                 if 'hessian' in properties:
@@ -779,7 +766,7 @@ class BasicNN:
                     with tf.name_scope("Elastic"):
                         predictions["elastic"] = \
                             elastic_ops.get_elastic_constat_tensor_op(
-                                predictions["total_stress"],
+                                predictions["virial"],
                                 features["cell"],
                                 features["volume"],
                                 name='elastic', verbose=verbose)
@@ -805,7 +792,6 @@ class BasicNN:
         Required if 'stress' or 'total_pressure' should be minimized:
             * 'stress' of shape `[batch_size, 6]` is required if
               'stress' should be minimized.
-            * 'pulay_stress' of shape `[batch_size, ]`
             * 'total_pressure' of shape `[batch_size, ]`
 
         `n_atoms` is a `int64` tensor with shape `[batch_size, ]`, representing
@@ -935,7 +921,6 @@ class BasicNN:
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms_vap' of dtype `int64`.
                 * 'etemperature' of dtype `float32` or `float64`.
-                * 'pulay_stress' of dtype `float32` or `float64`.
         labels : dict
             A dict of reference tensors.
 
@@ -949,7 +934,6 @@ class BasicNN:
             Required if 'stress' or 'total_pressure' should be minimized:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
-                * 'pulay_stress' of shape `[batch_size, ]`
 
         mode : tf_estimator.ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
@@ -1062,8 +1046,7 @@ class BasicNN:
             configs.pop('class')
             nn = self.__class__(**configs)
 
-            if to_lammps \
-                    and isinstance(clf, UniversalTransformer):
+            if to_lammps and isinstance(clf, UniversalTransformer):
                 clf.use_computed_dists = False
 
             nn.attach_transformer(clf)

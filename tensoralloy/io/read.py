@@ -141,10 +141,6 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             # Write the `Atoms` object to the database.
             source = atoms.info.get('source', '')
             key_value_pairs = {'source': source}
-            if use_stress:
-                pulay_stress = atoms_utils.get_pulay_stress(atoms) * to_eV_Ang3
-                key_value_pairs['pulay_stress'] = pulay_stress
-
             eentropy = atoms_utils.get_electron_entropy(atoms)
             etemp = atoms_utils.get_electron_temperature(atoms)
             key_value_pairs['eentropy'] = eentropy

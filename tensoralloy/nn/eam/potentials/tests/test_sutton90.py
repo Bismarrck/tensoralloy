@@ -99,7 +99,6 @@ class EamSutton90Test(unittest.TestCase):
                             n_atoms=batch["n_atoms_vap"],
                             cell=batch["cell"],
                             atom_masks=batch["atom_masks"],
-                            pulay_stress=batch["pulay_stress"],
                             volume=batch["volume"])
 
             nn = EamAlloyNN(elements=['Ag'], custom_potentials={
@@ -113,7 +112,7 @@ class EamSutton90Test(unittest.TestCase):
                 mode=tf_estimator.ModeKeys.EVAL,
                 verbose=False)
             prediction = dict(
-                energy=nn._get_energy_ops(outputs, features).free_energy)
+                energy=nn._get_energy_ops(outputs, features).energy.total)
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()

@@ -10,10 +10,7 @@ import nose
 
 from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_dict_equal, assert_true
-from nose.tools import assert_almost_equal
 from ase.db import connect
-from ase.build import bulk
-from ase.units import GPa
 from os.path import join
 from collections import Counter
 from typing import List
@@ -22,70 +19,15 @@ from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.basic import BasicNN
 from tensoralloy.nn.atomic import AtomicNN, TemperatureDependentAtomicNN
 from tensoralloy.nn.atomic import SymmetryFunction
-from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchUniversalTransformer
-from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import Defaults
-from tensoralloy.atoms_utils import set_pulay_stress
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
-from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.precision import precision_scope
 
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-def test_energy_pv():
-    """
-    Test the total energy Op and the stress Op after the introduction of `E_pv`.
-    """
-    atoms = bulk('Ni')
-    volume = atoms.get_volume()
-    rc = 6.0
-    elements = ['Ni']
-    mode = tf_estimator.ModeKeys.PREDICT
-
-    with precision_scope("high"):
-
-        with tf.Graph().as_default():
-
-            nn = EamAlloyNN(elements, custom_potentials='zjw04',
-                            export_properties=['energy', 'forces', 'stress'])
-            clf = UniversalTransformer(rcut=rc, elements=elements)
-            nn.attach_transformer(clf)
-
-            with tf.name_scope("0GPa"):
-                zero_ops = nn.build(
-                    clf.get_constant_features(atoms), mode=mode, verbose=False)
-
-            with tf.name_scope("10GPa"):
-                set_pulay_stress(atoms, 10.0 * GPa)
-                ten_ops = nn.build(
-                    clf.get_constant_features(atoms), mode=mode, verbose=False)
-
-            with tf.name_scope("100GPa"):
-                set_pulay_stress(atoms, 100.0 * GPa)
-                hundred_ops = nn.build(
-                    clf.get_constant_features(atoms), mode=mode, verbose=False)
-
-            with tf.Session() as sess:
-                tf.global_variables_initializer().run()
-                zero, ten, hundred = sess.run([zero_ops, ten_ops, hundred_ops])
-
-            assert_almost_equal(zero["energy"], hundred["energy"], delta=1e-8)
-
-            # Only diag elements are affected by pulay stress.
-            assert_array_almost_equal(
-                ten["stress"][:3] / GPa - hundred["stress"][:3] / GPa,
-                np.ones(3) * 90.0,
-                delta=1e-8)
-
-            assert_array_almost_equal(
-                ten["stress"][3:] / GPa - hundred["stress"][3:] / GPa,
-                np.zeros(3),
-                delta=1e-8)
 
 
 def test_hidden_sizes():

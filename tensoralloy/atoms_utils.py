@@ -27,20 +27,6 @@ def __set_property(atoms: Atoms, prop: str, value: Any):
     atoms.info[prop] = value
 
 
-def get_pulay_stress(atoms: Atoms) -> float:
-    """
-    Return the pulay stress (eV/Ang**3).
-    """
-    return __get_property(atoms, 'pulay_stress', 0.0)
-
-
-def set_pulay_stress(atoms: Atoms, pulay: float):
-    """
-    Set the pulay stress.
-    """
-    __set_property(atoms, 'pulay_stress', pulay)
-
-
 def get_electron_temperature(atoms: Atoms) -> float:
     """
     Return the electron temperature (eV).

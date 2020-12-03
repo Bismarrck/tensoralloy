@@ -22,14 +22,13 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
+def _get_cijkl_op(virial: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
                   i: int, j: int, kl: List[Tuple[int, int]]):
     """
     Return the Op to compute C_{ijkl}.
     """
-    dsdhij = tf.identity(tf.gradients(
-        total_stress[i, j],
-        cell)[0], name=f'dsdh{i}{j}')
+    dsdhij = tf.identity(tf.gradients(virial[i, j], cell)[0],
+                         name=f'dsdh{i}{j}')
     cij = tf.matmul(
         tf.transpose(dsdhij),
         tf.identity(cell),
@@ -45,7 +44,7 @@ def _get_cijkl_op(total_stress: tf.Tensor, cell: tf.Tensor, volume: tf.Tensor,
     return groups
 
 
-def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
+def get_elastic_constat_tensor_op(virial: tf.Tensor, cell: tf.Tensor,
                                   volume: tf.Tensor, name='elastic',
                                   verbose=False):
     """
@@ -53,8 +52,8 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
 
     Parameters
     ----------
-    total_stress : tf.Tensor
-        The total stress (with unit 'eV') tensor. The shape should be `[3, 3]`.
+    virial : tf.Tensor
+        The virial tensor. The shape should be `[3, 3]`.
     cell : tf.Tensor
         The 3x3 lattice tensor. The shape should be `[3, 3]`.
     volume : tf.Tensor
@@ -71,7 +70,7 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
 
     """
     with tf.name_scope("Cijkl"):
-        assert total_stress.shape.as_list() == [3, 3]
+        assert virial.shape.as_list() == [3, 3]
         assert cell.shape.as_list() == [3, 3]
         components = []
         v2c_map = []
@@ -81,7 +80,7 @@ def get_elastic_constat_tensor_op(total_stress: tf.Tensor, cell: tf.Tensor,
             for vj in range(6):
                 k, l = voigt_to_ij(vj, is_py_index=True)
                 pairs.append((k, l))
-            ops = _get_cijkl_op(total_stress, cell, volume, i, j, pairs)
+            ops = _get_cijkl_op(virial, cell, volume, i, j, pairs)
             for (k, l), cijkl in ops.items():
                 vj = voigt_notation(k, l, return_py_index=True)
                 components.append(cijkl)
@@ -159,7 +158,7 @@ def get_elastic_constant_loss(base_nn,
                     features=features,
                     mode=tf_estimator.ModeKeys.PREDICT,
                     verbose=verbose)
-                total_stress = output["total_stress"]
+                virial = output["virial"]
                 cell = features["cell"]
                 volume = features["volume"]
 
@@ -168,14 +167,14 @@ def get_elastic_constant_loss(base_nn,
                         tf.linalg.norm(output["forces"], name='forces'))
 
                     if options.use_kbar:
-                        unit = tf.constant(10.0 / GPa, dtype=total_stress.dtype,
+                        unit = tf.constant(10.0 / GPa, dtype=virial.dtype,
                                            name='unit')
                         value = tf.identity(
                             tf.linalg.norm(
                                 tf.math.multiply(output["stress"], unit)),
                             name='kbar')
                     else:
-                        unit = tf.constant(1e4 / GPa, dtype=total_stress.dtype,
+                        unit = tf.constant(1e4 / GPa, dtype=virial.dtype,
                                            name='unit')
                         value = tf.identity(
                             tf.linalg.norm(
@@ -201,8 +200,7 @@ def get_elastic_constant_loss(base_nn,
                         for elastic_constant in igroup.values():
                             k, l = elastic_constant.ijkl[2:]
                             pairs.append((k, l))
-                        ops = _get_cijkl_op(
-                            total_stress, cell, volume, i, j, pairs)
+                        ops = _get_cijkl_op(virial, cell, volume, i, j, pairs)
                         for (k, l), cijkl in ops.items():
                             vj = voigt_notation(k, l)
                             elastic_constant = groups[vi][vj]
@@ -212,11 +210,11 @@ def get_elastic_constant_loss(base_nn,
                             predictions.append(cijkl)
                             labels.append(
                                 tf.convert_to_tensor(elastic_constant.value,
-                                                     dtype=total_stress.dtype,
+                                                     dtype=virial.dtype,
                                                      name=f'C{vi}{vj}/ref'))
                             cijkl_weights.append(
                                 tf.convert_to_tensor(elastic_constant.weight,
-                                                     dtype=total_stress.dtype,
+                                                     dtype=virial.dtype,
                                                      name=f'C{vi}{vj}/weight'))
 
                             if is_first_replica():
