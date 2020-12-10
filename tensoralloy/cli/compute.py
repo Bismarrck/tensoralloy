@@ -27,6 +27,7 @@ from tensoralloy.analysis.elastic import get_elastic_tensor
 from tensoralloy.analysis.eos import EquationOfState
 from tensoralloy.cli.cli import CLIProgram
 from tensoralloy.nn.constraint.data import read_external_crystal
+from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.precision import precision_scope
 from tensoralloy.utils import Defaults
 from tensoralloy import atoms_utils
@@ -91,6 +92,8 @@ def _get_atoms(name_or_filename: str):
     """
     A helper function to initialize an `Atoms` given a name or a filename.
     """
+    if name_or_filename in built_in_crystals:
+        return built_in_crystals[name_or_filename].atoms
     try:
         atoms = bulk(name_or_filename)
     except Exception:
