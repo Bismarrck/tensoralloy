@@ -80,11 +80,11 @@ def test_moment_tensor():
                 g1 = g1['Be'][0]
                 g2 = g2['Be'][0]
                 assert_array_almost_equal(
-                    g1[:, 0:-1:3], g2[:, 0:-1:3], delta=1e-6)
+                    g1[:, 0:-1:4], g2[:, 0:-1:4], delta=1e-6)
                 assert_array_almost_equal(
-                    g1[:, 1:-1:3] * 100.0, g2[:, 1:-1:3], delta=1e-6)
+                    g1[:, 1:-1:4] * 100.0, g2[:, 1:-1:4], delta=1e-6)
                 assert_array_almost_equal(
-                    g1[:, 2:-1:3] * 0.1, g2[:, 2:-1:3], delta=1e-6)
+                    g1[:, 2:-1:4] * 0.1, g2[:, 2:-1:4], delta=1e-6)
 
 
 if __name__ == "__main__":

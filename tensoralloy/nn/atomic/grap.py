@@ -212,8 +212,6 @@ class GenericRadialAtomicPotential(Descriptor):
         if isinstance(moment_tensors, int):
             moment_tensors = [moment_tensors]
         moment_tensors = list(set(moment_tensors))
-        for moment_tensor in moment_tensors:
-            assert 0 <= moment_tensor <= 2
         if np.isscalar(moment_scale_factors):
             moment_scale_factors = [moment_scale_factors] * len(moment_tensors)
         else:
@@ -338,9 +336,10 @@ class GenericRadialAtomicPotential(Descriptor):
                                         dtau.append(vi)
                                 gtau.append(tf.multiply(scale, tf.add_n(dtau),
                                                         name='u2'))
-                            elif moment_tensor == 2:
+                            elif moment_tensor in [2, 21]:
                                 # Quadrupole moment
                                 qtau = []
+                                vtau = []
                                 for (i, j) in moment_tensors_indices[2]:
                                     itag = xyz_map[i]
                                     jtag = xyz_map[j]
@@ -349,11 +348,16 @@ class GenericRadialAtomicPotential(Descriptor):
                                             dij[i] * dij[j], rij * rij,
                                             name='coef')
                                         vij = compute(
-                                            tf.multiply(v, coef, name='fx'),
-                                            square=True)
-                                        qtau.append(vij)
+                                            tf.multiply(v, coef, name='fx'))
+                                        if i == j:
+                                            vtau.append(vij)
+                                        qtau.append(tf.square(vij))
                                 gtau.append(tf.multiply(scale, tf.add_n(qtau),
                                                         name='q2'))
+                                if moment_tensor == 21:
+                                    gtau.append(tf.multiply(
+                                        scale, tf.square(tf.add_n(vtau)),
+                                        name='v2'))
                 g = tf.concat(gtau, axis=-1, name='g')
             index = clf.kbody_terms_for_element[center].index(kbody_term)
             outputs[center][index] = g
