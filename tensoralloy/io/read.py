@@ -29,7 +29,7 @@ class XyzFormat(Enum):
     Differrent xyz formats.
     """
     normal = 0
-    ext = 1
+    extxyz = 1
     stepmax = 2
     polar = 3
 
@@ -38,11 +38,11 @@ class XyzFormat(Enum):
         """ Return True if `` """
         if isinstance(fmt, cls):
             fmt = fmt.name
-        return fmt in ('normal', 'ext', 'stepmax', 'polar')
+        return fmt in ('normal', 'extxyz', 'stepmax', 'polar')
 
 
-def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
-                 verbose=True):
+def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
+                 num_examples=None, verbose=True):
     """
     Read `Atoms` objects from a `xyz` or an `extxyz` file.
 
@@ -119,7 +119,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
             # energies are in 'eV', forces in 'eV/Angstrom' and stress in 'kB'.
             atoms.calc.results['energy'] *= to_eV
 
-            if xyz_format == XyzFormat.ext or xyz_format == XyzFormat.polar:
+            if xyz_format == XyzFormat.extxyz or xyz_format == XyzFormat.polar:
                 atoms.calc.results['forces'] *= to_eV_Angstrom
             else:
                 # Structures without forces are considered to be local minima so
@@ -170,7 +170,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.ext, num_examples=None,
 
     database.metadata = {
         'max_occurs': max_occurs,
-        'extxyz': xyz_format == XyzFormat.ext,
+        'extxyz': xyz_format == XyzFormat.extxyz,
         'forces': True,
         'stress': use_stress,
         'periodic': periodic,
