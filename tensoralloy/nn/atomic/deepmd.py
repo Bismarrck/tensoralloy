@@ -8,11 +8,10 @@ import tensorflow as tf
 
 from typing import List, Dict
 from collections import Counter
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.nn.cutoff import deepmd_cutoff
 from tensoralloy.nn.utils import log_tensor, get_activation_fn
 from tensoralloy.nn.convolutional import convolution1x1
@@ -184,7 +183,7 @@ class DeepPotSE(Descriptor):
     def calculate(self,
                   transformer: UniversalTransformer,
                   universal_descriptors,
-                  mode: tf_estimator.ModeKeys,
+                  mode: ModeKeys,
                   verbose=False) -> AtomicDescriptors:
         """
         A wrapper function.

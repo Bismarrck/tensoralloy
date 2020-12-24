@@ -6,7 +6,6 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.units import GPa
 from typing import List, Union, Tuple
 
@@ -15,7 +14,7 @@ from tensoralloy.nn.constraint.voigt import voigt_notation, voigt_to_ij
 from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.dataclasses import ElasticConstraintOptions
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 
 
 __author__ = 'Xin Chen'
@@ -156,7 +155,7 @@ def get_elastic_constant_loss(base_nn,
 
                 output = elastic_nn.build(
                     features=features,
-                    mode=tf_estimator.ModeKeys.PREDICT,
+                    mode=ModeKeys.PREDICT,
                     verbose=verbose)
                 virial = output["virial"]
                 cell = features["cell"]

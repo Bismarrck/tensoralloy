@@ -6,9 +6,7 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
-
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.nn.utils import get_tensors_dict_for_hook
 from tensoralloy.nn.hooks import LoggingTensorHook, RestoreEmaVariablesHook
 from tensoralloy.nn.dataclasses import TrainParameters
@@ -31,7 +29,7 @@ def get_evaluation_hooks(ema: tf.train.ExponentialMovingAverage,
                 logging_tensor_hook = LoggingTensorHook(
                     tensors=get_tensors_dict_for_hook(
                         GraphKeys.EVAL_METRICS),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     every_n_iter=train_parameters.eval_steps,
                     at_end=True)
             hooks.append(logging_tensor_hook)

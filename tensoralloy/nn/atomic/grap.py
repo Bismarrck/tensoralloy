@@ -7,12 +7,11 @@ from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.transformer import UniversalTransformer
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.nn.atomic.atomic import Descriptor
@@ -371,7 +370,7 @@ class GenericRadialAtomicPotential(Descriptor):
     def calculate(self,
                   transformer: UniversalTransformer,
                   universal_descriptors,
-                  mode: tf_estimator.ModeKeys,
+                  mode: ModeKeys,
                   verbose=False) -> AtomicDescriptors:
         """
         Construct the computation graph for calculating descriptors.

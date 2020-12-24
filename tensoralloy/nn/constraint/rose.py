@@ -12,14 +12,13 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from ase.units import GPa, kB, eV
 from typing import List
 from collections import Counter
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.nn.utils import is_first_replica
 from tensoralloy.nn.constraint.data import get_crystal
 from tensoralloy.nn.dataclasses import RoseLossOptions
 from tensoralloy.neighbor import find_neighbor_size_of_atoms, NeighborSize
 from tensoralloy.transformer import BatchUniversalTransformer
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy import atoms_utils
 from tensoralloy.precision import get_float_dtype
 
@@ -162,7 +161,7 @@ def get_rose_constraint_loss(base_nn,
                     features = clf.get_constant_features(crystal.atoms)
                     output = nn.build(
                         features=features,
-                        mode=tf_estimator.ModeKeys.PREDICT,
+                        mode=ModeKeys.PREDICT,
                         verbose=verbose)
                     e0 = tf.identity(output[prop], name='E0')
                     v0 = tf.identity(features["volume"], name='V0')
@@ -236,7 +235,7 @@ def get_rose_constraint_loss(base_nn,
 
                     outputs = nn.build(
                         features=fixed_batch,
-                        mode=tf_estimator.ModeKeys.TRAIN,
+                        mode=ModeKeys.TRAIN,
                         verbose=verbose)
 
                     predictions = tf.identity(

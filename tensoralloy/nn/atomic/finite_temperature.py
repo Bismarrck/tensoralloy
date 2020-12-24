@@ -6,11 +6,10 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict, Union
 from collections import Counter
 
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.atomic.atomic import AtomicNN, Descriptor
 from tensoralloy.nn.convolutional import convolution1x1
@@ -91,13 +90,13 @@ class TemperatureDependentAtomicNN(AtomicNN):
     def _add_electron_temperature(x: tf.Tensor,
                                   etemperature: tf.Tensor,
                                   element: str,
-                                  mode: tf_estimator.ModeKeys,
+                                  mode: ModeKeys,
                                   max_occurs: Counter):
         """
         Add electron temperature to the atomic descriptor tensor `x`.
         """
         with tf.name_scope("Temperature"):
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 d0 = 1
                 d1 = max_occurs[element]
             else:
@@ -198,7 +197,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
@@ -217,7 +216,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is None.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.

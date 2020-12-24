@@ -10,7 +10,6 @@ import nose
 import os
 import unittest
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from os.path import join, exists
@@ -18,6 +17,7 @@ from shutil import rmtree
 from unittest import skipUnless
 from nose.tools import assert_almost_equal
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
@@ -84,7 +84,7 @@ class EamBe1Test(unittest.TestCase):
                 nn.attach_transformer(clf)
                 predictions = nn.build(
                     features=clf.get_placeholder_features(),
-                    mode=tf_estimator.ModeKeys.PREDICT,
+                    mode=ModeKeys.PREDICT,
                     verbose=True)
 
                 with tf.Session() as sess:

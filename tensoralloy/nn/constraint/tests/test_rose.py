@@ -14,8 +14,8 @@ from os.path import join
 from collections import Counter
 from sklearn.metrics import mean_absolute_error
 from nose.tools import assert_almost_equal, assert_equal
-from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.nn.constraint.rose import get_rose_constraint_loss
 from tensoralloy.nn.constraint.data import built_in_crystals
 from tensoralloy.nn import EamAlloyNN
@@ -109,7 +109,7 @@ def test_rose_eos_constraint():
             nn.model_fn(
                 features=batch,
                 labels=labels,
-                mode=tf_estimator.ModeKeys.TRAIN,
+                mode=ModeKeys.TRAIN,
                 params=hparams,
             )
 

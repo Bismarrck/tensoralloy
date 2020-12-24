@@ -7,12 +7,11 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from tensorflow_estimator import estimator as tf_estimator
 from typing import List
 from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.transformer import UniversalTransformer
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
@@ -185,7 +184,7 @@ class SymmetryFunction(Descriptor):
     def calculate(self,
                   transformer: UniversalTransformer,
                   universal_descriptors,
-                  mode: tf_estimator.ModeKeys,
+                  mode: ModeKeys,
                   verbose=False):
         """
         Construct the computation graph for calculating symmetry function

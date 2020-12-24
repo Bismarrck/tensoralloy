@@ -18,7 +18,7 @@ from nose.tools import assert_equal, assert_is_none, assert_in
 from nose.tools import with_setup, assert_dict_equal, assert_true
 
 from tensoralloy.io.read import read_file
-from tensoralloy.utils import Defaults
+from tensoralloy.utils import Defaults, ModeKeys
 from tensoralloy.train.training import TrainingManager
 from tensoralloy.nn.atomic.sf import SymmetryFunction
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
@@ -244,7 +244,7 @@ def test_warm_start():
 
         train_spec = tf_estimator.TrainSpec(
             input_fn=dataset.input_fn(
-                mode=tf_estimator.ModeKeys.TRAIN,
+                mode=ModeKeys.TRAIN,
                 batch_size=hparams.train.batch_size,
                 shuffle=hparams.train.shuffle),
             max_steps=hparams.train.train_steps)

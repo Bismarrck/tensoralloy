@@ -12,10 +12,9 @@ from ase.neighborlist import neighbor_list
 from ase.data import chemical_symbols
 from collections import Counter
 from typing import List, Dict
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import szudzik_pairing
+from tensoralloy.utils import szudzik_pairing, ModeKeys
 from tensoralloy import atoms_utils
 from tensoralloy.transformer.metadata import RadialMetadata, AngularMetadata
 from tensoralloy.transformer.vap import VirtualAtomMap
@@ -28,8 +27,8 @@ __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
 
-def _get_iaxis(mode: tf_estimator.ModeKeys):
-    if mode == tf_estimator.ModeKeys.PREDICT:
+def _get_iaxis(mode: ModeKeys):
+    if mode == ModeKeys.PREDICT:
         return 0
     else:
         return 1
@@ -48,7 +47,7 @@ def get_radial_metadata(atoms: Atoms,
                         rc: float,
                         interactions: Dict[str, int],
                         vap: VirtualAtomMap,
-                        mode: tf_estimator.ModeKeys,
+                        mode: ModeKeys,
                         nij_max: int = None,
                         dtype=np.float32) -> (RadialMetadata, dict):
     """
@@ -118,7 +117,7 @@ def get_angular_metadata(atoms: Atoms,
                          radial_interactions: Dict[str, int],
                          angular_interactions: Dict[str, int],
                          vap: VirtualAtomMap,
-                         mode: tf_estimator.ModeKeys,
+                         mode: ModeKeys,
                          radial_metadata: RadialMetadata = None,
                          ijn_id_map: Dict[int, int] = None,
                          nijk_max: int = None,
@@ -823,7 +822,7 @@ class UniversalTransformer(DescriptorTransformer):
             rc=self._rcut,
             interactions=radial_interactions,
             vap=vap,
-            mode=tf_estimator.ModeKeys.PREDICT,
+            mode=ModeKeys.PREDICT,
             nij_max=None,
             dtype=dtype)
         if self._angular:
@@ -842,7 +841,7 @@ class UniversalTransformer(DescriptorTransformer):
                 angular_interactions=angular_interactions,
                 vap=vap,
                 angular_symmetricity=self._symmetric,
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 nijk_max=None,
                 dtype=dtype)
         else:
@@ -1058,7 +1057,7 @@ class BatchUniversalTransformer(UniversalTransformer,
             rc=self._rcut,
             interactions=self._radial_interactions,
             vap=vap,
-            mode=tf_estimator.ModeKeys.TRAIN,
+            mode=ModeKeys.TRAIN,
             nij_max=self._nij_max,
             dtype=dtype)
         if self._angular:
@@ -1077,7 +1076,7 @@ class BatchUniversalTransformer(UniversalTransformer,
                 angular_interactions=self._angular_interactions,
                 vap=vap,
                 angular_symmetricity=self._symmetric,
-                mode=tf_estimator.ModeKeys.TRAIN,
+                mode=ModeKeys.TRAIN,
                 nijk_max=self._nijk_max,
                 dtype=dtype)
         else:

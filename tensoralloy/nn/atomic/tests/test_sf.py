@@ -9,7 +9,6 @@ import numpy as np
 import nose
 
 from dataclasses import dataclass
-from tensorflow_estimator import estimator as tf_estimator
 from ase.io import read
 from ase import Atoms
 from ase.neighborlist import neighbor_list
@@ -26,6 +25,7 @@ from tensoralloy.nn.atomic import AtomicNN
 from tensoralloy.precision import precision_scope
 from tensoralloy.test_utils import test_dir, assert_array_equal, Pd3O2
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
+from tensoralloy.utils import ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -624,7 +624,7 @@ def test_monoatomic_molecule():
             transformer=clf,
             universal_descriptors=clf.get_descriptors(
                 clf.get_constant_features(atoms)),
-            mode=tf_estimator.ModeKeys.PREDICT).descriptors
+            mode=ModeKeys.PREDICT).descriptors
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             g_new = sess.run(op)
@@ -657,7 +657,7 @@ def test_monoatomic_molecule_with_omega():
                 transformer=clf,
                 universal_descriptors=clf.get_descriptors(
                     clf.get_constant_features(atoms)),
-                mode=tf_estimator.ModeKeys.PREDICT).descriptors
+                mode=ModeKeys.PREDICT).descriptors
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 assert_array_equal(sess.run(op)['B'], z)
@@ -683,7 +683,7 @@ def test_single_structure():
                 transformer=clf,
                 universal_descriptors=clf.get_descriptors(
                     clf.get_constant_features(Pd3O2)),
-                mode=tf_estimator.ModeKeys.PREDICT).descriptors
+                mode=ModeKeys.PREDICT).descriptors
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 g_new = sess.run(op)

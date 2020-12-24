@@ -8,7 +8,6 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from tensorflow_estimator import estimator as tf_estimator
 from os.path import join
 from ase.io import read
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -20,6 +19,7 @@ from tensoralloy.test_utils import data_dir
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.transformer import BatchUniversalTransformer
+from tensoralloy.utils import ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -47,7 +47,7 @@ def test_dynamic_partition():
                 clf.get_descriptors(clf.get_placeholder_features())["radial"],
                 elements=clf.elements,
                 kbody_terms_for_element=clf.kbody_terms_for_element,
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 merge_symmetric=True)
 
             with tf.Session() as sess:
@@ -82,7 +82,7 @@ def test_dynamic_partition():
             descriptors["radial"],
             elements=clf.elements,
             kbody_terms_for_element=clf.kbody_terms_for_element,
-            mode=tf_estimator.ModeKeys.TRAIN,
+            mode=ModeKeys.TRAIN,
             merge_symmetric=False)
 
         with tf.Session() as sess:

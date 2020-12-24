@@ -16,8 +16,8 @@ from enum import Enum
 from os.path import dirname, join, exists
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
-from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.io.lammps import LAMMPS_COMMAND
 from tensoralloy.nn.eam.meam import MeamNN
@@ -99,7 +99,7 @@ class MeamSplineTest(unittest.TestCase):
         with tf.Graph().as_default():
             predictions = nn.build(
                 features=clf.get_constant_features(atoms),
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 verbose=True)
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()

@@ -9,7 +9,6 @@ import nose
 import unittest
 import shutil
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from ase import Atoms
@@ -18,6 +17,7 @@ from os import makedirs
 from typing import List
 from nose.tools import assert_almost_equal
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.test_utils import test_dir, assert_array_almost_equal
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.eam.adp import AdpNN
@@ -219,7 +219,7 @@ class AlCuAdpTest(unittest.TestCase):
 
                 predictions = nn.build(
                     features=clf.get_constant_features(atoms),
-                    mode=tf_estimator.ModeKeys.PREDICT,
+                    mode=ModeKeys.PREDICT,
                     verbose=True)
 
                 with tf.Session() as sess:

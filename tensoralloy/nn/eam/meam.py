@@ -7,7 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict
 from collections import Counter
 from functools import partial
@@ -19,6 +18,7 @@ from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import AttributeDict, get_elements_from_kbody_term
 from tensoralloy.utils import safe_select, Defaults, get_kbody_terms
+from tensoralloy.utils import ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -186,7 +186,7 @@ class MeamNN(EamAlloyNN):
 
     def _build_rho_nn(self,
                       partitions: dict,
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -201,7 +201,7 @@ class MeamNN(EamAlloyNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -249,13 +249,13 @@ class MeamNN(EamAlloyNN):
                     outputs[kbody_term] = rho
 
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
     def _build_angular_rho_nn(self,
                               partitions: dict,
-                              mode: tf_estimator.ModeKeys,
+                              mode: ModeKeys,
                               max_occurs: Counter,
                               verbose=False):
         rho_dict: Dict = {}
@@ -308,7 +308,7 @@ class MeamNN(EamAlloyNN):
                     return tf.reduce_sum(rho, axis=[-1, -2], keepdims=False, name='rho')
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
-                      mode: tf_estimator.ModeKeys, verbose=False):
+                      mode: ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -323,7 +323,7 @@ class MeamNN(EamAlloyNN):
             `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -370,7 +370,7 @@ class MeamNN(EamAlloyNN):
             return atomic, values
 
     def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
-                        mode: tf_estimator.ModeKeys, verbose=True):
+                        mode: ModeKeys, verbose=True):
         """
         Return the embedding energy, `F(rho)`.
 
@@ -381,7 +381,7 @@ class MeamNN(EamAlloyNN):
             axis has the size `n_atoms_max`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -421,7 +421,7 @@ class MeamNN(EamAlloyNN):
     def _get_model_outputs(self,
                            features: AttributeDict,
                            descriptors: AttributeDict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Return raw NN-EAM model outputs.
@@ -439,7 +439,7 @@ class MeamNN(EamAlloyNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -509,7 +509,7 @@ class MeamNN(EamAlloyNN):
                 verbose=verbose)
 
             y = tf.add(phi, embed, name='atomic')
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 y = tf.squeeze(y, axis=0, name='atomic/squeeze')
 
             return y

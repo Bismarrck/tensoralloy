@@ -8,11 +8,10 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_equal
 from collections import Counter
 
-from tensoralloy.utils import get_kbody_terms
+from tensoralloy.utils import get_kbody_terms, ModeKeys
 from tensoralloy.test_utils import assert_array_equal
 from tensoralloy.nn.partition import dynamic_partition
 
@@ -77,7 +76,7 @@ def test_dynamic_partition_radial():
     """
     with tf.Graph().as_default():
         data = AlCuFakeData()
-        mode = tf_estimator.ModeKeys.TRAIN
+        mode = ModeKeys.TRAIN
 
         with tf.Session() as sess:
             op, max_occurs = dynamic_partition(

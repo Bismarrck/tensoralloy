@@ -12,7 +12,7 @@ from collections import Counter
 from typing import List, Dict
 from ase.build import bulk
 
-from tensoralloy.utils import get_kbody_terms
+from tensoralloy.utils import get_kbody_terms, ModeKeys
 from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.precision import get_float_dtype
 from tensoralloy import atoms_utils
@@ -23,7 +23,7 @@ __email__ = 'Bismarrck@me.com'
 
 class KMCTransformer(DescriptorTransformer):
     """
-    The universal transformer for all models.
+    The transformer for TensorKMC.
     """
 
     def __init__(self, elements: List[str], rcut, nnl_max: int):
@@ -100,6 +100,11 @@ class KMCTransformer(DescriptorTransformer):
         Return the cutoff radius for radial interactions.
         """
         return self._rcut
+
+    @property
+    def angular(self):
+        """ Not implemented yet """
+        return False
 
     @property
     def elements(self) -> List[str]:
@@ -321,7 +326,6 @@ class KMCTransformer(DescriptorTransformer):
 
 
 def test():
-    from tensorflow_estimator import estimator as tf_estimator
     from tensoralloy.transformer.universal import UniversalTransformer
     from tensoralloy.neighbor import find_neighbor_size_of_atoms
     from tensoralloy.nn import EamAlloyNN
@@ -343,7 +347,7 @@ def test():
         utf = UniversalTransformer(elements, rcut=rc)
         nn.attach_transformer(utf)
         op = nn.build(utf.get_constant_features(atoms),
-                      tf_estimator.ModeKeys.PREDICT)['energy']
+                      ModeKeys.PREDICT)['energy']
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             e1 = sess.run(op)
@@ -353,7 +357,7 @@ def test():
         ktf = KMCTransformer(elements, rcut=rc, nnl_max=nnl)
         nn.attach_transformer(ktf)
         op = nn.build(ktf.get_constant_features(atoms),
-                      tf_estimator.ModeKeys.PREDICT)['energy']
+                      ModeKeys.PREDICT)['energy']
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             e2 = sess.run(op)

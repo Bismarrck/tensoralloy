@@ -9,9 +9,9 @@ import unittest
 import nose
 
 from nose.tools import assert_equal, assert_list_equal, assert_almost_equal
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy import atoms_utils
+from tensoralloy.utils import ModeKeys
 from tensoralloy.io.db import snap
 from tensoralloy.nn.atomic import TemperatureDependentAtomicNN
 from tensoralloy.nn.atomic.sf import SymmetryFunction
@@ -69,7 +69,7 @@ def test_tdsf():
 
     with tf.Graph().as_default():
         predictions = nn.build(clf.get_constant_features(atoms),
-                               mode=tf_estimator.ModeKeys.PREDICT)
+                               mode=ModeKeys.PREDICT)
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             results = sess.run(predictions)

@@ -11,7 +11,6 @@ import os
 import shutil
 import unittest
 
-from tensorflow_estimator import estimator as tf_estimator
 from unittest import skipUnless
 from nose.tools import assert_list_equal, with_setup
 from nose.tools import assert_almost_equal
@@ -20,6 +19,7 @@ from os import remove
 from ase.calculators.lammpsrun import LAMMPS
 from ase.build import bulk
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.nn.eam import EamFsNN
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.test_utils import assert_array_almost_equal, test_dir
@@ -147,7 +147,7 @@ class EamFsTest(unittest.TestCase):
                 nn.attach_transformer(clf)
                 predictions = nn.build(
                     features=clf.get_placeholder_features(),
-                    mode=tf_estimator.ModeKeys.PREDICT,
+                    mode=ModeKeys.PREDICT,
                     verbose=True)
 
                 with tf.Session() as sess:

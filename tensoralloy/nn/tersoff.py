@@ -6,12 +6,11 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
 from typing import List, Dict
 from collections import Counter
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.nn.cutoff import tersoff_cutoff
 from tensoralloy.io.lammps import read_tersoff_file
 from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
@@ -275,7 +274,7 @@ class Tersoff(BasicNN):
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Return raw NN-EAM model outputs.
@@ -292,7 +291,7 @@ class Tersoff(BasicNN):
         descriptors : Dict
             A dict of (element, (dists, masks)) where `element` represents the
             symbol of an element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -437,7 +436,7 @@ class Tersoff(BasicNN):
                             vij, axis=[-1, -2], keepdims=False, name='vij/sum')
 
             y_atomic = self._dynamic_stitch(outputs, max_occurs)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 y_atomic = tf.squeeze(y_atomic, name='atomic/squeeze')
             return y_atomic
 

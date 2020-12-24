@@ -8,7 +8,6 @@ import tensorflow as tf
 import numpy as np
 import nose
 
-from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_dict_equal, assert_true
 from ase.db import connect
 from os.path import join
@@ -21,7 +20,7 @@ from tensoralloy.nn.atomic import AtomicNN, TemperatureDependentAtomicNN
 from tensoralloy.nn.atomic import SymmetryFunction
 from tensoralloy.nn.dataclasses import LossParameters
 from tensoralloy.transformer import BatchUniversalTransformer
-from tensoralloy.utils import Defaults
+from tensoralloy.utils import Defaults, ModeKeys
 from tensoralloy.test_utils import assert_array_equal, datasets_dir
 from tensoralloy.precision import precision_scope
 
@@ -142,7 +141,7 @@ def test_build_nn_with_properties():
             loss_parameters.elastic.constraint.stress_weight = 0.1
             loss_parameters.elastic.constraint.use_kbar = True
 
-            mode = tf_estimator.ModeKeys.TRAIN
+            mode = ModeKeys.TRAIN
 
             tf.train.get_or_create_global_step()
 

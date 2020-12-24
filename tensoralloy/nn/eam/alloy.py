@@ -7,7 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from tensorflow_estimator import estimator as tf_estimator
 from datetime import datetime
 from os.path import dirname, join
 from ase import data
@@ -16,7 +15,7 @@ from typing import List, Dict, Tuple
 from atsim.potentials import Potential, EAMPotential, writeSetFL
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
-from tensoralloy.utils import GraphKeys, Defaults, safe_select
+from tensoralloy.utils import GraphKeys, Defaults, safe_select, ModeKeys
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.precision import get_float_dtype
@@ -128,7 +127,7 @@ class EamAlloyNN(EamNN):
 
     def _build_rho_nn(self,
                       partitions: dict,
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -143,7 +142,7 @@ class EamAlloyNN(EamNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -192,7 +191,7 @@ class EamAlloyNN(EamNN):
                     outputs[kbody_term] = rho
 
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
@@ -270,17 +269,17 @@ class EamAlloyNN(EamNN):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, rho_vals = self._build_rho_nn(
                     partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, phi_vals = self._build_phi_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
 
             sess = tf.Session()

@@ -9,7 +9,6 @@ import nose
 import os
 import unittest
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from collections import Counter
@@ -18,6 +17,7 @@ from shutil import rmtree
 from unittest import skipUnless
 from nose.tools import assert_almost_equal
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.eam.alloy import EamAlloyNN
@@ -109,7 +109,7 @@ class EamSutton90Test(unittest.TestCase):
             outputs = nn._get_model_outputs(
                 features=features,
                 descriptors=descriptors,
-                mode=tf_estimator.ModeKeys.EVAL,
+                mode=ModeKeys.EVAL,
                 verbose=False)
             prediction = dict(
                 energy=nn._get_energy_ops(outputs, features).energy.total)
@@ -142,7 +142,7 @@ class EamSutton90Test(unittest.TestCase):
             nn.attach_transformer(clf)
             prediction = nn.build(
                 features=clf.get_placeholder_features(),
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 verbose=True)
 
             with tf.Session() as sess:

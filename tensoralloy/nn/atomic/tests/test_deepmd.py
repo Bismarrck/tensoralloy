@@ -12,12 +12,12 @@ import nose
 
 from nose.tools import assert_list_equal
 from collections import Counter
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.atomic import AtomicNN
+from tensoralloy.utils import ModeKeys
 from tensoralloy.io.db import snap
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 
@@ -37,7 +37,7 @@ def test_init():
         nn = AtomicNN(elements, dp, hidden_sizes=[64, 32])
         nn.attach_transformer(clf)
         predictions = nn.build(features=clf.get_constant_features(atoms),
-                               mode=tf_estimator.ModeKeys.PREDICT,
+                               mode=ModeKeys.PREDICT,
                                verbose=True)
 
         assert_list_equal(predictions["energy"].shape.as_list(), [])

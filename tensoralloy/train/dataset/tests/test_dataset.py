@@ -10,7 +10,6 @@ import nose
 import unittest
 import glob
 
-from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_equal, assert_dict_equal
 from nose.tools import assert_less, assert_true
 from os.path import join, exists
@@ -19,7 +18,7 @@ from os import remove
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.transformer import VirtualAtomMap
 from tensoralloy.train.dataset.dataset import Dataset
-from tensoralloy.utils import Defaults
+from tensoralloy.utils import Defaults, ModeKeys
 from tensoralloy.test_utils import get_qm7m_test_dict, test_dir
 from tensoralloy.precision import precision_scope, get_float_dtype
 from tensoralloy.io.read import read_file
@@ -122,7 +121,7 @@ class Qm7mTest(DatasetTest):
                 assert_true(dataset.load_tfrecords(savedir))
 
                 # random_state: 611, test_size: 0.33 -> train: 1, 2, test: 0
-                next_batch = dataset.next_batch(mode=tf_estimator.ModeKeys.EVAL,
+                next_batch = dataset.next_batch(mode=ModeKeys.EVAL,
                                                 batch_size=1,
                                                 num_epochs=1,
                                                 shuffle=False)
@@ -180,7 +179,7 @@ class EthanolTest(DatasetTest):
 
                 # random_state: 611, test_size: 0.5 -> train: [0, 1, 8, 2, 3]
                 next_batch = dataset.next_batch(
-                    mode=tf_estimator.ModeKeys.TRAIN,
+                    mode=ModeKeys.TRAIN,
                     batch_size=5,
                     num_epochs=1,
                     shuffle=False)
@@ -236,7 +235,7 @@ class NickelTest(DatasetTest):
                 assert_true(dataset.load_tfrecords(savedir))
 
                 next_batch = dataset.next_batch(
-                    mode=tf_estimator.ModeKeys.TRAIN,
+                    mode=ModeKeys.TRAIN,
                     batch_size=1,
                     num_epochs=1,
                     shuffle=False)

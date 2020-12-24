@@ -6,11 +6,10 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
 from collections import Counter
 from typing import List, Dict
 
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -19,7 +18,7 @@ __email__ = 'Bismarrck@me.com'
 def dynamic_partition(dists_and_masks: dict,
                       elements: List[str],
                       kbody_terms_for_element: Dict[str, List[str]],
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       angular=False,
                       merge_symmetric=True):
     """
@@ -64,7 +63,7 @@ def dynamic_partition(dists_and_masks: dict,
     kbody_terms_for_element : Dict[str, List[str]]
         A dict. The keys are elements and values are their corresponding k-body
         terms.
-    mode : tf_estimator.ModeKeys
+    mode : ModeKeys
         Specifies if this is training, evaluation or prediction.
     angular : bool
         If True, the input
@@ -105,7 +104,7 @@ def dynamic_partition(dists_and_masks: dict,
                 dists = tf.convert_to_tensor(dists, name='dists')
                 masks = tf.convert_to_tensor(masks, name='masks')
 
-                if mode == tf_estimator.ModeKeys.PREDICT:
+                if mode == ModeKeys.PREDICT:
                     assert dists.shape.ndims == 5
                     dists = tf.expand_dims(dists, axis=1)
                     masks = tf.expand_dims(masks, axis=0)

@@ -6,13 +6,11 @@ from __future__ import print_function, absolute_import
 
 import tensorflow as tf
 
-from tensorflow_estimator import estimator as tf_estimator
-
 from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.nn.constraint.data import get_crystal, Crystal
 from tensoralloy.nn.dataclasses import EnergyDifferenceLossOptions
 from tensoralloy.precision import get_float_dtype
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.nn.utils import is_first_replica, logcosh
 
 __author__ = 'Xin Chen'
@@ -49,7 +47,7 @@ def calculate(base_nn, crystal: Crystal, verbose=False):
     features = clf.get_constant_features(crystal.atoms)
     output = nn.build(
         features=features,
-        mode=tf_estimator.ModeKeys.PREDICT,
+        mode=ModeKeys.PREDICT,
         verbose=verbose)
     energy = output["energy"]
     fnorm = tf.linalg.norm(output['forces'], name='fnorm')

@@ -41,12 +41,13 @@ def test_find_ij2k():
     Test the calculation of `ij2k`.
     """
     from collections import Counter
-    from tensorflow_estimator import estimator as tf_estimator
 
     from tensoralloy.io.db import snap
     from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
     from tensoralloy.transformer.vap import VirtualAtomMap
-    from tensoralloy.transformer.universal import get_radial_metadata, get_angular_metadata
+    from tensoralloy.transformer.universal import get_radial_metadata
+    from tensoralloy.transformer.universal import get_angular_metadata
+    from tensoralloy.utils import ModeKeys
 
     db = snap()
     symmetric = False
@@ -73,13 +74,13 @@ def test_find_ij2k():
                                              rc=rc,
                                              interactions=radial_interactions,
                                              vap=vap,
-                                             mode=tf_estimator.ModeKeys.PREDICT)
+                                             mode=ModeKeys.PREDICT)
         g4 = get_angular_metadata(atoms,
                                   rc=rc,
                                   radial_interactions=radial_interactions,
                                   angular_interactions=angular_interactions,
                                   vap=vap,
-                                  mode=tf_estimator.ModeKeys.PREDICT,
+                                  mode=ModeKeys.PREDICT,
                                   g2=g2,
                                   ijn_id_map=ijn_id_map)
 

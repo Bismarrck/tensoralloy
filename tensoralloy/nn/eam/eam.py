@@ -12,9 +12,8 @@ from matplotlib import pyplot as plt
 from collections import Counter
 from functools import partial
 from typing import List, Dict, Callable
-from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
 from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
 from tensoralloy.nn.basic import BasicNN
@@ -326,7 +325,7 @@ class EamNN(BasicNN):
         return EnergyOps(energy=EnergyOp(energy, atomic_energy))
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
-                      mode: tf_estimator.ModeKeys, verbose=False):
+                      mode: ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -341,7 +340,7 @@ class EamNN(BasicNN):
             `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -385,13 +384,13 @@ class EamNN(BasicNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
     def _build_rho_nn(self,
                       partitions: dict,
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -406,7 +405,7 @@ class EamNN(BasicNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -427,7 +426,7 @@ class EamNN(BasicNN):
             "This method must be overridden by its subclass")
 
     def _build_embed_nn(self, rho: tf.Tensor, max_occurs: Counter,
-                        mode: tf_estimator.ModeKeys, verbose=True):
+                        mode: ModeKeys, verbose=True):
         """
         Return the embedding energy, `F(rho)`.
 
@@ -438,7 +437,7 @@ class EamNN(BasicNN):
             axis has the size `n_atoms_max`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -451,7 +450,7 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
-        if mode == tf_estimator.ModeKeys.PREDICT:
+        if mode == ModeKeys.PREDICT:
             split_axis = 0
             squeeze_axis = 1
         else:
@@ -523,7 +522,7 @@ class EamNN(BasicNN):
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Return raw NN-EAM model outputs.
@@ -541,7 +540,7 @@ class EamNN(BasicNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.

@@ -13,10 +13,9 @@ from datetime import datetime
 from ase.data import atomic_masses, atomic_numbers
 from atsim.potentials import writeSetFLFinnisSinclair, Potential, EAMPotential
 from typing import Dict, List
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import get_kbody_terms, get_elements_from_kbody_term
-from tensoralloy.utils import GraphKeys, Defaults, safe_select
+from tensoralloy.utils import GraphKeys, Defaults, safe_select, ModeKeys
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.eam import EamNN, plot_potential
 from tensoralloy.precision import get_float_dtype
@@ -146,7 +145,7 @@ class EamFsNN(EamNN):
 
     def _build_rho_nn(self,
                       partitions: dict,
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -161,7 +160,7 @@ class EamFsNN(EamNN):
             `[batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -199,7 +198,7 @@ class EamFsNN(EamNN):
                         log_tensor(rho)
                     outputs[kbody_term] = rho
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
@@ -250,7 +249,7 @@ class EamFsNN(EamNN):
             0.0, nr * dr, dr, dtype=dtype).reshape((1, 1, 1, 1, -1, 1))
         lattice_constants = safe_select(lattice_constants, {})
         lattice_types = safe_select(lattice_types, {})
-        mode = tf_estimator.ModeKeys.EVAL
+        mode = ModeKeys.EVAL
 
         with tf.Graph().as_default():
 

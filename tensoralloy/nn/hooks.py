@@ -14,6 +14,7 @@ from tensorflow.python.training import session_run_hook
 from tensorflow.python.training import basic_session_run_hooks
 from tensorflow.python.training import training_util
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.nn.dataclasses import CkptParameters
 
 
@@ -158,7 +159,7 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
     A modified implementation of `LoggingTensorHook`.
     """
 
-    def __init__(self, tensors, mode: tf_estimator.ModeKeys, every_n_iter=None,
+    def __init__(self, tensors, mode: ModeKeys, every_n_iter=None,
                  every_n_secs=None, at_end=False, formatter=None):
         """
         Initialization method.
@@ -175,7 +176,7 @@ class LoggingTensorHook(basic_session_run_hooks.LoggingTensorHook):
         When this is called, the graph is finalized and ops can no longer be
         added to the graph.
         """
-        if self._mode != tf_estimator.ModeKeys.TRAIN:
+        if self._mode != ModeKeys.TRAIN:
             return
 
         tf.logging.info("All Trainable Ops: ")

@@ -7,7 +7,6 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import warnings
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.units import kB
 
 from tensoralloy.nn.constraint.data import get_crystal
@@ -15,7 +14,7 @@ from tensoralloy.nn.dataclasses import EEntropyConstraintOptions
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.utils import is_first_replica
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -63,7 +62,7 @@ def get_eentropy_constraint_loss(base_nn,
                 features = clf.get_constant_features(crystal.atoms)
                 output = nn.build(
                     features=features,
-                    mode=tf_estimator.ModeKeys.PREDICT,
+                    mode=ModeKeys.PREDICT,
                     verbose=verbose)
                 eentropy = output['eentropy']
                 y_true.append(

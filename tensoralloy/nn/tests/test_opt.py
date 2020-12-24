@@ -11,8 +11,8 @@ import glob
 from os import remove
 from os.path import join, exists
 from nose.tools import assert_equal, with_setup
-from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.test_utils import test_dir
 from tensoralloy.train.dataset import Dataset
 from tensoralloy.io.db import connect
@@ -51,7 +51,7 @@ def run_case():
         dataset.to_records(work_dir, test_size=1)
     assert_equal(dataset.test_size, 1)
 
-    input_fn = dataset.input_fn(mode=tf_estimator.ModeKeys.TRAIN,
+    input_fn = dataset.input_fn(mode=ModeKeys.TRAIN,
                                 batch_size=1,
                                 num_epochs=None,
                                 shuffle=False)
@@ -70,7 +70,7 @@ def run_case():
     nn = AtomicNN(elements=elements, descriptor=sf, minmax_scale=False)
     nn.attach_transformer(dataset.transformer)
 
-    predictions = nn.build(features, tf_estimator.ModeKeys.TRAIN)
+    predictions = nn.build(features, ModeKeys.TRAIN)
     total_loss, losses = nn.get_total_loss(
         predictions=predictions,
         labels=labels,

@@ -10,7 +10,6 @@ __email__ = 'Bismarrck@me.com'
 import tensorflow as tf
 import numpy as np
 
-from tensorflow_estimator import estimator as tf_estimator
 from collections import Counter
 from datetime import datetime
 from os.path import join, dirname
@@ -24,7 +23,7 @@ from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.utils import log_tensor
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.eam import plot_potential
-from tensoralloy.utils import get_elements_from_kbody_term
+from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
 from tensoralloy.utils import get_kbody_terms, Defaults, safe_select
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.io.lammps import write_adp_setfl
@@ -192,7 +191,7 @@ class AdpNN(EamAlloyNN):
 
     def _build_rho_nn(self,
                       partitions: dict,
-                      mode: tf_estimator.ModeKeys,
+                      mode: ModeKeys,
                       max_occurs: Counter,
                       verbose=False):
         """
@@ -208,7 +207,7 @@ class AdpNN(EamAlloyNN):
             `value` is a 5D tensor, `[4, batch_size, 1, max_n_element, nnl]`.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -250,12 +249,12 @@ class AdpNN(EamAlloyNN):
                         log_tensor(rho)
                     outputs[kbody_term] = rho
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
     def _build_phi_nn(self, partitions: dict, max_occurs: Counter,
-                      mode: tf_estimator.ModeKeys, verbose=False):
+                      mode: ModeKeys, verbose=False):
         """
         Return the outputs of the pairwise interactions, `Phi(r)`.
 
@@ -271,7 +270,7 @@ class AdpNN(EamAlloyNN):
             type of atom; otherwise `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -309,12 +308,12 @@ class AdpNN(EamAlloyNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
     def _build_dipole_nn(self, partitions: dict, max_occurs: Counter,
-                         mode: tf_estimator.ModeKeys, verbose=False):
+                         mode: ModeKeys, verbose=False):
         """
         Return the outputs of the dipole interactions.
 
@@ -330,7 +329,7 @@ class AdpNN(EamAlloyNN):
             type of atom; otherwise `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -388,14 +387,14 @@ class AdpNN(EamAlloyNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
     def _build_quadrupole_nn(self,
                              partitions: dict,
                              max_occurs: Counter,
-                             mode: tf_estimator.ModeKeys,
+                             mode: ModeKeys,
                              verbose=False):
         """
         Return the outputs of the quadrupole interactions.
@@ -412,7 +411,7 @@ class AdpNN(EamAlloyNN):
             type of atom; otherwise `delta` will be one.
         max_occurs : Counter
             The maximum occurance of each type of element.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, key tensors will be logged.
@@ -494,14 +493,14 @@ class AdpNN(EamAlloyNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-            if mode == tf_estimator.ModeKeys.PREDICT:
+            if mode == ModeKeys.PREDICT:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Return raw NN-EAM model outputs.
@@ -519,7 +518,7 @@ class AdpNN(EamAlloyNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is the mask of `value`.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -661,27 +660,27 @@ class AdpNN(EamAlloyNN):
                 embed_vals = self._build_embed_nn(
                     rho,
                     max_occurs=Counter({el: nrho for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, rho_vals = self._build_rho_nn(
                     partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, phi_vals = self._build_phi_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, dipole_vals = self._build_dipole_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
                 _, quadrupole_vals = self._build_quadrupole_nn(
                     symmetric_partitions,
                     max_occurs=Counter({el: 1 for el in elements}),
-                    mode=tf_estimator.ModeKeys.EVAL,
+                    mode=ModeKeys.EVAL,
                     verbose=False)
 
             sess = tf.Session()

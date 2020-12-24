@@ -10,9 +10,8 @@ import json
 
 from monty.json import MSONable, MontyDecoder
 from typing import List, Dict, Union
-from tensorflow_estimator import estimator as tf_estimator
 
-from tensoralloy.utils import GraphKeys
+from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
@@ -43,7 +42,7 @@ class Descriptor(MSONable):
     def calculate(self,
                   transformer: UniversalTransformer,
                   universal_descriptors,
-                  mode: tf_estimator.ModeKeys,
+                  mode: ModeKeys,
                   verbose=False) -> AtomicDescriptors:
         """
         Calculate atomic descriptors with the unversal descriptors.
@@ -156,7 +155,7 @@ class AtomicNN(BasicNN):
     def _apply_minmax_normalization(self,
                                     x: tf.Tensor,
                                     mask: tf.Tensor,
-                                    mode: tf_estimator.ModeKeys):
+                                    mode: ModeKeys):
         """
         Apply the min-max normalization to raw symmetry function descriptors.
 
@@ -166,8 +165,8 @@ class AtomicNN(BasicNN):
             The input tensor.
         mask : tf.Tensor
             The atom mask.
-        mode : tf_estimator.ModeKeys
-
+        mode : ModeKeys
+            The mode.
 
         Returns
         -------
@@ -179,7 +178,7 @@ class AtomicNN(BasicNN):
             shape = [1, 1, x.shape[-1]]
             xlo = self._create_variable("xlo", shape, False, init_val=1000.)
             xhi = self._create_variable("xhi", shape, False, init_val=0.)
-            if mode == tf_estimator.ModeKeys.TRAIN:
+            if mode == ModeKeys.TRAIN:
                 xmax = tf.reduce_max(x, [0, 1], True, 'xmax')
                 xmin = tf.reshape(
                     tf.reduce_min(
@@ -196,7 +195,7 @@ class AtomicNN(BasicNN):
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Build 1x1 Convolution1D based atomic neural networks for all elements.
@@ -215,7 +214,7 @@ class AtomicNN(BasicNN):
             A dict of (element, (value, mask)) where `element` represents the
             symbol of an element, `value` is the descriptors of `element` and
             `mask` is None.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.

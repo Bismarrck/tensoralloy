@@ -11,7 +11,6 @@ import os
 import shutil
 import unittest
 
-from tensorflow_estimator import estimator as tf_estimator
 from nose.tools import assert_equal, assert_almost_equal
 from nose.tools import assert_dict_equal, assert_list_equal, with_setup
 from os.path import join, exists
@@ -37,6 +36,7 @@ except ImportError:
 else:
     is_pymatgen_avail = True
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.transformer import UniversalTransformer
@@ -320,7 +320,7 @@ class BulkStressOpTest(unittest.TestCase):
             nn.attach_transformer(clf)
             predictions = nn.build(
                 features=clf.get_placeholder_features(),
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 verbose=True)
 
             with tf.Session() as sess:
@@ -363,7 +363,7 @@ def test_batch_stress():
         clf = UniversalTransformer(elements=elements, rcut=rc)
         nn.attach_transformer(clf)
         predictions = nn.build(features=clf.get_placeholder_features(),
-                               mode=tf_estimator.ModeKeys.PREDICT,
+                               mode=ModeKeys.PREDICT,
                                verbose=False)
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
@@ -394,7 +394,7 @@ def test_batch_stress():
         outputs = nn._get_model_outputs(
             features=features,
             descriptors=descriptors,
-            mode=tf_estimator.ModeKeys.EVAL,
+            mode=ModeKeys.EVAL,
             verbose=False)
         ops = nn._get_energy_ops(outputs, features, verbose=False)
         forces = nn._get_forces_op(ops.energy, batch["positions"],
@@ -487,7 +487,7 @@ class Zjw04SurfaceStressTest(unittest.TestCase):
 
             predictions = nn.build(
                 features=clf.get_placeholder_features(),
-                mode=tf_estimator.ModeKeys.PREDICT,
+                mode=ModeKeys.PREDICT,
                 verbose=True)
 
             nn.export(pb_file)

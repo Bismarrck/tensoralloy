@@ -12,13 +12,13 @@ import enum
 import os
 import shutil
 
-from tensorflow_estimator import estimator as tf_estimator
 from ase.build import bulk
 from ase.calculators.lammpsrun import LAMMPS
 from ase.io import read
 from os.path import join, exists
 from nose.tools import assert_almost_equal
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.nn.tersoff import Tersoff
 from tensoralloy.precision import precision_scope
@@ -94,7 +94,7 @@ class TersoffTest(unittest.TestCase):
                 nn.attach_transformer(clf)
                 predictions = nn.build(
                     features=clf.get_constant_features(atoms),
-                    mode=tf_estimator.ModeKeys.PREDICT)
+                    mode=ModeKeys.PREDICT)
                 with tf.Session() as sess:
                     tf.global_variables_initializer().run()
                     results = sess.run(predictions)
@@ -126,7 +126,7 @@ class TersoffTest(unittest.TestCase):
                 nn.attach_transformer(clf)
                 predictions = nn.build(
                     features=clf.get_constant_features(atoms),
-                    mode=tf_estimator.ModeKeys.PREDICT)
+                    mode=ModeKeys.PREDICT)
                 with tf.Session() as sess:
                     tf.global_variables_initializer().run()
                     results = sess.run(predictions)
