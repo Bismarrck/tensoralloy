@@ -306,6 +306,24 @@ def set_logging_configs(logfile="logfile", level=logging.INFO):
     dictConfig(LOGGING_CONFIG)
 
 
+class ModeKeys:
+    """Standard names for Estimator model modes.
+
+    The following standard keys are defined:
+    * `TRAIN`: training/fitting mode.
+    * `EVAL`: testing/evaluation mode.
+    * `PREDICT`: predication/inference mode.
+    * `LAMMPS`: prediciton/inference mode for LAMMPS
+    * `KMC`: prediciton/inference mode for TensorKMC
+  """
+
+    TRAIN = 'train'
+    EVAL = 'eval'
+    PREDICT = 'infer'
+    LAMMPS = 'lammps'
+    KMC = 'KMC'
+
+
 class GraphKeys:
     """
     Standard names for variable collections.
