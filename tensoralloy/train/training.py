@@ -34,7 +34,7 @@ from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.polar import BatchPolarTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
-from tensoralloy.utils import check_path
+from tensoralloy.utils import check_path, ModeKeys
 from tensoralloy.precision import precision_scope
 from tensoralloy.train.dataclasses import EstimatorHyperParams
 
@@ -465,14 +465,14 @@ class TrainingManager:
                     strategy = None
                 if strategy is None:
                     train_input_fn = dataset.input_fn(
-                        mode=tf_estimator.ModeKeys.TRAIN,
+                        mode=ModeKeys.TRAIN,
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
                 else:
                     # The lambda wrap of `input_fn` is necessary for distributed
                     # training.
                     train_input_fn = lambda: dataset.input_fn(
-                        mode=tf_estimator.ModeKeys.TRAIN,
+                        mode=ModeKeys.TRAIN,
                         batch_size=hparams.train.batch_size,
                         shuffle=hparams.train.shuffle)
 
@@ -522,7 +522,7 @@ class TrainingManager:
 
                 eval_spec = tf_estimator.EvalSpec(
                     input_fn=dataset.input_fn(
-                        mode=tf_estimator.ModeKeys.EVAL,
+                        mode=ModeKeys.EVAL,
                         batch_size=hparams.train.eval_batch_size,
                         num_epochs=1,
                         shuffle=False),
@@ -536,7 +536,7 @@ class TrainingManager:
                     estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None, use_ema_variables=True,
-               export_lammps_mpi_pb=False, **kwargs):
+               mode='default', **kwargs):
         """
         Export the trained model.
         """
@@ -546,10 +546,13 @@ class TrainingManager:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)
 
-            if export_lammps_mpi_pb:
+            if mode == 'lammps':
                 pb_ext = "lmpb"
+            elif mode == 'kmc':
+                pb_ext = 'kmcpb'
             else:
                 pb_ext = "pb"
+
             if tag is not None:
                 graph_name = f'{self._dataset.name}.{tag}.{pb_ext}'
             else:
@@ -561,7 +564,7 @@ class TrainingManager:
                 checkpoint=checkpoint,
                 use_ema_variables=use_ema_variables,
                 keep_tmp_files=False,
-                to_lammps=export_lammps_mpi_pb)
+                mode=mode, **kwargs)
 
             if isinstance(self._model, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']

@@ -28,7 +28,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 def _get_iaxis(mode: ModeKeys):
-    if mode == ModeKeys.PREDICT:
+    if ModeKeys.for_prediction(mode):
         return 0
     else:
         return 1

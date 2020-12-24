@@ -15,10 +15,9 @@ from os.path import join, splitext, basename, exists, dirname
 from typing import Dict, List, Tuple, Union
 from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.transformer import BatchUniversalTransformer
-from tensoralloy.utils import Defaults, check_path
+from tensoralloy.utils import Defaults, check_path, ModeKeys
 from tensoralloy.train.dataset.utils import should_be_serial
 from tensoralloy.train.dataset.utils import brange
 from tensoralloy.io.sqlite import CoreDatabase
@@ -131,14 +130,14 @@ class Dataset:
         """
         Return the size of the training dataset.
         """
-        return self._file_sizes.get(tf_estimator.ModeKeys.TRAIN, 0)
+        return self._file_sizes.get(ModeKeys.TRAIN, 0)
 
     @property
     def test_size(self):
         """
         Return the size of the evaluation dataset.
         """
-        return self._file_sizes.get(tf_estimator.ModeKeys.EVAL, 0)
+        return self._file_sizes.get(ModeKeys.EVAL, 0)
 
     @property
     def atomic_static_energy(self) -> Dict[str, float]:
@@ -166,14 +165,14 @@ class Dataset:
         """
         self._database.get_atomic_static_energy(allow_calculation=True)
 
-    def _write_subset(self, mode: tf_estimator.ModeKeys, filename: str,
+    def _write_subset(self, mode: ModeKeys, filename: str,
                       indices: List[int], verbose=False):
         """
         Write a subset of this dataset to the given file.
 
         Parameters
         ----------
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             The purpose of this subset.
         filename : str
             The file to write.
@@ -318,7 +317,7 @@ class Dataset:
 
         if write == 'all' or write == 'eval':
             self._write_subset(
-                tf_estimator.ModeKeys.EVAL,
+                ModeKeys.EVAL,
                 check_path(join(savedir, '{}-test-{}-{}.{}.tfrecords'.format(
                     self._name,
                     signature,
@@ -330,7 +329,7 @@ class Dataset:
 
         if write == 'all' or write == 'train':
             self._write_subset(
-                tf_estimator.ModeKeys.TRAIN,
+                ModeKeys.TRAIN,
                 check_path(join(savedir, '{}-train-{}-{}.{}.tfrecords'.format(
                     self._name,
                     signature,
@@ -390,14 +389,14 @@ class Dataset:
         train_file, train_size = _load(is_test=False)
         success = (test_file is not None) and (train_file is not None)
 
-        self._files = {tf_estimator.ModeKeys.TRAIN: train_file,
-                       tf_estimator.ModeKeys.EVAL: test_file}
-        self._file_sizes = {tf_estimator.ModeKeys.TRAIN: train_size,
-                            tf_estimator.ModeKeys.EVAL: test_size}
+        self._files = {ModeKeys.TRAIN: train_file,
+                       ModeKeys.EVAL: test_file}
+        self._file_sizes = {ModeKeys.TRAIN: train_size,
+                            ModeKeys.EVAL: test_size}
 
         return success
 
-    def input_fn(self, mode: tf_estimator.ModeKeys, batch_size=25,
+    def input_fn(self, mode: ModeKeys, batch_size=25,
                  num_epochs=None, shuffle=False):
         """
         Return a Callable input function for `tf_estimator.Estimator`.
@@ -415,8 +414,8 @@ class Dataset:
             Shuffle the input data if True.
 
         """
-        if mode == tf_estimator.ModeKeys.PREDICT:
-            raise ValueError("The PREDICT does not need an `input_fn`.")
+        if ModeKeys.for_prediction(mode):
+            raise ValueError("Prediction mode does not need an `input_fn`.")
 
         def _input_fn() -> Tuple[dict, dict]:
             """
@@ -452,7 +451,7 @@ class Dataset:
 
         return _input_fn
 
-    def next_batch(self, mode=tf_estimator.ModeKeys.TRAIN, batch_size=25,
+    def next_batch(self, mode=ModeKeys.TRAIN, batch_size=25,
                    num_epochs=None, shuffle=False):
         """
         Return batch inputs of this dataset.

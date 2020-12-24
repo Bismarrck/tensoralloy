@@ -19,7 +19,7 @@ from tensorflow.python.framework import importer
 from typing import List, Tuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
-from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer import UniversalTransformer, KMCTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.precision import precision_scope
 
@@ -129,6 +129,8 @@ class TensorAlloyCalculator(Calculator):
         cls = params.pop('class')
         if cls == 'UniversalTransformer':
             return UniversalTransformer(**params)
+        elif cls == "KMCTransformer":
+            return KMCTransformer(**params)
         else:
             raise ValueError(f"Unsupported transformer: {cls}")
 

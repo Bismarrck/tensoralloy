@@ -11,15 +11,15 @@ import shutil
 
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Union
 from os.path import join, dirname
 from tensorflow.python.tools import freeze_graph
 from tensorflow.python.framework import graph_io
 from tensorflow.python.framework.tensor_util import is_tensor
-from tensorflow_estimator import estimator as tf_estimator
+from tensorflow_estimator.python.estimator.estimator_lib import EstimatorSpec
 from ase.units import GPa
 
-from tensoralloy.utils import GraphKeys, Defaults, safe_select
+from tensoralloy.utils import GraphKeys, Defaults, safe_select, ModeKeys
 from tensoralloy.nn.dataclasses import StructuralProperty, LossParameters
 from tensoralloy.nn.dataclasses import EnergyOps
 from tensoralloy.nn.utils import log_tensor, is_first_replica
@@ -30,9 +30,9 @@ from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.nn.constraint import eentropy as eentropy_ops
 from tensoralloy.transformer.base import BaseTransformer
-from tensoralloy.transformer.base import BatchDescriptorTransformer
-from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
+from tensoralloy.transformer.universal import BatchUniversalTransformer
+from tensoralloy.transformer.kmc import KMCTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -231,7 +231,8 @@ class BasicNN:
         """
         return self._transformer
 
-    def attach_transformer(self, clf: UniversalTransformer):
+    def attach_transformer(self,
+                           clf: Union[UniversalTransformer, KMCTransformer]):
         """
         Attach a descriptor transformer to this potential.
         """
@@ -462,7 +463,7 @@ class BasicNN:
                        atom_masks,
                        loss_parameters: LossParameters,
                        max_train_steps=None,
-                       mode=tf_estimator.ModeKeys.TRAIN):
+                       mode=ModeKeys.TRAIN):
         """
         Get the total loss tensor.
 
@@ -508,7 +509,7 @@ class BasicNN:
             The maximum number of training steps.
         loss_parameters : LossParameters
             The hyper parameters for computing the total loss.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
 
         Returns
@@ -566,7 +567,7 @@ class BasicNN:
             if l2_loss is not None:
                 losses['l2'] = l2_loss
 
-            verbose = bool(mode == tf_estimator.ModeKeys.TRAIN)
+            verbose = bool(mode == ModeKeys.TRAIN)
 
             if 'elastic' in self._minimize_properties:
                 if loss_parameters.elastic.crystals is not None:
@@ -606,7 +607,7 @@ class BasicNN:
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
-                           mode: tf_estimator.ModeKeys,
+                           mode: ModeKeys,
                            verbose=False):
         """
         Build the NN model and return raw outputs.
@@ -624,7 +625,7 @@ class BasicNN:
         descriptors : dict
             A dict of Ops to get atomic descriptors. This should be produced by
             an overrided `BaseTransformer.get_descriptors()`.
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -650,7 +651,7 @@ class BasicNN:
 
     def build(self,
               features: dict,
-              mode=tf_estimator.ModeKeys.TRAIN,
+              mode=ModeKeys.TRAIN,
               verbose=True):
         """
         Build the atomic neural network.
@@ -665,7 +666,7 @@ class BasicNN:
                 * 'volume' of shape `[batch_size, ]`.
                 * 'n_atoms_vap' of dtype `int64`.
                 * 'etemperature' of dtype `float32` or `float64`
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
         verbose : bool
             If True, the prediction tensors will be logged.
@@ -704,15 +705,15 @@ class BasicNN:
             mode=mode,
             verbose=verbose)
 
-        export_partial_forces = False
-        if mode == tf_estimator.ModeKeys.PREDICT:
-            if not self._transformer.use_computed_dists:
-                export_partial_forces = True
-                properties = ["energy", "partial_forces"]
-                if self.is_finite_temperature:
-                    properties.extend(["eentropy", "free_energy"])
-            else:
+        if ModeKeys.for_prediction(mode):
+            if mode == ModeKeys.PREDICT:
                 properties = self._export_properties
+            elif mode == ModeKeys.LAMMPS:
+                properties = ["energy", "partial_forces"]
+            else:
+                properties = ["energy"]
+            if self.is_finite_temperature:
+                properties.extend(["eentropy", "free_energy"])
         else:
             properties = self._minimize_properties
 
@@ -722,7 +723,7 @@ class BasicNN:
                 ops = self._get_energy_ops(outputs, features, verbose)
                 predictions = ops.as_dict()
 
-            if export_partial_forces:
+            if mode == ModeKeys.LAMMPS:
                 with tf.name_scope("PartialForces"):
                     predictions.update(
                         self._get_partial_forces_ops(
@@ -761,7 +762,7 @@ class BasicNN:
                             positions=features["positions"],
                             verbose=verbose)
 
-                if mode == tf_estimator.ModeKeys.PREDICT \
+                if mode == ModeKeys.PREDICT \
                         and 'elastic' in properties:
                     with tf.name_scope("Elastic"):
                         predictions["elastic"] = \
@@ -902,7 +903,7 @@ class BasicNN:
     def model_fn(self,
                  features: dict,
                  labels: dict,
-                 mode: tf_estimator.ModeKeys,
+                 mode: ModeKeys,
                  params):
         """
         Initialize a model function for `tf_estimator.Estimator`.
@@ -935,7 +936,7 @@ class BasicNN:
                 * 'stress' of shape `[batch_size, 6]` is required if
                   'stress' should be minimized.
 
-        mode : tf_estimator.ModeKeys
+        mode : ModeKeys
             A `ModeKeys`. Specifies if this is training, evaluation or
             prediction.
         params : EstimatorHyperParams
@@ -953,11 +954,14 @@ class BasicNN:
 
         predictions = self.build(features=features,
                                  mode=mode,
-                                 verbose=(mode == tf_estimator.ModeKeys.TRAIN))
+                                 verbose=(mode == ModeKeys.TRAIN))
 
-        if mode == tf_estimator.ModeKeys.PREDICT:
-            return tf_estimator.EstimatorSpec(mode=mode,
-                                              predictions=predictions)
+        if mode == ModeKeys.LAMMPS or mode == ModeKeys.KMC:
+            raise ValueError(
+                "`model_fn` cannot be called for mode LAMMPS or KMC")
+
+        if mode == ModeKeys.PREDICT:
+            return EstimatorSpec(mode=mode, predictions=predictions)
 
         total_loss, losses = self.get_total_loss(
             predictions=predictions,
@@ -973,14 +977,15 @@ class BasicNN:
             opt_parameters=params.opt,
             minimize_properties=self._minimize_properties)
 
-        if mode == tf_estimator.ModeKeys.TRAIN:
+        if mode == ModeKeys.TRAIN:
             training_hooks = get_training_hooks(
                 ema=ema,
                 train_parameters=params.train,
                 num_replicas=params.distribute.num_replicas)
-            return tf_estimator.EstimatorSpec(mode=mode, loss=total_loss,
-                                              train_op=train_op,
-                                              training_hooks=training_hooks)
+            return EstimatorSpec(mode=mode,
+                                 loss=total_loss,
+                                 train_op=train_op,
+                                 training_hooks=training_hooks)
 
         eval_metrics_ops = self.get_eval_metrics(
             predictions=predictions,
@@ -991,14 +996,14 @@ class BasicNN:
         evaluation_hooks = get_evaluation_hooks(
             ema=ema,
             train_parameters=params.train)
-        return tf_estimator.EstimatorSpec(mode=mode,
-                                          loss=total_loss,
-                                          eval_metric_ops=eval_metrics_ops,
-                                          evaluation_hooks=evaluation_hooks)
+        return EstimatorSpec(mode=mode,
+                             loss=total_loss,
+                             eval_metric_ops=eval_metrics_ops,
+                             evaluation_hooks=evaluation_hooks)
 
     def export(self, output_graph_path: str, checkpoint=None,
                keep_tmp_files=False, use_ema_variables=True,
-               to_lammps=False):
+               mode=ModeKeys.PREDICT, **kwargs):
         """
         Freeze the graph and export the model to a pb file.
 
@@ -1012,8 +1017,8 @@ class BasicNN:
             If False, the intermediate files will be deleted.
         use_ema_variables : bool
             If True, exponentially moving averaged variables will be used.
-        to_lammps : bool
-            If True, a LAMMPS model will be exported.
+        mode : ModeKeys
+            The export mode: `infer`, `lammps` or `kmc`
 
         """
 
@@ -1032,26 +1037,37 @@ class BasicNN:
             if self._transformer is None:
                 raise ValueError("A transformer must be attached before "
                                  "exporting to a pb file.")
-            elif isinstance(self._transformer, BatchDescriptorTransformer):
-                clf = self._transformer.as_descriptor_transformer()
-            elif isinstance(self._transformer, DescriptorTransformer):
-                serialized = self._transformer.as_dict()
-                if 'class' in serialized:
-                    serialized.pop('class')
-                clf = self._transformer.__class__(**serialized)
-            else:
-                raise ValueError(f"Unknown transformer: {self._transformer}")
 
             configs = self.as_dict()
             configs.pop('class')
             nn = self.__class__(**configs)
 
-            if to_lammps and isinstance(clf, UniversalTransformer):
-                clf.use_computed_dists = False
+            if mode == ModeKeys.KMC:
+                if self.transformer.angular:
+                    raise ValueError(
+                        "TensorKMC does not support angular potentials")
+                nnl_max = kwargs.get("nnl_max", 0)
+                if nnl_max == 0:
+                    raise ValueError("`nnl_max` should be set but zero")
+                clf = KMCTransformer(
+                    elements=self.transformer.elements,
+                    rcut=self.transformer.rcut,
+                    nnl_max=nnl_max)
+                configs['export_properties'] = ['energy']
+            else:
+                if isinstance(self._transformer, BatchUniversalTransformer):
+                    clf = self._transformer.as_descriptor_transformer()
+                else:
+                    serialized = self._transformer.as_dict()
+                    if 'class' in serialized:
+                        serialized.pop('class')
+                    clf = self._transformer.__class__(**serialized)
+                if mode == ModeKeys.LAMMPS:
+                    clf.use_computed_dists = False
 
             nn.attach_transformer(clf)
             predictions = nn.build(clf.get_placeholder_features(),
-                                   mode=tf_estimator.ModeKeys.PREDICT,
+                                   mode=mode,
                                    verbose=True)
 
             # Encode the JSON dict of the serialized transformer into the graph.

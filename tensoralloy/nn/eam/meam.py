@@ -249,7 +249,7 @@ class MeamNN(EamAlloyNN):
                     outputs[kbody_term] = rho
 
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if mode == ModeKeys.PREDICT:
+            if ModeKeys.for_prediction(mode):
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
@@ -509,7 +509,7 @@ class MeamNN(EamAlloyNN):
                 verbose=verbose)
 
             y = tf.add(phi, embed, name='atomic')
-            if mode == ModeKeys.PREDICT:
+            if ModeKeys.for_prediction(mode):
                 y = tf.squeeze(y, axis=0, name='atomic/squeeze')
 
             return y

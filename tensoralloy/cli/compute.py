@@ -16,8 +16,8 @@ from os.path import dirname, join, basename, exists
 from ase.build import bulk
 from ase.io import read, write
 from ase.units import GPa, kB
-from tensorflow_estimator import estimator as tf_estimator
 
+from tensoralloy.utils import ModeKeys
 from tensoralloy.calculator import TensorAlloyCalculator
 from tensoralloy.io.input.reader import InputReader
 from tensoralloy.train.training import TrainingManager
@@ -277,11 +277,11 @@ class ComputePTErrorProgram(CLIProgram):
                 with tf.Graph().as_default():
                     manager = TrainingManager(config, validate_tfrecords=True)
                     if args.use_train_data:
-                        mode = tf_estimator.ModeKeys.TRAIN
+                        mode = ModeKeys.TRAIN
                         size = manager.dataset.train_size
                         batch_size = manager.hparams.train.batch_size
                     else:
-                        mode = tf_estimator.ModeKeys.EVAL
+                        mode = ModeKeys.EVAL
                         size = manager.dataset.test_size
                         batch_size = manager.hparams.train.batch_size
                         batch_size = min(size, batch_size)
@@ -475,11 +475,11 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                     manager = TrainingManager(config, validate_tfrecords=True)
                     if args.use_train_data:
-                        mode = tf_estimator.ModeKeys.TRAIN
+                        mode = ModeKeys.TRAIN
                         size = manager.dataset.train_size
                         batch_size = manager.hparams.train.batch_size
                     else:
-                        mode = tf_estimator.ModeKeys.EVAL
+                        mode = ModeKeys.EVAL
                         size = manager.dataset.test_size
                         batch_size = manager.hparams.train.batch_size
                         batch_size = min(size, batch_size)

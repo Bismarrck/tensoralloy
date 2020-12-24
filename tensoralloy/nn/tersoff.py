@@ -436,7 +436,7 @@ class Tersoff(BasicNN):
                             vij, axis=[-1, -2], keepdims=False, name='vij/sum')
 
             y_atomic = self._dynamic_stitch(outputs, max_occurs)
-            if mode == ModeKeys.PREDICT:
+            if ModeKeys.for_prediction(mode):
                 y_atomic = tf.squeeze(y_atomic, name='atomic/squeeze')
             return y_atomic
 

@@ -60,14 +60,20 @@ class ExportModelProgram(CLIProgram):
             help="If this flag is given, EMA variables will be disabled."
         )
         subparser.add_argument(
-            '--lammps',
-            action='store_true',
-            default=False,
-            help="Export Lammps/MPI compatible model with partial forces ops."
+            '--mode',
+            default='infer',
+            choices=['infer', 'lammps', 'kmc'],
+            type=str,
+            help="Export mode: infer, lammps or kmc"
         )
 
-        group = subparser.add_argument_group("EAM")
+        group = subparser.add_argument_group("KMC")
+        group.add_argument(
+            "--nnl",
+            type=int,
+            help="The nnl_max parameter for TensorKMC")
 
+        group = subparser.add_argument_group("EAM")
         group.add_argument(
             '--r0',
             type=float,
@@ -92,7 +98,6 @@ class ExportModelProgram(CLIProgram):
             default=None,
             help="The final 'rho' for plotting embedding functions."
         )
-
         super(ExportModelProgram, self).config_subparser(subparser)
 
     @property
@@ -139,12 +144,13 @@ class ExportModelProgram(CLIProgram):
             configs['dataset.sqlite3'] = database_file
 
             kwargs = {'r0': args.r0, 'rt': args.rt,
-                      'rho0': args.rho0, 'rhot': args.rhot}
+                      'rho0': args.rho0, 'rhot': args.rhot,
+                      'nnl_max': args.nnl}
 
             manager = TrainingManager(configs, validate_tfrecords=False)
             manager.export(ckpt,
                            tag=step_tag,
                            use_ema_variables=(not args.no_ema),
-                           export_lammps_mpi_pb=args.lammps,
+                           mode=args.mode,
                            **kwargs)
         return func

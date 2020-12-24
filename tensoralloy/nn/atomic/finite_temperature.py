@@ -96,7 +96,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
         Add electron temperature to the atomic descriptor tensor `x`.
         """
         with tf.name_scope("Temperature"):
-            if mode == ModeKeys.PREDICT:
+            if ModeKeys.for_prediction(mode):
                 d0 = 1
                 d1 = max_occurs[element]
             else:

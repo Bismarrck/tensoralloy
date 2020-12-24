@@ -104,7 +104,7 @@ def dynamic_partition(dists_and_masks: dict,
                 dists = tf.convert_to_tensor(dists, name='dists')
                 masks = tf.convert_to_tensor(masks, name='masks')
 
-                if mode == ModeKeys.PREDICT:
+                if ModeKeys.for_prediction(mode):
                     assert dists.shape.ndims == 5
                     dists = tf.expand_dims(dists, axis=1)
                     masks = tf.expand_dims(masks, axis=0)
