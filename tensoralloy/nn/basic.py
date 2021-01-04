@@ -1046,7 +1046,10 @@ class BasicNN:
                 if self.transformer.angular:
                     raise ValueError(
                         "TensorKMC does not support angular potentials")
-                nnl_max = kwargs.get("nnl_max", 0)
+                if isinstance(self._transformer, KMCTransformer):
+                    nnl_max = self._transformer.nnl_max
+                else:
+                    nnl_max = kwargs.get("nnl_max", 0)
                 if nnl_max == 0:
                     raise ValueError("`nnl_max` should be set but zero")
                 clf = KMCTransformer(

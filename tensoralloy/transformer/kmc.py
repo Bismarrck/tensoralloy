@@ -102,6 +102,11 @@ class KMCTransformer(DescriptorTransformer):
         return self._rcut
 
     @property
+    def nnl_max(self):
+        """ The nnl_max for this transformer """
+        return self._nnl_max
+
+    @property
     def angular(self):
         """ Not implemented yet """
         return False
@@ -159,8 +164,6 @@ class KMCTransformer(DescriptorTransformer):
         for element in self._elements:
             assert f"G/{element}" in features
             assert f"G/{element}/masks" in features
-            assert f"atom_masks/{element}" in features
-            assert f"n_atoms_vap/{element}" in features
 
     def build_radial_graph(self, features: dict):
         """
@@ -193,8 +196,7 @@ class KMCTransformer(DescriptorTransformer):
         self._check_keys(features)
         with tf.name_scope(f"Transformer"):
             g2 = self.build_radial_graph(features)
-            atom_masks = self._get_atom_masks(features)
-            return {"radial": g2, "angular": None, "atom_masks": atom_masks}
+            return {"radial": g2, "angular": None}
 
     def _create_float_5d(self, dtype, name):
         return self._get_or_create_placeholder(
@@ -225,12 +227,6 @@ class KMCTransformer(DescriptorTransformer):
                     dtype, f"G/{element}")
                 self._placeholders[f"G/{element}/masks"] = \
                     self._create_float_4d(dtype, f"G/{element}/masks")
-                self._placeholders[f"atom_masks/{element}"] = \
-                    self._create_float_1d(name=f"atom_masks/{element}",
-                                          dtype=dtype)
-                self._placeholders[f"n_atoms_vap/{element}"] = \
-                    self._create_float(dtype=dtype,
-                                       name=f"n_atoms_vap/{element}")
 
         return self._placeholders
 
@@ -239,7 +235,6 @@ class KMCTransformer(DescriptorTransformer):
         Return a dict of features (Numpy or Python objects).
         """
         dtype = get_float_dtype().as_numpy_dtype
-        itype = np.int32
         symbols = atoms.get_chemical_symbols()
         vap = self.get_vap_transformer(atoms)
         atom_masks = vap.atom_masks.astype(dtype)
@@ -286,15 +281,11 @@ class KMCTransformer(DescriptorTransformer):
             if n == 0:
                 virt4d = [self._max_nr_terms, 1, self._nnl_max, 1]
                 virt5d = [4, ] + virt4d
-                feed_dict[f"atom_masks/{element}"] = np.zeros(1, dtype=itype)
-                feed_dict[f"n_atoms_vap/{element}"] = itype(1)
                 feed_dict[f"G/{element}"] = np.zeros(virt5d, dtype=dtype)
                 feed_dict[f"G/{element}/masks"] = np.zeros(virt4d, dtype=dtype)
             else:
                 d20 = offsets[element]
                 d2t = offsets[element] + n
-                feed_dict[f"atom_masks/{element}"] = np.ones(n, dtype=itype)
-                feed_dict[f"n_atoms_vap/{element}"] = itype(n)
                 feed_dict[f"G/{element}"] = g[:, :, d20: d2t, :, :]
                 feed_dict[f"G/{element}/masks"] = m[:, d20: d2t, :, :]
         return feed_dict
