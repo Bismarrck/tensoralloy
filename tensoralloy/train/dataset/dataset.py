@@ -349,6 +349,9 @@ class Dataset:
         signature = self._get_signature()
         total_size = len(self._database)
 
+        if isinstance(test_size, float):
+            test_size = int(test_size * total_size)
+
         def _get_file_size(filename):
             suffix = str(splitext(basename(filename))[0].split('-')[5])
             return int(suffix.split('.')[0])
