@@ -1093,6 +1093,11 @@ class BasicNN:
                 ops = {key: tensor.name for key, tensor in predictions.items()}
                 ops_node = tf.constant(json.dumps(ops), name='ops')
 
+                if mode == ModeKeys.KMC:
+                    nnl_max_node = tf.constant(str(nnl_max), name="nnl_max")
+                else:
+                    nnl_max_node = None
+
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
 
@@ -1132,6 +1137,8 @@ class BasicNN:
                 api_version_node.op.name,
                 ops_node.op.name,
             ]
+            if mode == ModeKeys.KMC:
+                output_node_names.append(nnl_max_node)
 
             for tensor in predictions.values():
                 if not is_tensor(tensor):
