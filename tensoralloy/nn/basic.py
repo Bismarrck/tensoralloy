@@ -1138,7 +1138,7 @@ class BasicNN:
                 ops_node.op.name,
             ]
             if mode == ModeKeys.KMC:
-                output_node_names.append(nnl_max_node)
+                output_node_names.append(nnl_max_node.op.name)
 
             for tensor in predictions.values():
                 if not is_tensor(tensor):
