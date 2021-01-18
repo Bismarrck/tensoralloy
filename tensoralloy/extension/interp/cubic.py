@@ -11,6 +11,7 @@ from tensorflow.python.framework import ops
 from tensoralloy.extension.interp.utils import load_op_library
 from tensoralloy.extension.interp.solver import tri_diag_solve
 from tensoralloy.extension.grad_ops import safe_pow
+from tensoralloy.precision import get_float_dtype
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -89,8 +90,12 @@ class CubicInterpolator(object):
 
         with ops.name_scope(name, "CubicInterpolator", [t]):
 
-            x = tf.convert_to_tensor(self.x, name='x')
-            y = tf.convert_to_tensor(self.y, name='y')
+            dtype = get_float_dtype()
+            x = tf.convert_to_tensor(self.x, name='x', dtype=dtype)
+            if not isinstance(self.y, (tf.Tensor, tf.Variable)):
+                y = tf.convert_to_tensor(self.y, name='y', dtype=dtype)
+            else:
+                y = self.y
 
             # Compute the deltas
             size = tf.shape(x)[-1]
