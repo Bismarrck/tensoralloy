@@ -70,7 +70,7 @@ class KMCTransformer(DescriptorTransformer):
         self._radial_interactions = radial_interactions
         self._rcut = rcut
         self._elements = elements
-        self._nnl_max = nnl_max
+        self._nnl_max = int(nnl_max)
         self._n_elements = len(elements)
 
     def as_dict(self) -> Dict:
