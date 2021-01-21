@@ -22,6 +22,7 @@ from tensoralloy.transformer.base import DescriptorTransformer
 from tensoralloy.transformer import UniversalTransformer, KMCTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.precision import precision_scope
+from tensoralloy.utils import ModeKeys
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -77,11 +78,11 @@ class TensorAlloyCalculator(Calculator):
 
             self._sess = tf.Session(config=config, graph=graph)
             self._graph = graph
+            self._mode = ModeKeys.PREDICT
             self._transformer = self._get_transformer()
             self._get_ops()
 
             self.implemented_properties = self._predict_properties
-            print(self.implemented_properties)
             self._ncalls = 0
             self._prerequisite_properties = []
 
@@ -130,6 +131,7 @@ class TensorAlloyCalculator(Calculator):
         if cls == 'UniversalTransformer':
             return UniversalTransformer(**params)
         elif cls == "KMCTransformer":
+            self._mode = ModeKeys.KMC
             return KMCTransformer(**params)
         else:
             raise ValueError(f"Unsupported transformer: {cls}")
@@ -180,7 +182,7 @@ class TensorAlloyCalculator(Calculator):
         """
         energy = super(TensorAlloyCalculator, self).get_potential_energy(
             atoms, force_consistent)
-        return float(energy)
+        return energy
 
     def get_magnetic_moment(self, atoms=None):
         """
@@ -212,6 +214,8 @@ class TensorAlloyCalculator(Calculator):
         Return an array as the atomic energies.
         """
         values = self.get_property(f'{prop}/atom', atoms=atoms)
+        if self._mode == ModeKeys.KMC:
+            values = values[0]
         values = np.insert(values, 0, 0, 0)
         clf = self.transformer.get_vap_transformer(atoms)
         return clf.map_array(values.reshape((-1, 1)), reverse=True).flatten()

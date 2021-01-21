@@ -198,17 +198,17 @@ class KMCTransformer(DescriptorTransformer):
             g2 = self.build_radial_graph(features)
             return {"radial": g2, "angular": None}
 
+    def _create_float_6d(self, dtype, name):
+        return self._get_or_create_placeholder(
+            dtype,
+            name=name,
+            shape=(4, None, self._max_nr_terms, None, self._nnl_max, 1))
+
     def _create_float_5d(self, dtype, name):
         return self._get_or_create_placeholder(
             dtype,
             name=name,
-            shape=(4, self._max_nr_terms, None, self._nnl_max, 1))
-
-    def _create_float_4d(self, dtype, name):
-        return self._get_or_create_placeholder(
-            dtype,
-            name=name,
-            shape=(self._max_nr_terms, None, self._nnl_max, 1))
+            shape=(None, self._max_nr_terms, None, self._nnl_max, 1))
 
     def _initialize_placeholders(self):
         """
@@ -217,16 +217,16 @@ class KMCTransformer(DescriptorTransformer):
         with tf.name_scope("Placeholders/"):
             dtype = get_float_dtype()
 
-            self._placeholders["atom_masks"] = self._create_float_1d(
-                dtype=dtype, name='atom_masks')
-            self._placeholders["etemperature"] = self._create_float(
+            self._placeholders["atom_masks"] = self._create_float_2d(
+                dtype=dtype, name='atom_masks', d0=None, d1=None)
+            self._placeholders["etemperature"] = self._create_float_1d(
                 dtype=dtype, name='etemperature')
 
             for element in self._elements:
-                self._placeholders[f"G/{element}"] = self._create_float_5d(
+                self._placeholders[f"G/{element}"] = self._create_float_6d(
                     dtype, f"G/{element}")
                 self._placeholders[f"G/{element}/masks"] = \
-                    self._create_float_4d(dtype, f"G/{element}/masks")
+                    self._create_float_5d(dtype, f"G/{element}/masks")
 
         return self._placeholders
 
@@ -237,8 +237,9 @@ class KMCTransformer(DescriptorTransformer):
         dtype = get_float_dtype().as_numpy_dtype
         symbols = atoms.get_chemical_symbols()
         vap = self.get_vap_transformer(atoms)
-        atom_masks = vap.atom_masks.astype(dtype)
-        etemp = atoms_utils.get_electron_temperature(atoms)
+        atom_masks = np.atleast_2d(vap.atom_masks).astype(dtype)
+        etemp = np.asarray(
+            [atoms_utils.get_electron_temperature(atoms)]).astype(dtype)
 
         offsets = {}
         offset = 1
@@ -247,11 +248,13 @@ class KMCTransformer(DescriptorTransformer):
             offset += vap.max_occurs[element]
 
         g = np.zeros((4,
+                      1,
                       self._max_nr_terms,
                       vap.max_vap_natoms,
                       self._nnl_max,
                       1), dtype=dtype)
-        m = np.zeros((self._max_nr_terms,
+        m = np.zeros((1,
+                      self._max_nr_terms,
                       vap.max_vap_natoms,
                       self._nnl_max,
                       1), dtype=dtype)
@@ -268,26 +271,20 @@ class KMCTransformer(DescriptorTransformer):
             d1 = self._radial_interactions[f"{symboli}{symbolj}"]
             d2 = vap.local_to_gsl_map[atomi + 1]
             d3 = counters[atomi][d1]
-            g[0, d1, d2, d3, 0] = rij[index]
-            g[1, d1, d2, d3, 0] = dij[index, 0]
-            g[2, d1, d2, d3, 0] = dij[index, 1]
-            g[3, d1, d2, d3, 0] = dij[index, 2]
-            m[d1, d2, d3, 0] = 1.0
+            g[0, 0, d1, d2, d3, 0] = rij[index]
+            g[1, 0, d1, d2, d3, 0] = dij[index, 0]
+            g[2, 0, d1, d2, d3, 0] = dij[index, 1]
+            g[3, 0, d1, d2, d3, 0] = dij[index, 2]
+            m[0, d1, d2, d3, 0] = 1.0
             counters[atomi][d1] += 1
 
-        feed_dict = dict(atom_masks=atom_masks, etemperature=dtype(etemp))
+        feed_dict = dict(atom_masks=atom_masks, etemperature=etemp)
         for element in self._elements:
             n = vap.max_occurs.get(element, 0)
-            if n == 0:
-                virt4d = [self._max_nr_terms, 1, self._nnl_max, 1]
-                virt5d = [4, ] + virt4d
-                feed_dict[f"G/{element}"] = np.zeros(virt5d, dtype=dtype)
-                feed_dict[f"G/{element}/masks"] = np.zeros(virt4d, dtype=dtype)
-            else:
-                d20 = offsets[element]
-                d2t = offsets[element] + n
-                feed_dict[f"G/{element}"] = g[:, :, d20: d2t, :, :]
-                feed_dict[f"G/{element}/masks"] = m[:, d20: d2t, :, :]
+            d20 = offsets[element]
+            d2t = offsets[element] + n
+            feed_dict[f"G/{element}"] = g[:, :, :, d20: d2t, :, :]
+            feed_dict[f"G/{element}/masks"] = m[:, :, d20: d2t, :, :]
         return feed_dict
 
     def get_feed_dict(self, atoms: Atoms):
@@ -348,12 +345,13 @@ def test():
         ktf = KMCTransformer(elements, rcut=rc, nnl_max=nnl)
         nn.attach_transformer(ktf)
         op = nn.build(ktf.get_constant_features(atoms),
-                      ModeKeys.PREDICT)['energy']
+                      ModeKeys.KMC)['energy']
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             e2 = sess.run(op)
 
-    assert abs(e1 - e2) < 1e-8
+    assert abs(e1 - e2[0]) < 1e-8
+    assert abs(e1 - e2[1]) < 1e-8
 
 
 if __name__ == "__main__":

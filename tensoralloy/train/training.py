@@ -536,7 +536,7 @@ class TrainingManager:
                     estimator, train_spec, eval_spec)
 
     def export(self, checkpoint=None, tag=None, use_ema_variables=True,
-               mode='default', **kwargs):
+               mode=ModeKeys.PREDICT, **kwargs):
         """
         Export the trained model.
         """
@@ -546,9 +546,9 @@ class TrainingManager:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)
 
-            if mode == 'lammps':
+            if mode == ModeKeys.LAMMPS:
                 pb_ext = "lmpb"
-            elif mode == 'kmc':
+            elif mode == ModeKeys.KMC:
                 pb_ext = 'kmcpb'
             else:
                 pb_ext = "pb"

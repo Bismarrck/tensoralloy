@@ -384,7 +384,7 @@ class EamNN(BasicNN):
                         log_tensor(y)
                     outputs[kbody_term] = y
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=True)
-            if ModeKeys.for_prediction(mode):
+            if mode == ModeKeys.PREDICT or mode == ModeKeys.LAMMPS:
                 atomic = tf.squeeze(atomic, axis=0, name='squeeze')
             return atomic, values
 
@@ -450,7 +450,7 @@ class EamNN(BasicNN):
         """
         split_sizes = [max_occurs[el] for el in self._elements]
 
-        if ModeKeys.for_prediction(mode):
+        if mode == ModeKeys.PREDICT or mode == ModeKeys.LAMMPS:
             split_axis = 0
             squeeze_axis = 1
         else:

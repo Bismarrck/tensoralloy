@@ -198,7 +198,7 @@ class EamFsNN(EamNN):
                         log_tensor(rho)
                     outputs[kbody_term] = rho
             atomic = self._dynamic_stitch(outputs, max_occurs, symmetric=False)
-            if ModeKeys.for_prediction(mode):
+            if mode == ModeKeys.PREDICT or mode == ModeKeys.LAMMPS:
                 atomic = tf.squeeze(atomic, axis=0)
             return atomic, values
 
