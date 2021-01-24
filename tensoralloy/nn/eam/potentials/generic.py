@@ -117,6 +117,41 @@ def zhou_exp(r, a, b, c, re, order=20, name=None):
         return tf.math.divide(upper, lower, name='result')
 
 
+def power_exp1(r, rl, name=None):
+    """
+    Special routine for `power_exp` when `pl` == 1
+    """
+    with tf.name_scope(name, "PExp"):
+        r = tf.convert_to_tensor(r, name='r')
+        rl = tf.convert_to_tensor(rl, name='rl', dtype=r.dtype)
+        rrl = tf.divide(r, rl, name='rrl')
+        return tf.exp(-rrl, name='pexp1')
+
+
+def power_exp2(r, rl, name=None):
+    """
+    Special routine for `power_exp` when `pl` == 2
+    """
+    with tf.name_scope(name, "PExp"):
+        r = tf.convert_to_tensor(r, name='r')
+        rl = tf.convert_to_tensor(rl, name='rl', dtype=r.dtype)
+        rrl = tf.divide(r, rl, name='rrl')
+        rp = tf.multiply(rrl, rrl, name='rrl2')
+        return tf.exp(-rp, name='pexp2')
+
+
+def power_exp3(r, rl, name=None):
+    """
+    Special routine for `power_exp` when `pl` == 3
+    """
+    with tf.name_scope(name, "PExp"):
+        r = tf.convert_to_tensor(r, name='r')
+        rl = tf.convert_to_tensor(rl, name='rl', dtype=r.dtype)
+        rrl = tf.divide(r, rl, name='rrl')
+        rp = tf.multiply(tf.multiply(rrl, rrl), rrl, name='rrl3')
+        return tf.exp(-rp, name='pexp3')
+
+
 def power_exp(r, rl, pl, name=None):
     """
     The powered-exponential function used by Oganov.
@@ -130,4 +165,4 @@ def power_exp(r, rl, pl, name=None):
         pl = tf.convert_to_tensor(pl, name='pl', dtype=r.dtype)
         rrl = tf.divide(r, rl, name='rrl')
         rp = tf.pow(rrl, pl, name='rp')
-        return tf.exp(-rp, name='result')
+        return tf.exp(-rp, name='pexp')

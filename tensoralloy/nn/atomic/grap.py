@@ -18,6 +18,7 @@ from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
+from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2, power_exp3
 
 
 GRAP_algorithms = ["pexp", "density", "morse", "sf"]
@@ -185,9 +186,16 @@ class PowerExpAlgorithm(Algorithm):
         """
         rl = tf.convert_to_tensor(
             self._grid[tau]['rl'], dtype=dtype, name='rl')
-        pl = tf.convert_to_tensor(
-            self._grid[tau]['pl'], dtype=dtype, name='pl')
-        return power_exp(rij, rl, pl)
+        pl = self._grid[tau]['pl']
+        if pl == 1.0:
+            return power_exp1(rij, rl)
+        elif pl == 2.0:
+            return power_exp2(rij, rl)
+        elif pl == 3.0:
+            return power_exp3(rij, rl)
+        else:
+            pl = tf.convert_to_tensor(pl, dtype=dtype, name='pl')
+            return power_exp(rij, rl, pl)
 
 
 class GenericRadialAtomicPotential(Descriptor):
