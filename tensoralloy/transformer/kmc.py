@@ -313,6 +313,141 @@ class KMCTransformer(DescriptorTransformer):
         return feed_dict
 
 
+class KMCPreComputedTransformer(KMCTransformer):
+    """
+    The special transformer for TensorKMC.
+    """
+
+    def __init__(self, elements: List[str], nfeatures):
+        """
+        The initialization method
+
+        Parameters
+        ----------
+        elements : List[str]
+            A list of str as the ordered unique elements.
+        nfeatures : int
+            The number of features per atom.
+
+        """
+        super(KMCPreComputedTransformer, self).__init__(elements, 0.0, 0)
+        self._nfeatures = nfeatures
+
+    @property
+    def nfeatures(self):
+        """
+        Number of atomic features for each atom.
+        """
+        return self._nfeatures
+
+    def as_dict(self) -> Dict:
+        """
+        Return a JSON serializable dict representation of this transformer.
+        """
+        return {'class': self.__class__.__name__, 'elements': self._elements,
+                'nfeatures': self._nfeatures}
+
+    @property
+    def descriptor(self):
+        """
+        Return the descriptor name. This property will be removed soon.
+        """
+        return "kmcpre"
+
+    def _check_keys(self, features: dict):
+        """
+        Make sure `placeholders` contains enough keys.
+        """
+        assert 'etemperature' in features
+        assert 'atom_masks' in features
+
+        for element in self._elements:
+            assert f"G/pre/{element}" in features
+            assert f"G/pre/{element}/max_occur" in features
+
+    def build_graph(self, features: dict):
+        """
+        Build the graph for computing universal descriptors.
+
+        Returns
+        -------
+        ops : Dict[str, Tuple[tf.Tensor, tf.Tensor]]
+            A dict of {element: (descriptor, mask)}.
+        """
+        self._check_keys(features)
+        with tf.name_scope(f"Transformer"):
+            return {"radial": None, "angular": None}
+
+    def _create_float_3d(self, dtype, name, d2, d0=None, d1=None):
+        return self._get_or_create_placeholder(
+            dtype,
+            name=name,
+            shape=(d0, d1, d2))
+
+    def _initialize_placeholders(self):
+        """
+        Initialize placeholder tensors.
+        """
+        with tf.name_scope("Placeholders/"):
+            dtype = get_float_dtype()
+
+            self._placeholders["atom_masks"] = self._create_float_2d(
+                dtype=dtype, name='atom_masks', d0=None, d1=None)
+            self._placeholders["etemperature"] = self._create_float_1d(
+                dtype=dtype, name='etemperature')
+
+            for element in self._elements:
+                self._placeholders[f"G/pre/{element}"] = self._create_float_3d(
+                    dtype, f"G/pre/{element}", d2=self._nfeatures)
+                self._placeholders[f"G/pre/{element}/max_occur"] = \
+                    self._create_int(f"G/pre/{element}/max_occur")
+
+        return self._placeholders
+
+    def get_np_feed_dict(self, atoms: Atoms):
+        """
+        Return a dict of features (Numpy or Python objects).
+        """
+        dtype = get_float_dtype().as_numpy_dtype
+        vap = self.get_vap_transformer(atoms)
+        atom_masks = np.atleast_2d(vap.atom_masks).astype(dtype)
+        etemp = np.asarray(
+            [atoms_utils.get_electron_temperature(atoms)]).astype(dtype)
+
+        feed_dict = dict(atom_masks=atom_masks, etemperature=etemp)
+        for element in self._elements:
+            feed_dict[f"G/pre/{element}"] = np.array(
+                atoms.info[f'G/pre/{element}'], dtype=dtype)
+            feed_dict[f"G/pre/{element}/max_occur"] = np.int32(
+                vap.max_occurs[element])
+        return feed_dict
+
+    def get_feed_dict(self, atoms: Atoms):
+        """
+        Return the feed dict.
+        """
+        feed_dict = {}
+
+        if not self._placeholders:
+            self._initialize_placeholders()
+        placeholders = self._placeholders
+
+        for key, value in self.get_np_feed_dict(atoms).items():
+            feed_dict[placeholders[key]] = value
+
+        return feed_dict
+
+    def get_constant_features(self, atoms: Atoms):
+        """
+        Return a dict of constant feature tensors for the given `Atoms`.
+        """
+        feed_dict = dict()
+        with tf.name_scope("Constants"):
+            for key, val in self.get_np_feed_dict(atoms).items():
+                feed_dict[key] = tf.convert_to_tensor(val, name=key)
+        return feed_dict
+
+
 def test():
     from tensoralloy.transformer.universal import UniversalTransformer
     from tensoralloy.neighbor import find_neighbor_size_of_atoms

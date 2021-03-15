@@ -550,6 +550,8 @@ class TrainingManager:
                 pb_ext = "lmpb"
             elif mode == ModeKeys.KMC:
                 pb_ext = 'kmcpb'
+            elif mode == ModeKeys.PRECOMPUTE:
+                pb_ext = 'kmcppb'
             else:
                 pb_ext = "pb"
 

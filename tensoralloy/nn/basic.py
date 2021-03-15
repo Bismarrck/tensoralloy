@@ -33,6 +33,7 @@ from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.kmc import KMCTransformer
+from tensoralloy.transformer.kmc import KMCPreComputedTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -1056,6 +1057,21 @@ class BasicNN:
                     elements=self.transformer.elements,
                     rcut=self.transformer.rcut,
                     nnl_max=nnl_max)
+                configs['export_properties'] = ['energy']
+            elif mode == ModeKeys.PRECOMPUTE:
+                if self.transformer.angular:
+                    raise ValueError(
+                        "TensorKMC does not support angular potentials")
+                if isinstance(self._transformer, KMCPreComputedTransformer):
+                    nfeatures = self._transformer.nfeatures
+                else:
+                    nfeatures = kwargs.get("nfeatures", 0)
+                if nfeatures == 0:
+                    raise ValueError("`ndim` should be set but zero")
+                clf = KMCPreComputedTransformer(
+                    elements=self.transformer.elements,
+                    nfeatures=nfeatures,
+                )
                 configs['export_properties'] = ['energy']
             else:
                 if isinstance(self._transformer, BatchUniversalTransformer):

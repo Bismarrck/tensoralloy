@@ -322,10 +322,11 @@ class ModeKeys:
     PREDICT = 'infer'
     LAMMPS = 'lammps'
     KMC = 'kmc'
+    PRECOMPUTE = 'precompute'
 
     @staticmethod
     def for_prediction(modekey):
-        return modekey in ('infer', 'lammps', 'kmc')
+        return modekey in ('infer', 'lammps', 'kmc', 'precompute')
 
 
 class GraphKeys:

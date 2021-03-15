@@ -10,6 +10,7 @@ import json
 
 from monty.json import MSONable, MontyDecoder
 from typing import List, Dict, Union
+from collections import Counter
 
 from tensoralloy.utils import GraphKeys, ModeKeys
 from tensoralloy.transformer import UniversalTransformer
@@ -192,6 +193,17 @@ class AtomicNN(BasicNN):
             with tf.control_dependencies(update_ops):
                 return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
 
+    def _get_precomputed_descriptors(self, features: dict):
+        """
+        Get pre-computed descriptors.
+        """
+        descriptors = {}
+        max_occurs = Counter()
+        for element in self._elements:
+            descriptors[element] = features[f"G/pre/{element}"]
+            max_occurs[element] = features[f"G/pre/{element}/max_occur"]
+        return AtomicDescriptors(descriptors, max_occurs)
+
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -224,12 +236,14 @@ class AtomicNN(BasicNN):
         activation_fn = get_activation_fn(self._activation)
 
         with tf.variable_scope(self.scope):
-
             outputs = {'energy': []}
-            atomic_descriptors = self._descriptor.calculate(
-                transformer=self._transformer,
-                universal_descriptors=descriptors,
-                mode=mode)
+            if mode == ModeKeys.PRECOMPUTE:
+                atomic_descriptors = self._get_precomputed_descriptors(features)
+            else:
+                atomic_descriptors = self._descriptor.calculate(
+                    transformer=self._transformer,
+                    universal_descriptors=descriptors,
+                    mode=mode)
             for element, x in atomic_descriptors.descriptors.items():
                 with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                     if self._use_atomic_static_energy:
