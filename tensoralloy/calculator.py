@@ -218,7 +218,7 @@ class TensorAlloyCalculator(Calculator):
         Return an array as the atomic energies.
         """
         values = self.get_property(f'{prop}/atom', atoms=atoms)
-        if self._mode == ModeKeys.KMC:
+        if self._mode == ModeKeys.KMC or self._mode == ModeKeys.PRECOMPUTE:
             values = values[0]
         values = np.insert(values, 0, 0, 0)
         clf = self.transformer.get_vap_transformer(atoms)
