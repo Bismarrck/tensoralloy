@@ -54,11 +54,11 @@ class TersoffTest(unittest.TestCase):
         """
         if system == TestSystem.Si:
             pot_file = 'Si.tersoff'
-            pair_coeff = ['* * Si.tersoff Si']
+            pair_coeff = [f'* * {join(test_dir(), "lammps")}/Si.tersoff Si']
             specorder = ['Si']
         else:
             pot_file = 'SiC.tersoff'
-            pair_coeff = ['* * SiC.tersoff Si C']
+            pair_coeff = [f'* * {join(test_dir(), "lammps")}/SiC.tersoff Si C']
             specorder = ['Si', 'C']
         return LAMMPS(files=[join(test_dir(True), 'lammps', pot_file)],
                       binary_dump=False,
