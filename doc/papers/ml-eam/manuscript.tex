@@ -66,17 +66,19 @@
 \author[a]{Xin Chen}
 \author[a]{Li-Fang Wang}
 \author[a]{Xing-Yu Gao}
-\author[b,a]{Ya-Fan Zhao}
-\author[b,a]{De-Ye Lin\corref{author}}
+\author[b,c]{Ya-Fan Zhao}
+\author[b,c]{De-Ye Lin\corref{author}}
 \author[a]{Wei-Dong Chu}
-\author[a,b]{Hai-Feng Song\corref{author}}
+\author[a]{Hai-Feng Song\corref{author}}
 
 \cortext[author] {Corresponding author.
 \textit{E-mail address:} lindeye0716@163.com, song\_haifeng@iapcm.ac.cn}
-\address[a]{Institute of Applied Physics and Computational Mathematics, 
-Beijing 100088, China}
+\address[a]{Laboratory of Computational Physics, Institute of Applied Physics 
+and Computational Mathematics, Beijing 100088, China}
 \address[b]{CAEP Software Center for High Performance Numerical Simulation, 
 Beijing 100088, China}
+\address[c]{Institute of Applied Physics and Computational Mathematics, Beijing 
+100088, China}
 
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
@@ -88,10 +90,10 @@ Beijing 100088, China}
 Interatomic potential (i.e. force-field) plays a vital role in atomistic 
 simulation of materials. 
 Empirical potentials like the embedded atom method (EAM) and its variant 
-angular-dependent potential (ADP) have proven successful in modeling many 
-metals qualitatively. In the past few years, machine learning has became a 
-compelling approach for modeling interatomic interactions. Powered by big data and 
-efficient optimizers, machine learning interatomic potentials can generally 
+angular-dependent potential (ADP) have proven successful in many 
+metals. In the past few years, machine learning has became a 
+compelling approach for modeling interatomic interactions. Powered by big data 
+and efficient optimizers, machine learning interatomic potentials can generally 
 approximate to the the accuracy of the first-principles calculations based on 
 the quantum mechanics theory. In this works, we successfully 
 developed a route to express EAM and ADP within machine learning framework in 
@@ -99,10 +101,10 @@ highly-vectorizable form and further incorperated several physical constraints
 into the training. As it is proved in this work, the performances of empirical 
 potentials can be significantly boosted with few traning data.
 For energy and force 
-predictions, machine lear̦ned EAM and ADP can be almost as accurate as the 
-spectral neighbor analysis potential (SNAP) on the fcc Ni, bcc Mo and Mo-Ni 
-alloy systems, while the molecular dynamics simulations performed by our 
-potentials are nearly 1000 times faster. Machine learned EAM and ADP can also 
+predictions, machine tuned EAM and ADP, can be 
+almost as accurate as the computationally expensive spectral neighbor analysis 
+potential (SNAP) on the fcc Ni, bcc Mo and Mo-Ni alloy systems. 
+Machine learned EAM and ADP can also 
 reproduce some key materials properties, such as elastic constants, melting 
 temperatures and surface energies, close to the first-principles accuracy. 
 Our results suggest a new and systematic route for developing machine learning 
@@ -135,7 +137,7 @@ https://doi.org/10.1016/j.cpc.2019.107057}                      \\
 the previous version. Now machine learning approaches and physical constraints 
 can be used together to tune empirical potentials (for example the embbeded atom 
 method). Machine learning optimized empirical potentials can be almost as 
-accurate as machine learning interaction potentials but run much faster} \\
+accurate as machine learning interaction potentials but run much faster.} \\
 {\em Summary of revisions:}*\\
 {\em Nature of problem:} \\
   Optimizing empirical potentials with machine learning approaches and physical 
@@ -166,11 +168,11 @@ calculation or force-field based molecular dynamics simulation (MD) are
 effective ways to study, understand or predict chemical and physical properties 
 of materials. \textit{ab initio} approaches are generally much more precise but 
 they are rarely used on large-scale metallic systems due to their extremely-high 
-computation expenses. Physical model based empirical potential (force-field), 
+computational expenses. Physical model based empirical potentials (force-field), 
 such as the embedded-atom method (EAM) \cite{EAM0,EAM1,EAM2,EAM3,EAM4}, 
 modified embedded-atom method (MEAM) \cite{MEAM0,MEAM1,MEAM2,MEAM_Jelinek}, 
 bond-order potential (BoP) \cite{BOP0,BOP1,BOP2,BOP3}, or angular-dependent 
-potential (ADP) \cite{ADP0,ADP1,ADP2,ADP3,ADP_FeNi}, still plays the major role 
+potential (ADP) \cite{ADP0,ADP1,ADP2,ADP3,ADP_FeNi}, still play the major role 
 in long-time simulations and these empirical methods can achieve reasonable 
 accuracy with much lower computation costs. Empirical potentials 
 generally have very few learnable parameters and both microscopic observables 
@@ -180,12 +182,13 @@ optimal parameters of empirical potentials is always a challenging task. Global
 optimization (GO) approaches (Basin-Hopping \cite{BH0,BH1}, genetic algorithm 
 \cite{PCIPY,PGA}, etc) are traditionally used to find the best possible 
 parameters. However, the gradients of the losses with respect to model 
-parameters are difficult or even impossible to calcualte. Hence, 
+parameters are difficult or even impossible to calculate. Hence, 
 global optimizations are generally not that effective.
 
 In the last decade, machine learning (ML) has become one of the hottest 
-topics in many research areas. In the materials science, researchers have made 
-great efforts on developing ML models to describe atomic interactions. Such ML 
+topics in many research areas. In the field of materials science, researchers 
+have made great efforts on developing ML models to describe atomic interactions. 
+Such ML 
 models are considered as machine learning interaction potentials (MLIPs). Until 
 now, hundreds of MLIPs have been proposed. Among them, the symmetry-function 
 based atomistic neural network (ANN) model, published by Parinello and Behler in 
@@ -212,23 +215,24 @@ implemented within modern deep learning frameworks
 (TensorFlow \cite{tensorflow}, PyTorch \cite{pytorch}, etc) 
 so that the gradients of the total loss with respect to fitting parameters can 
 be can obtained with the backpropagation algorithm automatically and 
-efficiently. Second, MLIPs are mostly vectorizable. Hence, GPUs can be utilized
-to significantly accelerate training and using of MILPs.
+efficiently. Second, MLIPs are mostly vectorizable. Hence, graphic processing 
+units (GPUs) can be utilized to significantly accelerate training and using of 
+MILPs.
 
 However, MLIPs also have challenges. The large parameter space and lack of 
 physical background makes the "big data" a requisite. The cost of dataset is 
 non-negligible. Besides, even "big data" can only cover a small portion of real 
 physical environments (temperature, external pressure, etc). Outside the 
 training zone, the performances of MILPs may not that stable. For long-time 
-molecular dynamics (MD) simulations of large-scale ($10^5$ or more) systems, 
+molecular dynamics (MD) simulations of large-scale ($10^5$ or more) atoms, 
 computation efficiency also becomes a major concern. Recent benchmark 
 tests \cite{SnapBenchmark} suggest that MILPs are still too expensive. 
 At present, most MLIPs are used to examine small to medium ($10^3$ to $10^4$) 
-systems \cite{SNAP,SFApp0,SFApp1,SFApp2,soap3}.
+atoms \cite{SNAP,SFApp0,SFApp1,SFApp2,soap3}.
 
 In this work, instead of designing new atomic descriptors, we chose a new route 
-to develop MLIP: combining machine learning with empirical potentials. We 
-successfully implemented EAM and its variant ADP within TensorFlow so that 
+to develop MLIP: combining machine learning approach with empirical potentials. 
+We successfully implemented EAM and its variant ADP within TensorFlow so that 
 machine learning approaches can be used directly to tune EAM and ADP potentials. 
 Our results suggest ML-EAM or ML-ADP can be as precise as the SNAP machine 
 learning method. 
@@ -314,7 +318,7 @@ strengths of dipole and quadrupole interactions.
 % -----------
 % Section 2.B Transformation
 % -----------
-\subsection{Transformation}
+\subsection{Vectorizable Transformation}
 \label{sec:transformation}
 
 To integrate EAM/ADP with machine learning strategy, the original total energy 
@@ -777,16 +781,24 @@ are overall weights of force, rose EOS and elastic contributions. Typicall
 $\chi_{\mathrm{f}}$ is 2, $\chi_{\mathrm{rose}}$ is 10 and 
 $\chi_{\mathrm{elastic}}$ is set to 0.01.
 
-To find optimal parameters of the funcitons in section \ref{sec:functions}, the 
-overall loss function shall be defined. Just like other machine learning tasks, 
-the mini-batch stochastic gradient descent algorithm is used to minimize the 
-loss function. 
 The Adam optimizer \cite{adam} is used to minimize Equation \ref{eq:loss}. 
 In most cases, we use 0.01 as the initial learning rate and the batch size 
 ranges from 20 to 50. Since there are very few adjustable parameters compared 
 with neural network potentials, the optimization typically needs very few 
 training steps to converge. When the optimization is finished, the corresponding 
 Lammps setfl potential file will be exported.
+
+The number of trainable parameters in empirical potentials are quite limited. 
+According to our tests, typically tens of thousands of steps are sufficient to 
+finish a training. The training time mainly depends on the choices of losses. 
+Training with standard metrics (energy, forces and stress) only needs a few GPU 
+hours. Including the EOS constraint will just slightly increase the time cost.
+However, the elastic constraint is extremely complicated. Adding elastic term 
+to the total loss will significantly increase the training time to 
+approximately 20 to 40 GPU hours depending on your hardware and the number of 
+elastic losses. In our experience, training with energy, forces, stress and EOS 
+constraints first then restarting from a checkpoint with elastic constraints 
+appended is the best strategy.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
@@ -897,8 +909,10 @@ randomly selected to form the test subsets. In these two experiments,
 $\chi_{\mathrm{f}}$, $\chi_{\mathrm{rose}}$ and $\chi_{\mathrm{elastic}}$ were 
 set to 1, 3 and 0.05 respectively. The batch size was fixed to 25.
 
-The original Zjw04 potentials were fitted to experimentally obtained quantities.
-Thus, we use the relative MAE:
+The original Zjw04 potentials were fitted to experimental data. It would be 
+unfair if we calculate their relative errors based on DFT data directly. Hence, 
+in this work we also use the relative MAE (rMAE), 
+followed by Shyue Ping Ong\cite{SNAP,SNAP_Mo}:
 \begin{equation}
 \mathbf{rMAE} = \frac{1}{N}\sum_{i=1}^{N}{
     | \frac{(E_i - E_i^{dft})}{N_i} - (E_{eq} - E_{eq}^{dft}) |
@@ -1188,8 +1202,9 @@ The above results suggest that with machine learning and essential physical
 constraints, for the fcc and bcc solids, the traditional empirical potentials, 
 EAM/ADP, can be improved to be almost as accurate as the SNAP method using 
 exactly the same dataset. But, EAM/ADP are around $10^2$ to $10^3$ times faster 
-than SNAP. To understand this, we can start from the many-body expansion (MBE) 
-scheme \cite{kCON}.
+than SNAP, according to the benchmark tests did by Trott and Thompson, who are 
+founders of SNAP\cite{SnapBenchmark}. To understand this, we can start from 
+the many-body expansion (MBE) scheme \cite{kCON}.
 
 MBE is one of the most widely used schemes for fitting potential energy 
 surfaces. In the many-body expansion scheme, the total energy of a system with N 
@@ -1293,8 +1308,8 @@ and can be accessed from
 
 This work was supported by the National Key Research and Development Program of 
 China under Grant No. 2016YFB0201204, the Science Challenge Project under Grant 
-No. TZ2018002 and the National Natural Science Foundation of China under Grant 
-No. U1630250.
+No. TZ2018002, the National Natural Science Foundation of China under Grant 
+No. U1630250, No. 12002064 and No. 12004046.
 
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % 
