@@ -29,6 +29,7 @@ from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.nn.constraint import eentropy as eentropy_ops
+from tensoralloy.nn.constraint import fc as fc_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
@@ -85,7 +86,8 @@ all_properties = (
     StructuralProperty(name='hessian', minimizable=False),
     StructuralProperty(name='elastic'),
     StructuralProperty(name='rose', exportable=False),
-    StructuralProperty(name='eentropy/c', exportable=False)
+    StructuralProperty(name='eentropy/c', exportable=False),
+    StructuralProperty(name='hessian/c', exportable=False)
 )
 
 exportable_properties = [
@@ -574,7 +576,6 @@ class BasicNN:
                 if loss_parameters.elastic.crystals is not None:
                     losses["elastic"] = elastic_ops.get_elastic_constant_loss(
                         base_nn=self,
-                        list_of_crystal=loss_parameters.elastic.crystals,
                         weight=loss_parameters.elastic.weight,
                         options=loss_parameters.elastic.constraint,
                         verbose=verbose)
@@ -594,6 +595,15 @@ class BasicNN:
                         verbose=verbose)
                     if loss is not None:
                         losses['eentropy/c'] = loss
+
+            if 'hessian/c' in self._minimize_properties:
+                if loss_parameters.hessian_constraint.crystals is not None:
+                    loss = fc_ops.get_fc2_loss(
+                        self,
+                        options=loss_parameters.hessian_constraint,
+                        verbose=verbose)
+                    if loss is not None:
+                        losses['hessian/c'] = loss
 
             for tensor in losses.values():
                 tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -646,7 +656,7 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop in ('elastic', 'rose', 'eentropy/c'):
+            if prop in ('elastic', 'rose', 'eentropy/c', 'hessian/c'):
                 continue
             assert prop in labels, f"{prop} is missing"
 

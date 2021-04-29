@@ -1161,8 +1161,8 @@ class BatchUniversalTransformer(UniversalTransformer,
 
     def get_v2g_map(self, features: dict, angular=False):
         """
-                A wrapper function to get `v2g_map` and `v2g_masks`.
-                """
+        A wrapper function to get `v2g_map` and `v2g_masks`.
+        """
         if angular:
             key = "g4.v2g_map"
         else:

@@ -56,6 +56,11 @@ method = "mae"
 crystals = []
 weight = 1.0
 
+[nn.loss.hessian_constraint]
+crystals = []
+forces_weight = 1.0
+weight = 1.0
+
 [nn.loss.forces]
 weight = 1.0
 method = "rmse"

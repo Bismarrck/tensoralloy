@@ -170,7 +170,7 @@ def get_rose_constraint_loss(base_nn,
                     gpa = tf.reduce_mean(p0, name='GPa')
                     pref = tf.convert_to_tensor(options.p_target[idx],
                                                 dtype=dtype, name='P')
-                    if options.E_target is not None:
+                    if options.E_target:
                         eref = tf.convert_to_tensor(options.E_target[idx],
                                                     dtype=dtype, name='E')
                     else:

@@ -7,13 +7,12 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 import numpy as np
 
-from typing import List, Union
-
 from tensoralloy.nn.dataclasses import ForceConstantsLossOptions
-from tensoralloy.nn.constraint.data import Crystal, get_crystal
+from tensoralloy.nn.constraint.data import get_crystal
 from tensoralloy.nn.utils import is_first_replica
 from tensoralloy.transformer.vap import VirtualAtomMap
-from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer.base import DescriptorTransformer
+from tensoralloy.transformer.base import BatchDescriptorTransformer
 from tensoralloy.utils import ModeKeys, GraphKeys
 from tensoralloy.precision import get_float_dtype
 
@@ -58,7 +57,6 @@ def reorder_phonopy_fc2(fc2, vap):
 
 
 def get_fc2_loss(base_nn,
-                 list_of_crystal: List[Union[Crystal, str]],
                  options: ForceConstantsLossOptions = None,
                  weight=1.0,
                  verbose=True):
@@ -69,9 +67,6 @@ def get_fc2_loss(base_nn,
     ----------
     base_nn : BasicNN
         A `BasicNN`. Its weights will be reused.
-    list_of_crystal : List[Crystal] or List[str]
-        A list of `Crystal` objects. It can also be a list of str as the names
-        of the built-in crystals.
     options : ForceConstantsLossOptions
         The options of the loss contributed by the constraints.
     weight : float
@@ -81,7 +76,7 @@ def get_fc2_loss(base_nn,
 
     """
     if options is None:
-        options = ForceConstantsLossOptions()
+        return
 
     configs = base_nn.as_dict()
     configs.pop('class')
@@ -97,7 +92,7 @@ def get_fc2_loss(base_nn,
             options.forces_weight, dtype, name='weight/f')
         constraints = {'forces': [eps]}
 
-        for crystal_or_name_or_file in list_of_crystal:
+        for crystal_or_name_or_file in options.crystals:
             crystal = get_crystal(crystal_or_name_or_file)
 
             symbols = set(crystal.atoms.get_chemical_symbols())
@@ -108,10 +103,12 @@ def get_fc2_loss(base_nn,
             with tf.name_scope(f"{crystal.name}/{crystal.phase}"):
                 fc2_nn = base_nn.__class__(**configs)
 
-                if isinstance(base_nn.transformer, UniversalTransformer):
+                if isinstance(base_nn.transformer, BatchDescriptorTransformer):
+                    fc2_clf = base_nn.transformer.as_descriptor_transformer()
+                elif isinstance(base_nn.transformer, DescriptorTransformer):
                     fc2_clf = base_nn.transformer
                 else:
-                    fc2_clf = base_nn.transformer.as_descriptor_transformer()
+                    raise ValueError("Unknown transformer")
                 fc2_nn.attach_transformer(fc2_clf)
                 features = fc2_clf.get_constant_features(crystal.supercell)
                 output = fc2_nn.build(

@@ -225,6 +225,16 @@ class EnergyDifferenceLossOptions(_LossOptions):
     method: str = "mae"
 
 
+@add_slots
+@dataclass
+class ForceConstantsLossOptions(_LossOptions):
+    """
+    Special options for force constants constraint loss.
+    """
+    crystals: List[str] = None
+    forces_weight: float = 1.0
+
+
 @dataclass
 class _HyperParameters:
     """
@@ -251,6 +261,7 @@ class LossParameters(_HyperParameters):
     rose: RoseLossOptions = RoseLossOptions()
     ediff: EnergyDifferenceLossOptions = EnergyDifferenceLossOptions()
     eentropy_constraint: EEntropyConstraintOptions = EEntropyConstraintOptions()
+    hessian_constraint: ForceConstantsLossOptions = ForceConstantsLossOptions()
 
     def __getitem__(self, item):
         return getattr(self, item)
