@@ -1,0 +1,7 @@
+name = "Ni"
+phase = "fcc"
+format = "cif"
+file = "./Ni.cif"
+bulk_modulus = 188
+supercell = "./Ni_sc.cif"
+fc2 = "./Ni_fc2.npy"

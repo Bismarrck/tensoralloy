@@ -9,6 +9,7 @@ import toml
 
 from dataclasses import dataclass
 from os.path import join, realpath, dirname
+from pathlib import Path
 from typing import Union, List, Tuple
 from ase import Atoms
 from ase.build import bulk
@@ -79,6 +80,9 @@ class Crystal:
     elastic_constants: List[ElasticConstant]
     temperature: float = 0.0
     eentropy: float = 0.0
+
+    fc2: np.ndarray = None
+    supercell: Atoms = None
 
     def __post_init__(self):
         atoms_utils.set_electron_temperature(self.atoms, self.temperature)
@@ -175,13 +179,14 @@ built_in_crystals = {
 }
 
 
-def read_external_crystal(toml_file: str) -> Crystal:
+def read_external_crystal(toml_file: Union[str, Path]) -> Crystal:
     """
     Read a `Crystal` from the external toml file.
     """
     with open(toml_file) as fp:
         key_value_pairs = dict(toml.load(fp))
 
+        ase_format = key_value_pairs.pop('format')
         name = key_value_pairs.pop('name')
         phase = key_value_pairs.pop('phase')
         real_path = realpath(join(dirname(toml_file),
@@ -200,8 +205,23 @@ def read_external_crystal(toml_file: str) -> Crystal:
         else:
             temperature = val
 
-        atoms = read(real_path,
-                     format=key_value_pairs.pop('format'))
+        if real_path is None:
+            atoms = bulk(name)
+        else:
+            atoms = read(real_path, format=ase_format)
+
+        supercell_path = realpath(join(dirname(toml_file),
+                                  key_value_pairs.pop('supercell')))
+        if supercell_path:
+            supercell = read(supercell_path, format=ase_format)
+        else:
+            supercell = None
+        fc2_npy = realpath(join(dirname(toml_file),
+                           key_value_pairs.pop('fc2')))
+        if fc2_npy:
+            fc2 = np.load(fc2_npy)
+        else:
+            fc2 = None
 
         constants = []
         for key, value in key_value_pairs.items():
@@ -229,16 +249,18 @@ def read_external_crystal(toml_file: str) -> Crystal:
                        temperature=temperature,
                        atoms=atoms,
                        eentropy=eentropy,
-                       elastic_constants=constants)
+                       elastic_constants=constants,
+                       supercell=supercell,
+                       fc2=fc2)
 
 
-def get_crystal(crystal_or_name_or_file: Union[str, Crystal]) -> Crystal:
+def get_crystal(crystal_or_name_or_file: Union[str, Crystal, Path]) -> Crystal:
     """
     Return a `Crystal` object.
 
     Parameters
     ----------
-    crystal_or_name_or_file : Unit[str, Crystal]
+    crystal_or_name_or_file : Unit[str, Crystal, Path]
         Maybe a str or a `Crystal` object. If str, it can be either a filename
         or one of the names of the built-in crystals.
 
@@ -248,7 +270,8 @@ def get_crystal(crystal_or_name_or_file: Union[str, Crystal]) -> Crystal:
         A `Crystal` object.
 
     """
-    if isinstance(crystal_or_name_or_file, str):
+    if isinstance(crystal_or_name_or_file, (str, Path)):
+        crystal_or_name_or_file = str(crystal_or_name_or_file)
         if crystal_or_name_or_file.endswith('toml'):
             crystal = read_external_crystal(crystal_or_name_or_file)
         else:
