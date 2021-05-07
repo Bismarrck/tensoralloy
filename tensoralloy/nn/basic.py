@@ -576,6 +576,7 @@ class BasicNN:
                 if loss_parameters.elastic.crystals is not None:
                     losses["elastic"] = elastic_ops.get_elastic_constant_loss(
                         base_nn=self,
+                        list_of_crystal=loss_parameters.elastic.crystals,
                         weight=loss_parameters.elastic.weight,
                         options=loss_parameters.elastic.constraint,
                         verbose=verbose)

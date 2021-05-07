@@ -7,9 +7,9 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from ase.units import GPa
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
-from tensoralloy.nn.constraint.data import get_crystal
+from tensoralloy.nn.constraint.data import get_crystal, Crystal
 from tensoralloy.nn.constraint.voigt import voigt_notation, voigt_to_ij
 from tensoralloy.nn.utils import log_tensor, is_first_replica
 from tensoralloy.nn.dataclasses import ElasticConstraintOptions
@@ -92,6 +92,7 @@ def get_elastic_constat_tensor_op(virial: tf.Tensor, cell: tf.Tensor,
 
 
 def get_elastic_constant_loss(base_nn,
+                              list_of_crystal: List[Union[Crystal, str]],
                               options: ElasticConstraintOptions = None,
                               weight=1.0,
                               verbose=True):
@@ -103,6 +104,9 @@ def get_elastic_constant_loss(base_nn,
     ----------
     base_nn : BasicNN
         A `BasicNN`. Its weights will be reused.
+    list_of_crystal : List[Crystal] or List[str]
+        A list of `Crystal` objects. It can also be a list of str as the names
+        of the built-in crystals.
     options : ElasticConstraintOptions
         The options of the loss contributed by the constraints.
     weight : float
@@ -131,7 +135,7 @@ def get_elastic_constant_loss(base_nn,
             options.stress_weight, dtype, name='weight/p')
         constraints = {'forces': [eps], 'stress': [eps]}
 
-        for crystal_or_name_or_file in options.crystals:
+        for crystal_or_name_or_file in list_of_crystal:
             predictions = []
             labels = []
             cijkl_weights = []

@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import
 
 import numpy as np
 import logging
+import subprocess
 
 from dataclasses import fields
 from genericpath import isdir
@@ -17,6 +18,18 @@ from typing import List, Union, Any
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
+
+
+def get_git_revision_hash():
+    """
+    Return the git hash.
+    """
+    try:
+        out = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD']).decode('utf-8')
+    except subprocess.CalledProcessError:
+        out = ""
+    return out
 
 
 def add_slots(cls):

@@ -34,7 +34,7 @@ from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.polar import BatchPolarTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
-from tensoralloy.utils import check_path, ModeKeys
+from tensoralloy.utils import check_path, ModeKeys, get_git_revision_hash
 from tensoralloy.precision import precision_scope
 from tensoralloy.train.dataclasses import EstimatorHyperParams
 
@@ -453,6 +453,7 @@ class TrainingManager:
                     level=self._get_logging_level(hparams))
 
                 tf.logging.info(f'pid={os.getpid()}')
+                tf.logging.info(f'hash={get_git_revision_hash()}')
                 tf.logging.info(f'seed={self._hparams.seed}')
                 tf.logging.info(f'input= \n{str(self._reader)}')
 
