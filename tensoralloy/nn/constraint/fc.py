@@ -58,7 +58,6 @@ def reorder_phonopy_fc2(fc2, vap):
 
 def get_fc2_loss(base_nn,
                  options: ForceConstantsLossOptions = None,
-                 weight=1.0,
                  verbose=True):
     """
     Return a special loss: RMSE (GPa) of force constants of crystals.
@@ -69,8 +68,6 @@ def get_fc2_loss(base_nn,
         A `BasicNN`. Its weights will be reused.
     options : ForceConstantsLossOptions
         The options of the loss contributed by the constraints.
-    weight : float
-        The weight of the loss contributed by force constants.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -87,7 +84,7 @@ def get_fc2_loss(base_nn,
         losses = []
         dtype = get_float_dtype()
         eps = tf.convert_to_tensor(dtype.eps, dtype=dtype, name='eps')
-        weight = tf.convert_to_tensor(weight, dtype, name='weight/loss')
+        weight = tf.convert_to_tensor(options.weight, dtype, name='weight/loss')
         f_weight = tf.convert_to_tensor(
             options.forces_weight, dtype, name='weight/f')
         constraints = {'forces': [eps]}

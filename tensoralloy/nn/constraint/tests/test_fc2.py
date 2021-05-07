@@ -64,8 +64,9 @@ def test_fc2_loss():
             nn = EamAlloyNN(elements, custom_potentials="zjw04")
             clf = UniversalTransformer(elements, rc)
             nn.attach_transformer(clf)
-            options = ForceConstantsLossOptions(forces_weight=0.0)
-            loss = get_fc2_loss(nn, [crystal], options)
+            options = ForceConstantsLossOptions(forces_weight=0.0,
+                                                crystals=[crystal])
+            loss = get_fc2_loss(nn, options)
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 print(sess.run(loss))
