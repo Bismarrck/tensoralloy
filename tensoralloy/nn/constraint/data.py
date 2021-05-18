@@ -210,16 +210,16 @@ def read_external_crystal(toml_file: Union[str, Path]) -> Crystal:
         else:
             atoms = read(real_path, format=ase_format)
 
-        supercell_path = realpath(join(dirname(toml_file),
-                                  key_value_pairs.pop('supercell', None)))
+        supercell_path = key_value_pairs.pop('supercell', None)
         if supercell_path:
-            supercell = read(supercell_path, format=ase_format)
+            supercell = read(
+                realpath(join(dirname(toml_file), supercell_path)),
+                format=ase_format)
         else:
             supercell = None
-        fc2_npy = realpath(join(dirname(toml_file),
-                           key_value_pairs.pop('fc2', None)))
+        fc2_npy = key_value_pairs.pop('fc2', None)
         if fc2_npy:
-            fc2 = np.load(fc2_npy)
+            fc2 = np.load(realpath(join(dirname(toml_file), fc2_npy)))
         else:
             fc2 = None
 
