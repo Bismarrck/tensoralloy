@@ -3,6 +3,7 @@
 The End-to-End symmetry preserved DeepPotSE model.
 """
 from __future__ import print_function, absolute_import
+from os import name
 
 import tensorflow as tf
 
@@ -96,14 +97,16 @@ class DeepPotSE(Descriptor):
         """
         collections = [self.default_collection]
         outputs = {}
-        for kbody_term, (value, mask) in partitions.items():
+        for kbody_term, (value, masks) in partitions.items():
             with tf.variable_scope(f"{kbody_term}"):
                 ijx = tf.squeeze(value[1], axis=1, name='ijx')
                 ijy = tf.squeeze(value[2], axis=1, name='ijy')
                 ijz = tf.squeeze(value[3], axis=1, name='ijz')
                 rij = tf.squeeze(value[0], axis=1, name='rij')
+                masks = tf.squeeze(masks, axis=1, name='masks')
                 sij = deepmd_cutoff(rij, transformer.rc, self._rcs,
                                     name="sij")
+                z = tf.div_no_nan(sij, rij, name="z")
                 if verbose:
                     log_tensor(sij)
 
@@ -119,8 +122,11 @@ class DeepPotSE(Descriptor):
                                     output_bias=False,
                                     variable_scope=None,
                                     verbose=verbose)
-                g2 = tf.identity(g1[..., :self._m2], name='g2')
-
+                g1 = tf.multiply(g1, masks, name="G1")
+                g2 = tf.identity(g1[..., :self._m2], name='G2')
+                ijx = tf.multiply(ijx, z, name="ijx/hat")
+                ijy = tf.multiply(ijy, z, name="ijy/hat")
+                ijz = tf.multiply(ijz, z, name="ijz/hat")
                 rr = tf.concat((sij, ijx, ijy, ijz), axis=-1, name='R')
                 d1 = tf.einsum('ijkl,ijkp->ijlp', g1, rr, name='GR')
                 d2 = tf.einsum('ijkl,ijpl->ijkp', d1, rr, name='GRR')
@@ -128,7 +134,6 @@ class DeepPotSE(Descriptor):
                 shape = tf.shape(d3)
                 x = tf.reshape(d3, [shape[0], shape[1], self._m1 * self._m2],
                                name='D')
-                # TODO: apply value mask on `x`
                 if verbose:
                     log_tensor(x)
                 outputs[kbody_term] = x
