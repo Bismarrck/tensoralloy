@@ -3,10 +3,13 @@
 The GenericRadialAtomicPotential, GRAP
 """
 from __future__ import print_function
+from operator import gt
+from os import name
 
 import numpy as np
 import tensorflow as tf
 
+from collections import Counter
 from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
 
@@ -265,6 +268,95 @@ class GenericRadialAtomicPotential(Descriptor):
             raise ValueError(
                 f"GRAP: algorithm '{algorithm}' is not implemented")
         return cls(parameters, param_space_method)
+    
+    def _dynamic_stitch(self,
+                        outputs: Dict[str, tf.Tensor],
+                        max_occurs: Counter,
+                        symmetric=False):
+        """
+        The reverse of `dynamic_partition`. Interleave the kbody-term centered
+        `outputs` of type `Dict[kbody_term, tensor]` to element centered values
+        of type `Dict[element, tensor]`.
+
+        Parameters
+        ----------
+        outputs : Dict[str, tf.Tensor]
+            A dict. The keys are unique kbody-terms and values are 2D tensors
+            with shape `[batch_size, max_n_elements]` where `max_n_elements`
+            denotes the maximum occurance of the center element of the
+            corresponding kbody-term.
+        max_occurs : Counter
+            The maximum occurance of each type of element.
+        symmetric : bool
+            This should be True if kbody terms all symmetric.
+
+        Returns
+        -------
+        results : Dict
+            A dict. The keys are elements and the values are corresponding
+            merged features.
+
+        """
+        with tf.name_scope("Stitch"):
+            stacks: Dict = {}
+            for kbody_term, value in outputs.items():
+                center, other = get_elements_from_kbody_term(kbody_term)
+                if symmetric and center != other:
+                    sizes = [max_occurs[center], max_occurs[other]]
+                    splits = tf.split(
+                        value, sizes, axis=1, name=f'splits/{center}{other}')
+                    stacks[center] = stacks.get(center, []) + [splits[0]]
+                    stacks[other] = stacks.get(other, []) + [splits[1]]
+                else:
+                    stacks[center] = stacks.get(center, []) + [value]
+            results = {}
+            for element in self._elements:
+                results[element] = tf.concat(
+                    stacks[element], axis=-1, name=element)
+            return results
+    
+    def apply_symmetry_preserved_model(self, 
+                                       clf: UniversalTransformer, 
+                                       partitions: dict, 
+                                       max_occurs: Counter):
+        """
+        Apply the symmetry preserved model.
+        """
+        dtype = get_float_dtype()
+        rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
+        outputs = {}
+        m1 = len(self._algorithm_instance)
+        m2 = min(m1, abs(self._moment_tensors[0]))
+        for kbody_term, (dists, masks) in partitions.items():
+            with tf.variable_scope(f"{kbody_term}"):
+                ijx = tf.squeeze(dists[1], axis=1, name='ijx')
+                ijy = tf.squeeze(dists[2], axis=1, name='ijy')
+                ijz = tf.squeeze(dists[3], axis=1, name='ijz')
+                rij = tf.squeeze(dists[0], axis=1, name='rij')
+                sij = self.apply_cutoff(rij, rc=rc, name='sij')
+                zij = tf.div_no_nan(sij, rij, name="zij")
+                ijx = tf.multiply(ijx, zij, name="ijx/hat")
+                ijy = tf.multiply(ijy, zij, name="ijy/hat")
+                ijz = tf.multiply(ijz, zij, name="ijz/hat")
+                masks = tf.squeeze(masks, axis=1, name='masks')
+                gtau = []
+                for tau in range(m1):
+                    with tf.name_scope(f"{tau}"):
+                        v = self._algorithm_instance.compute(
+                            tau, rij, rc, dtype=dtype)
+                        gtau.append(v)
+                g = tf.concat(gtau, axis=-1, name="G")
+                g1 = tf.multiply(g, masks, name="G1")
+                g2 = tf.identity(g1[..., :m2], name="G2")
+                rr = tf.concat((sij, ijx, ijy, ijz), axis=-1, name='R')
+                d1 = tf.einsum('ijkl,ijkp->ijlp', g1, rr, name='GR')
+                d2 = tf.einsum('ijkl,ijpl->ijkp', d1, rr, name='GRR')
+                d3 = tf.einsum('ijkl,ijlp->ijkp', d2, g2, name='GRRG')
+                shape = tf.shape(d3)
+                x = tf.reshape(d3, [shape[0], shape[1], m1 * m2],
+                               name='D')
+                outputs[kbody_term] = x
+        return self._dynamic_stitch(outputs, max_occurs, False)
    
     def apply_cutoff(self, x, rc, name=None):
         """
@@ -391,6 +483,10 @@ class GenericRadialAtomicPotential(Descriptor):
                 mode=mode,
                 angular=False,
                 merge_symmetric=False)
-            descriptors = self.apply_pairwise_descriptor_functions(
-                transformer, partitions)
+            if len(self._moment_tensors) == 1 and self._moment_tensors[0] < 0:
+                descriptors = self.apply_symmetry_preserved_model(
+                    transformer, partitions, max_occurs)
+            else:
+                descriptors = self.apply_pairwise_descriptor_functions(
+                    transformer, partitions)
         return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)
