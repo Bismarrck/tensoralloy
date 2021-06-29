@@ -171,10 +171,10 @@ def get_rose_constraint_loss(base_nn,
                     pref = tf.convert_to_tensor(options.p_target[idx],
                                                 dtype=dtype, name='P')
                     if options.E_target:
-                        eref = tf.convert_to_tensor(options.E_target[idx],
+                        ecoh = tf.convert_to_tensor(options.E_target[idx],
                                                     dtype=dtype, name='E')
                     else:
-                        eref = None
+                        ecoh = None
 
                 dx = options.dx
                 xlo = options.xlo
@@ -248,12 +248,15 @@ def get_rose_constraint_loss(base_nn,
                         c3 = tf.math.multiply(
                             beta, tf.pow(ax, three) * div, name='c3')
                         coef = tf.math.multiply(tf.exp(-ax), c12 + c3, 'coef')
-                        labels = tf.multiply(e0, coef, name='labels')
+                        if ecoh is None:
+                            labels = tf.multiply(e0, coef, name='labels')
+                        else:
+                            labels = tf.multiply(ecoh, coef, name='labels')
 
                     with tf.name_scope("Loss"):
                         ploss = tf.norm(p0 - pref, name='loss/GPa')
-                        if eref is not None:
-                            eloss = tf.abs(e0 - eref, name='loss/E')
+                        if ecoh is not None:
+                            eloss = tf.abs(e0 - ecoh, name='loss/E')
                         else:
                             eloss = zero
 
