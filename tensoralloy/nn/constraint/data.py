@@ -226,7 +226,7 @@ def read_external_crystal(toml_file: Union[str, Path]) -> Crystal:
         constants = []
         for key, value in key_value_pairs.items():
             assert len(key) == 3
-            assert key[0] == 'c' or key[0] == 'C'
+            assert key[0] == 'c'
             vi = int(key[1])
             vj = int(key[2])
             ijkl = voigt_to_ijkl(vi, vj, is_py_index=False)
