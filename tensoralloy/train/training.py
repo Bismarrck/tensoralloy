@@ -453,7 +453,7 @@ class TrainingManager:
                     level=self._get_logging_level(hparams))
 
                 tf.logging.info(f'pid={os.getpid()}')
-                tf.logging.info(f'hash={get_git_revision_hash()}')
+                # tf.logging.info(f'hash={get_git_revision_hash()}')
                 tf.logging.info(f'seed={self._hparams.seed}')
                 tf.logging.info(f'input= \n{str(self._reader)}')
 

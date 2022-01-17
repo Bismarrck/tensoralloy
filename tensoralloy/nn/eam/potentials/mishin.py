@@ -70,7 +70,6 @@ class MishinH(EamAlloyPotential):
                 "h": 6.202, "rc": 5.055
             }
         }
-        params['PuPu'] = params['FeFe'].copy()
         params['MoMo'] = params['NiNi'].copy()
         params['MoNi'] = params['NiNi'].copy()
         params['BeBe'] = params['MoMo'].copy()

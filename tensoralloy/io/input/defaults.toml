@@ -121,11 +121,12 @@ gamma = [1.0, -1.0]
 zeta = [1.0, 4.0]
 
 [nn.atomic.grap]
-moment_tensors = [0, 1]
+moment_tensors = [0, 1, 2]
 moment_scale_factors = 1.0
 algorithm = 'pexp'
 cutoff_function = 'polynomial'
 param_space_method = "pair"
+legacy_mode = true
 
 [nn.atomic.grap.sf]
 eta = [0.1, 0.5, 1.0, 4.0]

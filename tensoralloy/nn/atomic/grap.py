@@ -3,8 +3,6 @@
 The GenericRadialAtomicPotential, GRAP
 """
 from __future__ import print_function
-from operator import gt
-from os import name
 
 import numpy as np
 import tensorflow as tf
@@ -210,10 +208,11 @@ class GenericRadialAtomicPotential(Descriptor):
                  elements: List[str],
                  algorithm='sf',
                  parameters=None,
-                 param_space_method="cross",
+                 param_space_method="pair",
                  moment_tensors: Union[int, List[int]] = 0,
                  moment_scale_factors: Union[float, List[float]] = 1.0,
-                 cutoff_function="cosine"):
+                 cutoff_function="cosine",
+                 legacy_mode=True):
         """
         Initialization method.
         """
@@ -235,6 +234,7 @@ class GenericRadialAtomicPotential(Descriptor):
         self._cutoff_function = cutoff_function
         self._parameters = parameters
         self._param_space_method = param_space_method
+        self._legacy_mode = legacy_mode
 
     @property
     def name(self):
@@ -248,7 +248,8 @@ class GenericRadialAtomicPotential(Descriptor):
         d = super(GenericRadialAtomicPotential, self).as_dict()
         d.update({"moment_tensors": self._moment_tensors,
                   "cutoff_function": self._cutoff_function,
-                  "moment_scale_factors": self._moment_scale_factors})
+                  "moment_scale_factors": self._moment_scale_factors,
+                  "legacy_mode": self._legacy_mode})
         return d
 
     @staticmethod
@@ -366,10 +367,133 @@ class GenericRadialAtomicPotential(Descriptor):
             return cosine_cutoff(x, rc, name=name)
         else:
             return polynomial_cutoff(x, rc, name=name)
-    
+
     def apply_pairwise_descriptor_functions(self,
                                             clf: UniversalTransformer,
                                             partitions: dict):
+        """
+        Apply the descriptor functions to all partitions.
+        """
+        xyz_map = {
+            0: 'x', 1: 'y', 2: 'z'
+        }
+        vind = {
+            1: {0: 1, 1: 1, 2: 1},
+            2: {(0, 0): 1, (1, 1): 1, (2, 2): 1,
+                (0, 1): 2, (0, 2): 2, (1, 2): 2},
+            3: {(0, 0, 0): 1, (1, 1, 1): 1, (2, 2, 2): 1,
+                (0, 0, 1): 3, (0, 0, 2): 3, (0, 1, 1): 3, (0, 1, 2): 6,
+                (0, 2, 2): 3, (1, 1, 2): 3, (1, 2, 2): 3}}
+        dtype = get_float_dtype()
+        rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
+        outputs = {element: [None] * len(self._elements)
+                   for element in self._elements}
+        for kbody_term, (dists, masks) in partitions.items():
+            center = get_elements_from_kbody_term(kbody_term)[0]
+            with tf.variable_scope(f"{kbody_term}"):
+                rij = tf.squeeze(dists[0], axis=1, name='rij')
+                dij = tf.squeeze(dists[1:], axis=2, name='dij')
+                masks = tf.squeeze(masks, axis=1, name='masks')
+                fc = self.apply_cutoff(rij, rc=rc, name='fc')
+                c2 = tf.constant(1.0 / 3.0, dtype=dtype, name="c2")
+                c3 = tf.constant(3.0 / 5.0, dtype=dtype, name="c3")
+                gtau = []
+
+                def compute(fx, square=False):
+                    """
+                    Apply the smooth cutoff values and zero masks to `fx`.
+                    Then sum `fx` for each atom.
+                    """
+                    gx = tf.math.multiply(fx, fc)
+                    gx = tf.math.multiply(gx, masks, name=f'gx/masked')
+                    gx = tf.expand_dims(
+                        tf.reduce_sum(gx, axis=[-1, -2], keep_dims=False),
+                        axis=-1, name='gx')
+                    if square:
+                        gx = tf.square(gx, name='gx2')
+                    return gx
+
+                for tau in range(len(self._algorithm_instance)):
+                    with tf.name_scope(f"{tau}"):
+                        v = self._algorithm_instance.compute(
+                            tau, rij, rc, dtype=dtype)
+                        squared = {}
+                        for idx, angular in enumerate(self._moment_tensors):
+                            vtau = []
+                            if angular == 0:
+                                with tf.name_scope("r"):
+                                    g = compute(v)
+                                    g2 = tf.square(g, name="g/squared")
+                                    gtau.append(g)
+                                    squared[0] = g2
+                            elif angular == 1:
+                                for i in vind[1]:
+                                    itag = xyz_map[i]
+                                    with tf.name_scope(f"r{itag}"):
+                                        coef = tf.div_no_nan(
+                                            dij[i], rij, name='coef')
+                                        vi = compute(
+                                            tf.multiply(v, coef, name='fx'),
+                                            square=True)
+                                        vtau.append(vi)
+                                g2 = tf.add_n(vtau, name="g/squared")
+                                g = tf.sqrt(g2, name="g")
+                                squared[1] = g2
+                                gtau.append(g)
+                            elif angular == 2:
+                                for (i, j), multi in vind[2].items():
+                                    itag = xyz_map[i]
+                                    jtag = xyz_map[j]
+                                    with tf.name_scope(f"r{itag}{jtag}"):
+                                        coef = tf.div_no_nan(
+                                            dij[i] * dij[j], rij * rij,
+                                            name='coef')
+                                        v = compute(
+                                            tf.multiply(v, coef, name='fx'))
+                                        multi = tf.convert_to_tensor(
+                                            multi, dtype=dtype, name="multi")
+                                        vtau.append(tf.square(v) * multi)
+                                g2 = tf.subtract(tf.add_n(vtau),
+                                                 squared[0] * c2,
+                                                 name="g/squared")
+                                g = tf.sqrt(g2, name="g")
+                                gtau.append(g)
+                            elif angular == 3:
+                                for (i, j, k), multi in vind[3].items():
+                                    itag = xyz_map[i]
+                                    jtag = xyz_map[j]
+                                    ktag = xyz_map[k]
+                                    with tf.name_scope(f"r{itag}{jtag}{ktag}"):
+                                        coef = tf.div_no_nan(
+                                            dij[i] * dij[j] * dij[k],
+                                            rij * rij * rij,
+                                            name='coef')
+                                        v = compute(
+                                            tf.multiply(v, coef, name='fx'))
+                                        multi = tf.convert_to_tensor(
+                                            multi, dtype=dtype, name="multi")
+                                        vtau.append(tf.square(v) * multi)
+                                g2 = tf.subtract(tf.add_n(vtau),
+                                                 squared[1] * c3,
+                                                 name="g/squared")
+                                g = tf.sqrt(g2, name="g")
+                                gtau.append(g)
+                            else:
+                                raise ValueError(
+                                    "Angular moment should be <= 3")
+                g = tf.concat(gtau, axis=-1, name='g')
+            index = clf.kbody_terms_for_element[center].index(kbody_term)
+            outputs[center][index] = g
+        with tf.name_scope("Concat"):
+            results = {}
+            for element in self._elements:
+                results[element] = tf.concat(
+                    outputs[element], axis=-1, name=element)
+            return results
+
+    def apply_legacy_pairwise_descriptor_functions(self,
+                                                   clf: UniversalTransformer,
+                                                   partitions: dict):
         """
         Apply the descriptor functions to all partitions.
         """
@@ -484,9 +608,13 @@ class GenericRadialAtomicPotential(Descriptor):
                 angular=False,
                 merge_symmetric=False)
             if len(self._moment_tensors) == 1 and self._moment_tensors[0] < 0:
-                descriptors = self.apply_symmetry_preserved_model(
+                g = self.apply_symmetry_preserved_model(
                     transformer, partitions, max_occurs)
             else:
-                descriptors = self.apply_pairwise_descriptor_functions(
-                    transformer, partitions)
-        return AtomicDescriptors(descriptors=descriptors, max_occurs=max_occurs)
+                if self._legacy_mode:
+                    g = self.apply_legacy_pairwise_descriptor_functions(
+                        transformer, partitions)
+                else:
+                    g = self.apply_pairwise_descriptor_functions(
+                        transformer, partitions)
+        return AtomicDescriptors(descriptors=g, max_occurs=max_occurs)
