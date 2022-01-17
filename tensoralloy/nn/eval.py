@@ -34,6 +34,16 @@ def get_evaluation_hooks(ema: tf.train.ExponentialMovingAverage,
                     at_end=True)
             hooks.append(logging_tensor_hook)
 
+        if len(tf.get_collection(GraphKeys.EAM_POTENTIAL_VARIABLES)):
+            with tf.name_scope("EAM"):
+                logging_tensor_hook = LoggingTensorHook(
+                    tensors=get_tensors_dict_for_hook(
+                        GraphKeys.EAM_POTENTIAL_VARIABLES),
+                    mode=ModeKeys.EVAL,
+                    every_n_iter=train_parameters.eval_steps,
+                    at_end=True)
+            hooks.append(logging_tensor_hook)
+
         with tf.name_scope("EMA"):
             restore_ema_hook = RestoreEmaVariablesHook(ema=ema)
             hooks.append(restore_ema_hook)
