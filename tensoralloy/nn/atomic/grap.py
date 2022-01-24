@@ -21,7 +21,6 @@ from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
 from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2, power_exp3
 
-
 GRAP_algorithms = ["pexp", "density", "morse", "sf"]
 
 
@@ -29,10 +28,10 @@ class Algorithm:
     """
     The base class for all radial descriptors.
     """
-    
+
     required_keys = []
     name = "algorithm"
-    
+
     def __init__(self,
                  parameters: Dict[str, Union[List[float], np.ndarray]],
                  param_space_method="cross"):
@@ -55,7 +54,7 @@ class Algorithm:
 
         for key in self.required_keys:
             assert key in parameters and len(parameters[key]) >= 1
-        self._params = {key: [float(x) for x in parameters[key]] 
+        self._params = {key: [float(x) for x in parameters[key]]
                         for key in self.required_keys}
         self._param_space_method = param_space_method
 
@@ -73,7 +72,7 @@ class Algorithm:
                 for key in self._params.keys():
                     row[key] = self._params[key][i]
                 self._grid.append(row)
-    
+
     def __len__(self):
         """
         Return the number of hyper-parameter combinations.
@@ -82,7 +81,7 @@ class Algorithm:
 
     def __getitem__(self, item):
         return self._grid[item]
-    
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this object.
@@ -94,12 +93,12 @@ class Algorithm:
                 dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
-        
+
         Notes
         -----
-        The smooth damping `cutoff(r, rc)`, the multipole effect and zero-masks 
+        The smooth damping `cutoff(r, rc)`, the multipole effect and zero-masks
         will be handled outside this function.
-        
+
         """
         raise NotImplementedError()
 
@@ -108,10 +107,10 @@ class SymmetryFunctionAlgorithm(Algorithm):
     """
     The radial symmetry function descriptor.
     """
-    
+
     required_keys = ['eta', 'omega']
     name = "sf"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -132,10 +131,10 @@ class MorseAlgorithm(Algorithm):
     """
     The morse-style descriptor.
     """
-    
+
     required_keys = ['D', 'gamma', 'r0']
     name = "morse"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -154,10 +153,10 @@ class DensityExpAlgorithm(Algorithm):
     """
     The expoential density descriptor: f(r) = A * exp[ -beta * (r / re - 1) ]
     """
-    
+
     required_keys = ['A', 'beta', 're']
     name = "density"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -212,12 +211,13 @@ class GenericRadialAtomicPotential(Descriptor):
                  moment_tensors: Union[int, List[int]] = 0,
                  moment_scale_factors: Union[float, List[float]] = 1.0,
                  cutoff_function="cosine",
-                 legacy_mode=True):
+                 legacy_mode=True,
+                 do_sqrt=False):
         """
         Initialization method.
         """
         super(GenericRadialAtomicPotential, self).__init__(elements=elements)
-        
+
         if isinstance(moment_tensors, int):
             moment_tensors = [moment_tensors]
         moment_tensors = list(set(moment_tensors))
@@ -235,6 +235,7 @@ class GenericRadialAtomicPotential(Descriptor):
         self._parameters = parameters
         self._param_space_method = param_space_method
         self._legacy_mode = legacy_mode
+        self._do_sqrt = do_sqrt
 
     @property
     def name(self):
@@ -249,7 +250,8 @@ class GenericRadialAtomicPotential(Descriptor):
         d.update({"moment_tensors": self._moment_tensors,
                   "cutoff_function": self._cutoff_function,
                   "moment_scale_factors": self._moment_scale_factors,
-                  "legacy_mode": self._legacy_mode})
+                  "legacy_mode": self._legacy_mode,
+                  "do_sqrt": self._do_sqrt})
         return d
 
     @staticmethod
@@ -269,7 +271,7 @@ class GenericRadialAtomicPotential(Descriptor):
             raise ValueError(
                 f"GRAP: algorithm '{algorithm}' is not implemented")
         return cls(parameters, param_space_method)
-    
+
     def _dynamic_stitch(self,
                         outputs: Dict[str, tf.Tensor],
                         max_occurs: Counter,
@@ -315,10 +317,10 @@ class GenericRadialAtomicPotential(Descriptor):
                 results[element] = tf.concat(
                     stacks[element], axis=-1, name=element)
             return results
-    
-    def apply_symmetry_preserved_model(self, 
-                                       clf: UniversalTransformer, 
-                                       partitions: dict, 
+
+    def apply_symmetry_preserved_model(self,
+                                       clf: UniversalTransformer,
+                                       partitions: dict,
                                        max_occurs: Counter):
         """
         Apply the symmetry preserved model.
@@ -358,7 +360,7 @@ class GenericRadialAtomicPotential(Descriptor):
                                name='D')
                 outputs[kbody_term] = x
         return self._dynamic_stitch(outputs, max_occurs, False)
-   
+
     def apply_cutoff(self, x, rc, name=None):
         """
         Apply the cutoff function on interatomic distances.
@@ -397,6 +399,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 c2 = tf.constant(1.0 / 3.0, dtype=dtype, name="c2")
                 c3 = tf.constant(3.0 / 5.0, dtype=dtype, name="c3")
+                eps = tf.constant(1e-16, dtype=dtype, name="eps")
                 gtau = []
 
                 def compute(fx, square=False):
@@ -427,19 +430,20 @@ class GenericRadialAtomicPotential(Descriptor):
                                     gtau.append(g)
                                     squared[0] = g2
                             elif angular == 1:
-                                for i in vind[1]:
+                                for i, multi in vind[1].items():
                                     itag = xyz_map[i]
                                     with tf.name_scope(f"r{itag}"):
                                         coef = tf.div_no_nan(
                                             dij[i], rij, name='coef')
                                         vi = compute(
-                                            tf.multiply(v, coef, name='fx'),
+                                            tf.multiply(v, coef, name='v'),
                                             square=True)
                                         vtau.append(vi)
                                 g2 = tf.add_n(vtau, name="g/squared")
-                                g = tf.sqrt(g2, name="g")
                                 squared[1] = g2
-                                gtau.append(g)
+                                if self._do_sqrt:
+                                    g2 = tf.sqrt(g2 + eps, name="g")
+                                gtau.append(g2)
                             elif angular == 2:
                                 for (i, j), multi in vind[2].items():
                                     itag = xyz_map[i]
@@ -448,16 +452,18 @@ class GenericRadialAtomicPotential(Descriptor):
                                         coef = tf.div_no_nan(
                                             dij[i] * dij[j], rij * rij,
                                             name='coef')
-                                        v = compute(
-                                            tf.multiply(v, coef, name='fx'))
+                                        vij = compute(
+                                            tf.multiply(v, coef, name='v'))
                                         multi = tf.convert_to_tensor(
                                             multi, dtype=dtype, name="multi")
-                                        vtau.append(tf.square(v) * multi)
-                                g2 = tf.subtract(tf.add_n(vtau),
-                                                 squared[0] * c2,
-                                                 name="g/squared")
-                                g = tf.sqrt(g2, name="g")
-                                gtau.append(g)
+                                        vtau.append(tf.square(vij) * multi)
+                                if self._do_sqrt:
+                                    g2 = tf.sqrt(tf.add_n(vtau) + eps, name="g")
+                                else:
+                                    g2 = tf.subtract(tf.add_n(vtau),
+                                                     squared[0] * c2,
+                                                     name="g/squared")
+                                gtau.append(g2)
                             elif angular == 3:
                                 for (i, j, k), multi in vind[3].items():
                                     itag = xyz_map[i]
@@ -468,16 +474,18 @@ class GenericRadialAtomicPotential(Descriptor):
                                             dij[i] * dij[j] * dij[k],
                                             rij * rij * rij,
                                             name='coef')
-                                        v = compute(
-                                            tf.multiply(v, coef, name='fx'))
+                                        vijk = compute(
+                                            tf.multiply(v, coef, name='v'))
                                         multi = tf.convert_to_tensor(
                                             multi, dtype=dtype, name="multi")
-                                        vtau.append(tf.square(v) * multi)
-                                g2 = tf.subtract(tf.add_n(vtau),
-                                                 squared[1] * c3,
-                                                 name="g/squared")
-                                g = tf.sqrt(g2, name="g")
-                                gtau.append(g)
+                                        vtau.append(tf.square(vijk) * multi)
+                                if self._do_sqrt:
+                                    g2 = tf.add_n(tf.sqrt(vtau) + eps, name="g")
+                                else:
+                                    g2 = tf.subtract(tf.add_n(vtau),
+                                                     squared[1] * c3,
+                                                     name="g/squared")
+                                gtau.append(g2)
                             else:
                                 raise ValueError(
                                     "Angular moment should be <= 3")
@@ -516,7 +524,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 masks = tf.squeeze(masks, axis=1, name='masks')
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 gtau = []
-                
+
                 def compute(fx, square=False):
                     """
                     Apply the smooth cutoff values and zero masks to `fx`.
@@ -530,7 +538,7 @@ class GenericRadialAtomicPotential(Descriptor):
                     if square:
                         gx = tf.square(gx, name='gx2')
                     return gx
-                
+
                 for tau in range(len(self._algorithm_instance)):
                     with tf.name_scope(f"{tau}"):
                         v = self._algorithm_instance.compute(
