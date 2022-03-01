@@ -13,14 +13,15 @@ from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
+from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
-from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2, power_exp3
-
+from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2
+from tensoralloy.nn.eam.potentials.generic import power_exp3
 
 GRAP_algorithms = ["pexp", "density", "morse", "sf"]
 
@@ -29,10 +30,10 @@ class Algorithm:
     """
     The base class for all radial descriptors.
     """
-    
+
     required_keys = []
     name = "algorithm"
-    
+
     def __init__(self,
                  parameters: Dict[str, Union[List[float], np.ndarray]],
                  param_space_method="cross"):
@@ -55,7 +56,7 @@ class Algorithm:
 
         for key in self.required_keys:
             assert key in parameters and len(parameters[key]) >= 1
-        self._params = {key: [float(x) for x in parameters[key]] 
+        self._params = {key: [float(x) for x in parameters[key]]
                         for key in self.required_keys}
         self._param_space_method = param_space_method
 
@@ -73,7 +74,7 @@ class Algorithm:
                 for key in self._params.keys():
                     row[key] = self._params[key][i]
                 self._grid.append(row)
-    
+
     def __len__(self):
         """
         Return the number of hyper-parameter combinations.
@@ -82,7 +83,7 @@ class Algorithm:
 
     def __getitem__(self, item):
         return self._grid[item]
-    
+
     def as_dict(self):
         """
         Return a JSON serializable dict representation of this object.
@@ -94,12 +95,12 @@ class Algorithm:
                 dtype=tf.float32):
         """
         Compute f(r, rc) using the \tau-th set of parameters.
-        
+
         Notes
         -----
-        The smooth damping `cutoff(r, rc)`, the multipole effect and zero-masks 
+        The smooth damping `cutoff(r, rc)`, the multipole effect and zero-masks
         will be handled outside this function.
-        
+
         """
         raise NotImplementedError()
 
@@ -108,10 +109,10 @@ class SymmetryFunctionAlgorithm(Algorithm):
     """
     The radial symmetry function descriptor.
     """
-    
+
     required_keys = ['eta', 'omega']
     name = "sf"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -132,10 +133,10 @@ class MorseAlgorithm(Algorithm):
     """
     The morse-style descriptor.
     """
-    
+
     required_keys = ['D', 'gamma', 'r0']
     name = "morse"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -154,10 +155,10 @@ class DensityExpAlgorithm(Algorithm):
     """
     The expoential density descriptor: f(r) = A * exp[ -beta * (r / re - 1) ]
     """
-    
+
     required_keys = ['A', 'beta', 're']
     name = "density"
-    
+
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
         """
@@ -212,12 +213,14 @@ class GenericRadialAtomicPotential(Descriptor):
                  moment_tensors: Union[int, List[int]] = 0,
                  moment_scale_factors: Union[float, List[float]] = 1.0,
                  cutoff_function="cosine",
-                 legacy_mode=True):
+                 legacy_mode=True,
+                 do_sqrt=False,
+                 use_nn=False):
         """
         Initialization method.
         """
         super(GenericRadialAtomicPotential, self).__init__(elements=elements)
-        
+
         if isinstance(moment_tensors, int):
             moment_tensors = [moment_tensors]
         moment_tensors = list(set(moment_tensors))
@@ -235,6 +238,8 @@ class GenericRadialAtomicPotential(Descriptor):
         self._parameters = parameters
         self._param_space_method = param_space_method
         self._legacy_mode = legacy_mode
+        self._do_sqrt = do_sqrt
+        self._use_nn = use_nn
 
     @property
     def name(self):
@@ -249,7 +254,9 @@ class GenericRadialAtomicPotential(Descriptor):
         d.update({"moment_tensors": self._moment_tensors,
                   "cutoff_function": self._cutoff_function,
                   "moment_scale_factors": self._moment_scale_factors,
-                  "legacy_mode": self._legacy_mode})
+                  "legacy_mode": self._legacy_mode,
+                  "do_sqrt": self._do_sqrt,
+                  "use_nn": self._use_nn})
         return d
 
     @staticmethod
@@ -269,7 +276,7 @@ class GenericRadialAtomicPotential(Descriptor):
             raise ValueError(
                 f"GRAP: algorithm '{algorithm}' is not implemented")
         return cls(parameters, param_space_method)
-    
+
     def _dynamic_stitch(self,
                         outputs: Dict[str, tf.Tensor],
                         max_occurs: Counter,
@@ -315,10 +322,10 @@ class GenericRadialAtomicPotential(Descriptor):
                 results[element] = tf.concat(
                     stacks[element], axis=-1, name=element)
             return results
-    
-    def apply_symmetry_preserved_model(self, 
-                                       clf: UniversalTransformer, 
-                                       partitions: dict, 
+
+    def apply_symmetry_preserved_model(self,
+                                       clf: UniversalTransformer,
+                                       partitions: dict,
                                        max_occurs: Counter):
         """
         Apply the symmetry preserved model.
@@ -358,7 +365,7 @@ class GenericRadialAtomicPotential(Descriptor):
                                name='D')
                 outputs[kbody_term] = x
         return self._dynamic_stitch(outputs, max_occurs, False)
-   
+
     def apply_cutoff(self, x, rc, name=None):
         """
         Apply the cutoff function on interatomic distances.
@@ -397,6 +404,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 c2 = tf.constant(1.0 / 3.0, dtype=dtype, name="c2")
                 c3 = tf.constant(3.0 / 5.0, dtype=dtype, name="c3")
+                eps = tf.constant(1e-16, dtype=dtype, name="eps")
                 gtau = []
 
                 def compute(fx, square=False):
@@ -427,19 +435,20 @@ class GenericRadialAtomicPotential(Descriptor):
                                     gtau.append(g)
                                     squared[0] = g2
                             elif angular == 1:
-                                for i in vind[1]:
+                                for i, multi in vind[1].items():
                                     itag = xyz_map[i]
                                     with tf.name_scope(f"r{itag}"):
                                         coef = tf.div_no_nan(
                                             dij[i], rij, name='coef')
                                         vi = compute(
-                                            tf.multiply(v, coef, name='fx'),
+                                            tf.multiply(v, coef, name='v'),
                                             square=True)
                                         vtau.append(vi)
                                 g2 = tf.add_n(vtau, name="g/squared")
-                                g = tf.sqrt(g2, name="g")
                                 squared[1] = g2
-                                gtau.append(g)
+                                if self._do_sqrt:
+                                    g2 = tf.sqrt(g2 + eps, name="g")
+                                gtau.append(g2)
                             elif angular == 2:
                                 for (i, j), multi in vind[2].items():
                                     itag = xyz_map[i]
@@ -448,16 +457,18 @@ class GenericRadialAtomicPotential(Descriptor):
                                         coef = tf.div_no_nan(
                                             dij[i] * dij[j], rij * rij,
                                             name='coef')
-                                        v = compute(
-                                            tf.multiply(v, coef, name='fx'))
+                                        vij = compute(
+                                            tf.multiply(v, coef, name='v'))
                                         multi = tf.convert_to_tensor(
                                             multi, dtype=dtype, name="multi")
-                                        vtau.append(tf.square(v) * multi)
-                                g2 = tf.subtract(tf.add_n(vtau),
-                                                 squared[0] * c2,
-                                                 name="g/squared")
-                                g = tf.sqrt(g2, name="g")
-                                gtau.append(g)
+                                        vtau.append(tf.square(vij) * multi)
+                                if self._do_sqrt:
+                                    g2 = tf.sqrt(tf.add_n(vtau) + eps, name="g")
+                                else:
+                                    g2 = tf.subtract(tf.add_n(vtau),
+                                                     squared[0] * c2,
+                                                     name="g/squared")
+                                gtau.append(g2)
                             elif angular == 3:
                                 for (i, j, k), multi in vind[3].items():
                                     itag = xyz_map[i]
@@ -468,16 +479,18 @@ class GenericRadialAtomicPotential(Descriptor):
                                             dij[i] * dij[j] * dij[k],
                                             rij * rij * rij,
                                             name='coef')
-                                        v = compute(
-                                            tf.multiply(v, coef, name='fx'))
+                                        vijk = compute(
+                                            tf.multiply(v, coef, name='v'))
                                         multi = tf.convert_to_tensor(
                                             multi, dtype=dtype, name="multi")
-                                        vtau.append(tf.square(v) * multi)
-                                g2 = tf.subtract(tf.add_n(vtau),
-                                                 squared[1] * c3,
-                                                 name="g/squared")
-                                g = tf.sqrt(g2, name="g")
-                                gtau.append(g)
+                                        vtau.append(tf.square(vijk) * multi)
+                                if self._do_sqrt:
+                                    g2 = tf.add_n(tf.sqrt(vtau) + eps, name="g")
+                                else:
+                                    g2 = tf.subtract(tf.add_n(vtau),
+                                                     squared[1] * c3,
+                                                     name="g/squared")
+                                gtau.append(g2)
                             else:
                                 raise ValueError(
                                     "Angular moment should be <= 3")
@@ -516,7 +529,7 @@ class GenericRadialAtomicPotential(Descriptor):
                 masks = tf.squeeze(masks, axis=1, name='masks')
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 gtau = []
-                
+
                 def compute(fx, square=False):
                     """
                     Apply the smooth cutoff values and zero masks to `fx`.
@@ -530,7 +543,7 @@ class GenericRadialAtomicPotential(Descriptor):
                     if square:
                         gx = tf.square(gx, name='gx2')
                     return gx
-                
+
                 for tau in range(len(self._algorithm_instance)):
                     with tf.name_scope(f"{tau}"):
                         v = self._algorithm_instance.compute(
@@ -590,6 +603,119 @@ class GenericRadialAtomicPotential(Descriptor):
                 results[element] = tf.concat(
                     outputs[element], axis=-1, name=element)
             return results
+    
+    @staticmethod
+    def _get_multiplicity_tensor(max_moment: int):
+        """
+        Return the multiplicity tensor T_dm.
+        """
+        dtype = get_float_dtype()
+        if max_moment == 0:
+            array = np.ones((1, 1), dtype=dtype.as_numpy_dtype)
+        elif max_moment == 1:
+            array = np.zeros((4, 2), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+        elif max_moment == 2:
+            array = np.zeros((10, 3), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+            array[4: 10, 2] = 1, 2, 2, 1, 2, 1
+        else:
+            array = np.zeros((20, 4), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+            array[4: 10, 2] = 1, 2, 2, 1, 2, 1
+            array[10: 20, 3] = 1, 3, 3, 3, 6, 3, 1, 3, 3, 1
+        return tf.convert_to_tensor(array, dtype=dtype, name="T_dm")
+    
+    @staticmethod
+    def _get_moment_coeff_tensor(rij: tf.Tensor, dij: tf.Tensor, 
+                                 max_moment: int):
+        """
+        Return the moment coefficients tensor.
+        """
+        dtype = get_float_dtype()
+        with tf.name_scope("M_dnac"):
+            abx = [0, 0, 0, 1, 1, 2]
+            aby = [0, 1, 2, 1, 2, 2]
+            ab_bcast = tf.convert_to_tensor(
+                [9, 1, 1, 1, 1], dtype=tf.int32, name="bcast/ab")
+            ab_rows = [abx[i] * 3 + aby[i] for i in range(len(abx))]
+            abcx = [0, 0, 0, 0, 0, 0, 1, 1, 1, 2]
+            abcy = [0, 0, 0, 1, 1, 2, 1, 1, 2, 2]
+            abcz = [0, 1, 2, 1, 2, 2, 1, 2, 2, 2]
+            abc_rows = [abcx[i] * 3**2 + abcy[i] * 3 + abcz[i] 
+                        for i in range(len(abcx))]
+            abc_bcast = tf.convert_to_tensor(
+                [27, 1, 1, 1, 1], dtype=tf.int32, name="bcast/abc")
+            shape = tf.shape(rij, name="shape", dtype=tf.int32)
+            M_d = [tf.ones_like(rij, name="d/0", dtype=dtype)]
+            za = tf.div_no_nan(rij, dij, name="za")
+            if max_moment > 0:
+                M_d.append(za)
+                if max_moment > 1:
+                    xynac = tf.einsum("xnacu, ynacu->xynacu", za, za)
+                    zab_flat = tf.reshape(
+                        xynac, shape=shape * ab_bcast, name="zab/flat")
+                    zab = tf.gather(zab_flat, ab_rows, name="zab")
+                    M_d.append(zab)
+                    if max_moment > 2:
+                        xyznac = tf.einsum("xynacu, znacu->xyznacu", xynac, za)
+                        zabc_flat = tf.reshape(
+                            xyznac, shape=shape * abc_bcast, name="zabc/flat")
+                        zabc = tf.gather(zabc_flat, abc_rows, name="zabc")
+                    M_d.append(zabc)
+            return tf.squeeze(tf.concat(M_d, axis=3), axis=-1, name="M")
+    
+    def apply_nn_model(self, clf: UniversalTransformer, partitions: dict):
+        """
+        Apply the NN based descriptors model to all partitions.
+        """
+        dtype = get_float_dtype()
+        rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
+        outputs = {element: [None] * len(self._elements)
+                   for element in self._elements}
+        max_moment = max(self._moment_tensors)
+        ndims = (max_moment + 1) * len(self._algorithm_instance)
+        for kbody_term, (dists, masks) in partitions.items():
+            center = get_elements_from_kbody_term(kbody_term)[0]
+            with tf.variable_scope(f"{kbody_term}"):
+                rij = tf.squeeze(dists[0], axis=1, name='rij')
+                dij = tf.squeeze(dists[1:], axis=2, name='dij')
+                masks = tf.squeeze(masks, axis=1, name='masks')
+                fc = self.apply_cutoff(rij, rc=rc, name='fc')
+                fc = tf.multiply(fc, masks, name="fc/masked")
+                eps = tf.convert_to_tensor(1e-12, dtype=dtype, name="eps")
+                H = convolution1x1(
+                    fc, 
+                    activation_fn="softplus", 
+                    hidden_sizes=[32, 32, 32], 
+                    num_out=len(self._algorithm_instance),
+                    variable_scope="/Filters",
+                    output_bias=False,
+                    use_resnet_dt=True)
+                M = self._get_moment_coeff_tensor(
+                    tf.expand_dims(rij, 0), dij, max_moment)
+                T = self._get_multiplicity_tensor(max_moment)
+                P = tf.einsum("nack,dnac->nakd", H, M, name="P")
+                S = tf.square(P, name="S")
+                Q = tf.einsum("nakd,dm->nakm", S, T, name="Q")
+                if max_moment == 0:
+                    G = tf.sqrt(Q + eps, name="G")
+                else:
+                    G = tf.concat([
+                        tf.expand_dims(
+                            tf.sqrt(G[:, :, :, 0] + eps), axis=3, name="m/0"),
+                        G[:, :, :, 1:]
+                    ], axis=3, name="G")
+            n = rij.shape.dims[0].value
+            g = tf.reshape(G, (n, -1, ndims), name='g')
+            index = clf.kbody_terms_for_element[center].index(kbody_term)
+            outputs[center][index] = g
+        with tf.name_scope("Concat"):
+            results = {}
+            for element in self._elements:
+                results[element] = tf.concat(
+                    outputs[element], axis=-1, name=element)
+            return results
 
     def calculate(self,
                   transformer: UniversalTransformer,
@@ -611,7 +737,9 @@ class GenericRadialAtomicPotential(Descriptor):
                 g = self.apply_symmetry_preserved_model(
                     transformer, partitions, max_occurs)
             else:
-                if self._legacy_mode:
+                if self._use_nn:
+                    g = self.apply_nn_model(transformer, partitions)
+                elif self._legacy_mode:
                     g = self.apply_legacy_pairwise_descriptor_functions(
                         transformer, partitions)
                 else:

@@ -127,6 +127,8 @@ algorithm = 'pexp'
 cutoff_function = 'polynomial'
 param_space_method = "pair"
 legacy_mode = true
+do_sqrt = false
+use_nn = false
 
 [nn.atomic.grap.sf]
 eta = [0.1, 0.5, 1.0, 4.0]
