@@ -13,13 +13,15 @@ from sklearn.model_selection import ParameterGrid
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
+from tensoralloy.nn.convolutional import convolution1x1
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.nn.cutoff import cosine_cutoff, polynomial_cutoff
 from tensoralloy.nn.atomic.atomic import Descriptor
 from tensoralloy.nn.atomic.dataclasses import AtomicDescriptors
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials.generic import morse, density_exp, power_exp
-from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2, power_exp3
+from tensoralloy.nn.eam.potentials.generic import power_exp1, power_exp2
+from tensoralloy.nn.eam.potentials.generic import power_exp3
 
 GRAP_algorithms = ["pexp", "density", "morse", "sf"]
 
@@ -212,7 +214,8 @@ class GenericRadialAtomicPotential(Descriptor):
                  moment_scale_factors: Union[float, List[float]] = 1.0,
                  cutoff_function="cosine",
                  legacy_mode=True,
-                 do_sqrt=False):
+                 do_sqrt=False,
+                 use_nn=False):
         """
         Initialization method.
         """
@@ -236,6 +239,7 @@ class GenericRadialAtomicPotential(Descriptor):
         self._param_space_method = param_space_method
         self._legacy_mode = legacy_mode
         self._do_sqrt = do_sqrt
+        self._use_nn = use_nn
 
     @property
     def name(self):
@@ -251,7 +255,8 @@ class GenericRadialAtomicPotential(Descriptor):
                   "cutoff_function": self._cutoff_function,
                   "moment_scale_factors": self._moment_scale_factors,
                   "legacy_mode": self._legacy_mode,
-                  "do_sqrt": self._do_sqrt})
+                  "do_sqrt": self._do_sqrt,
+                  "use_nn": self._use_nn})
         return d
 
     @staticmethod
@@ -598,6 +603,119 @@ class GenericRadialAtomicPotential(Descriptor):
                 results[element] = tf.concat(
                     outputs[element], axis=-1, name=element)
             return results
+    
+    @staticmethod
+    def _get_multiplicity_tensor(max_moment: int):
+        """
+        Return the multiplicity tensor T_dm.
+        """
+        dtype = get_float_dtype()
+        if max_moment == 0:
+            array = np.ones((1, 1), dtype=dtype.as_numpy_dtype)
+        elif max_moment == 1:
+            array = np.zeros((4, 2), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+        elif max_moment == 2:
+            array = np.zeros((10, 3), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+            array[4: 10, 2] = 1, 2, 2, 1, 2, 1
+        else:
+            array = np.zeros((20, 4), dtype=dtype.as_numpy_dtype)
+            array[0, 0] = array[1: 4, 1] = 1
+            array[4: 10, 2] = 1, 2, 2, 1, 2, 1
+            array[10: 20, 3] = 1, 3, 3, 3, 6, 3, 1, 3, 3, 1
+        return tf.convert_to_tensor(array, dtype=dtype, name="T_dm")
+    
+    @staticmethod
+    def _get_moment_coeff_tensor(rij: tf.Tensor, dij: tf.Tensor, 
+                                 max_moment: int):
+        """
+        Return the moment coefficients tensor.
+        """
+        dtype = get_float_dtype()
+        with tf.name_scope("M_dnac"):
+            abx = [0, 0, 0, 1, 1, 2]
+            aby = [0, 1, 2, 1, 2, 2]
+            ab_bcast = tf.convert_to_tensor(
+                [9, 1, 1, 1, 1], dtype=tf.int32, name="bcast/ab")
+            ab_rows = [abx[i] * 3 + aby[i] for i in range(len(abx))]
+            abcx = [0, 0, 0, 0, 0, 0, 1, 1, 1, 2]
+            abcy = [0, 0, 0, 1, 1, 2, 1, 1, 2, 2]
+            abcz = [0, 1, 2, 1, 2, 2, 1, 2, 2, 2]
+            abc_rows = [abcx[i] * 3**2 + abcy[i] * 3 + abcz[i] 
+                        for i in range(len(abcx))]
+            abc_bcast = tf.convert_to_tensor(
+                [27, 1, 1, 1, 1], dtype=tf.int32, name="bcast/abc")
+            shape = tf.shape(rij, name="shape", dtype=tf.int32)
+            M_d = [tf.ones_like(rij, name="d/0", dtype=dtype)]
+            za = tf.div_no_nan(rij, dij, name="za")
+            if max_moment > 0:
+                M_d.append(za)
+                if max_moment > 1:
+                    xynac = tf.einsum("xnacu, ynacu->xynacu", za, za)
+                    zab_flat = tf.reshape(
+                        xynac, shape=shape * ab_bcast, name="zab/flat")
+                    zab = tf.gather(zab_flat, ab_rows, name="zab")
+                    M_d.append(zab)
+                    if max_moment > 2:
+                        xyznac = tf.einsum("xynacu, znacu->xyznacu", xynac, za)
+                        zabc_flat = tf.reshape(
+                            xyznac, shape=shape * abc_bcast, name="zabc/flat")
+                        zabc = tf.gather(zabc_flat, abc_rows, name="zabc")
+                    M_d.append(zabc)
+            return tf.squeeze(tf.concat(M_d, axis=3), axis=-1, name="M")
+    
+    def apply_nn_model(self, clf: UniversalTransformer, partitions: dict):
+        """
+        Apply the NN based descriptors model to all partitions.
+        """
+        dtype = get_float_dtype()
+        rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
+        outputs = {element: [None] * len(self._elements)
+                   for element in self._elements}
+        max_moment = max(self._moment_tensors)
+        ndims = (max_moment + 1) * len(self._algorithm_instance)
+        for kbody_term, (dists, masks) in partitions.items():
+            center = get_elements_from_kbody_term(kbody_term)[0]
+            with tf.variable_scope(f"{kbody_term}"):
+                rij = tf.squeeze(dists[0], axis=1, name='rij')
+                dij = tf.squeeze(dists[1:], axis=2, name='dij')
+                masks = tf.squeeze(masks, axis=1, name='masks')
+                fc = self.apply_cutoff(rij, rc=rc, name='fc')
+                fc = tf.multiply(fc, masks, name="fc/masked")
+                eps = tf.convert_to_tensor(1e-12, dtype=dtype, name="eps")
+                H = convolution1x1(
+                    fc, 
+                    activation_fn="softplus", 
+                    hidden_sizes=[32, 32, 32], 
+                    num_out=len(self._algorithm_instance),
+                    variable_scope="/Filters",
+                    output_bias=False,
+                    use_resnet_dt=True)
+                M = self._get_moment_coeff_tensor(
+                    tf.expand_dims(rij, 0), dij, max_moment)
+                T = self._get_multiplicity_tensor(max_moment)
+                P = tf.einsum("nack,dnac->nakd", H, M, name="P")
+                S = tf.square(P, name="S")
+                Q = tf.einsum("nakd,dm->nakm", S, T, name="Q")
+                if max_moment == 0:
+                    G = tf.sqrt(Q + eps, name="G")
+                else:
+                    G = tf.concat([
+                        tf.expand_dims(
+                            tf.sqrt(G[:, :, :, 0] + eps), axis=3, name="m/0"),
+                        G[:, :, :, 1:]
+                    ], axis=3, name="G")
+            n = rij.shape.dims[0].value
+            g = tf.reshape(G, (n, -1, ndims), name='g')
+            index = clf.kbody_terms_for_element[center].index(kbody_term)
+            outputs[center][index] = g
+        with tf.name_scope("Concat"):
+            results = {}
+            for element in self._elements:
+                results[element] = tf.concat(
+                    outputs[element], axis=-1, name=element)
+            return results
 
     def calculate(self,
                   transformer: UniversalTransformer,
@@ -619,7 +737,9 @@ class GenericRadialAtomicPotential(Descriptor):
                 g = self.apply_symmetry_preserved_model(
                     transformer, partitions, max_occurs)
             else:
-                if self._legacy_mode:
+                if self._use_nn:
+                    g = self.apply_nn_model(transformer, partitions)
+                elif self._legacy_mode:
                     g = self.apply_legacy_pairwise_descriptor_functions(
                         transformer, partitions)
                 else:
