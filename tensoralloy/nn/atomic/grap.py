@@ -646,9 +646,9 @@ class GenericRadialAtomicPotential(Descriptor):
                         for i in range(len(abcx))]
             abc_bcast = tf.convert_to_tensor(
                 [27, 1, 1, 1, 1], dtype=tf.int32, name="bcast/abc")
-            shape = tf.shape(rij, name="shape", dtype=tf.int32)
+            shape = tf.shape(rij, name="shape", out_type=tf.int32)
             M_d = [tf.ones_like(rij, name="d/0", dtype=dtype)]
-            za = tf.div_no_nan(rij, dij, name="za")
+            za = tf.div_no_nan(dij, rij, name="za")
             if max_moment > 0:
                 M_d.append(za)
                 if max_moment > 1:
@@ -662,10 +662,11 @@ class GenericRadialAtomicPotential(Descriptor):
                         zabc_flat = tf.reshape(
                             xyznac, shape=shape * abc_bcast, name="zabc/flat")
                         zabc = tf.gather(zabc_flat, abc_rows, name="zabc")
-                    M_d.append(zabc)
-            return tf.squeeze(tf.concat(M_d, axis=3), axis=-1, name="M")
+                        M_d.append(zabc)
+            return tf.squeeze(tf.concat(M_d, axis=0), axis=-1, name="M")
     
-    def apply_nn_model(self, clf: UniversalTransformer, partitions: dict):
+    def apply_nn_model(self, clf: UniversalTransformer, partitions: dict,
+                       debug=True):
         """
         Apply the NN based descriptors model to all partitions.
         """
@@ -683,15 +684,26 @@ class GenericRadialAtomicPotential(Descriptor):
                 masks = tf.squeeze(masks, axis=1, name='masks')
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 fc = tf.multiply(fc, masks, name="fc/masked")
-                eps = tf.convert_to_tensor(1e-12, dtype=dtype, name="eps")
-                H = convolution1x1(
-                    fc, 
-                    activation_fn="softplus", 
-                    hidden_sizes=[32, 32, 32], 
-                    num_out=len(self._algorithm_instance),
-                    variable_scope="/Filters",
-                    output_bias=False,
-                    use_resnet_dt=True)
+                eps = tf.convert_to_tensor(1e-16, dtype=dtype, name="eps")
+                if debug:
+                    gtau = []
+                    for tau in range(len(self._algorithm_instance)):
+                        with tf.name_scope(f"{tau}"):
+                            v = self._algorithm_instance.compute(
+                                tau, rij, rc, dtype=dtype)
+                            gx = tf.math.multiply(v, fc)
+                            gtau.append(gx)
+                    H = tf.concat(gtau, axis=-1, name="H")
+                else:
+                    H = convolution1x1(
+                        fc,
+                        activation_fn="softplus",
+                        hidden_sizes=[32, 32, 32],
+                        num_out=len(self._algorithm_instance),
+                        variable_scope="/Filters",
+                        output_bias=False,
+                        use_resnet_dt=True)
+                    H = tf.multiply(H, fc, name="H")
                 M = self._get_moment_coeff_tensor(
                     tf.expand_dims(rij, 0), dij, max_moment)
                 T = self._get_multiplicity_tensor(max_moment)
@@ -703,8 +715,8 @@ class GenericRadialAtomicPotential(Descriptor):
                 else:
                     G = tf.concat([
                         tf.expand_dims(
-                            tf.sqrt(G[:, :, :, 0] + eps), axis=3, name="m/0"),
-                        G[:, :, :, 1:]
+                            tf.sqrt(Q[:, :, :, 0] + eps), axis=3, name="m/0"),
+                        Q[:, :, :, 1:]
                     ], axis=3, name="G")
             n = rij.shape.dims[0].value
             g = tf.reshape(G, (n, -1, ndims), name='g')
