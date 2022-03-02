@@ -7,10 +7,13 @@ from __future__ import print_function, absolute_import
 import nose
 import tensorflow as tf
 import numpy as np
-from tensorflow_estimator import estimator
 from ase.build import bulk
 from nose.tools import assert_equal
+from collections import Counter
+from tensoralloy.utils import ModeKeys
 from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
+from tensoralloy.neighbor import find_neighbor_size_of_atoms
 from tensoralloy.nn.atomic.grap import Algorithm, GenericRadialAtomicPotential
 from tensoralloy.test_utils import assert_array_almost_equal
 from tensoralloy.precision import precision_scope
@@ -71,11 +74,11 @@ def test_moment_tensor():
                 op1 = grap1.calculate(
                     clf,
                     clf.get_descriptors(clf.get_placeholder_features()),
-                    estimator.ModeKeys.PREDICT).descriptors
+                    ModeKeys.PREDICT).descriptors
                 op2 = grap2.calculate(
                     clf,
                     clf.get_descriptors(clf.get_placeholder_features()),
-                    estimator.ModeKeys.PREDICT).descriptors
+                    ModeKeys.PREDICT).descriptors
                 g1, g2 = sess.run([op1, op2], feed_dict=clf.get_feed_dict(atoms))
                 g1 = g1['Be'][0]
                 g2 = g2['Be'][0]
@@ -92,7 +95,7 @@ def test_grap_nn_algo():
         with precision_scope("high"):
             rlist = [1.0, 1.15, 1.3, 1.45, 1.6, 1.75, 1.9, 2.05, 2.2, 2.35]
             plist = [5.0, 4.75, 4.5, 4.25, 4.0, 3.75, 3.5, 3.25, 3.0, 2.75]
-            elements = ['Be']
+            elements = ['Be', 'W']
             grap1 = GenericRadialAtomicPotential(
                 elements, "pexp", parameters={"rl": rlist, "pl": plist},
                 param_space_method="pair",
@@ -105,25 +108,44 @@ def test_grap_nn_algo():
                 cutoff_function="polynomial")
             atoms = bulk('Be') * [2, 2, 2]
             atoms.positions += np.random.rand(16, 3) * 0.1
-            atoms.set_chemical_symbols(["Be"] * 8 + ["Be"] * 8)
+            atoms.set_chemical_symbols(["Be"] * 8 + ["W"] * 8)
 
-            clf = UniversalTransformer(elements, 5.0)
+            rcut = 5.0
+            neigh = find_neighbor_size_of_atoms(atoms, rc=rcut)
+            max_occurs = Counter(atoms.get_chemical_symbols())
+
+            clf = UniversalTransformer(elements, rcut=5.0)
+            blf = BatchUniversalTransformer(
+                max_occurs, rcut=rcut, nij_max=neigh.nij, nnl_max=neigh.nnl,
+                batch_size=1)
+            protobuf = tf.convert_to_tensor(
+                blf.encode(atoms).SerializeToString())
+            example = blf.decode_protobuf(protobuf)
+            batch = dict()
+            for key, tensor in example.items():
+                batch[key] = tf.expand_dims(
+                    tensor, axis=0, name=tensor.op.name + '/batch')
+
+            descriptors = blf.get_descriptors(batch)
 
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
                 op1 = grap1.calculate(
                     clf,
                     clf.get_descriptors(clf.get_placeholder_features()),
-                    estimator.ModeKeys.PREDICT).descriptors
+                    ModeKeys.PREDICT).descriptors
                 op2 = grap2.calculate(
                     clf,
                     clf.get_descriptors(clf.get_placeholder_features()),
-                    estimator.ModeKeys.PREDICT).descriptors
-                g1, g2 = sess.run([op1, op2],
-                                  feed_dict=clf.get_feed_dict(atoms))
-                g1 = g1['Be'][0]
-                g2 = g2['Be'][0]
-                assert_array_almost_equal(g1, g2, delta=1e-6)
+                    ModeKeys.PREDICT).descriptors
+                op3 = grap2.calculate(
+                    blf, descriptors, ModeKeys.TRAIN).descriptors
+                g1, g2, g3 = sess.run([op1, op2, op3],
+                                      feed_dict=clf.get_feed_dict(atoms))
+                assert_array_almost_equal(g1['Be'][0], g2['Be'][0], delta=1e-6)
+                assert_array_almost_equal(g1['W'][0], g2['W'][0], delta=1e-6)
+                assert_array_almost_equal(g1['Be'][0], g3['Be'][0], delta=1e-6)
+                assert_array_almost_equal(g1['W'][0], g3['W'][0], delta=1e-6)
 
 
 

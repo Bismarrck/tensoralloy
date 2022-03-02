@@ -637,7 +637,7 @@ class GenericRadialAtomicPotential(Descriptor):
             abx = [0, 0, 0, 1, 1, 2]
             aby = [0, 1, 2, 1, 2, 2]
             ab_bcast = tf.convert_to_tensor(
-                [9, 1, 1, 1, 1], dtype=tf.int32, name="bcast/ab")
+                [9, 1, 1, 1, 1, 1], dtype=tf.int32, name="bcast/ab")
             ab_rows = [abx[i] * 3 + aby[i] for i in range(len(abx))]
             abcx = [0, 0, 0, 0, 0, 0, 1, 1, 1, 2]
             abcy = [0, 0, 0, 1, 1, 2, 1, 1, 2, 2]
@@ -645,43 +645,48 @@ class GenericRadialAtomicPotential(Descriptor):
             abc_rows = [abcx[i] * 3**2 + abcy[i] * 3 + abcz[i] 
                         for i in range(len(abcx))]
             abc_bcast = tf.convert_to_tensor(
-                [27, 1, 1, 1, 1], dtype=tf.int32, name="bcast/abc")
+                [27, 1, 1, 1, 1, 1], dtype=tf.int32, name="bcast/abc")
             shape = tf.shape(rij, name="shape", out_type=tf.int32)
             M_d = [tf.ones_like(rij, name="d/0", dtype=dtype)]
             za = tf.div_no_nan(dij, rij, name="za")
             if max_moment > 0:
                 M_d.append(za)
                 if max_moment > 1:
-                    xynac = tf.einsum("xnacu, ynacu->xynacu", za, za)
+                    xynac = tf.einsum("xnbacu, ynbacu->xynbacu", za, za)
                     zab_flat = tf.reshape(
                         xynac, shape=shape * ab_bcast, name="zab/flat")
                     zab = tf.gather(zab_flat, ab_rows, name="zab")
                     M_d.append(zab)
                     if max_moment > 2:
-                        xyznac = tf.einsum("xynacu, znacu->xyznacu", xynac, za)
+                        xyznac = tf.einsum("xynbacu, znbacu->xyznbacu",
+                                           xynac, za)
                         zabc_flat = tf.reshape(
                             xyznac, shape=shape * abc_bcast, name="zabc/flat")
                         zabc = tf.gather(zabc_flat, abc_rows, name="zabc")
                         M_d.append(zabc)
             return tf.squeeze(tf.concat(M_d, axis=0), axis=-1, name="M")
     
-    def apply_nn_model(self, clf: UniversalTransformer, partitions: dict,
-                       debug=True):
+    def apply_nn_model(self, clf: UniversalTransformer, dists_and_masks: dict,
+                       mode: ModeKeys, debug=True):
         """
         Apply the NN based descriptors model to all partitions.
         """
         dtype = get_float_dtype()
         rc = tf.convert_to_tensor(clf.rcut, name='rc', dtype=dtype)
+        neltypes = len(self._elements)
         outputs = {element: [None] * len(self._elements)
                    for element in self._elements}
         max_moment = max(self._moment_tensors)
-        ndims = (max_moment + 1) * len(self._algorithm_instance)
-        for kbody_term, (dists, masks) in partitions.items():
-            center = get_elements_from_kbody_term(kbody_term)[0]
-            with tf.variable_scope(f"{kbody_term}"):
-                rij = tf.squeeze(dists[0], axis=1, name='rij')
-                dij = tf.squeeze(dists[1:], axis=2, name='dij')
-                masks = tf.squeeze(masks, axis=1, name='masks')
+        ndims = (max_moment + 1) * len(self._algorithm_instance) * neltypes
+        max_occurs = {}
+        for element in clf.elements:
+            with tf.variable_scope(f"{element}"):
+                dists, masks = dists_and_masks[element]
+                rij = dists[0]
+                dij = dists[1:]
+                if ModeKeys.for_prediction(mode):
+                    rij = tf.expand_dims(rij, 0)
+                    dij = tf.expand_dims(dij, 1)
                 fc = self.apply_cutoff(rij, rc=rc, name='fc')
                 fc = tf.multiply(fc, masks, name="fc/masked")
                 eps = tf.convert_to_tensor(1e-16, dtype=dtype, name="eps")
@@ -707,27 +712,23 @@ class GenericRadialAtomicPotential(Descriptor):
                 M = self._get_moment_coeff_tensor(
                     tf.expand_dims(rij, 0), dij, max_moment)
                 T = self._get_multiplicity_tensor(max_moment)
-                P = tf.einsum("nack,dnac->nakd", H, M, name="P")
+                P = tf.einsum("nback,dnbac->nbakd", H, M, name="P")
                 S = tf.square(P, name="S")
-                Q = tf.einsum("nakd,dm->nakm", S, T, name="Q")
+                Q = tf.einsum("nbakd,dm->nabkm", S, T, name="Q")
                 if max_moment == 0:
                     G = tf.sqrt(Q + eps, name="G")
                 else:
                     G = tf.concat([
                         tf.expand_dims(
-                            tf.sqrt(Q[:, :, :, 0] + eps), axis=3, name="m/0"),
-                        Q[:, :, :, 1:]
-                    ], axis=3, name="G")
+                            tf.sqrt(Q[:, :, :, :, 0] + eps),
+                            axis=4, name="m/0"),
+                        Q[:, :, :, :, 1:]
+                    ], axis=4, name="G")
             n = rij.shape.dims[0].value
             g = tf.reshape(G, (n, -1, ndims), name='g')
-            index = clf.kbody_terms_for_element[center].index(kbody_term)
-            outputs[center][index] = g
-        with tf.name_scope("Concat"):
-            results = {}
-            for element in self._elements:
-                results[element] = tf.concat(
-                    outputs[element], axis=-1, name=element)
-            return results
+            max_occurs[element] = g.shape.dims[1].value
+            outputs[element] = g
+        return outputs, max_occurs
 
     def calculate(self,
                   transformer: UniversalTransformer,
@@ -738,19 +739,20 @@ class GenericRadialAtomicPotential(Descriptor):
         Construct the computation graph for calculating descriptors.
         """
         with tf.name_scope("Radial"):
-            partitions, max_occurs = dynamic_partition(
-                dists_and_masks=universal_descriptors['radial'],
-                elements=transformer.elements,
-                kbody_terms_for_element=transformer.kbody_terms_for_element,
-                mode=mode,
-                angular=False,
-                merge_symmetric=False)
-            if len(self._moment_tensors) == 1 and self._moment_tensors[0] < 0:
-                g = self.apply_symmetry_preserved_model(
-                    transformer, partitions, max_occurs)
+            if self._use_nn:
+                g, max_occurs = self.apply_nn_model(
+                    transformer, universal_descriptors["radial"], mode)
             else:
-                if self._use_nn:
-                    g = self.apply_nn_model(transformer, partitions)
+                partitions, max_occurs = dynamic_partition(
+                    dists_and_masks=universal_descriptors['radial'],
+                    elements=transformer.elements,
+                    kbody_terms_for_element=transformer.kbody_terms_for_element,
+                    mode=mode,
+                    angular=False,
+                    merge_symmetric=False)
+                if len(self._moment_tensors) == 1 and self._moment_tensors[0] < 0:
+                    g = self.apply_symmetry_preserved_model(
+                        transformer, partitions, max_occurs)
                 elif self._legacy_mode:
                     g = self.apply_legacy_pairwise_descriptor_functions(
                         transformer, partitions)
