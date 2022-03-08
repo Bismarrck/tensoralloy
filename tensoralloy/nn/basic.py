@@ -508,10 +508,10 @@ class BasicNN:
             A `int64` tensor of shape `[batch_size, ]`.
         atom_masks : tf.Tensor
             A float tensor of shape `[batch_size, n_atoms_max + 1]`.
-        max_train_steps : Union[int, tf.Tensor]
+        max_train_steps : int
             The maximum number of training steps.
         loss_parameters : LossParameters
-            The hyper parameters for computing the total loss.
+            The hyper-parameters for computing the total loss.
         mode : ModeKeys
             Specifies if this is training, evaluation or prediction.
 
@@ -607,7 +607,7 @@ class BasicNN:
                         losses['hessian/c'] = loss
 
             for tensor in losses.values():
-                tf.compat.v1.summary.scalar(tensor.op.name + '/summary', tensor)
+                tf.summary.scalar(tensor.op.name + '/summary', tensor)
 
         total_loss = tf.add_n(list(losses.values()), name='total_loss')
 
@@ -851,7 +851,8 @@ class BasicNN:
                     metrics.update(ops_dict)
             return metrics
 
-    def _get_eval_forces_metrocs(self, labels, predictions, atom_masks):
+    @staticmethod
+    def _get_eval_forces_metrocs(labels, predictions, atom_masks):
         """
         Default evaluation metrics for forces predictions.
         """
@@ -869,7 +870,8 @@ class BasicNN:
             return {'Forces/mae': tf.metrics.mean_absolute_error(x, y),
                     'Forces/mse': tf.metrics.mean_squared_error(x, y)}
 
-    def _get_eval_stress_metrics(self, labels, predictions):
+    @staticmethod
+    def _get_eval_stress_metrics(labels, predictions):
         """
         Default evaluation metrics for stress predictions.
         """
@@ -886,7 +888,8 @@ class BasicNN:
                     tf.metrics.mean(upper / lower)
             return ops_dict
 
-    def _get_eval_constraints_metrics(self):
+    @staticmethod
+    def _get_eval_constraints_metrics():
         """
         Default evaluation metrics for constraints.
         """
@@ -1134,12 +1137,12 @@ class BasicNN:
                         Defaults.variable_moving_average_decay)
                     saver = tf.train.Saver(ema.variables_to_restore())
                 else:
-                    saver = tf.train.Saver(var_list=tf.trainable_variables())
+                    saver = tf.train.Saver(var_list=tf.model_variables())
                 if checkpoint is not None:
                     saver.restore(sess, checkpoint)
 
                 # Create another saver to save the trainable variables
-                saver = tf.train.Saver(var_list=tf.model_variables())
+                saver = tf.train.Saver(var_list=tf.global_variables())
                 checkpoint_path = saver.save(
                     sess, saved_model_ckpt, global_step=0)
                 graph_io.write_graph(graph_or_graph_def=graph,

@@ -52,13 +52,13 @@ class InputReader:
         input_dir = dirname(filename)
 
         with open(join(dirname(__file__), "defaults.toml")) as fp:
-            defaults = toml.load(fp)
+            defaults = dict(toml.load(fp))
 
         with open(join(dirname(__file__), "choices.toml")) as fp:
-            choices = toml.load(fp)
+            choices = dict(toml.load(fp))
 
         with open(filename) as fp:
-            configs = toml.load(fp)
+            configs = dict(toml.load(fp))
 
         self._configs = self._merge(defaults, configs, choices, input_dir)
 
@@ -160,12 +160,12 @@ class InputReader:
         if nested_get(results, 'dataset.name').find("-") >= 0:
             raise ValueError("'-' is not allowed in 'dataset.name'.")
 
-        layers = nested_get(configs, 'nn.atomic.layers')
+        layers = nested_get(results, 'nn.atomic.layers')
         if isinstance(layers, dict):
             for key, val in layers.items():
                 nested_set(results, f'nn.atomic.layers.{key}', val)
 
-        pair_style = nested_get(configs, 'pair_style')
+        pair_style = nested_get(results, 'pair_style')
         if pair_style.startswith("eam"):
             for attr in ('constant', 'type'):
                 values = nested_get(configs, f"nn.eam.setfl.lattice.{attr}")
@@ -174,7 +174,7 @@ class InputReader:
                         _safe_update(f"nn.eam.setfl.lattice.{attr}.{element}")
 
             for func in ('embed', 'phi', 'rho', 'dipole', 'quadrupole'):
-                pots = nested_get(configs, f"nn.eam.{func}")
+                pots = nested_get(results, f"nn.eam.{func}")
                 if isinstance(pots, dict):
                     for key in pots.keys():
                         src = f"nn.eam.{func}.{key}"
@@ -190,9 +190,10 @@ class InputReader:
         for keypath in ("dataset.sqlite3",
                         "dataset.tfrecords_dir",
                         "train.model_dir",
-                        "train.ckpt.checkpoint_filename"):
+                        "train.ckpt.checkpoint_filename",
+                        "nn.atomic.grap.nn.ckpt"):
             path = nested_get(results, keypath)
-            if keypath == "train.ckpt.checkpoint_filename" and path is False:
+            if path is False:
                 continue
             nested_set(results, keypath, _convert_filepath(path))
 

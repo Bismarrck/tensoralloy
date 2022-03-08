@@ -1,9 +1,9 @@
 # This toml file defines the default values of the options.
 
-precision = 'high'
+precision = "medium"
 seed = 611
-pair_style = "required"
-rcut = 6.5
+pair_style = "atomic/grap"
+rcut = 6.0
 acut = 4.0
 
 [dataset]
@@ -14,24 +14,24 @@ test_size = 0.2
 serial = false
 
 [nn]
-minimize = ['energy', 'forces']
-export = ['energy', 'forces']
+minimize = ['energy', 'forces', 'stress']
+export = ['energy', 'forces', 'stress']
 
 [nn.loss]
 
 [nn.loss.energy]
 weight = 1.0
-per_atom_loss = false
+per_atom_loss = true
 method = "rmse"
 
 [nn.loss.eentropy]
 weight = 1.0
-per_atom_loss = false
+per_atom_loss = true
 method = "ylogy"
 
 [nn.loss.free_energy]
 weight = 1.0
-per_atom_loss = false
+per_atom_loss = true
 method = "rmse"
 
 [nn.loss.rose]
@@ -91,7 +91,7 @@ tau = 1.0
 
 [nn.atomic]
 kernel_initializer = 'he_normal'
-use_resnet_dt = false
+use_resnet_dt = true
 use_atomic_static_energy = true
 fixed_atomic_static_energy = false
 minmax_scale = false
@@ -123,7 +123,7 @@ zeta = [1.0, 4.0]
 [nn.atomic.grap]
 moment_tensors = [0, 1, 2]
 algorithm = 'pexp'
-cutoff_function = 'polynomial'
+cutoff_function = 'cosine'
 param_space_method = "pair"
 legacy_mode = true
 
@@ -179,10 +179,10 @@ symmetric_mixing = false
 
 [opt]
 method = "adam"
-learning_rate = 0.01
-decay_function = false
+learning_rate = 0.001
+decay_function = 'exponential'
 decay_rate = 0.98
-decay_steps = 2500
+decay_steps = 10000
 staircase = false
 
 [opt.sgd]
@@ -223,6 +223,7 @@ profile_steps = 0
 checkpoint_filename = false
 use_ema_variables = true
 restore_all_variables = true
+restore_optimizer_vars = true
 
 [distribute]
 strategy = "off"

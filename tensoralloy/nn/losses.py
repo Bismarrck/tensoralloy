@@ -260,7 +260,7 @@ def _absolute_forces_loss(labels: tf.Tensor,
 def get_forces_loss(labels,
                     predictions,
                     atom_masks,
-                    max_train_steps: Union[None, int, tf.Tensor] = None,
+                    max_train_steps=None,
                     options: ForcesLossOptions = ForcesLossOptions(),
                     collections=None):
     """

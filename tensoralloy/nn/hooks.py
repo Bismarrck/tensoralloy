@@ -57,6 +57,15 @@ class WarmStartFromVariablesHook(tf_estimator.SessionRunHook):
         self._ema = ema
         self._reset_global_step = reset_global_step
 
+    @staticmethod
+    def is_variable_for_optimizer(var_op_name: str):
+        """
+        Is this variable created by an optimizer?
+        """
+        if "Adam" in var_op_name:
+            return True
+        return False
+
     def begin(self):
         """
         Create restoring operations before the graph been finalized.
@@ -84,6 +93,14 @@ class WarmStartFromVariablesHook(tf_estimator.SessionRunHook):
         if self._reset_global_step:
             if "global_step" in assignment_map:
                 del assignment_map["global_step"]
+
+        del_keys = []
+        if not self._ckpt_params.restore_optimizer_vars:
+            for key in assignment_map:
+                if self.is_variable_for_optimizer(key):
+                    del_keys.append(key)
+        for key in del_keys:
+            del assignment_map[key]
 
         tf.train.init_from_checkpoint(self._ckpt_params.checkpoint_filename,
                                       assignment_map=assignment_map)

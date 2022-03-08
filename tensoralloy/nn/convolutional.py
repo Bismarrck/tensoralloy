@@ -67,13 +67,14 @@ class Conv(keras_Conv, base.Layer):
         if not isinstance(bias_initializer, str):
             self.bias_initializer = bias_initializer
 
+        default_set = {tf.GraphKeys.GLOBAL_VARIABLES,
+                       tf.GraphKeys.MODEL_VARIABLES}
+        if trainable:
+            default_set.add(tf.GraphKeys.TRAINABLE_VARIABLES)
         if collections is not None:
-            assert isinstance(collections, list)
-            _set = {tf.GraphKeys.GLOBAL_VARIABLES,
-                    tf.GraphKeys.TRAINABLE_VARIABLES}
-            collections = list(set(collections).difference(_set))
-            if len(collections) == 0:
-                collections = None
+            collections = list(set(collections).union(default_set))
+        else:
+            collections = list(default_set)
 
         self.fixed_bias = fixed_bias
         self.collections = collections

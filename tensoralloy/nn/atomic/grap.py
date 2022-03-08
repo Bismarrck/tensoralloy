@@ -207,7 +207,7 @@ class NNAlgorithm:
     """
 
     required_keys = ["activation_fn", "layer_sizes", "num_filters",
-                     "use_reset_dt"]
+                     "use_reset_dt", "ckpt", "trainable"]
     name = "nn"
 
     def __init__(self, parameters: dict):
@@ -231,7 +231,9 @@ class NNAlgorithm:
         return {"use_resnet_dt": self.use_reset_dt,
                 "layer_sizes": self.layer_sizes,
                 "activation": self.activation,
-                "num_filters": self.num_filters}
+                "num_filters": self.num_filters,
+                "trainable": self.trainable,
+                "ckpt": self.ckpt}
 
 
 class GenericRadialAtomicPotential(Descriptor):

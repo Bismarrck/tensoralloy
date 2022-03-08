@@ -8,7 +8,6 @@ import tensorflow as tf
 
 from typing import List, Dict, Tuple
 from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
-from tensorflow_estimator import estimator as tf_estimator
 
 from tensoralloy.utils import Defaults, GraphKeys, ModeKeys
 from tensoralloy.nn.utils import get_optimizer, get_learning_rate
@@ -111,7 +110,7 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
     """
     with tf.name_scope("Optimize"):
 
-        global_step = tf.compat.v1.train.get_or_create_global_step()
+        global_step = tf.train.get_or_create_global_step()
         learning_rate = get_learning_rate(
             global_step,
             learning_rate=opt_parameters.learning_rate,
@@ -155,7 +154,7 @@ def get_train_op(losses: dict, opt_parameters: OptParameters,
                                    reuse=tf.AUTO_REUSE):
                 decay = Defaults.variable_moving_average_decay
                 ema = tf.train.ExponentialMovingAverage(decay=decay)
-                variable_averages_op = ema.apply(tf.trainable_variables())
+                variable_averages_op = ema.apply(tf.model_variables())
 
         if is_first_replica():
             with tf.name_scope("Histogram"):
