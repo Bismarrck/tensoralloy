@@ -95,7 +95,7 @@ class WarmStartFromVariablesHook(tf_estimator.SessionRunHook):
                 del assignment_map["global_step"]
 
         del_keys = []
-        if not self._ckpt_params.restore_optimizer_vars:
+        if not self._ckpt_params.restore_optimizer_variables:
             for key in assignment_map:
                 if self.is_variable_for_optimizer(key):
                     del_keys.append(key)

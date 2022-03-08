@@ -292,7 +292,7 @@ class CkptParameters(_HyperParameters):
     checkpoint_filename: Union[str, None, bool] = None
     use_ema_variables: bool = True
     restore_all_variables: bool = True
-    restore_optimizer_vars: bool = True
+    restore_optimizer_variables: bool = True
 
 
 @add_slots

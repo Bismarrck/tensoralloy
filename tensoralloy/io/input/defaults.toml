@@ -223,7 +223,7 @@ profile_steps = 0
 checkpoint_filename = false
 use_ema_variables = true
 restore_all_variables = true
-restore_optimizer_vars = true
+restore_optimizer_variables = true
 
 [distribute]
 strategy = "off"

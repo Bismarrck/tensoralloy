@@ -1,6 +1,6 @@
-tensorflow==1.15.3
+tensorflow==1.15
 numpy>=1.18.5
-ase==3.19.1
+ase>=3.21
 nose
 joblib
 scikit-learn
