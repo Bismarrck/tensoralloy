@@ -19,16 +19,18 @@ kernel_initializer = [
     'truncated_normal']
 
 [nn.atomic.finite_temperature]
-algorithm = ["off", "zero", "semi", "full"]
 activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
 
 [nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
 
 [nn.atomic.grap]
-algorithm = ['sf', 'density', 'morse', 'pexp']
+algorithm = ['sf', 'density', 'morse', 'pexp', 'nn']
 cutoff_function = ['cosine', 'polynomial']
 param_space_method = ["pair", "cross"]
+
+[nn.atomic.grap.nn]
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
 
 [nn.loss.energy]
 method = ["rmse", "logcosh"]

@@ -34,7 +34,7 @@ from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.polar import BatchPolarTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
-from tensoralloy.utils import check_path, ModeKeys, get_git_revision_hash
+from tensoralloy.utils import check_path, ModeKeys
 from tensoralloy.precision import precision_scope
 from tensoralloy.train.dataclasses import EstimatorHyperParams
 

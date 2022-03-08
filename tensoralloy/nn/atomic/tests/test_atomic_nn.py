@@ -63,8 +63,7 @@ def test_tdsf():
                                use_computed_dists=True)
     sf = SymmetryFunction(elements=elements)
     nn = TemperatureDependentAtomicNN(
-        elements, sf, hidden_sizes=[64, 64], activation='softplus',
-        finite_temperature={"algorithm": "full"})
+        elements, sf, hidden_sizes=[64, 64], activation='softplus')
     nn.attach_transformer(clf)
 
     with tf.Graph().as_default():

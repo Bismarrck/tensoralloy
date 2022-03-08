@@ -5,9 +5,10 @@ This module defines the 1x1 convolutional Op for `tensoralloy`.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 import six
 
-from tensorflow.contrib.layers import l2_regularizer
+from tensorflow_core.contrib.layers.python.layers import regularizers
 from tensorflow.python.layers import base
 from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
 from tensorflow.python.keras.engine.input_spec import InputSpec
@@ -152,7 +153,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                    variable_scope, num_out=1, kernel_initializer='he_normal',
                    l2_weight=0.0, collections=None, output_bias=False,
                    output_bias_mean=0, fixed_output_bias=False,
-                   use_resnet_dt=False, verbose=False):
+                   use_resnet_dt=False, ckpt=None, trainable=True,
+                   verbose=False):
     """
     Construct a 1x1 convolutional neural network.
 
@@ -178,10 +180,16 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
     output_bias_mean : float
         The bias unit of the output layer will be initialized with
         `constant_initializer`. This defines the initial value.
+    fixed_output_bias : bool
+        Should the output bias be fixed or not.
     use_resnet_dt : bool
         Use ResNet block (x = sigma(wx + b) + x) if True.
     collections : List[str] or None
         A list of str as the collections where the variables should be added.
+    ckpt : str or None
+        The npz file for initial weights or None.
+    trainable : bool
+        Should the variables optimized or not.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -193,17 +201,9 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
 
     """
     dtype = x.dtype
-    kernel_initializer = get_initializer(kernel_initializer, dtype=dtype)
-    bias_initializer = get_initializer('zero', dtype=dtype)
-
-    if output_bias:
-        output_bias_initializer = get_initializer(
-            'constant', value=output_bias_mean, dtype=dtype)
-    else:
-        output_bias_initializer = None
 
     if l2_weight > 0.0:
-        regularizer = l2_regularizer(l2_weight)
+        regularizer = regularizers.l2_regularizer(l2_weight)
     else:
         regularizer = None
 
@@ -213,16 +213,47 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
 
     rank = len(x.shape) - 2
 
+    if ckpt is None or not ckpt:
+        npz = None
+    else:
+        npz = np.load(ckpt)
+        actfn_map = {
+            0: "relu",
+            1: "softplus",
+            2: "tanh"
+        }
+        activation_fn = actfn_map.get(int(npz["actfn"]))
+        hidden_sizes = npz["layer_sizes"].tolist()
+        num_out = hidden_sizes.pop(-1)
+        use_resnet_dt = npz["use_resnet_dt"] == 1
+        output_bias = npz["apply_output_bias"] == 1
+
+    def _get_initializer(layer):
+        if npz is None:
+            kernel_fn = get_initializer(kernel_initializer, dtype=dtype)
+            bias_fn = get_initializer('zero', dtype=dtype)
+        else:
+            kernel_fn = get_initializer(
+                'constant', value=npz[f"weights_0_{layer}"], dtype=dtype)
+            if layer < len(hidden_sizes) or output_bias:
+                bias_fn = get_initializer(
+                    'constant', value=npz[f"biases_0_{layer}"], dtype=dtype)
+            else:
+                bias_fn = None
+        return kernel_fn, bias_fn
+
     def _build(_x):
         for j in range(len(hidden_sizes)):
+            kernel_init, bias_init = _get_initializer(j)
             layer = Conv(rank=rank, filters=hidden_sizes[j], kernel_size=1,
                          strides=1, use_bias=True, activation=activation_fn,
-                         kernel_initializer=kernel_initializer,
-                         bias_initializer=bias_initializer,
+                         kernel_initializer=kernel_init,
+                         bias_initializer=bias_init,
                          kernel_regularizer=regularizer,
                          bias_regularizer=regularizer,
                          name=f'Conv{rank}d{j + 1}',
                          collections=collections,
+                         trainable=trainable,
                          _reuse=tf.AUTO_REUSE)
             # The condition `hidden_sizes[j] == hidden_sizes[j - 1]` is required
             # for constructing reset block.
@@ -233,13 +264,20 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
             if verbose:
                 log_tensor(_x)
 
+        kernel_init, bias_init = _get_initializer(len(hidden_sizes))
+        if not output_bias:
+            bias_init = None
+        elif npz is None:
+            bias_init = get_initializer(
+                'constant', value=output_bias_mean, dtype=dtype)
         layer = Conv(rank=rank, filters=num_out, kernel_size=1,
                      strides=1, use_bias=output_bias,
                      fixed_bias=fixed_output_bias,  activation=None,
-                     kernel_initializer=kernel_initializer,
+                     kernel_initializer=kernel_init,
                      kernel_regularizer=regularizer,
-                     bias_initializer=output_bias_initializer,
+                     bias_initializer=bias_init,
                      name='Output',
+                     trainable=trainable,
                      collections=collections,
                      _reuse=tf.AUTO_REUSE)
         return layer.apply(_x)
