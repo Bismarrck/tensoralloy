@@ -320,26 +320,27 @@ def set_logging_configs(logfile="logfile", level=logging.INFO):
 
 
 class ModeKeys:
-    """Standard names for Estimator model modes.
+    """
+    Standard names for Estimator model modes.
 
     The following standard keys are defined:
     * `TRAIN`: training/fitting mode.
     * `EVAL`: testing/evaluation mode.
     * `PREDICT`: predication/inference mode.
-    * `LAMMPS`: prediciton/inference mode for LAMMPS
-    * `KMC`: prediciton/inference mode for TensorKMC
-  """
+    * `LAMMPS`: prediciton mode for LAMMPS, pair_style tensoralloy
+    * `NATIVE`: prediciton mode for LAMMPS, pair_style tensoralloy/native
+    
+    """
 
     TRAIN = 'train'
     EVAL = 'eval'
     PREDICT = 'infer'
     LAMMPS = 'lammps'
-    KMC = 'kmc'
-    PRECOMPUTE = 'precompute'
+    NATIVE = 'native'
 
     @staticmethod
     def for_prediction(modekey):
-        return modekey in ('infer', 'lammps', 'kmc', 'precompute')
+        return modekey in ('infer', 'lammps', 'native')
 
 
 class GraphKeys:

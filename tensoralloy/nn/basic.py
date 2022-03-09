@@ -13,9 +13,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Union
 from os.path import join, dirname
-from tensorflow.python.tools import freeze_graph
-from tensorflow.python.framework import graph_io
-from tensorflow.python.framework.tensor_util import is_tensor
+from tensorflow_core.python.tools import freeze_graph
+from tensorflow_core.python.framework import graph_io
+from tensorflow_core.python.framework.tensor_util import is_tensor
 from tensorflow_estimator.python.estimator.estimator_lib import EstimatorSpec
 from ase.units import GPa
 
@@ -971,7 +971,7 @@ class BasicNN:
                                  mode=mode,
                                  verbose=(mode == ModeKeys.TRAIN))
 
-        if mode == ModeKeys.LAMMPS or mode == ModeKeys.KMC:
+        if mode == ModeKeys.LAMMPS:
             raise ValueError(
                 "`model_fn` cannot be called for mode LAMMPS or KMC")
 
@@ -1036,6 +1036,9 @@ class BasicNN:
             The export mode: `infer`, `lammps` or `kmc`
 
         """
+        if mode == ModeKeys.NATIVE:
+            self.export_to_lammps_native()
+            return
 
         graph = tf.Graph()
 
@@ -1057,46 +1060,15 @@ class BasicNN:
             configs.pop('class')
             nn = self.__class__(**configs)
 
-            if mode == ModeKeys.KMC:
-                if self.transformer.angular:
-                    raise ValueError(
-                        "TensorKMC does not support angular potentials")
-                if isinstance(self._transformer, KMCTransformer):
-                    nnl_max = self._transformer.nnl_max
-                else:
-                    nnl_max = kwargs.get("nnl_max", 0)
-                if nnl_max == 0:
-                    raise ValueError("`nnl_max` should be set but zero")
-                clf = KMCTransformer(
-                    elements=self.transformer.elements,
-                    rcut=self.transformer.rcut,
-                    nnl_max=nnl_max)
-                configs['export_properties'] = ['energy']
-            elif mode == ModeKeys.PRECOMPUTE:
-                if self.transformer.angular:
-                    raise ValueError(
-                        "TensorKMC does not support angular potentials")
-                if isinstance(self._transformer, KMCPreComputedTransformer):
-                    nfeatures = self._transformer.nfeatures
-                else:
-                    nfeatures = kwargs.get("nfeatures", 0)
-                if nfeatures == 0:
-                    raise ValueError("`ndim` should be set but zero")
-                clf = KMCPreComputedTransformer(
-                    elements=self.transformer.elements,
-                    nfeatures=nfeatures,
-                )
-                configs['export_properties'] = ['energy']
+            if isinstance(self._transformer, BatchUniversalTransformer):
+                clf = self._transformer.as_descriptor_transformer()
             else:
-                if isinstance(self._transformer, BatchUniversalTransformer):
-                    clf = self._transformer.as_descriptor_transformer()
-                else:
-                    serialized = self._transformer.as_dict()
-                    if 'class' in serialized:
-                        serialized.pop('class')
-                    clf = self._transformer.__class__(**serialized)
-                if mode == ModeKeys.LAMMPS:
-                    clf.use_computed_dists = False
+                serialized = self._transformer.as_dict()
+                if 'class' in serialized:
+                    serialized.pop('class')
+                clf = self._transformer.__class__(**serialized)
+            if mode == ModeKeys.LAMMPS:
+                clf.use_computed_dists = False
 
             nn.attach_transformer(clf)
             predictions = nn.build(clf.get_placeholder_features(),
@@ -1122,12 +1094,7 @@ class BasicNN:
                 api_version_node = tf.constant(API_VERSION, name="api")
                 ops = {key: tensor.name for key, tensor in predictions.items()}
                 ops_node = tf.constant(json.dumps(ops), name='ops')
-
-                if mode == ModeKeys.KMC:
-                    nnl_max_node = tf.constant(str(nnl_max), name="nnl_max")
-                else:
-                    nnl_max_node = None
-
+                
             with tf.Session() as sess:
                 tf.global_variables_initializer().run()
 
@@ -1167,8 +1134,6 @@ class BasicNN:
                 api_version_node.op.name,
                 ops_node.op.name,
             ]
-            if mode == ModeKeys.KMC:
-                output_node_names.append(nnl_max_node.op.name)
 
             for tensor in predictions.values():
                 if not is_tensor(tensor):

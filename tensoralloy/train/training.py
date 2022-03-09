@@ -13,9 +13,9 @@ import warnings
 
 from os.path import join, exists, dirname, basename, realpath
 from typing import Union
-from tensorflow.python import debug as tf_debug
+from tensorflow_core.python import debug as tf_debug
 from tensorflow_estimator import estimator as tf_estimator
-from tensorflow.core.protobuf.rewriter_config_pb2 import RewriterConfig
+from tensorflow_core.core.protobuf.rewriter_config_pb2 import RewriterConfig
 
 from tensoralloy.train.dataset.dataset import PolarDataset, Dataset
 from tensoralloy.io.input import InputReader
@@ -549,10 +549,6 @@ class TrainingManager:
 
             if mode == ModeKeys.LAMMPS:
                 pb_ext = "lmpb"
-            elif mode == ModeKeys.KMC:
-                pb_ext = 'kmcpb'
-            elif mode == ModeKeys.PRECOMPUTE:
-                pb_ext = 'kmcppb'
             else:
                 pb_ext = "pb"
 
@@ -599,3 +595,10 @@ class TrainingManager:
                     use_ema_variables=use_ema_variables,
                     **setfl_kwargs,
                     **kwargs)
+            
+            elif isinstance(self._model, (AtomicNN, )):
+                model_name = f'{self._dataset.name}.npz'
+                self._model.export_to_lammps_native(
+                    model_path=join(self._hparams.train.model_dir, model_name),
+                    checkpoint=checkpoint, 
+                    use_ema_variables=use_ema_variables)

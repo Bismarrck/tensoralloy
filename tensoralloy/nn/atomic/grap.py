@@ -89,7 +89,12 @@ class Algorithm:
         """
         Return a JSON serializable dict representation of this object.
         """
-        return {"algorithm": self.name, "parameters": self._params,
+        parameters = {}
+        for key, value in self._params.items():
+            if isinstance(value, np.ndarray):
+                value = value.tolist()
+            parameters[key] = value
+        return {"algorithm": self.name, "parameters": parameters,
                 "param_space_method": self._param_space_method}
 
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
@@ -206,13 +211,13 @@ class NNAlgorithm:
     The Neural Network descriptor model.
     """
 
-    required_keys = ["activation_fn", "layer_sizes", "num_filters",
+    required_keys = ["activation_fn", "hidden_sizes", "num_filters",
                      "use_reset_dt", "ckpt", "trainable"]
     name = "nn"
 
     def __init__(self, parameters: dict):
         self.use_reset_dt = parameters.get("use_resnet_dt", True)
-        self.layer_sizes = parameters.get("layer_sizes", [32, 32, 32])
+        self.hidden_sizes = parameters.get("hidden_sizes", [32, 32, 32])
         self.activation = parameters.get("activation", "softplus")
         self.num_filters = parameters.get("num_filters", 16)
         self.ckpt = parameters.get("ckpt", None)
@@ -229,7 +234,7 @@ class NNAlgorithm:
         Dict representation of this class.
         """
         return {"use_resnet_dt": self.use_reset_dt,
-                "layer_sizes": self.layer_sizes,
+                "hidden_sizes": self.hidden_sizes,
                 "activation": self.activation,
                 "num_filters": self.num_filters,
                 "trainable": self.trainable,
@@ -279,6 +284,21 @@ class GenericRadialAtomicPotential(Descriptor):
     def name(self):
         """ Return the name of this descriptor. """
         return "GRAP"
+    
+    @property
+    def algorithm(self):
+        """ The descriptor model. """
+        return self._algo
+    
+    @property
+    def max_moment(self):
+        """ The maximum angular moment. """
+        return max(self._moment_tensors)
+    
+    @property
+    def cutoff_function(self):
+        """ The cutoff function. """
+        return self._cutoff_function
 
     def as_dict(self):
         """
@@ -498,7 +518,7 @@ class GenericRadialAtomicPotential(Descriptor):
                     H = convolution1x1(
                         rij,
                         activation_fn=get_activation_fn(self._algo.activation),
-                        hidden_sizes=self._algo.layer_sizes,
+                        hidden_sizes=self._algo.hidden_sizes,
                         num_out=len(self._algo),
                         variable_scope="Filters",
                         output_bias=False,

@@ -3,17 +3,19 @@
 This module defines various atomic neural networks.
 """
 from __future__ import print_function, absolute_import
-from tensoralloy.precision import get_float_dtype
 
 import tensorflow as tf
+import numpy as np
 import json
 
 from monty.json import MSONable, MontyDecoder
 from typing import List, Dict, Union
 from collections import Counter
 
-from tensoralloy.utils import GraphKeys, ModeKeys
+from tensoralloy.precision import get_float_dtype
+from tensoralloy.utils import GraphKeys, ModeKeys, Defaults
 from tensoralloy.transformer import UniversalTransformer
+from tensoralloy.transformer import BatchUniversalTransformer
 from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.dataclasses import EnergyOps, EnergyOp
 from tensoralloy.nn.basic import BasicNN
@@ -193,17 +195,6 @@ class AtomicNN(BasicNN):
             with tf.control_dependencies(update_ops):
                 return tf.div_no_nan(xhi - x, xhi - xlo, name='x')
 
-    def _get_precomputed_descriptors(self, features: dict):
-        """
-        Get pre-computed descriptors.
-        """
-        descriptors = {}
-        max_occurs = Counter()
-        for element in self._elements:
-            descriptors[element] = features[f"G/pre/{element}"]
-            max_occurs[element] = features[f"G/pre/{element}/max_occur"]
-        return AtomicDescriptors(descriptors, max_occurs)
-
     def _get_model_outputs(self,
                            features: dict,
                            descriptors: dict,
@@ -237,13 +228,10 @@ class AtomicNN(BasicNN):
 
         with tf.variable_scope(self.scope):
             outputs = {'energy': []}
-            if mode == ModeKeys.PRECOMPUTE:
-                atomic_descriptors = self._get_precomputed_descriptors(features)
-            else:
-                atomic_descriptors = self._descriptor.calculate(
-                    transformer=self._transformer,
-                    universal_descriptors=descriptors,
-                    mode=mode)
+            atomic_descriptors = self._descriptor.calculate(
+                transformer=self._transformer,
+                universal_descriptors=descriptors,
+                mode=mode)
             for element, x in atomic_descriptors.descriptors.items():
                 with tf.variable_scope(element, reuse=tf.AUTO_REUSE):
                     if self._use_atomic_static_energy:
@@ -313,3 +301,151 @@ class AtomicNN(BasicNN):
         if verbose:
             log_tensor(energy)
         return EnergyOps(energy=EnergyOp(energy, eatom))
+    
+    def export_to_lammps_native(self, model_path, checkpoint=None, 
+                                use_ema_variables=True):
+        """
+        Export the model for LAMMPS pair_style tensoralloy/native.
+        """
+        from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
+        from ase.data import atomic_masses, atomic_numbers
+
+        if not isinstance(self._descriptor, GenericRadialAtomicPotential):
+            raise ValueError(
+                "The descriptor GenericRadialAtomicPotential is required")
+        if self._descriptor.algorithm.name not in ("pexp", "nn"):
+            raise ValueError("Only (pexp, nn) are supported!")
+        
+        layer_sizes = np.array(self._hidden_sizes[self._elements[0]], dtype=int)
+        for elt in self._elements[1:]:
+            if not np.all(self._hidden_sizes[elt] == layer_sizes):
+                raise ValueError("Layer sizes of all elements must be the same")
+        layer_sizes = np.append(layer_sizes, 1).astype(np.int32)
+
+        fctype_map = {"cosine": 0, "polynomial": 1}
+        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2}
+        
+        graph = tf.Graph()
+        with graph.as_default():
+            if self._transformer is None:
+                raise ValueError("A transformer must be attached before "
+                                 "exporting to a pb file.")
+            configs = self.as_dict()
+            configs.pop('class')
+            nn = self.__class__(**configs)
+
+            if isinstance(self._transformer, BatchUniversalTransformer):
+                clf = self._transformer.as_descriptor_transformer()
+            else:
+                serialized = self._transformer.as_dict()
+                if 'class' in serialized:
+                    serialized.pop('class')
+                clf = self._transformer.__class__(**serialized)
+
+            nn.attach_transformer(clf)
+            nn.build(clf.get_placeholder_features(),
+                     mode=ModeKeys.PREDICT,
+                     verbose=True)
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                if use_ema_variables:
+                    # Restore the moving averaged variables
+                    ema = tf.train.ExponentialMovingAverage(
+                        Defaults.variable_moving_average_decay)
+                    saver = tf.train.Saver(ema.variables_to_restore())
+                else:
+                    saver = tf.train.Saver(var_list=tf.model_variables())
+                if checkpoint is not None:
+                    saver.restore(sess, checkpoint)
+
+                elements = clf.elements
+                masses = [atomic_masses[atomic_numbers[elt]] 
+                          for elt in elements]
+                chars = []
+                for elt in elements:
+                    for char in elt:
+                        chars.append(ord(char))
+                
+                data = {
+                    "rmax": np.float64(clf.rcut),
+                    "nelt": np.int32(len(clf.elements)),
+                    "masses": np.array(masses, dtype=np.float64),
+                    "numbers": np.array(chars, dtype=np.int32)
+                }
+
+                algo = self._descriptor.algorithm.as_dict()
+                if algo["algorithm"] == "pexp":
+                    data["use_fnn"] = np.int32(0)
+                    data["rl"] = np.array(
+                        algo["parameters"]["rl"], dtype=np.float64)
+                    data["pl"] = np.array(
+                        algo["parameters"]["pl"], dtype=np.float64)
+                else:
+                    data["use_fnn"] = np.int32(1)
+                    data["fnn::nlayers"] = np.int32(
+                        len(algo["layer_sizes"]) + 1)
+                    data["fnn::layer_sizes"] = np.array(
+                        np.append(algo["hidden_sizes"], algo["num_filters"]), 
+                        dtype=np.int32)
+                    data["fnn::num_filters"] = np.int32(algo["num_filters"])
+                    data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
+                    data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
+                    data["fnn::apply_output_bias"] = np.int32(0)
+                    for j in range(len(algo["layer_sizes"])):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"Atomic/Filters/Conv1d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"Atomic/Filters/Conv1d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"fnn::weights_0_{j}"] = weights
+                        data[f"fnn::biases_0_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"Atomic/Filters/Output/kernel:0"),
+                    ]
+                    weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
+                    data[f"fnn::weights_0_{data['fnn::nlayers']}"] = weights
+                
+                data["nlayers"] = np.int32(len(layer_sizes))
+                data["max_moment"] = np.int32(self._descriptor.max_moment)
+                data["actfn"] = np.int32(actfn_map[self._activation])
+                data["fctype"] = np.int32(
+                    fctype_map[self._descriptor.cutoff_function])
+                data["layer_sizes"] = np.array(layer_sizes, dtype=np.int32)
+                data["use_resnet_dt"] = np.int32(self._use_resnet_dt)
+                data["apply_output_bias"] = np.int32(
+                    self._use_atomic_static_energy)
+                
+                for i, elt in enumerate(elements):
+                    for j in range(len(layer_sizes) - 1):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"Atomic/{elt}/Conv1d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"Atomic/{elt}/Conv1d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"weights_{i}_{j}"] = weights
+                        data[f"biases_{i}_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"Atomic/{elt}/Output/kernel:0"),
+                    ]
+                    if self._use_atomic_static_energy:
+                        ops.append(
+                            graph.get_tensor_by_name(
+                                f"Atomic/{elt}/Output/bias:0"))
+                    results = sess.run(ops)
+                    weights = np.squeeze(results[0]).astype(np.float64)
+                    data[f"weights_{i}_{len(layer_sizes) - 1}"] = weights
+                    if len(results) == 2:
+                        biases = np.squeeze(results[1]).astype(np.float64)
+                        data[f"biases_{i}_{len(layer_sizes) - 1}"] = biases
+                
+                np.savez(model_path, **data)
