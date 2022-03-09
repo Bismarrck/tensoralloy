@@ -374,7 +374,7 @@ class AtomicNN(BasicNN):
                 }
 
                 algo = self._descriptor.algorithm.as_dict()
-                if algo["algorithm"] == "pexp":
+                if self._descriptor.algorithm.name == "pexp":
                     data["use_fnn"] = np.int32(0)
                     data["rl"] = np.array(
                         algo["parameters"]["rl"], dtype=np.float64)
@@ -382,8 +382,7 @@ class AtomicNN(BasicNN):
                         algo["parameters"]["pl"], dtype=np.float64)
                 else:
                     data["use_fnn"] = np.int32(1)
-                    data["fnn::nlayers"] = np.int32(
-                        len(algo["layer_sizes"]) + 1)
+                    data["fnn::nlayers"] = np.int32(len(layer_sizes) + 1)
                     data["fnn::layer_sizes"] = np.array(
                         np.append(algo["hidden_sizes"], algo["num_filters"]), 
                         dtype=np.int32)
@@ -391,7 +390,7 @@ class AtomicNN(BasicNN):
                     data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
                     data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
                     data["fnn::apply_output_bias"] = np.int32(0)
-                    for j in range(len(algo["layer_sizes"])):
+                    for j in range(len(layer_sizes) - 1):
                         ops = [
                             graph.get_tensor_by_name(
                                 f"Atomic/Filters/Conv1d{j + 1}/kernel:0"),

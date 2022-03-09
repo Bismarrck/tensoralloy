@@ -9,12 +9,12 @@ import numpy as np
 import six
 
 from tensorflow_core.contrib.layers.python.layers import regularizers
-from tensorflow.python.layers import base
-from tensorflow.python.keras.layers.convolutional import Conv as keras_Conv
-from tensorflow.python.keras.engine.input_spec import InputSpec
-from tensorflow.python.ops import nn_ops
-from tensorflow.python.keras.utils import conv_utils
-from tensorflow.python.framework import tensor_shape
+from tensorflow_core.python.layers import base
+from tensorflow_core.python.keras.layers.convolutional import Conv as keras_Conv
+from tensorflow_core.python.keras.engine.input_spec import InputSpec
+from tensorflow_core.python.ops.nn_ops import Convolution
+from tensorflow_core.python.keras.utils import conv_utils
+from tensorflow_core.python.framework import tensor_shape
 from typing import List
 
 from tensoralloy.nn.init_ops import get_initializer
@@ -125,7 +125,7 @@ class Conv(keras_Conv, base.Layer):
             op_padding = self.padding
         if not isinstance(op_padding, (list, tuple)):
             op_padding = op_padding.upper()
-        self._convolution_op = nn_ops.Convolution(
+        self._convolution_op = Convolution(
             input_shape,
             filter_shape=self.kernel.shape,
             dilation_rate=self.dilation_rate,
