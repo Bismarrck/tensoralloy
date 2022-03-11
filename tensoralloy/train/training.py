@@ -184,7 +184,11 @@ class TrainingManager:
         """
         Copy the input TOML file and the sqlite3 database  to `model_dir`.
         """
-        files = (self._input_file, self._reader['dataset.sqlite3'])
+        files = [self._input_file, self._reader['dataset.sqlite3']]
+        ckpt = self._reader["nn.atomic.grap.parameters.ckpt"]
+
+        if isinstance(ckpt, str):
+            files.append(ckpt)
 
         for src in files:
             dst = join(self._hparams.train.model_dir, basename(src))
@@ -558,12 +562,28 @@ class TrainingManager:
                 graph_name = f'{self._dataset.name}.{pb_ext}'
             graph_path = join(self._hparams.train.model_dir, graph_name)
 
-            self._model.export(
-                output_graph_path=graph_path,
-                checkpoint=checkpoint,
-                use_ema_variables=use_ema_variables,
-                keep_tmp_files=False,
-                mode=mode, **kwargs)
+            if mode == ModeKeys.NATIVE:
+                if isinstance(self._model, (AtomicNN, )):
+                    if tag is not None:
+                        model_name = f'{self._dataset.name}.{tag}.npz'
+                    else:
+                        model_name = f'{self._dataset.name}.npz'
+                    self._model.export_to_lammps_native(
+                        model_path=join(
+                            self._hparams.train.model_dir, model_name),
+                        checkpoint=checkpoint,
+                        use_ema_variables=use_ema_variables)
+                else:
+                    raise ValueError(
+                        "This potential cannot be exported to a native lammps "
+                        "model")
+            else:
+                self._model.export(
+                    output_graph_path=graph_path,
+                    checkpoint=checkpoint,
+                    use_ema_variables=use_ema_variables,
+                    keep_tmp_files=False,
+                    mode=mode, **kwargs)
 
             if isinstance(self._model, (EamAlloyNN, EamFsNN, AdpNN)):
                 setfl_kwargs = self._reader['nn.eam.setfl']
@@ -595,10 +615,3 @@ class TrainingManager:
                     use_ema_variables=use_ema_variables,
                     **setfl_kwargs,
                     **kwargs)
-            
-            elif isinstance(self._model, (AtomicNN, )):
-                model_name = f'{self._dataset.name}.npz'
-                self._model.export_to_lammps_native(
-                    model_path=join(self._hparams.train.model_dir, model_name),
-                    checkpoint=checkpoint, 
-                    use_ema_variables=use_ema_variables)

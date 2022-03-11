@@ -393,9 +393,9 @@ class AtomicNN(BasicNN):
                     for j in range(len(layer_sizes) - 1):
                         ops = [
                             graph.get_tensor_by_name(
-                                f"Atomic/Filters/Conv1d{j + 1}/kernel:0"),
+                                f"Atomic/Filters/Conv3d{j + 1}/kernel:0"),
                             graph.get_tensor_by_name(
-                                f"Atomic/Filters/Conv1d{j + 1}/bias:0")
+                                f"Atomic/Filters/Conv3d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
                         weights = np.squeeze(weights).astype(np.float64)

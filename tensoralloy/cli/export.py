@@ -62,7 +62,7 @@ class ExportModelProgram(CLIProgram):
         subparser.add_argument(
             '--mode',
             default='infer',
-            choices=['infer', 'lammps', 'kmc', 'precompute'],
+            choices=['infer', 'lammps', 'native'],
             type=str,
             help="Export mode: infer, lammps or kmc"
         )
