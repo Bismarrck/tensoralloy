@@ -5,11 +5,13 @@ A special module for modeling finite-temperature systems.
 from __future__ import print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 
 from typing import List, Dict, Union
 from collections import Counter
 
-from tensoralloy.utils import GraphKeys, ModeKeys
+from tensoralloy.transformer import BatchUniversalTransformer
+from tensoralloy.utils import GraphKeys, ModeKeys, Defaults
 from tensoralloy.nn import losses as loss_ops
 from tensoralloy.nn.atomic.atomic import AtomicNN, Descriptor
 from tensoralloy.nn.convolutional import convolution1x1
@@ -96,15 +98,23 @@ class TemperatureDependentAtomicNN(AtomicNN):
         Add electron temperature to the atomic descriptor tensor `x`.
         """
         with tf.name_scope("Temperature"):
-            if mode == ModeKeys.LAMMPS or mode == ModeKeys.PREDICT:
+            if ModeKeys.for_prediction(mode):
+                np_dtype = x.dtype.as_numpy_dtype
                 d0 = 1
-                d1 = max_occurs[element]
+                d2 = x.shape.dims[2].value
+                vec = np.insert(np.zeros(d2), d2, 1).astype(np_dtype)
+                mat = np.insert(np.eye(d2), d2, 0, axis=1).astype(np_dtype)
+                vec = tf.convert_to_tensor(vec, name="vec", dtype=x.dtype)
+                mat = tf.convert_to_tensor(mat, name="mat", dtype=x.dtype)
+                x = tf.add(tf.einsum("nab,bc->nac", x, mat), 
+                           vec * etemperature, name="x")
+                etemp = tf.reshape(x[:, :, -1], (d0, -1, 1), name="etemp/tiled")
             else:
                 d0, d1 = x.shape.as_list()[0: 2]
-            etemp = tf.reshape(
-                etemperature, [d0, 1, 1], name='etemp')
-            etemp = tf.tile(etemp, [1, d1, 1], name='etemp/tiled')
-            x = tf.concat((x, etemp), axis=2, name='x')
+                etemp = tf.reshape(
+                    etemperature, [d0, 1, 1], name='etemp')
+                etemp = tf.tile(etemp, [1, d1, 1], name='etemp/tiled')
+                x = tf.concat((x, etemp), axis=2, name='x')
         return x, etemp
 
     def _get_electron_entropy(self,
@@ -368,3 +378,231 @@ class TemperatureDependentAtomicNN(AtomicNN):
                         name_scope=scope_name)
                     losses[prop] = loss
         return losses
+        
+    def export_to_lammps_native(self, model_path, checkpoint=None, 
+                                use_ema_variables=True):
+        """
+        Export the model for LAMMPS pair_style tensoralloy/native.
+        """
+        from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
+        from ase.data import atomic_masses, atomic_numbers
+
+        if not isinstance(self._descriptor, GenericRadialAtomicPotential):
+            raise ValueError(
+                "The descriptor GenericRadialAtomicPotential is required")
+        if self._descriptor.algorithm.name not in ("pexp", "nn"):
+            raise ValueError("Only (pexp, nn) are supported!")
+        
+        layer_sizes = np.array(self._hidden_sizes[self._elements[0]], dtype=int)
+        for elt in self._elements[1:]:
+            if not np.all(self._hidden_sizes[elt] == layer_sizes):
+                raise ValueError("Layer sizes of all elements must be the same")
+        layer_sizes = np.append(layer_sizes, 1).astype(np.int32)
+
+        fctype_map = {"cosine": 0, "polynomial": 1}
+        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2}
+        
+        graph = tf.Graph()
+        with graph.as_default():
+            if self._transformer is None:
+                raise ValueError("A transformer must be attached before "
+                                 "exporting to a pb file.")
+            configs = self.as_dict()
+            configs.pop('class')
+            nn = self.__class__(**configs)
+
+            if isinstance(self._transformer, BatchUniversalTransformer):
+                clf = self._transformer.as_descriptor_transformer()
+            else:
+                serialized = self._transformer.as_dict()
+                if 'class' in serialized:
+                    serialized.pop('class')
+                clf = self._transformer.__class__(**serialized)
+
+            nn.attach_transformer(clf)
+            nn.build(clf.get_placeholder_features(),
+                     mode=ModeKeys.PREDICT,
+                     verbose=True)
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                if use_ema_variables:
+                    # Restore the moving averaged variables
+                    ema = tf.train.ExponentialMovingAverage(
+                        Defaults.variable_moving_average_decay)
+                    saver = tf.train.Saver(ema.variables_to_restore())
+                else:
+                    saver = tf.train.Saver(var_list=tf.model_variables())
+                if checkpoint is not None:
+                    saver.restore(sess, checkpoint)
+
+                elements = clf.elements
+                masses = [atomic_masses[atomic_numbers[elt]] 
+                          for elt in elements]
+                chars = []
+                for elt in elements:
+                    for char in elt:
+                        chars.append(ord(char))
+                
+                data = {
+                    "rmax": np.float64(clf.rcut),
+                    "nelt": np.int32(len(clf.elements)),
+                    "masses": np.array(masses, dtype=np.float64),
+                    "numbers": np.array(chars, dtype=np.int32)
+                }
+                data["max_moment"] = np.int32(self._descriptor.max_moment)
+                data["fctype"] = np.int32(
+                    fctype_map[self._descriptor.cutoff_function])
+                data["tdnp"] = np.int32(1)
+
+                # --------------------------------------------------------------
+                # Algorithm
+                # 
+
+                algo = self._descriptor.algorithm.as_dict()
+                if self._descriptor.algorithm.name == "pexp":
+                    data["use_fnn"] = np.int32(0)
+                    data["rl"] = np.array(
+                        algo["parameters"]["rl"], dtype=np.float64)
+                    data["pl"] = np.array(
+                        algo["parameters"]["pl"], dtype=np.float64)
+                else:
+                    data["use_fnn"] = np.int32(1)
+                    data["fnn::nlayers"] = np.int32(len(layer_sizes) + 1)
+                    data["fnn::layer_sizes"] = np.array(
+                        np.append(algo["hidden_sizes"], algo["num_filters"]), 
+                        dtype=np.int32)
+                    data["fnn::num_filters"] = np.int32(algo["num_filters"])
+                    data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
+                    data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
+                    data["fnn::apply_output_bias"] = np.int32(0)
+                    for j in range(len(layer_sizes) - 1):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/Filters/Conv3d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/Filters/Conv3d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"fnn::weights_0_{j}"] = weights
+                        data[f"fnn::biases_0_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/Filters/Output/kernel:0"),
+                    ]
+                    weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
+                    data[f"fnn::weights_0_{data['fnn::nlayers']}"] = weights
+
+                # --------------------------------------------------------------
+                # H
+                # 
+
+                nlayers = len(self._finite_temperature.layers)
+                data["H::nlayers"] = np.int32(nlayers)
+                data["H::actfn"] = np.int32(
+                    actfn_map[self._finite_temperature.activation])
+                data["H::layer_sizes"] = np.array(
+                    self._finite_temperature.layers, dtype=np.int32)
+                data["H::use_resnet_dt"] = np.int32(self._use_resnet_dt)
+                data["H::apply_output_bias"] = np.int32(1)
+                for i, elt in enumerate(elements):
+                    for j in range(nlayers - 1):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/H/Conv1d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/H/Conv1d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"H::weights_{i}_{j}"] = weights
+                        data[f"H::biases_{i}_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/{elt}/H/Output/kernel:0"),
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/{elt}/H/Output/bias:0")
+                    ]
+                    results = sess.run(ops)
+                    weights = np.squeeze(results[0]).astype(np.float64)
+                    biases = np.squeeze(results[1]).astype(np.float64)
+                    data[f"H::weights_{i}_{nlayers - 1}"] = weights
+                    data[f"H::biases_{i}_{nlayers - 1}"] = biases
+                
+                # --------------------------------------------------------------
+                # S
+                # 
+
+                nlayers = len(layer_sizes)
+                data["S::nlayers"] = np.int32(nlayers)
+                data["S::actfn"] = np.int32(actfn_map[self._activation])
+                data["S::layer_sizes"] = np.array(layer_sizes, dtype=np.int32)
+                data["S::use_resnet_dt"] = np.int32(self._use_resnet_dt)
+                data["S::apply_output_bias"] = np.int32(1)
+                for i, elt in enumerate(elements):
+                    for j in range(nlayers - 1):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/S/Conv1d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/S/Conv1d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"S::weights_{i}_{j}"] = weights
+                        data[f"S::biases_{i}_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/{elt}/S/Output/kernel:0"),
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/{elt}/S/Output/bias:0")
+                    ]
+                    results = sess.run(ops)
+                    weights = np.squeeze(results[0]).astype(np.float64)
+                    biases = np.squeeze(results[1]).astype(np.float64)
+                    data[f"S::weights_{i}_{nlayers - 1}"] = weights
+                    data[f"S::biases_{i}_{nlayers - 1}"] = biases
+                
+                # --------------------------------------------------------------
+                # U
+                # 
+
+                nlayers = len(layer_sizes)
+                data["U::nlayers"] = np.int32(nlayers)
+                data["U::actfn"] = np.int32(actfn_map[self._activation])
+                data["U::layer_sizes"] = np.array(layer_sizes, dtype=np.int32)
+                data["U::use_resnet_dt"] = np.int32(self._use_resnet_dt)
+                data["U::apply_output_bias"] = np.int32(
+                    self._use_atomic_static_energy)
+                for i, elt in enumerate(elements):
+                    for j in range(nlayers - 1):
+                        ops = [
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/U/Conv1d{j + 1}/kernel:0"),
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/U/Conv1d{j + 1}/bias:0")
+                        ]
+                        weights, biases = sess.run(ops)
+                        weights = np.squeeze(weights).astype(np.float64)
+                        biases = np.squeeze(biases).astype(np.float64)
+                        data[f"U::weights_{i}_{j}"] = weights
+                        data[f"U::biases_{i}_{j}"] = biases
+                    ops = [
+                        graph.get_tensor_by_name(
+                            f"{self.scope}/{elt}/U/Output/kernel:0"),
+                    ]
+                    if self._use_atomic_static_energy:
+                        ops.append(
+                            graph.get_tensor_by_name(
+                                f"{self.scope}/{elt}/U/Output/bias:0"))
+                    results = sess.run(ops)
+                    weights = np.squeeze(results[0]).astype(np.float64)
+                    data[f"U::weights_{i}_{nlayers - 1}"] = weights
+                    if len(results) == 2:
+                        biases = np.squeeze(results[1]).astype(np.float64)
+                        data[f"H::biases_{i}_{nlayers - 1}"] = biases
+                
+                np.savez(model_path, **data)
