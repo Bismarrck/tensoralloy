@@ -372,6 +372,7 @@ class AtomicNN(BasicNN):
                     "masses": np.array(masses, dtype=np.float64),
                     "numbers": np.array(chars, dtype=np.int32)
                 }
+                data["tdnp"] = np.int32(0)
 
                 algo = self._descriptor.algorithm.as_dict()
                 if self._descriptor.algorithm.name == "pexp":
@@ -393,9 +394,9 @@ class AtomicNN(BasicNN):
                     for j in range(len(layer_sizes) - 1):
                         ops = [
                             graph.get_tensor_by_name(
-                                f"Atomic/Filters/Conv3d{j + 1}/kernel:0"),
+                                f"{self.scope}/Filters/Conv3d{j + 1}/kernel:0"),
                             graph.get_tensor_by_name(
-                                f"Atomic/Filters/Conv3d{j + 1}/bias:0")
+                                f"{self.scope}/Filters/Conv3d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
                         weights = np.squeeze(weights).astype(np.float64)
@@ -404,7 +405,7 @@ class AtomicNN(BasicNN):
                         data[f"fnn::biases_0_{j}"] = biases
                     ops = [
                         graph.get_tensor_by_name(
-                            f"Atomic/Filters/Output/kernel:0"),
+                            f"{self.scope}/Filters/Output/kernel:0"),
                     ]
                     weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
                     data[f"fnn::weights_0_{data['fnn::nlayers']}"] = weights
@@ -423,9 +424,9 @@ class AtomicNN(BasicNN):
                     for j in range(len(layer_sizes) - 1):
                         ops = [
                             graph.get_tensor_by_name(
-                                f"Atomic/{elt}/Conv1d{j + 1}/kernel:0"),
+                                f"{self.scope}/{elt}/Conv1d{j + 1}/kernel:0"),
                             graph.get_tensor_by_name(
-                                f"Atomic/{elt}/Conv1d{j + 1}/bias:0")
+                                f"{self.scope}/{elt}/Conv1d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
                         weights = np.squeeze(weights).astype(np.float64)
@@ -434,12 +435,12 @@ class AtomicNN(BasicNN):
                         data[f"biases_{i}_{j}"] = biases
                     ops = [
                         graph.get_tensor_by_name(
-                            f"Atomic/{elt}/Output/kernel:0"),
+                            f"{self.scope}/{elt}/Output/kernel:0"),
                     ]
                     if self._use_atomic_static_energy:
                         ops.append(
                             graph.get_tensor_by_name(
-                                f"Atomic/{elt}/Output/bias:0"))
+                                f"{self.scope}/{elt}/Output/bias:0"))
                     results = sess.run(ops)
                     weights = np.squeeze(results[0]).astype(np.float64)
                     data[f"weights_{i}_{len(layer_sizes) - 1}"] = weights
