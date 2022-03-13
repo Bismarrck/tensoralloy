@@ -149,7 +149,7 @@ pl = [5.0, 4.75, 4.5, 4.25, 4.0, 3.75, 3.5, 3.25, 3.0, 2.75, 2.5, 2.25, 2.0, 1.7
 activation = "softplus"
 hidden_sizes = [32, 32, 32]
 num_filters = 16
-use_resnet_dt = true
+use_resnet_dt = false
 ckpt = false
 trainable = true
 

@@ -216,7 +216,7 @@ class NNAlgorithm:
     name = "nn"
 
     def __init__(self, parameters: dict):
-        self.use_reset_dt = parameters.get("use_resnet_dt", True)
+        self.use_resnet_dt = parameters.get("use_resnet_dt", True)
         self.hidden_sizes = parameters.get("hidden_sizes", [32, 32, 32])
         self.activation = parameters.get("activation", "softplus")
         self.num_filters = parameters.get("num_filters", 16)
@@ -233,7 +233,19 @@ class NNAlgorithm:
         """
         Dict representation of this class.
         """
-        return {"use_resnet_dt": self.use_reset_dt,
+        if isinstance(self.ckpt, str):
+            npz = np.load(self.ckpt)
+            actfn_map = {
+                0: "relu",
+                1: "softplus",
+                2: "tanh"
+            }
+            self.activation = actfn_map.get(int(npz["actfn"]))
+            self.hidden_sizes = npz["layer_sizes"].tolist()
+            self.num_filters = self.hidden_sizes.pop(-1)
+            self.use_resnet_dt = npz["use_resnet_dt"] == 1
+
+        return {"use_resnet_dt": self.use_resnet_dt,
                 "hidden_sizes": self.hidden_sizes,
                 "activation": self.activation,
                 "num_filters": self.num_filters,
@@ -284,17 +296,17 @@ class GenericRadialAtomicPotential(Descriptor):
     def name(self):
         """ Return the name of this descriptor. """
         return "GRAP"
-    
+
     @property
     def algorithm(self):
         """ The descriptor model. """
         return self._algo
-    
+
     @property
     def max_moment(self):
         """ The maximum angular moment. """
         return max(self._moment_tensors)
-    
+
     @property
     def cutoff_function(self):
         """ The cutoff function. """
@@ -525,7 +537,7 @@ class GenericRadialAtomicPotential(Descriptor):
                         verbose=True,
                         trainable=self._algo.trainable,
                         ckpt=self._algo.ckpt,
-                        use_resnet_dt=self._algo.use_reset_dt)
+                        use_resnet_dt=self._algo.use_resnet_dt)
                     H = tf.multiply(H, fc, name="H")
                 else:
                     gtau = []

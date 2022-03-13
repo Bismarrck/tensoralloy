@@ -10,7 +10,6 @@ import json
 
 from monty.json import MSONable, MontyDecoder
 from typing import List, Dict, Union
-from collections import Counter
 
 from tensoralloy.precision import get_float_dtype
 from tensoralloy.utils import GraphKeys, ModeKeys, Defaults
@@ -131,14 +130,14 @@ class AtomicNN(BasicNN):
                 "minimize_properties": self._minimize_properties,
                 "export_properties": self._export_properties,
                 "descriptor": self._descriptor.as_dict()}
-    
+
     def _create_variable(self, name, shape, trainable=True, init_val=0.0,
                          monitoring=0):
         """
         Create a variable.
         """
         collections = [
-            tf.GraphKeys.GLOBAL_VARIABLES, 
+            tf.GraphKeys.GLOBAL_VARIABLES,
             tf.GraphKeys.MODEL_VARIABLES,
             self.default_collection,
         ]
@@ -150,9 +149,9 @@ class AtomicNN(BasicNN):
             collections.append(GraphKeys.TRAIN_METRICS)
         dtype = get_float_dtype()
         init = tf.constant_initializer(init_val, dtype)
-        return tf.get_variable(name=name, shape=shape, dtype=dtype, 
+        return tf.get_variable(name=name, shape=shape, dtype=dtype,
                                trainable=trainable, collections=collections,
-                               initializer=init, 
+                               initializer=init,
                                aggregation=tf.VariableAggregation.MEAN)
 
     def _apply_minmax_normalization(self,
@@ -301,8 +300,8 @@ class AtomicNN(BasicNN):
         if verbose:
             log_tensor(energy)
         return EnergyOps(energy=EnergyOp(energy, eatom))
-    
-    def export_to_lammps_native(self, model_path, checkpoint=None, 
+
+    def export_to_lammps_native(self, model_path, checkpoint=None,
                                 use_ema_variables=True):
         """
         Export the model for LAMMPS pair_style tensoralloy/native.
@@ -315,7 +314,7 @@ class AtomicNN(BasicNN):
                 "The descriptor GenericRadialAtomicPotential is required")
         if self._descriptor.algorithm.name not in ("pexp", "nn"):
             raise ValueError("Only (pexp, nn) are supported!")
-        
+
         layer_sizes = np.array(self._hidden_sizes[self._elements[0]], dtype=int)
         for elt in self._elements[1:]:
             if not np.all(self._hidden_sizes[elt] == layer_sizes):
@@ -324,7 +323,7 @@ class AtomicNN(BasicNN):
 
         fctype_map = {"cosine": 0, "polynomial": 1}
         actfn_map = {"relu": 0, "softplus": 1, "tanh": 2}
-        
+
         graph = tf.Graph()
         with graph.as_default():
             if self._transformer is None:
@@ -359,20 +358,19 @@ class AtomicNN(BasicNN):
                     saver.restore(sess, checkpoint)
 
                 elements = clf.elements
-                masses = [atomic_masses[atomic_numbers[elt]] 
+                masses = [atomic_masses[atomic_numbers[elt]]
                           for elt in elements]
                 chars = []
                 for elt in elements:
                     for char in elt:
                         chars.append(ord(char))
-                
-                data = {
-                    "rmax": np.float64(clf.rcut),
-                    "nelt": np.int32(len(clf.elements)),
-                    "masses": np.array(masses, dtype=np.float64),
-                    "numbers": np.array(chars, dtype=np.int32)
-                }
-                data["tdnp"] = np.int32(0)
+
+                data = {"rmax": np.float64(clf.rcut),
+                        "nelt": np.int32(len(clf.elements)),
+                        "masses": np.array(masses, dtype=np.float64),
+                        "numbers": np.array(chars, dtype=np.int32),
+                        "tdnp": np.int32(0),
+                        "precision": np.int32(64)}
 
                 algo = self._descriptor.algorithm.as_dict()
                 if self._descriptor.algorithm.name == "pexp":
@@ -383,9 +381,10 @@ class AtomicNN(BasicNN):
                         algo["parameters"]["pl"], dtype=np.float64)
                 else:
                     data["use_fnn"] = np.int32(1)
-                    data["fnn::nlayers"] = np.int32(len(layer_sizes) + 1)
+                    data["fnn::nlayers"] = np.int32(
+                        len(algo["hidden_sizes"]) + 1)
                     data["fnn::layer_sizes"] = np.array(
-                        np.append(algo["hidden_sizes"], algo["num_filters"]), 
+                        np.append(algo["hidden_sizes"], algo["num_filters"]),
                         dtype=np.int32)
                     data["fnn::num_filters"] = np.int32(algo["num_filters"])
                     data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
@@ -408,8 +407,8 @@ class AtomicNN(BasicNN):
                             f"{self.scope}/Filters/Output/kernel:0"),
                     ]
                     weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
-                    data[f"fnn::weights_0_{data['fnn::nlayers']}"] = weights
-                
+                    data[f"fnn::weights_0_{data['fnn::nlayers'] - 1}"] = weights
+
                 data["nlayers"] = np.int32(len(layer_sizes))
                 data["max_moment"] = np.int32(self._descriptor.max_moment)
                 data["actfn"] = np.int32(actfn_map[self._activation])
@@ -419,7 +418,7 @@ class AtomicNN(BasicNN):
                 data["use_resnet_dt"] = np.int32(self._use_resnet_dt)
                 data["apply_output_bias"] = np.int32(
                     self._use_atomic_static_energy)
-                
+
                 for i, elt in enumerate(elements):
                     for j in range(len(layer_sizes) - 1):
                         ops = [
@@ -447,5 +446,5 @@ class AtomicNN(BasicNN):
                     if len(results) == 2:
                         biases = np.squeeze(results[1]).astype(np.float64)
                         data[f"biases_{i}_{len(layer_sizes) - 1}"] = biases
-                
+
                 np.savez(model_path, **data)
