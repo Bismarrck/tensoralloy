@@ -390,7 +390,7 @@ class AtomicNN(BasicNN):
                     data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
                     data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
                     data["fnn::apply_output_bias"] = np.int32(0)
-                    for j in range(len(layer_sizes) - 1):
+                    for j in range(data["fnn::nlayers"] - 1):
                         ops = [
                             graph.get_tensor_by_name(
                                 f"{self.scope}/Filters/Conv3d{j + 1}/kernel:0"),

@@ -467,15 +467,16 @@ class TemperatureDependentAtomicNN(AtomicNN):
                         algo["parameters"]["pl"], dtype=np.float64)
                 else:
                     data["use_fnn"] = np.int32(1)
-                    data["fnn::nlayers"] = np.int32(len(layer_sizes) + 1)
+                    data["fnn::nlayers"] = np.int32(
+                        len(algo["hidden_sizes"]) + 1)
                     data["fnn::layer_sizes"] = np.array(
-                        np.append(algo["hidden_sizes"], algo["num_filters"]), 
+                        np.append(algo["hidden_sizes"], algo["num_filters"]),
                         dtype=np.int32)
                     data["fnn::num_filters"] = np.int32(algo["num_filters"])
                     data["fnn::actfn"] = np.int32(actfn_map[algo["activation"]])
                     data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
                     data["fnn::apply_output_bias"] = np.int32(0)
-                    for j in range(len(layer_sizes) - 1):
+                    for j in range(data["fnn::nlayers"] - 1):
                         ops = [
                             graph.get_tensor_by_name(
                                 f"{self.scope}/Filters/Conv3d{j + 1}/kernel:0"),
@@ -492,7 +493,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
                             f"{self.scope}/Filters/Output/kernel:0"),
                     ]
                     weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
-                    data[f"fnn::weights_0_{data['fnn::nlayers']}"] = weights
+                    data[f"fnn::weights_0_{data['fnn::nlayers'] - 1}"] = weights
 
                 # --------------------------------------------------------------
                 # H
@@ -603,6 +604,6 @@ class TemperatureDependentAtomicNN(AtomicNN):
                     data[f"U::weights_{i}_{nlayers - 1}"] = weights
                     if len(results) == 2:
                         biases = np.squeeze(results[1]).astype(np.float64)
-                        data[f"H::biases_{i}_{nlayers - 1}"] = biases
+                        data[f"U::biases_{i}_{nlayers - 1}"] = biases
                 
                 np.savez(model_path, **data)
