@@ -66,16 +66,12 @@ class ExportModelProgram(CLIProgram):
             type=str,
             help="Export mode: infer, lammps or kmc"
         )
-
-        group = subparser.add_mutually_exclusive_group()
-        group.add_argument(
-            "--nnl",
+        subparser.add_argument(
+            "--precision",
+            default=None,
+            choices=[32, 64],
             type=int,
-            help="The nnl_max parameter for TensorKMC")
-        group.add_argument(
-            '--nfeatures',
-            type=int,
-            help="Number of features per atom for precomputed TensorKMC"
+            help="Override the float precision for native models."
         )
 
         group = subparser.add_argument_group("EAM")
@@ -150,7 +146,7 @@ class ExportModelProgram(CLIProgram):
 
             kwargs = {'r0': args.r0, 'rt': args.rt,
                       'rho0': args.rho0, 'rhot': args.rhot,
-                      'nnl': args.nnl, 'nfeatures': args.nfeatures}
+                      'precision': args.precision}
 
             manager = TrainingManager(configs, validate_tfrecords=False)
             manager.export(ckpt,

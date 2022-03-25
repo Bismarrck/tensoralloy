@@ -302,7 +302,7 @@ class AtomicNN(BasicNN):
         return EnergyOps(energy=EnergyOp(energy, eatom))
 
     def export_to_lammps_native(self, model_path, checkpoint=None,
-                                use_ema_variables=True):
+                                use_ema_variables=True, dtype=np.float64):
         """
         Export the model for LAMMPS pair_style tensoralloy/native.
         """
@@ -365,20 +365,21 @@ class AtomicNN(BasicNN):
                     for char in elt:
                         chars.append(ord(char))
 
-                data = {"rmax": np.float64(clf.rcut),
+                precision = np.int32(64 if dtype == np.float64 else 32)
+                data = {"rmax": dtype(clf.rcut),
                         "nelt": np.int32(len(clf.elements)),
-                        "masses": np.array(masses, dtype=np.float64),
+                        "masses": np.array(masses, dtype=dtype),
                         "numbers": np.array(chars, dtype=np.int32),
                         "tdnp": np.int32(0),
-                        "precision": np.int32(64)}
+                        "precision": precision}
 
                 algo = self._descriptor.algorithm.as_dict()
                 if self._descriptor.algorithm.name == "pexp":
                     data["use_fnn"] = np.int32(0)
                     data["rl"] = np.array(
-                        algo["parameters"]["rl"], dtype=np.float64)
+                        algo["parameters"]["rl"], dtype=dtype)
                     data["pl"] = np.array(
-                        algo["parameters"]["pl"], dtype=np.float64)
+                        algo["parameters"]["pl"], dtype=dtype)
                 else:
                     data["use_fnn"] = np.int32(1)
                     data["fnn::nlayers"] = np.int32(
@@ -398,15 +399,15 @@ class AtomicNN(BasicNN):
                                 f"{self.scope}/Filters/Conv3d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"fnn::weights_0_{j}"] = weights
                         data[f"fnn::biases_0_{j}"] = biases
                     ops = [
                         graph.get_tensor_by_name(
                             f"{self.scope}/Filters/Output/kernel:0"),
                     ]
-                    weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
+                    weights = np.squeeze(sess.run(ops)[0]).astype(dtype)
                     data[f"fnn::weights_0_{data['fnn::nlayers'] - 1}"] = weights
 
                 data["nlayers"] = np.int32(len(layer_sizes))
@@ -428,8 +429,8 @@ class AtomicNN(BasicNN):
                                 f"{self.scope}/{elt}/Conv1d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"weights_{i}_{j}"] = weights
                         data[f"biases_{i}_{j}"] = biases
                     ops = [
@@ -441,10 +442,10 @@ class AtomicNN(BasicNN):
                             graph.get_tensor_by_name(
                                 f"{self.scope}/{elt}/Output/bias:0"))
                     results = sess.run(ops)
-                    weights = np.squeeze(results[0]).astype(np.float64)
+                    weights = np.squeeze(results[0]).astype(dtype)
                     data[f"weights_{i}_{len(layer_sizes) - 1}"] = weights
                     if len(results) == 2:
-                        biases = np.squeeze(results[1]).astype(np.float64)
+                        biases = np.squeeze(results[1]).astype(dtype)
                         data[f"biases_{i}_{len(layer_sizes) - 1}"] = biases
 
                 np.savez(model_path, **data)

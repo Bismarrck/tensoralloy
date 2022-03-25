@@ -380,7 +380,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
         return losses
         
     def export_to_lammps_native(self, model_path, checkpoint=None, 
-                                use_ema_variables=True):
+                                use_ema_variables=True, dtype=np.float64):
         """
         Export the model for LAMMPS pair_style tensoralloy/native.
         """
@@ -444,15 +444,16 @@ class TemperatureDependentAtomicNN(AtomicNN):
                         chars.append(ord(char))
                 
                 data = {
-                    "rmax": np.float64(clf.rcut),
+                    "rmax": dtype(clf.rcut),
                     "nelt": np.int32(len(clf.elements)),
-                    "masses": np.array(masses, dtype=np.float64),
-                    "numbers": np.array(chars, dtype=np.int32)
+                    "masses": np.array(masses, dtype=dtype),
+                    "numbers": np.array(chars, dtype=dtype)
                 }
                 data["max_moment"] = np.int32(self._descriptor.max_moment)
                 data["fctype"] = np.int32(
                     fctype_map[self._descriptor.cutoff_function])
                 data["tdnp"] = np.int32(1)
+                data["precision"] = np.int32(64 if dtype == np.float64 else 32)
 
                 # --------------------------------------------------------------
                 # Algorithm
@@ -462,9 +463,9 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 if self._descriptor.algorithm.name == "pexp":
                     data["use_fnn"] = np.int32(0)
                     data["rl"] = np.array(
-                        algo["parameters"]["rl"], dtype=np.float64)
+                        algo["parameters"]["rl"], dtype=dtype)
                     data["pl"] = np.array(
-                        algo["parameters"]["pl"], dtype=np.float64)
+                        algo["parameters"]["pl"], dtype=dtype)
                 else:
                     data["use_fnn"] = np.int32(1)
                     data["fnn::nlayers"] = np.int32(
@@ -484,15 +485,15 @@ class TemperatureDependentAtomicNN(AtomicNN):
                                 f"{self.scope}/Filters/Conv3d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"fnn::weights_0_{j}"] = weights
                         data[f"fnn::biases_0_{j}"] = biases
                     ops = [
                         graph.get_tensor_by_name(
                             f"{self.scope}/Filters/Output/kernel:0"),
                     ]
-                    weights = np.squeeze(sess.run(ops)[0]).astype(np.float64)
+                    weights = np.squeeze(sess.run(ops)[0]).astype(dtype)
                     data[f"fnn::weights_0_{data['fnn::nlayers'] - 1}"] = weights
 
                 # --------------------------------------------------------------
@@ -516,8 +517,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                                 f"{self.scope}/{elt}/H/Conv1d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"H::weights_{i}_{j}"] = weights
                         data[f"H::biases_{i}_{j}"] = biases
                     ops = [
@@ -527,8 +528,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                             f"{self.scope}/{elt}/H/Output/bias:0")
                     ]
                     results = sess.run(ops)
-                    weights = np.squeeze(results[0]).astype(np.float64)
-                    biases = np.squeeze(results[1]).astype(np.float64)
+                    weights = np.squeeze(results[0]).astype(dtype)
+                    biases = np.squeeze(results[1]).astype(dtype)
                     data[f"H::weights_{i}_{nlayers - 1}"] = weights
                     data[f"H::biases_{i}_{nlayers - 1}"] = biases
                 
@@ -551,8 +552,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                                 f"{self.scope}/{elt}/S/Conv1d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"S::weights_{i}_{j}"] = weights
                         data[f"S::biases_{i}_{j}"] = biases
                     ops = [
@@ -562,8 +563,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                             f"{self.scope}/{elt}/S/Output/bias:0")
                     ]
                     results = sess.run(ops)
-                    weights = np.squeeze(results[0]).astype(np.float64)
-                    biases = np.squeeze(results[1]).astype(np.float64)
+                    weights = np.squeeze(results[0]).astype(dtype)
+                    biases = np.squeeze(results[1]).astype(dtype)
                     data[f"S::weights_{i}_{nlayers - 1}"] = weights
                     data[f"S::biases_{i}_{nlayers - 1}"] = biases
                 
@@ -587,8 +588,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                                 f"{self.scope}/{elt}/U/Conv1d{j + 1}/bias:0")
                         ]
                         weights, biases = sess.run(ops)
-                        weights = np.squeeze(weights).astype(np.float64)
-                        biases = np.squeeze(biases).astype(np.float64)
+                        weights = np.squeeze(weights).astype(dtype)
+                        biases = np.squeeze(biases).astype(dtype)
                         data[f"U::weights_{i}_{j}"] = weights
                         data[f"U::biases_{i}_{j}"] = biases
                     ops = [
@@ -600,10 +601,10 @@ class TemperatureDependentAtomicNN(AtomicNN):
                             graph.get_tensor_by_name(
                                 f"{self.scope}/{elt}/U/Output/bias:0"))
                     results = sess.run(ops)
-                    weights = np.squeeze(results[0]).astype(np.float64)
+                    weights = np.squeeze(results[0]).astype(dtype)
                     data[f"U::weights_{i}_{nlayers - 1}"] = weights
                     if len(results) == 2:
-                        biases = np.squeeze(results[1]).astype(np.float64)
+                        biases = np.squeeze(results[1]).astype(dtype)
                         data[f"U::biases_{i}_{nlayers - 1}"] = biases
                 
                 np.savez(model_path, **data)

@@ -4,6 +4,7 @@ This module is used to train the model
 """
 from __future__ import print_function, absolute_import
 
+import numpy as np
 import tensorflow as tf
 import shutil
 import os
@@ -568,11 +569,19 @@ class TrainingManager:
                         model_name = f'{self._dataset.name}.{tag}.npz'
                     else:
                         model_name = f'{self._dataset.name}.npz'
+                    from tensoralloy.precision import get_float_dtype
+                    if kwargs.get('precision', None) == None:
+                        dtype = get_float_dtype().as_numpy_dtype
+                    elif kwargs["precision"] == 32:
+                        dtype = np.float32
+                    else:
+                        dtype = np.float64
                     self._model.export_to_lammps_native(
                         model_path=join(
                             self._hparams.train.model_dir, model_name),
                         checkpoint=checkpoint,
-                        use_ema_variables=use_ema_variables)
+                        use_ema_variables=use_ema_variables,
+                        dtype=dtype)
                 else:
                     raise ValueError(
                         "This potential cannot be exported to a native lammps "
