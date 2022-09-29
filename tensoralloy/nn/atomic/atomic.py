@@ -419,6 +419,8 @@ class AtomicNN(BasicNN):
                 data["use_resnet_dt"] = np.int32(self._use_resnet_dt)
                 data["apply_output_bias"] = np.int32(
                     self._use_atomic_static_energy)
+                data["is_T_symmetric"] = np.int32(
+                    self._descriptor.is_T_symmetric)
 
                 for i, elt in enumerate(elements):
                     for j in range(len(layer_sizes) - 1):

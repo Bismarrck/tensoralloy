@@ -265,6 +265,7 @@ class GenericRadialAtomicPotential(Descriptor):
                  param_space_method="pair",
                  moment_tensors: Union[int, List[int]] = 0,
                  cutoff_function="cosine",
+                 symmetric=False,
                  legacy_mode=True):
         """
         Initialization method.
@@ -291,6 +292,7 @@ class GenericRadialAtomicPotential(Descriptor):
         self._parameters = parameters
         self._param_space_method = param_space_method
         self._legacy_mode = legacy_mode
+        self._symmetric = symmetric
 
     @property
     def name(self):
@@ -306,6 +308,13 @@ class GenericRadialAtomicPotential(Descriptor):
     def max_moment(self):
         """ The maximum angular moment. """
         return max(self._moment_tensors)
+
+    @property
+    def is_T_symmetric(self):
+        """
+        Is the multiplicity `T_md` tensor symmetric?
+        """
+        return self._symmetric
 
     @property
     def cutoff_function(self):
@@ -324,6 +333,7 @@ class GenericRadialAtomicPotential(Descriptor):
              "param_space_method": self._param_space_method,
              "moment_tensors": self._moment_tensors,
              "cutoff_function": self._cutoff_function,
+             "symmetric": self._symmetric,
              "legacy_mode": self._legacy_mode}
         return d
 
@@ -441,7 +451,7 @@ class GenericRadialAtomicPotential(Descriptor):
             return results
 
     @staticmethod
-    def _get_multiplicity_tensor(max_moment: int):
+    def _get_multiplicity_tensor(max_moment: int, symmetric=False):
         """
         Return the multiplicity tensor T_dm.
         """
@@ -455,11 +465,15 @@ class GenericRadialAtomicPotential(Descriptor):
             array = np.zeros((10, 3), dtype=dtype.as_numpy_dtype)
             array[0, 0] = array[1: 4, 1] = 1
             array[4: 10, 2] = 1, 2, 2, 1, 2, 1
+            if symmetric:
+                array[0, 2] = -1 / 3
         else:
             array = np.zeros((20, 4), dtype=dtype.as_numpy_dtype)
             array[0, 0] = array[1: 4, 1] = 1
             array[4: 10, 2] = 1, 2, 2, 1, 2, 1
             array[10: 20, 3] = 1, 3, 3, 3, 6, 3, 1, 3, 3, 1
+            if symmetric:
+                array[1: 4, 3] = -3 / 5
         return tf.convert_to_tensor(array, dtype=dtype, name="T_dm")
 
     @staticmethod
@@ -550,7 +564,7 @@ class GenericRadialAtomicPotential(Descriptor):
                     H = tf.concat(gtau, axis=-1, name="H")
                 M = self._get_moment_coeff_tensor(
                     tf.expand_dims(rij, 0), dij, max_moment)
-                T = self._get_multiplicity_tensor(max_moment)
+                T = self._get_multiplicity_tensor(max_moment, self._symmetric)
                 P = tf.einsum("nback,dnbac->nbakd", H, M, name="P")
                 S = tf.square(P, name="S")
                 Q = tf.einsum("nbakd,dm->nabkm", S, T, name="Q")

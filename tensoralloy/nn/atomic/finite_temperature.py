@@ -454,6 +454,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                     fctype_map[self._descriptor.cutoff_function])
                 data["tdnp"] = np.int32(1)
                 data["precision"] = np.int32(64 if dtype == np.float64 else 32)
+                data["is_T_symmetric"] = np.int32(
+                    self._descriptor.is_T_symmetric)
 
                 # --------------------------------------------------------------
                 # Algorithm
