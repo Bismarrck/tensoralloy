@@ -473,6 +473,7 @@ class GenericRadialAtomicPotential(Descriptor):
             array[4: 10, 2] = 1, 2, 2, 1, 2, 1
             array[10: 20, 3] = 1, 3, 3, 3, 6, 3, 1, 3, 3, 1
             if symmetric:
+                array[0, 2] = -1 / 3
                 array[1: 4, 3] = -3 / 5
         return tf.convert_to_tensor(array, dtype=dtype, name="T_dm")
 
