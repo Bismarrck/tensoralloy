@@ -86,6 +86,14 @@ class TensorAlloyCalculator(Calculator):
             self.implemented_properties = self._predict_properties
             self._ncalls = 0
             self._prerequisite_properties = []
+    
+    @property
+    def session(self):
+        return self._sess
+    
+    @property
+    def graph(self):
+        return self._graph
 
     @property
     def elements(self) -> List[str]:
@@ -329,7 +337,7 @@ class TensorAlloyCalculator(Calculator):
                 self._prerequisite_properties.append(prop)
 
     def calculate(self, atoms=None, properties=('energy', 'forces'),
-                  system_changes=all_changes, debug_mode=False):
+                  system_changes=all_changes, debug_mode=False, extra_ops=None):
         """
         Calculate the total energy and other properties (1body, kbody, atomic).
 
@@ -354,6 +362,8 @@ class TensorAlloyCalculator(Calculator):
                 properties = set(properties).union(
                     self._prerequisite_properties)
                 ops = {target: self._ops[target] for target in properties}
+                if extra_ops is not None:
+                    ops["extra"] = extra_ops
                 if debug_mode:
                     sess = tf_debug.LocalCLIDebugWrapperSession(
                         self._sess, ui_type="readline")

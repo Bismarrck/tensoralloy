@@ -569,12 +569,15 @@ class GenericRadialAtomicPotential(Descriptor):
                 P = tf.einsum("nback,dnbac->nbakd", H, M, name="P")
                 S = tf.square(P, name="S")
                 Q = tf.einsum("nbakd,dm->nabkm", S, T, name="Q")
+                sign = tf.transpose(
+                    tf.sign(P[:, :, :, :, 0]), [0, 2, 1, 3], name="s/sign")
                 if max_moment == 0:
-                    G = tf.sqrt(Q + eps, name="G")
+                    G = tf.multiply(
+                        tf.sqrt(Q + eps), tf.expand_dims(sign, -1), name="G")
                 else:
                     G = tf.concat([
                         tf.expand_dims(
-                            tf.sqrt(Q[:, :, :, :, 0] + eps),
+                            tf.sqrt(Q[:, :, :, :, 0] + eps) * sign,
                             axis=4, name="m/0"),
                         Q[:, :, :, :, 1:]
                     ], axis=4, name="G")

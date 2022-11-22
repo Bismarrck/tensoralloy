@@ -105,6 +105,49 @@ def test_grap_nn_algo():
                 assert_array_almost_equal(g1['W'][0], g3['W'][0], delta=1e-6)
 
 
+def test_sign():
+    with tf.Graph().as_default():
+        with precision_scope("high"):
+            r0 = np.array([3.3, 3.4, 3.5])
+            D = np.ones(3, dtype=float)
+            gamma = np.ones(3, dtype=float)
+            elements = ['Fe']
+            grap1 = GenericRadialAtomicPotential(
+                elements, 
+                "morse", parameters={"D": D, "gamma": gamma, "r0": r0},
+                param_space_method="pair",
+                legacy_mode=False,
+                moment_tensors=[0, 1],
+                cutoff_function="cosine")
+            grap2 = GenericRadialAtomicPotential(
+                elements, 
+                "morse", parameters={"D": D, "gamma": gamma, "r0": r0},
+                param_space_method="pair",
+                legacy_mode=True,
+                moment_tensors=[0, 1],
+                cutoff_function="cosine")
+            clf = UniversalTransformer(elements, rcut=6.0)
+            op1 = grap1.calculate(
+                    clf,
+                    clf.get_descriptors(clf.get_placeholder_features()),
+                    ModeKeys.PREDICT).descriptors
+            op2 = grap2.calculate(
+                    clf,
+                    clf.get_descriptors(clf.get_placeholder_features()),
+                    ModeKeys.PREDICT).descriptors
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+                y = np.zeros((41, 6), dtype=float)
+                z = np.zeros((41, 6), dtype=float)
+                for i, x in enumerate(range(-20, 21, 1)):
+                    lat = 2.87 * (1.0 + float(x) / 100.0)
+                    atoms = bulk("Fe", 'bcc', a=lat, cubic=True)
+                    y[i] = sess.run(
+                        op1, feed_dict=clf.get_feed_dict(atoms))['Fe'][0, 0]
+                    z[i] = sess.run(
+                        op2, feed_dict=clf.get_feed_dict(atoms))['Fe'][0, 0]
+                assert_array_almost_equal(y, z, delta=1e-8)
+
 
 if __name__ == "__main__":
     nose.main()
