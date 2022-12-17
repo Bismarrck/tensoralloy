@@ -30,6 +30,7 @@ from tensoralloy.nn.constraint import elastic as elastic_ops
 from tensoralloy.nn.constraint import rose as rose_ops
 from tensoralloy.nn.constraint import eentropy as eentropy_ops
 from tensoralloy.nn.constraint import fc as fc_ops
+from tensoralloy.nn.constraint import extra_db as extra_db_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
@@ -87,7 +88,8 @@ all_properties = (
     StructuralProperty(name='elastic'),
     StructuralProperty(name='rose', exportable=False),
     StructuralProperty(name='eentropy/c', exportable=False),
-    StructuralProperty(name='hessian/c', exportable=False)
+    StructuralProperty(name='hessian/c', exportable=False),
+    StructuralProperty(name='extra/c', exportable=False)
 )
 
 exportable_properties = [
@@ -605,6 +607,15 @@ class BasicNN:
                         verbose=verbose)
                     if loss is not None:
                         losses['hessian/c'] = loss
+            
+            if 'extra/c' in self._minimize_properties:
+                if Path(loss_parameters.extra_constraint.filename).exists():
+                    loss = extra_db_ops.get_extra_db_constraint_loss(
+                        self,
+                        options=loss_parameters.extra_constraint,
+                        verbose=verbose)
+                    if loss is not None:
+                        losses['extra/c'] = loss
 
             for tensor in losses.values():
                 tf.summary.scalar(tensor.op.name + '/summary', tensor)
@@ -657,7 +668,8 @@ class BasicNN:
         assert isinstance(self._transformer, BaseTransformer)
 
         for prop in self._minimize_properties:
-            if prop in ('elastic', 'rose', 'eentropy/c', 'hessian/c'):
+            if prop in ('elastic', 'rose', 'eentropy/c', 'hessian/c', 
+                        'extra/c'):
                 continue
             assert prop in labels, f"{prop} is missing"
 
@@ -913,6 +925,8 @@ class BasicNN:
                     istop = slist.index('mae')
                     key = "/".join(slist[istart: istop - 1])
                 metrics[key] = (tensor, tf.no_op())
+            elif "Extra/total_loss" in tensor.op.name:
+                metrics["extra"] = (tensor, tf.no_op())
         return metrics
 
     def model_fn(self,

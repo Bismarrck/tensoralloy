@@ -214,6 +214,15 @@ class EEntropyConstraintOptions(_LossOptions):
 
 @add_slots
 @dataclass
+class ExtraDBConstraintOptions(_LossOptions):
+    """
+    The extra database constraint.
+    """
+    filename: str = None
+    minimize: List[str] = None
+
+@add_slots
+@dataclass
 class EnergyDifferenceLossOptions(_LossOptions):
     """
     Special options for the energy difference loss.
@@ -262,6 +271,7 @@ class LossParameters(_HyperParameters):
     ediff: EnergyDifferenceLossOptions = EnergyDifferenceLossOptions()
     eentropy_constraint: EEntropyConstraintOptions = EEntropyConstraintOptions()
     hessian_constraint: ForceConstantsLossOptions = ForceConstantsLossOptions()
+    extra_constraint: ExtraDBConstraintOptions = ExtraDBConstraintOptions()
 
     def __getitem__(self, item):
         return getattr(self, item)

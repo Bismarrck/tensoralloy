@@ -191,9 +191,10 @@ class InputReader:
                         "dataset.tfrecords_dir",
                         "train.model_dir",
                         "train.ckpt.checkpoint_filename",
-                        "nn.atomic.grap.nn.ckpt"):
+                        "nn.atomic.grap.nn.ckpt", 
+                        "nn.loss.extra_constraint.filename"):
             path = nested_get(results, keypath)
-            if path is False:
+            if path is False or path == "":
                 continue
             nested_set(results, keypath, _convert_filepath(path))
 
