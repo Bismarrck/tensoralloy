@@ -335,6 +335,9 @@ class TensorAlloyCalculator(Calculator):
         for prop in properties:
             if prop in self.implemented_properties:
                 self._prerequisite_properties.append(prop)
+    
+    def get_op(self, name):
+        return self._graph.get_tensor_by_name(name)
 
     def calculate(self, atoms=None, properties=('energy', 'forces'),
                   system_changes=all_changes, debug_mode=False, extra_ops=None):

@@ -11,7 +11,7 @@ from ase import Atoms
 from ase.neighborlist import neighbor_list
 from ase.data import chemical_symbols
 from collections import Counter
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from tensoralloy.utils import get_elements_from_kbody_term, get_kbody_terms
 from tensoralloy.utils import szudzik_pairing, ModeKeys
@@ -49,7 +49,7 @@ def get_radial_metadata(atoms: Atoms,
                         vap: VirtualAtomMap,
                         mode: ModeKeys,
                         nij_max: int = None,
-                        dtype=np.float32) -> (RadialMetadata, dict):
+                        dtype=np.float32) -> Tuple[RadialMetadata, dict]:
     """
     Build the base `v2g_map`.
 
