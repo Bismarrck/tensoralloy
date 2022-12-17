@@ -85,17 +85,27 @@ class Algorithm:
     def __getitem__(self, item):
         return self._grid[item]
 
-    def as_dict(self):
+    def as_dict(self, convert_to_pairs=False):
         """
         Return a JSON serializable dict representation of this object.
         """
-        parameters = {}
-        for key, value in self._params.items():
-            if isinstance(value, np.ndarray):
-                value = value.tolist()
-            parameters[key] = value
+        if not convert_to_pairs:
+            parameters = {}
+            for key, value in self._params.items():
+                if isinstance(value, np.ndarray):
+                    value = value.tolist()
+                parameters[key] = value
+            param_space_method = self._param_space_method
+        else:
+            param_space_method = "pair"
+            parameters = {}
+            for key in self._params:
+                parameters[key] = []
+            for i in range(len(self._grid)):
+                for key in self._params:
+                    parameters[key].append(float(self._grid[i][key]))
         return {"algorithm": self.name, "parameters": parameters,
-                "param_space_method": self._param_space_method}
+                "param_space_method": param_space_method}
 
     def compute(self, tau: int, rij: tf.Tensor, rc: tf.Tensor,
                 dtype=tf.float32):
@@ -229,7 +239,7 @@ class NNAlgorithm:
     def __getitem__(self, item):
         return self.__dict__[item]
 
-    def as_dict(self):
+    def as_dict(self, convert_to_pairs=False):
         """
         Dict representation of this class.
         """

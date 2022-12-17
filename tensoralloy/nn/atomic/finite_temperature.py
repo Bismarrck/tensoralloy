@@ -461,13 +461,35 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 # Algorithm
                 # 
 
-                algo = self._descriptor.algorithm.as_dict()
+                algo = self._descriptor.algorithm.as_dict(convert_to_pairs=True)
                 if self._descriptor.algorithm.name == "pexp":
-                    data["use_fnn"] = np.int32(0)
-                    data["rl"] = np.array(
+                    data["descriptor::method"] = np.int32(0)
+                    data["descriptor::rl"] = np.array(
                         algo["parameters"]["rl"], dtype=dtype)
-                    data["pl"] = np.array(
+                    data["descriptor::pl"] = np.array(
                         algo["parameters"]["pl"], dtype=dtype)
+                elif self._descriptor.algorithm.name == "morse":
+                    data["descriptor::method"] = np.int32(1)
+                    data["descriptor::D"] = np.array(
+                        algo["parameters"]["D"], dtype=dtype)
+                    data["descriptor::gamma"] = np.array(
+                        algo["parameters"]["gamma"], dtype=dtype)
+                    data["descriptor::r0"] = np.array(
+                        algo["parameters"]["r0"], dtype=dtype)
+                elif self._descriptor.algorithm.name == "density":
+                    data["descriptor::method"] = np.int32(2)
+                    data["descriptor::A"] = np.array(
+                        algo["parameters"]["A"], dtype=dtype)
+                    data["descriptor::beta"] = np.array(
+                        algo["parameters"]["beta"], dtype=dtype)
+                    data["descriptor::re"] = np.array(
+                        algo["parameters"]["re"], dtype=dtype)
+                elif self._descriptor.algorithm.name == "sf":
+                    data["descriptor::method"] = np.int32(3)
+                    data["descriptor::eta"] = np.array(
+                        algo["parameters"]["eta"], dtype=dtype)
+                    data["descriptor::omega"] = np.array(
+                        algo["parameters"]["omega"], dtype=dtype)
                 else:
                     data["use_fnn"] = np.int32(1)
                     data["fnn::nlayers"] = np.int32(
