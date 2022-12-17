@@ -67,9 +67,6 @@ class CoreDatabase(SQLite3Database):
         ----------
         selection: int, str or list
             See the select() method.
-        attach_calculator: bool
-            Attach calculator object to Atoms object (default value is
-            False).
         add_additional_information: bool
             Put key-value pairs and data into Atoms.info dictionary.
         kwargs
@@ -77,7 +74,7 @@ class CoreDatabase(SQLite3Database):
 
         """
         return super(CoreDatabase, self).get_atoms(
-            selection, attach_calculator, add_additional_information, **kwargs)
+            selection, add_additional_information, **kwargs)
 
     @property
     def metadata(self) -> dict:
