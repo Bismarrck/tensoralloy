@@ -30,3 +30,4 @@ class FiniteTemperatureOptions:
     """
     activation: str = "softplus"
     layers: List[int] = (128, 128)
+    algo: str = "default"

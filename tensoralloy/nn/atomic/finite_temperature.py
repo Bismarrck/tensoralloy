@@ -155,7 +155,11 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            eentropy = tf.squeeze(eentropy, axis=2, name="atomic")
+            if self._finite_temperature.algo == "Sommorfeld":
+                eentropy = tf.multiply(
+                    tf.squeeze(eentropy, axis=2), t, name="atomic")
+            else:
+                eentropy = tf.squeeze(eentropy, axis=2, name="atomic")
             if verbose:
                 log_tensor(eentropy)
             return eentropy
@@ -400,7 +404,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
         layer_sizes = np.append(layer_sizes, 1).astype(np.int32)
 
         fctype_map = {"cosine": 0, "polynomial": 1}
-        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2}
+        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2, 'squareplus': 3}
         
         graph = tf.Graph()
         with graph.as_default():
