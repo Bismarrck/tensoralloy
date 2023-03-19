@@ -9,7 +9,7 @@ pair_style = [
 ]
 
 [nn.atomic]
-activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu', 'squareplus']
 kernel_initializer = [
     'he_normal', 'he_uniform',
     'random_normal', 'random_uniform',
@@ -19,7 +19,8 @@ kernel_initializer = [
     'truncated_normal']
 
 [nn.atomic.finite_temperature]
-activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu', 'squareplus']
+algo = ["Sommerfeld", "default"]
 
 [nn.atomic.sf]
 cutoff_function = ["cosine", "polynomial"]
@@ -30,7 +31,7 @@ cutoff_function = ['cosine', 'polynomial']
 param_space_method = ["pair", "cross"]
 
 [nn.atomic.grap.nn]
-activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu']
+activation = ["leaky_relu", 'relu', 'tanh', 'softsign', 'softplus', 'sigmoid', 'linear', 'elu', 'squareplus']
 
 [nn.loss.energy]
 method = ["rmse", "logcosh"]

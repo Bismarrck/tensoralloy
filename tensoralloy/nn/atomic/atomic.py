@@ -320,7 +320,7 @@ class AtomicNN(BasicNN):
         layer_sizes = np.append(layer_sizes, 1).astype(np.int32)
 
         fctype_map = {"cosine": 0, "polynomial": 1}
-        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2}
+        actfn_map = {"relu": 0, "softplus": 1, "tanh": 2, 'squareplus': 3}
 
         graph = tf.Graph()
         with graph.as_default():

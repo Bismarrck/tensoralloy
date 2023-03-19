@@ -105,6 +105,7 @@ activation = "softplus"
 [nn.atomic.finite_temperature]
 activation = "softplus"
 layers = [128, 128]
+algo = "default"
 
 [nn.atomic.polar]
 inner_layers = [128, 128]

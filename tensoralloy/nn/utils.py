@@ -7,6 +7,8 @@ from __future__ import print_function, absolute_import
 import tensorflow as tf
 
 from tensorflow.contrib.opt import NadamOptimizer, AdamWOptimizer
+from tensorflow.python.framework import ops
+from tensorflow.python.ops import math_ops
 from typing import Dict
 
 __author__ = 'Xin Chen'
@@ -34,6 +36,17 @@ def is_first_replica():
     return True
 
 
+def squareplus(x, b=4.0, name=None):
+    """
+    Return the square plus of the input tensor.
+    """
+    with ops.name_scope(name, "SquarePlus", [x, b]) as name:
+        b = tf.convert_to_tensor(b, dtype=x.dtype, name="b")
+        z = math_ops.add(tf.square(x, name="square"), b, name="z")
+        half = tf.constant(0.5, dtype=x.dtype, name="half")
+        return tf.multiply(half, tf.add(x, tf.sqrt(z)), name=name)
+
+
 def get_activation_fn(fn_name="softplus"):
     """
     Return the corresponding activation function.
@@ -54,6 +67,8 @@ def get_activation_fn(fn_name="softplus"):
         return tf.nn.softmax
     elif fn_name.lower() == "elu":
         return tf.nn.elu
+    elif fn_name.lower() == "squareplus":
+        return squareplus
     else:
         raise ValueError(
             f"The activation function '{fn_name}' cannot be recognized!")
