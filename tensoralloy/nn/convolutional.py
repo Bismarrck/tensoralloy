@@ -221,7 +221,8 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         actfn_map = {
             0: "relu",
             1: "softplus",
-            2: "tanh"
+            2: "tanh",
+            3: "squareplus"
         }
         activation_fn = actfn_map.get(int(npz["actfn"]))
         hidden_sizes = npz["layer_sizes"].tolist()
