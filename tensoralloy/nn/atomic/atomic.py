@@ -360,8 +360,12 @@ class AtomicNN(BasicNN):
                           for elt in elements]
                 chars = []
                 for elt in elements:
-                    for char in elt:
-                        chars.append(ord(char))
+                    if len(elt) == 1:
+                        chars.append(ord(elt[0]))
+                        chars.append(0)
+                    else:
+                        for char in elt:
+                            chars.append(ord(char))
 
                 precision = np.int32(64 if dtype == np.float64 else 32)
                 data = {"rmax": dtype(clf.rcut),

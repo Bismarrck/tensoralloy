@@ -155,7 +155,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 kernel_initializer=self._kernel_initializer,
                 variable_scope=None,
                 verbose=verbose)
-            if self._finite_temperature.algo == "Sommorfeld":
+            if self._finite_temperature.algo == "Sommerfeld":
                 eentropy = tf.multiply(
                     tf.squeeze(eentropy, axis=2), t, name="atomic")
             else:
@@ -444,8 +444,12 @@ class TemperatureDependentAtomicNN(AtomicNN):
                           for elt in elements]
                 chars = []
                 for elt in elements:
-                    for char in elt:
-                        chars.append(ord(char))
+                    if len(elt) == 1:
+                        chars.append(ord(elt[0]))
+                        chars.append(0)
+                    else:
+                        for char in elt:
+                            chars.append(ord(char))
                 
                 data = {
                     "rmax": dtype(clf.rcut),
@@ -460,6 +464,8 @@ class TemperatureDependentAtomicNN(AtomicNN):
                 data["precision"] = np.int32(64 if dtype == np.float64 else 32)
                 data["is_T_symmetric"] = np.int32(
                     self._descriptor.is_T_symmetric)
+                data["tdnp::Sommerfeld"] = np.int32(
+                    self._finite_temperature.algo == "Sommerfeld")
 
                 # --------------------------------------------------------------
                 # Algorithm
