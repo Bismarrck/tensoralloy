@@ -616,6 +616,11 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 print(f"Mode: {mode} ({n_used}/{size})")
                 print(dataframe.to_string())
 
+                with open(f"percentile.{args.ckpt.replace('.', '_')}.dat", "w") as f:
+                    f.write(f"Mode: {mode} ({n_used}/{size})\n")
+                    f.write(dataframe.to_string())
+                    f.write("\n")
+
         return func
 
 
