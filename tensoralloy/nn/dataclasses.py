@@ -252,6 +252,15 @@ class _HyperParameters:
     pass
 
 
+class AdaptiveSampleWeightOptions():
+    """
+    Options for using the adaptive sample weight scheme.
+    """
+    enabled: bool = False
+    method: str = "sigmoid"
+    params: List[float] = None
+
+
 @add_slots
 @nested_dataclass
 @dataclass
@@ -272,6 +281,7 @@ class LossParameters(_HyperParameters):
     eentropy_constraint: EEntropyConstraintOptions = EEntropyConstraintOptions()
     hessian_constraint: ForceConstantsLossOptions = ForceConstantsLossOptions()
     extra_constraint: ExtraDBConstraintOptions = ExtraDBConstraintOptions()
+    adaptive_sample_weight: AdaptiveSampleWeightOptions = AdaptiveSampleWeightOptions()
 
     def __getitem__(self, item):
         return getattr(self, item)

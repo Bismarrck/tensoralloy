@@ -22,7 +22,7 @@ __email__ = 'Bismarrck@me.com'
 
 
 __all__ = ["get_energy_loss", "get_forces_loss", "get_stress_loss",
-           "LossMethod"]
+           "LossMethod", "adaptive_sample_weight"]
 
 
 class LossMethod(Enum):
@@ -67,7 +67,8 @@ def _get_relative_rmse_loss(labels: tf.Tensor, predictions: tf.Tensor):
 
 
 def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor,
-                   is_per_atom_loss=False):
+                   is_per_atom_loss=False, sample_weight=None, 
+                   normalized_weight=False):
     """
     Return the RMSE loss tensor. The MAE loss will also be calculated.
     """
@@ -76,7 +77,17 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor,
     else:
         suffix = ""
     mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
-    mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse' + suffix)
+    if sample_weight is not None:
+        if normalized_weight:
+            sample_weight = sample_weight / tf.reduce_sum(sample_weight)
+            if sample_weight.shape.rank > 1:
+                scl = tf.cumprod(tf.cast(tf.shape(x)[1:], 
+                                         dtype=sample_weight.dtype))
+                sample_weight = sample_weight / scl
+        mse = tf.reduce_sum(tf.squared_difference(x, y) * sample_weight, 
+                            name='mse' + suffix + '/weighted')
+    else:
+        mse = tf.reduce_mean(tf.squared_difference(x, y), name='mse' + suffix)
     dtype = get_float_dtype()
     eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
     mse = tf.add(mse, eps, name='mse/safe')
@@ -84,7 +95,8 @@ def _get_rmse_loss(x: tf.Tensor, y: tf.Tensor,
     return loss, mae
 
 
-def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
+def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False, 
+                      sample_weight=None, normalized_weight=False):
     """
     Return the Log-Cosh loss tensor and the MAE loss tensor.
     """
@@ -95,12 +107,23 @@ def _get_logcosh_loss(x: tf.Tensor, y: tf.Tensor, is_per_atom_loss=False):
     diff = tf.math.subtract(x, y, name='diff')
     mae = tf.reduce_mean(tf.abs(x - y), name='mae' + suffix)
     dtype = get_float_dtype()
-    z = tf.reduce_mean(_logcosh(diff, dtype), name='logcosh' + suffix)
+    if sample_weight is not None:
+        if normalized_weight:
+            sample_weight = sample_weight / tf.reduce_sum(sample_weight)
+            if sample_weight.shape.rank > 1:
+                scl = tf.cumprod(tf.cast(tf.shape(x)[1:], 
+                                         dtype=sample_weight.dtype))
+                sample_weight = sample_weight / scl
+        z = tf.reduce_sum(_logcosh(diff, dtype) * sample_weight, 
+                          name='logcosh' + suffix + '/weighted')
+    else:
+        z = tf.reduce_mean(_logcosh(diff, dtype), name='logcosh' + suffix)
     return z, mae
 
 
 def _get_ylogy_loss(labels: tf.Tensor, predictions: tf.Tensor,
-                    is_per_atom_loss=False):
+                    is_per_atom_loss=False, sample_weight=None, 
+                    normalized_weight=False):
     """
     Return the log loss:
 
@@ -114,8 +137,18 @@ def _get_ylogy_loss(labels: tf.Tensor, predictions: tf.Tensor,
     eps = tf.constant(1e-12, dtype=labels.dtype, name='epx')
     logx = tf.log(tf.maximum(labels, eps), name='logx')
     logy = tf.log(tf.maximum(predictions, eps), name='logy')
-    loss = tf.reduce_mean(tf.square(logx - logy) * labels,
-                          name='ylogy' + suffix)
+    if sample_weight is not None:
+        if normalized_weight:
+            sample_weight = sample_weight / tf.reduce_sum(sample_weight)
+            if sample_weight.shape.rank > 1:
+                scl = tf.cumprod(tf.cast(tf.shape(labels)[1:], 
+                                         dtype=sample_weight.dtype))
+                sample_weight = sample_weight / scl
+        loss = tf.reduce_sum(tf.square(logx - logy) * labels * sample_weight,
+                             name='ylogy' + suffix + '/weighted')
+    else:
+        loss = tf.reduce_mean(tf.square(logx - logy) * labels,
+                              name='ylogy' + suffix)
     mae = tf.reduce_mean(tf.abs(labels - predictions), name='mae' + suffix)
     return loss, mae
 
@@ -164,7 +197,9 @@ def get_energy_loss(labels,
                     max_train_steps: Union[None, int, tf.Tensor] = None,
                     options: EnergyLossOptions = EnergyLossOptions(),
                     collections=None,
-                    name_scope="Energy"):
+                    name_scope="Energy",
+                    sample_weight=None,
+                    normalized_weight=False):
     """
     Return the loss tensor of the energy.
 
@@ -185,6 +220,10 @@ def get_energy_loss(labels,
         A list of str as the collections where the loss tensors should be added.
     name_scope : str
         The name scope for this function.
+    sample_weight : Union[None, tf.Tensor]
+        A float tensor of shape `[batch_size, ]` as the sample weights.
+    normalized_weight : bool
+        Whether to normalize the sample weights.
 
     Returns
     -------
@@ -205,18 +244,28 @@ def get_energy_loss(labels,
         else:
             x = tf.identity(labels, name='labels')
             y = tf.identity(predictions, name='predictions')
-
+        
         if method == LossMethod.rmse:
-            raw_loss, mae = _get_rmse_loss(x, y, is_per_atom_loss=per_atom_loss)
+            raw_loss, mae = _get_rmse_loss(
+                x, y, 
+                is_per_atom_loss=per_atom_loss, 
+                sample_weight=sample_weight,
+                normalized_weight=normalized_weight)
         elif method == LossMethod.logcosh:
-            raw_loss, mae = _get_logcosh_loss(x, y,
-                                              is_per_atom_loss=per_atom_loss)
+            raw_loss, mae = _get_logcosh_loss(
+                x, y,
+                is_per_atom_loss=per_atom_loss,
+                sample_weight=sample_weight,
+                normalized_weight=normalized_weight)
         elif method == LossMethod.rrmse:
             raw_loss = _get_relative_rmse_loss(x, y)
             mae = None
         else:
-            raw_loss, mae = _get_ylogy_loss(x, y,
-                                            is_per_atom_loss=per_atom_loss)
+            raw_loss, mae = _get_ylogy_loss(
+                x, y,
+                is_per_atom_loss=per_atom_loss,
+                sample_weight=sample_weight, 
+                normalized_weight=normalized_weight)
         weight = _get_static_or_dyn_weight_tensor(
             options.weight, max_train_steps, dtype=raw_loss.dtype)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
@@ -225,7 +274,9 @@ def get_energy_loss(labels,
 def _absolute_forces_loss(labels: tf.Tensor,
                           predictions: tf.Tensor,
                           atom_masks: tf.Tensor,
-                          method=LossMethod.rmse):
+                          method=LossMethod.rmse,
+                          sample_weight=None,
+                          normalized_weight=True):
     """
     Return the absolute loss of atomic forces. The `mask` tensor of shape
     `[batch_size, n_atoms_max + 1]` is required to eliminate the zero-padding
@@ -236,24 +287,30 @@ def _absolute_forces_loss(labels: tf.Tensor,
     with tf.name_scope("Absolute"):
         dtype = get_float_dtype()
         diff = tf.math.subtract(labels, predictions, name='diff')
-        mask = tf.cast(tf.split(atom_masks, [1, -1], axis=1)[1], tf.bool,
-                       name='mask')
+        atom_masks = tf.split(atom_masks, [1, -1], axis=1)[1]
+        mask = tf.cast(atom_masks, tf.bool, name='mask')
         diff = tf.boolean_mask(diff, mask, axis=0, name='diff/mask')
         eps = tf.constant(dtype.eps, dtype=dtype, name='eps')
-
+        mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
+        if sample_weight is not None:
+            sample_weight = tf.expand_dims(sample_weight, axis=1)
+            sample_weight = tf.boolean_mask(sample_weight * atom_masks, mask)
+            if normalized_weight:
+                scl = tf.constant(3.0, dtype=labels.dtype, name="scl")
+                sample_weight /= (tf.reduce_sum(sample_weight) * scl)
         if method == LossMethod.rmse:
             val = tf.math.square(diff, name='square')
-        else:
-            val = _logcosh(diff, dtype=dtype, name='logcosh')
-        mae = tf.reduce_mean(tf.math.abs(diff), name='mae')
-
-        if method == LossMethod.rmse:
+            if sample_weight is not None:
+                val = tf.multiply(val, sample_weight, name='square/weighted')
             val = tf.reduce_mean(val, name='mse')
             val = tf.math.add(val, eps, name='mse/safe')
             loss = tf.sqrt(val, name='rmse')
         else:
+            val = _logcosh(diff, dtype=dtype, name='logcosh')
+            if sample_weight is not None:
+                val = tf.multiply(val, sample_weight, name='logcosh/weighted')
             loss = tf.reduce_mean(val, name='logcosh/mean')
-
+            
     return loss, mae
 
 
@@ -262,7 +319,8 @@ def get_forces_loss(labels,
                     atom_masks,
                     max_train_steps=None,
                     options: ForcesLossOptions = ForcesLossOptions(),
-                    collections=None):
+                    collections=None,
+                    sample_weight=None):
     """
     Return the loss tensor of the atomic forces.
 
@@ -283,6 +341,8 @@ def get_forces_loss(labels,
         Options for computing force loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    sample_weight : Union[None, tf.Tensor]
+        A float tensor of shape `[batch_size, ]` as the sample weights.
 
     Returns
     -------
@@ -301,7 +361,8 @@ def get_forces_loss(labels,
                                                   labels.dtype)
         raw_loss, mae = _absolute_forces_loss(labels, predictions,
                                               atom_masks=atom_masks,
-                                              method=method)
+                                              method=method,
+                                              sample_weight=sample_weight)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
@@ -309,7 +370,9 @@ def get_stress_loss(labels,
                     predictions,
                     max_train_steps: Union[None, int, tf.Tensor] = None,
                     options: StressLossOptions = StressLossOptions(),
-                    collections=None):
+                    collections=None,
+                    sample_weight=None,
+                    normalized_weight=False):
     """
     Return the (relative) RMSE loss of the stress.
 
@@ -325,6 +388,10 @@ def get_stress_loss(labels,
         Options for computing stress loss.
     collections : List[str] or None
         A list of str as the collections where the loss tensors should be added.
+    sample_weight : Union[None, tf.Tensor]
+        A float tensor of shape `[batch_size, ]` as the sample weights.
+    normalized_weight : bool
+        Whether to normalize the sample weights.
 
     Returns
     -------
@@ -336,11 +403,15 @@ def get_stress_loss(labels,
         assert labels.shape.ndims == 2 and labels.shape[1].value == 6
         assert predictions.shape.ndims == 2 and predictions.shape[1].value == 6
         method = LossMethod[options.method]
+        if sample_weight is not None:
+            sample_weight = tf.expand_dims(sample_weight, axis=1)
         if method == LossMethod.rmse:
             raw_loss, mae = _get_rmse_loss(
                 labels,
                 predictions,
-                is_per_atom_loss=False)
+                is_per_atom_loss=False, 
+                sample_weight=sample_weight, 
+                normalized_weight=normalized_weight)
         elif method == LossMethod.rrmse:
             raw_loss = _get_relative_rmse_loss(
                 labels,
@@ -350,7 +421,9 @@ def get_stress_loss(labels,
             raw_loss, mae = _get_logcosh_loss(
                 labels,
                 predictions,
-                is_per_atom_loss=False)
+                is_per_atom_loss=False, 
+                sample_weight=sample_weight,
+                normalized_weight=normalized_weight)
         weight = _get_static_or_dyn_weight_tensor(options.weight, max_train_steps,
                                                   dtype=mae.dtype)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
@@ -446,3 +519,28 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
             return None
         else:
             return loss
+
+
+def adaptive_sample_weight(true_forces: tf.Tensor, natoms: tf.Tensor, 
+                           method, *args):
+    """
+    Return force based sample weight. For structures with very large atomic 
+    forces, the weight may be smaller.
+    """
+    with tf.name_scope("AdaSW"):
+        with tf.name_scope("Split"):
+            true_forces = tf.split(
+                true_forces, [1, -1], axis=1, name='split')[1]
+        dtype = true_forces.dtype
+        f = tf.reduce_sum(tf.square(true_forces), axis=(1, 2), 
+                          keepdims=False, name='f')
+        f = tf.sqrt(tf.div_no_nan(f, natoms), name='f/atom')
+        if method == 'sigmoid':
+            a, b, c, d = args[:]
+            a = tf.convert_to_tensor(a, name="a", dtype=dtype)
+            b = tf.convert_to_tensor(b, name="b", dtype=dtype)
+            c = tf.convert_to_tensor(c, name="c", dtype=dtype)
+            d = tf.convert_to_tensor(d, name="d", dtype=dtype)
+            return tf.add(tf.sigmoid(a * (b - f)) * c, d, name='weight')
+        else:
+            raise ValueError("Only the sigmoid method is implemented")

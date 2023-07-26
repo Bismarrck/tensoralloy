@@ -35,7 +35,6 @@ from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.transformer.kmc import KMCTransformer
-from tensoralloy.transformer.kmc import KMCPreComputedTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -532,6 +531,16 @@ class BasicNN:
                 collections = [GraphKeys.TRAIN_METRICS]
             else:
                 collections = None
+            
+            if 'forces' in self._minimize_properties and \
+                    loss_parameters.adaptive_sample_weight.enabled:
+                options = loss_parameters.adaptive_sample_weight
+                sample_weights = loss_ops.adaptive_sample_weight(
+                    labels["forces"], 
+                    labels["n_atoms_vap"], 
+                    options.method, *options.params)
+            else:
+                sample_weights = None
 
             losses = self._get_energy_loss(
                 predictions=predictions,
