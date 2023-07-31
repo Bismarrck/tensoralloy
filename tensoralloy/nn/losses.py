@@ -546,6 +546,7 @@ def adaptive_sample_weight(true_forces: tf.Tensor, natoms: tf.Tensor,
             true_forces = tf.split(
                 true_forces, [1, -1], axis=1, name='split')[1]
         dtype = true_forces.dtype
+        natoms = tf.cast(natoms, dtype=dtype, name='natoms')
         f = tf.reduce_sum(tf.square(true_forces), axis=(1, 2), 
                           keepdims=False, name='f')
         f = tf.sqrt(tf.div_no_nan(f, natoms), name='f/atom')

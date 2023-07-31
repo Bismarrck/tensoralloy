@@ -447,7 +447,9 @@ class BasicNN:
                          n_atoms,
                          max_train_steps,
                          loss_parameters: LossParameters,
-                         collections) -> Dict[str, tf.Tensor]:
+                         collections,
+                         sample_weight=None,
+                         normalized_weight=False) -> Dict[str, tf.Tensor]:
         """
         Return energy loss(es).
         """
@@ -457,6 +459,8 @@ class BasicNN:
             n_atoms=n_atoms,
             max_train_steps=max_train_steps,
             options=loss_parameters.energy,
+            sample_weight=sample_weight,
+            normalized_weight=normalized_weight,
             collections=collections)
         return {"energy": loss}
 
@@ -535,12 +539,15 @@ class BasicNN:
             if 'forces' in self._minimize_properties and \
                     loss_parameters.adaptive_sample_weight.enabled:
                 options = loss_parameters.adaptive_sample_weight
-                sample_weights = loss_ops.adaptive_sample_weight(
+                sample_weight = loss_ops.adaptive_sample_weight(
                     labels["forces"], 
-                    labels["n_atoms_vap"], 
-                    options.method, *options.params)
+                    n_atoms, 
+                    options.method, 
+                    *options.params)
+                normalized_weight = options.normalized
             else:
-                sample_weights = None
+                sample_weight = None
+                normalized_weight = False
 
             losses = self._get_energy_loss(
                 predictions=predictions,
@@ -548,7 +555,9 @@ class BasicNN:
                 n_atoms=n_atoms,
                 max_train_steps=max_train_steps,
                 loss_parameters=loss_parameters,
-                collections=collections)
+                collections=collections,
+                sample_weight=sample_weight, 
+                normalized_weight=normalized_weight)
 
             if 'forces' in self._minimize_properties:
                 losses["forces"] = loss_ops.get_forces_loss(
@@ -557,7 +566,9 @@ class BasicNN:
                     atom_masks=atom_masks,
                     max_train_steps=max_train_steps,
                     options=loss_parameters.forces,
-                    collections=collections)
+                    collections=collections,
+                    sample_weight=sample_weight,
+                    normalized_weight=normalized_weight)
 
             if 'total_pressure' in self._minimize_properties:
                 losses["total_pressure"] = loss_ops.get_pressure_loss(
@@ -573,7 +584,9 @@ class BasicNN:
                     predictions=predictions["stress"],
                     max_train_steps=max_train_steps,
                     options=loss_parameters.stress,
-                    collections=collections)
+                    collections=collections,
+                    sample_weight=sample_weight,
+                    normalized_weight=normalized_weight)
 
             l2_loss = loss_ops.get_l2_regularization_loss(
                 options=loss_parameters.l2,

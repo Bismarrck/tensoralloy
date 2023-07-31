@@ -159,7 +159,7 @@ class L2LossOptions(_LossOptions):
     Special options for the L2 regularization.
     The default weight is changed to 0.01.
     """
-    weight: float = 0.01
+    weight: float = 0.00
     decayed: bool = True
     decay_rate: float = 0.99
     decay_steps: int = 1000
@@ -252,13 +252,16 @@ class _HyperParameters:
     pass
 
 
-class AdaptiveSampleWeightOptions():
+@add_slots
+@dataclass
+class AdaptiveSampleWeightOptions:
     """
     Options for using the adaptive sample weight scheme.
     """
     enabled: bool = False
     method: str = "sigmoid"
     params: List[float] = None
+    normalized: bool = True
 
 
 @add_slots
