@@ -301,15 +301,22 @@ def _absolute_forces_loss(labels: tf.Tensor,
         if method == LossMethod.rmse:
             val = tf.math.square(diff, name='square')
             if sample_weight is not None:
-                val = tf.multiply(val, sample_weight, name='square/weighted')
-            val = tf.reduce_mean(val, name='mse')
+                val = tf.multiply(
+                    val, 
+                    tf.expand_dims(sample_weight, axis=1), 
+                    name='square/weighted')
+                val = tf.reduce_sum(val, name="mse/weighted")
+            else:
+                val = tf.reduce_mean(val, name='mse')
             val = tf.math.add(val, eps, name='mse/safe')
             loss = tf.sqrt(val, name='rmse')
         else:
             val = _logcosh(diff, dtype=dtype, name='logcosh')
             if sample_weight is not None:
-                val = tf.multiply(val, sample_weight, name='logcosh/weighted')
-            loss = tf.reduce_mean(val, name='logcosh/mean')
+                val = tf.multiply(val, sample_weight)
+                loss = tf.reduce_sum(val, name="logcosh/weighted")
+            else:
+                loss = tf.reduce_mean(val, name='logcosh/mean')
             
     return loss, mae
 
@@ -320,7 +327,8 @@ def get_forces_loss(labels,
                     max_train_steps=None,
                     options: ForcesLossOptions = ForcesLossOptions(),
                     collections=None,
-                    sample_weight=None):
+                    sample_weight=None,
+                    normalized_weight=True):
     """
     Return the loss tensor of the atomic forces.
 
@@ -343,6 +351,8 @@ def get_forces_loss(labels,
         A list of str as the collections where the loss tensors should be added.
     sample_weight : Union[None, tf.Tensor]
         A float tensor of shape `[batch_size, ]` as the sample weights.
+    normalized_weight : bool
+        Whether to normalize the sample weights.
 
     Returns
     -------
@@ -357,12 +367,16 @@ def get_forces_loss(labels,
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
         method = LossMethod[options.method]
-        weight = _get_static_or_dyn_weight_tensor(options.weight, max_train_steps,
-                                                  labels.dtype)
-        raw_loss, mae = _absolute_forces_loss(labels, predictions,
-                                              atom_masks=atom_masks,
-                                              method=method,
-                                              sample_weight=sample_weight)
+        weight = _get_static_or_dyn_weight_tensor(
+            options.weight, 
+            max_train_steps, 
+            labels.dtype)
+        raw_loss, mae = _absolute_forces_loss(
+            labels, predictions,
+            atom_masks=atom_masks,
+            method=method,
+            sample_weight=sample_weight,
+            normalized_weight=normalized_weight)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 

@@ -12,7 +12,6 @@ from nose.tools import assert_less, assert_equal
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from tensoralloy.nn.dataclasses import ForcesLossOptions, EnergyLossOptions
-from tensoralloy.nn.dataclasses import StressLossOptions
 from tensoralloy.nn.losses import get_energy_loss, get_forces_loss
 from tensoralloy.nn.losses import get_stress_loss, adaptive_sample_weight
 from tensoralloy.precision import precision_scope, get_float_dtype
@@ -131,6 +130,60 @@ def test_forces_loss():
                 assert_less(y_rmse * 10.0 - sess.run(rmse), 1e-8)
 
 
+def test_weighted_forces_loss():
+    """
+    Test the function `get_forces_loss` with sample weights.
+    """
+    with precision_scope('high'):
+
+        x = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
+        y = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
+        w = np.random.uniform(0.0, 1.0, size=(6, ))
+        n_atoms = np.asarray([5, 6, 4, 8, 5, 3])
+        mask = np.zeros((6, 9), dtype=np.float64)
+        for i in range(len(n_atoms)):
+            mask[i, 1: n_atoms[i] + 1] = 1
+
+        mae_values = []
+        rmse_values = []
+        weight_values = []
+
+        for i in range(len(x)):
+            for j in range(n_atoms[i]):
+                if mask[i, j + 1] == 1:
+                    mae_values.append(np.abs(x[i, j] - y[i, j]))
+                    rmse_values.append(np.square(x[i, j] - y[i, j]))
+                    weight_values.append(w[i])
+
+        weight_values = np.asarray(weight_values)
+        rmse_values = np.asarray(rmse_values)
+        mae_values = np.asarray(mae_values)
+
+        y_mae = np.mean(mae_values)
+        scl = weight_values.sum() * 3
+        sq = rmse_values * np.expand_dims(weight_values, axis=(1, )) / scl
+        y_rmse = np.sqrt(np.sum(sq))
+
+        with tf.Graph().as_default():
+            dtype = get_float_dtype()
+
+            x = tf.convert_to_tensor(np.insert(x, 0, 0, axis=1))
+            y = tf.convert_to_tensor(y, dtype=dtype)
+            w = tf.convert_to_tensor(w, dtype=dtype)
+            mask = tf.convert_to_tensor(mask)
+            rmse = get_forces_loss(
+                x, y, 
+                atom_masks=mask,
+                sample_weight=w, 
+                normalized_weight=True)
+            mae = tf.get_default_graph().get_tensor_by_name(
+                'Forces/Absolute/mae:0')
+
+            with tf.Session() as sess:
+                assert_less(y_mae - sess.run(mae), 1e-8)
+                assert_less(y_rmse - sess.run(rmse), 1e-8)
+
+
 def test_stress_loss():
     """
     Test the function `get_stress_loss`.
@@ -139,8 +192,7 @@ def test_stress_loss():
 
         x = np.random.uniform(0.1, 3.0, size=(8, 6))
         y = np.random.uniform(0.1, 3.0, size=(8, 6))
-        y_rmse = np.mean(
-            np.linalg.norm(x - y, axis=1) / np.linalg.norm(x, axis=1))
+        y_rmse = np.sqrt(mean_squared_error(x, y))
 
         with tf.Graph().as_default():
             x = tf.convert_to_tensor(x)
@@ -174,8 +226,6 @@ def test_weighted_stress_loss():
                                    normalized_weight=True)
 
             with tf.Session() as sess:
-                print(sess.run(rmse))
-                print(y_rmse)
                 assert_less(y_rmse - sess.run(rmse), 1e-8)
 
 
@@ -195,9 +245,6 @@ def test_adaptive_sample_weight():
         d = 0.1
         forces = np.random.uniform(0.0, 3.0, size=(6, 8, 3))
         natoms = np.asarray([5, 6, 4, 8, 5, 3])
-        mask = np.zeros((6, 9))
-        for i in range(len(natoms)):
-            mask[i, 1: natoms[i] + 1] = 1.0
         forces[5] = 0.0
         ref = np.zeros(len(forces))
         for i in range(len(forces)):
@@ -205,16 +252,16 @@ def test_adaptive_sample_weight():
             ref[i] = sigmoid(f, a, b, c, d)
         
         with tf.Graph().as_default():
-            x_ = tf.convert_to_tensor(forces)
-            mask_ = tf.convert_to_tensor(mask)
-            natoms_ = tf.convert_to_tensor(
-                natoms, dtype=tf.float64, name="natoms")
-
-            w = adaptive_sample_weight(x_, mask_, natoms_, a, b, c, d)
+            x = tf.convert_to_tensor(
+                np.concatenate((np.zeros((6, 1, 3)), forces), axis=1),
+                dtype=tf.float64, 
+                name="forces")
+            n = tf.convert_to_tensor(natoms, dtype=tf.float64, name="natoms")
+            w = adaptive_sample_weight(x, n, "sigmoid", a, b, c, d)
             with tf.Session() as sess:
                 print(sess.run(w))
                 print(ref)
 
 
 if __name__ == "__main__":
-    test_weighted_stress_loss()
+    nose.run()
