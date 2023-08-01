@@ -52,6 +52,13 @@ weight = 1.0
 forces_weight = 1.0
 method = "mae"
 
+[nn.loss.adaptive_sample_weight]
+enabled = false
+metric = "fmax"
+method = "sigmoid"
+params = [1.0, 1.0, 1.0, 1.0]
+normalized = true
+
 [nn.loss.eentropy_constraint]
 crystals = []
 weight = 1.0

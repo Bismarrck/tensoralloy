@@ -542,6 +542,7 @@ class BasicNN:
                 sample_weight = loss_ops.adaptive_sample_weight(
                     labels["forces"], 
                     n_atoms, 
+                    options.metric,
                     options.method, 
                     *options.params)
                 normalized_weight = options.normalized

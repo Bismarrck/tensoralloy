@@ -260,6 +260,7 @@ class AdaptiveSampleWeightOptions:
     """
     enabled: bool = False
     method: str = "sigmoid"
+    metric: str = "fmax"
     params: List[float] = None
     normalized: bool = True
 
@@ -284,7 +285,8 @@ class LossParameters(_HyperParameters):
     eentropy_constraint: EEntropyConstraintOptions = EEntropyConstraintOptions()
     hessian_constraint: ForceConstantsLossOptions = ForceConstantsLossOptions()
     extra_constraint: ExtraDBConstraintOptions = ExtraDBConstraintOptions()
-    adaptive_sample_weight: AdaptiveSampleWeightOptions = AdaptiveSampleWeightOptions()
+    adaptive_sample_weight: AdaptiveSampleWeightOptions = \
+        AdaptiveSampleWeightOptions()
 
     def __getitem__(self, item):
         return getattr(self, item)

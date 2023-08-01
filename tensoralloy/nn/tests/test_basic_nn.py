@@ -200,6 +200,7 @@ def test_nn_with_adaptive_sample_weight():
             **{"adaptive_sample_weight": {
                 "enabled": True, 
                 "params": [1.0, 1.0, 1.0, 1.0],
+                "metric": "norm",
                 "method": "sigmoid",
                 "normalized": True}})
 

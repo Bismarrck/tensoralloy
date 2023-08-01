@@ -536,26 +536,31 @@ def get_l2_regularization_loss(options: L2LossOptions, collections=None):
 
 
 def adaptive_sample_weight(true_forces: tf.Tensor, natoms: tf.Tensor, 
-                           method, *args):
+                           metric: str, method: str, *args):
     """
     Return force based sample weight. For structures with very large atomic 
     forces, the weight may be smaller.
     """
     with tf.name_scope("AdaSW"):
+        dtype = true_forces.dtype
         with tf.name_scope("Split"):
             true_forces = tf.split(
                 true_forces, [1, -1], axis=1, name='split')[1]
-        dtype = true_forces.dtype
-        natoms = tf.cast(natoms, dtype=dtype, name='natoms')
-        f = tf.reduce_sum(tf.square(true_forces), axis=(1, 2), 
-                          keepdims=False, name='f')
-        f = tf.sqrt(tf.div_no_nan(f, natoms), name='f/atom')
+        if metric == 'norm':
+            natoms = tf.cast(natoms, dtype=dtype, name='natoms')
+            f = tf.reduce_sum(tf.square(true_forces), axis=(1, 2), 
+                            keepdims=False, name='f')
+            f = tf.sqrt(tf.div_no_nan(f, natoms), name='f/atom')
+        elif metric == 'fmax':
+            f = tf.reduce_max(tf.abs(true_forces), axis=(1, 2), name='fmax')
+        else:
+            raise ValueError("Only the norm and fmax metric is implemented")
         if method == 'sigmoid':
-            a, b, c, d = args[:]
-            a = tf.convert_to_tensor(a, name="a", dtype=dtype)
-            b = tf.convert_to_tensor(b, name="b", dtype=dtype)
-            c = tf.convert_to_tensor(c, name="c", dtype=dtype)
-            d = tf.convert_to_tensor(d, name="d", dtype=dtype)
-            return tf.add(tf.sigmoid(a * (b - f)) * c, d, name='weight')
+            slope = tf.convert_to_tensor(args[0], name="slope", dtype=dtype)
+            center = tf.convert_to_tensor(args[1], name="b", dtype=dtype)
+            wmax = tf.convert_to_tensor(args[2], name="wmax", dtype=dtype)
+            wmin = tf.convert_to_tensor(args[3], name="wmin", dtype=dtype)
+            return tf.add(tf.sigmoid(slope * (center - f)) * wmax, wmin, 
+                          name='weight')
         else:
             raise ValueError("Only the sigmoid method is implemented")

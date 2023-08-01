@@ -257,7 +257,7 @@ def test_adaptive_sample_weight():
                 dtype=tf.float64, 
                 name="forces")
             n = tf.convert_to_tensor(natoms, dtype=tf.float64, name="natoms")
-            w = adaptive_sample_weight(x, n, "sigmoid", a, b, c, d)
+            w = adaptive_sample_weight(x, n, "norm", "sigmoid", a, b, c, d)
             with tf.Session() as sess:
                 print(sess.run(w))
                 print(ref)
