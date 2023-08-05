@@ -248,12 +248,13 @@ class NNAlgorithm:
             actfn_map = {
                 0: "relu",
                 1: "softplus",
-                2: "tanh"
+                2: "tanh",
+                3: "squareplus",
             }
-            self.activation = actfn_map.get(int(npz["actfn"]))
-            self.hidden_sizes = npz["layer_sizes"].tolist()
+            self.activation = actfn_map.get(int(npz["fnn::actfn"]))
+            self.hidden_sizes = npz["fnn::layer_sizes"].tolist()
             self.num_filters = self.hidden_sizes.pop(-1)
-            self.use_resnet_dt = npz["use_resnet_dt"] == 1
+            self.use_resnet_dt = npz["fnn::use_resnet_dt"] == 1
 
         return {"use_resnet_dt": self.use_resnet_dt,
                 "hidden_sizes": self.hidden_sizes,

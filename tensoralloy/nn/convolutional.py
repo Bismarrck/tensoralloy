@@ -150,11 +150,12 @@ class Conv(keras_Conv, base.Layer):
                         tf.add_to_collection(name, self.bias)
 
 
+
 def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                    variable_scope, num_out=1, kernel_initializer='he_normal',
                    l2_weight=0.0, collections=None, output_bias=False,
                    output_bias_mean=0, fixed_output_bias=False,
-                   use_resnet_dt=False, ckpt=None, trainable=True,
+                   use_resnet_dt=False, ckpt=None, trainable=True, 
                    verbose=False):
     """
     Construct a 1x1 convolutional neural network.
@@ -213,33 +214,42 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
         collections = list(collections) + [tf.GraphKeys.MODEL_VARIABLES]
 
     rank = len(x.shape) - 2
-
-    if ckpt is None or not ckpt:
-        npz = None
-    else:
+    use_ckpt = False
+    npz = None
+        
+    if isinstance(ckpt, str):
         npz = np.load(ckpt)
-        actfn_map = {
-            0: "relu",
-            1: "softplus",
-            2: "tanh",
-            3: "squareplus"
-        }
-        activation_fn = actfn_map.get(int(npz["actfn"]))
-        hidden_sizes = npz["layer_sizes"].tolist()
-        num_out = hidden_sizes.pop(-1)
-        use_resnet_dt = npz["use_resnet_dt"] == 1
-        output_bias = npz["apply_output_bias"] == 1
+        if npz.get("use_fnn", False):
+            actfn_map = {
+                0: "relu",
+                1: "softplus",
+                2: "tanh",
+                3: "squareplus"
+            }
+            _activation_fn = actfn_map.get(int(npz["fnn::actfn"]))
+            _hidden_sizes = npz["fnn::layer_sizes"].tolist()
+            _num_out = _hidden_sizes.pop(-1)
+            _use_resnet_dt = npz["fnn::use_resnet_dt"] == 1
+            _output_bias = npz["fnn::apply_output_bias"] == 1
+
+            if _activation_fn == activation_fn and \
+                    _hidden_sizes == hidden_sizes and \
+                    _num_out == num_out and \
+                    _use_resnet_dt == use_resnet_dt and \
+                    _output_bias == output_bias:
+                use_ckpt = True
 
     def _get_initializer(layer):
-        if npz is None:
+        if not use_ckpt:
             kernel_fn = get_initializer(kernel_initializer, dtype=dtype)
             bias_fn = get_initializer('zero', dtype=dtype)
         else:
             kernel_fn = get_initializer(
-                'constant', value=npz[f"weights_0_{layer}"], dtype=dtype)
+                'constant', value=npz[f"fnn::weights_0_{layer}"], dtype=dtype)
             if layer < len(hidden_sizes) or output_bias:
                 bias_fn = get_initializer(
-                    'constant', value=npz[f"biases_0_{layer}"], dtype=dtype)
+                    'constant', value=npz[f"fnn::biases_0_{layer}"], 
+                    dtype=dtype)
             else:
                 bias_fn = None
         return kernel_fn, bias_fn
@@ -267,11 +277,6 @@ def convolution1x1(x: tf.Tensor, activation_fn, hidden_sizes: List[int],
                 log_tensor(_x)
 
         kernel_init, bias_init = _get_initializer(len(hidden_sizes))
-        if not output_bias:
-            bias_init = None
-        elif npz is None:
-            bias_init = get_initializer(
-                'constant', value=output_bias_mean, dtype=dtype)
         layer = Conv(rank=rank, filters=num_out, kernel_size=1,
                      strides=1, use_bias=output_bias,
                      fixed_bias=fixed_output_bias,  activation=None,

@@ -722,7 +722,7 @@ class EquationOfStateProgram(CLIProgram):
         The main function.
         """
         def func(args: argparse.Namespace):
-            assert 0.70 <= args.xlo
+            assert 0.40 <= args.xlo
             assert args.xlo < args.xhi <= 1.25
             assert 0.00 <= args.etemp
 
