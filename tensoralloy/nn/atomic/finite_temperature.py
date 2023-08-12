@@ -361,7 +361,9 @@ class TemperatureDependentAtomicNN(AtomicNN):
                          n_atoms,
                          max_train_steps,
                          loss_parameters: LossParameters,
-                         collections) -> Dict[str, tf.Tensor]:
+                         collections,
+                         sample_weight=None,
+                         normalized_weight=False) -> Dict[str, tf.Tensor]:
         """
         The energy loss or energy losses if temperature effect is considered.
         """
@@ -379,7 +381,9 @@ class TemperatureDependentAtomicNN(AtomicNN):
                         max_train_steps=max_train_steps,
                         options=loss_parameters[prop],
                         collections=collections,
-                        name_scope=scope_name)
+                        name_scope=scope_name,
+                        sample_weight=sample_weight,
+                        normalized_weight=normalized_weight)
                     losses[prop] = loss
         return losses
         

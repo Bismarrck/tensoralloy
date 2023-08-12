@@ -636,6 +636,7 @@ class BasicNN:
                     loss = extra_db_ops.get_extra_db_constraint_loss(
                         self,
                         options=loss_parameters.extra_constraint,
+                        max_train_steps=max_train_steps,
                         verbose=verbose)
                     if loss is not None:
                         losses['extra/c'] = loss

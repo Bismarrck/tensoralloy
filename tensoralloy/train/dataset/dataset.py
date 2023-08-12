@@ -191,7 +191,7 @@ class Dataset:
             num_examples = len(indices)
 
             if not self._serial:
-                n_cpus = min(cpu_count(), 16)
+                n_cpus = max(1, cpu_count() - 1)
                 batch_size = n_cpus * 10
             else:
                 batch_size = 1

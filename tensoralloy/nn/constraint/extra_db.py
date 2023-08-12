@@ -71,6 +71,7 @@ def get_batch_transformer(original_clf: BatchUniversalTransformer,
 
 def get_extra_db_constraint_loss(base_nn,
                                  options: ExtraDBConstraintOptions = None,
+                                 max_train_steps=None,
                                  verbose=True) -> tf.Tensor:
     """
     Create a constraint using the given database. 
@@ -81,6 +82,8 @@ def get_extra_db_constraint_loss(base_nn,
         A `BasicNN`. Its variables will be reused.
     options : ExtraDBConstraintOptions
         The options for this loss tensor.
+    max_train_steps : int
+        The maximum number of training steps.
     verbose : bool
         If True, key tensors will be logged.
 
@@ -182,8 +185,8 @@ def get_extra_db_constraint_loss(base_nn,
         atom_masks = fixed_batch.pop("atom_masks")
         loss = nn.get_total_loss(predictions, labels, n_atoms, atom_masks, 
                                  loss_parameters, 
+                                 max_train_steps=max_train_steps,
                                  mode=ModeKeys.TRAIN)[0]
-        print(loss)
         if is_first_replica():
             tf.add_to_collection(GraphKeys.TRAIN_METRICS, loss)
             tf.add_to_collection(GraphKeys.EVAL_METRICS, loss)
