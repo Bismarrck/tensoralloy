@@ -42,7 +42,7 @@ class XyzFormat(Enum):
 
 
 def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
-                 num_examples=None, verbose=True):
+                 num_examples=None, append_to=None, verbose=True):
     """
     Read `Atoms` objects from a `xyz` or an `extxyz` file.
 
@@ -71,8 +71,12 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
     max_occurs = Counter()
     use_stress = None
     periodic = False
-    database = connect(name='{}.db'.format(splitext(filename)[0]),
-                       append=False)
+
+    if append_to is not None:
+        database = connect(append_to, append=True)
+    else:
+        database = connect(name='{}.db'.format(splitext(filename)[0]),
+                           append=False)
 
     tic = time.time()
     if verbose:
@@ -181,7 +185,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
 
 
 def read_file(filename, units=None, num_examples=None, file_type=None,
-              verbose=True):
+              verbose=True, append_to=None):
     """
     Read `Atoms` objects from a file.
 
@@ -221,7 +225,8 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
 
     elif XyzFormat.has(file_type):
         return _read_extxyz(
-            filename, units, XyzFormat[file_type], num_examples, verbose)
+            filename, units, XyzFormat[file_type], num_examples, append_to, 
+            verbose)
 
     else:
         raise ValueError("Unknown file type: {}".format(file_type))

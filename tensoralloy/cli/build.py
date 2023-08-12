@@ -90,6 +90,7 @@ class BuildDatabaseProgram(CLIProgram):
                              'forces': args.forces_unit,
                              'stress': args.stress_unit},
                       num_examples=args.num_examples,
+                      append_to=args.append_to,
                       verbose=True)
         return func
 
@@ -136,6 +137,11 @@ class BuildDatabaseProgram(CLIProgram):
             default='eV/Angstrom**3',
             choices=['GPa', 'kbar', 'eV/Angstrom**3'],
             help='The unit of the stress tensors in the file.',
+        )
+        subparser.add_argument(
+            "--append-to",
+            type=str,
+            default=None
         )
         super(BuildDatabaseProgram, self).config_subparser(subparser)
 
