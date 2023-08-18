@@ -124,3 +124,6 @@ datasets/*.xyz
 
 # Ignore all experiments
 experiments/*
+
+# macOS 
+.DS_Store
