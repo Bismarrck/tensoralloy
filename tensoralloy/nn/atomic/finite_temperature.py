@@ -459,7 +459,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
                     "rmax": dtype(clf.rcut),
                     "nelt": np.int32(len(clf.elements)),
                     "masses": np.array(masses, dtype=dtype),
-                    "numbers": np.array(chars, dtype=dtype)
+                    "numbers": np.array(chars, dtype=np.int32)
                 }
                 data["max_moment"] = np.int32(self._descriptor.max_moment)
                 data["fctype"] = np.int32(
