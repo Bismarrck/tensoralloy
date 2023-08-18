@@ -327,7 +327,6 @@ class ModeKeys:
     * `TRAIN`: training/fitting mode.
     * `EVAL`: testing/evaluation mode.
     * `PREDICT`: predication/inference mode.
-    * `LAMMPS`: prediciton mode for LAMMPS, pair_style tensoralloy
     * `NATIVE`: prediciton mode for LAMMPS, pair_style tensoralloy/native
     
     """
@@ -335,12 +334,11 @@ class ModeKeys:
     TRAIN = 'train'
     EVAL = 'eval'
     PREDICT = 'infer'
-    LAMMPS = 'lammps'
     NATIVE = 'native'
 
     @staticmethod
     def for_prediction(modekey):
-        return modekey in ('infer', 'lammps', 'native')
+        return modekey in ('infer', 'native')
 
 
 class GraphKeys:

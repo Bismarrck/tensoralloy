@@ -34,7 +34,6 @@ from tensoralloy.nn.constraint import extra_db as extra_db_ops
 from tensoralloy.transformer.base import BaseTransformer
 from tensoralloy.transformer.universal import UniversalTransformer
 from tensoralloy.transformer.universal import BatchUniversalTransformer
-from tensoralloy.transformer.kmc import KMCTransformer
 from tensoralloy.precision import get_float_precision
 
 __author__ = 'Xin Chen'
@@ -78,9 +77,6 @@ all_properties = (
     StructuralProperty(name='free_energy'),
     StructuralProperty(name='atomic', exportable=True, minimizable=False),
     StructuralProperty(name='forces'),
-    StructuralProperty(name='polar'),
-    StructuralProperty(name="partial_forces", exportable=True,
-                       minimizable=False),
     StructuralProperty(name='stress'),
     StructuralProperty(name='total_pressure'),
     StructuralProperty(name='hessian', minimizable=False),
@@ -235,8 +231,7 @@ class BasicNN:
         """
         return self._transformer
 
-    def attach_transformer(self,
-                           clf: Union[UniversalTransformer, KMCTransformer]):
+    def attach_transformer(self, clf: UniversalTransformer):
         """
         Attach a descriptor transformer to this potential.
         """
@@ -293,22 +288,6 @@ class BasicNN:
         if verbose:
             log_tensor(forces)
         return forces
-
-    @staticmethod
-    def _get_partial_forces_ops(energy, rij, rijk, verbose=True):
-        """
-        Return the Ops for computing partial forces.
-        """
-        ops = {}
-        dEdrij = tf.gradients(energy, rij, name='dEdrij')[0]
-        ops["dEdrij"] = tf.identity(dEdrij, name='dE/drij')
-        if rijk is not None:
-            dEdrijk = tf.gradients(energy, rijk, name='dEdrijk')[0]
-            ops["dEdrijk"] = tf.identity(dEdrijk, name='dE/drijk')
-        if verbose:
-            for tensor in ops.values():
-                log_tensor(tensor)
-        return ops
 
     @staticmethod
     def _get_full_stress_and_virial(energy: tf.Tensor, cell, volume,
@@ -754,12 +733,7 @@ class BasicNN:
             verbose=verbose)
 
         if ModeKeys.for_prediction(mode):
-            if mode == ModeKeys.PREDICT:
-                properties = self._export_properties
-            elif mode == ModeKeys.LAMMPS:
-                properties = ["energy", "partial_forces"]
-            else:
-                properties = ["energy"]
+            properties = self._export_properties
             if self.is_finite_temperature:
                 properties.extend(["eentropy", "free_energy"])
         else:
@@ -771,54 +745,44 @@ class BasicNN:
                 ops = self._get_energy_ops(outputs, features, verbose)
                 predictions = ops.as_dict()
 
-            if mode == ModeKeys.LAMMPS:
-                with tf.name_scope("PartialForces"):
-                    predictions.update(
-                        self._get_partial_forces_ops(
-                            energy=predictions[self.variational_energy],
-                            rij=features["g2.rij"],
-                            rijk=features.get("g4.rijk", None)))
+            if 'forces' in properties or \
+                    'stress' in properties or \
+                    'total_pressure' in properties:
+                with tf.name_scope("Forces"):
+                    predictions["forces"] = self._get_forces_op(
+                        energy=predictions[self.variational_energy],
+                        positions=features["positions"],
+                        verbose=verbose)
 
-            else:
-                if 'forces' in properties or \
-                        'stress' in properties or \
-                        'total_pressure' in properties:
-                    with tf.name_scope("Forces"):
-                        predictions["forces"] = self._get_forces_op(
+            if 'stress' in properties:
+                with tf.name_scope("Stress"):
+                    voigt_stress, virial, total_pressure = \
+                        self._get_stress_ops(
                             energy=predictions[self.variational_energy],
+                            cell=features["cell"],
+                            volume=features["volume"],
                             positions=features["positions"],
+                            forces=predictions["forces"],
                             verbose=verbose)
+                    predictions["stress"] = voigt_stress
+                    predictions["virial"] = virial
+                    predictions["total_pressure"] = total_pressure
 
-                if 'stress' in properties:
-                    with tf.name_scope("Stress"):
-                        voigt_stress, virial, total_pressure = \
-                            self._get_stress_ops(
-                                energy=predictions[self.variational_energy],
-                                cell=features["cell"],
-                                volume=features["volume"],
-                                positions=features["positions"],
-                                forces=predictions["forces"],
-                                verbose=verbose)
-                        predictions["stress"] = voigt_stress
-                        predictions["virial"] = virial
-                        predictions["total_pressure"] = total_pressure
+            if 'hessian' in properties:
+                with tf.name_scope("Hessian"):
+                    predictions["hessian"] = self._get_hessian_op(
+                        energy=predictions[self.variational_energy],
+                        positions=features["positions"],
+                        verbose=verbose)
 
-                if 'hessian' in properties:
-                    with tf.name_scope("Hessian"):
-                        predictions["hessian"] = self._get_hessian_op(
-                            energy=predictions[self.variational_energy],
-                            positions=features["positions"],
-                            verbose=verbose)
-
-                if mode == ModeKeys.PREDICT \
-                        and 'elastic' in properties:
-                    with tf.name_scope("Elastic"):
-                        predictions["elastic"] = \
-                            elastic_ops.get_elastic_constat_tensor_op(
-                                predictions["virial"],
-                                features["cell"],
-                                features["volume"],
-                                name='elastic', verbose=verbose)
+            if mode == ModeKeys.PREDICT and 'elastic' in properties:
+                with tf.name_scope("Elastic"):
+                    predictions["elastic"] = \
+                        elastic_ops.get_elastic_constat_tensor_op(
+                            predictions["virial"],
+                            features["cell"],
+                            features["volume"],
+                            name='elastic', verbose=verbose)
 
             return predictions
 
@@ -1105,8 +1069,6 @@ class BasicNN:
                 if 'class' in serialized:
                     serialized.pop('class')
                 clf = self._transformer.__class__(**serialized)
-            if mode == ModeKeys.LAMMPS:
-                clf.use_computed_dists = False
 
             nn.attach_transformer(clf)
             predictions = nn.build(clf.get_placeholder_features(),

@@ -19,8 +19,7 @@ from tensorflow.python.framework import importer
 from typing import List, Tuple
 
 from tensoralloy.transformer.base import DescriptorTransformer
-from tensoralloy.transformer import UniversalTransformer, KMCTransformer
-from tensoralloy.transformer import KMCPreComputedTransformer
+from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.nn.basic import exportable_properties
 from tensoralloy.precision import precision_scope
 from tensoralloy.utils import ModeKeys
@@ -139,12 +138,6 @@ class TensorAlloyCalculator(Calculator):
         cls = params.pop('class')
         if cls == 'UniversalTransformer':
             return UniversalTransformer(**params)
-        elif cls == "KMCTransformer":
-            self._mode = ModeKeys.KMC
-            return KMCTransformer(**params)
-        elif cls == "KMCPreComputedTransformer":
-            self._mode = ModeKeys.PRECOMPUTE
-            return KMCPreComputedTransformer(**params)
         else:
             raise ValueError(f"Unsupported transformer: {cls}")
 
