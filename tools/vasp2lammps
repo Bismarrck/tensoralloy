@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+# coding=utf-8
+from argparse import ArgumentParser
+from ase.io import read
+from tensoralloy.io.lammps import write_lammps_data
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("poscar", type=str, help="The POSCAR file")
+    parser.add_argument("-o", "--output", type=str, default="data.lammps", 
+                        help="The output file")
+    parser.add_argument("-s", "--specorder", type=str, nargs="+", default=None)
+    parser.add_argument("--no-type-labels", default=True, 
+                        action="store_false", dest="type_labels")
+    args = parser.parse_args()
+
+    atoms = read(args.poscar, index="0")
+
+    write_lammps_data(args.output, atoms, atom_style="atomic", 
+                      type_labels=(not args.type_labels),
+                      specorder=args.specorder)
+
+
+if __name__ == "__main__":
+    main()

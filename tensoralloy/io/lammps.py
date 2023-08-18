@@ -586,10 +586,10 @@ def write_lammps_data(
     if masses:
         _write_masses(fd, atoms, species, units)
     
-    if type_labels and specorder is not None:
+    if type_labels:
         fd.write("Atom Type Labels\n")
         fd.write("\n")
-        for i, spec in enumerate(specorder):
+        for i, spec in enumerate(species):
             fd.write(f"{i + 1} {spec}\n")
         fd.write("\n")
 
