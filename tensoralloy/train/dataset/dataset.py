@@ -505,8 +505,3 @@ class Dataset:
 
             # Return the iterator
             return dataset.make_one_shot_iterator().get_next()
-
-
-class PolarDataset(Dataset):
-
-    default_input_keys = ['energy', 'free_energy', 'eentropy', 'polar']

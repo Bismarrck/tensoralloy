@@ -31,14 +31,13 @@ class XyzFormat(Enum):
     normal = 0
     extxyz = 1
     stepmax = 2
-    polar = 3
 
     @classmethod
     def has(cls, fmt) -> bool:
         """ Return True if `` """
         if isinstance(fmt, cls):
             fmt = fmt.name
-        return fmt in ('normal', 'extxyz', 'stepmax', 'polar')
+        return fmt in ('normal', 'extxyz', 'stepmax')
 
 
 def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
@@ -123,7 +122,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
             # energies are in 'eV', forces in 'eV/Angstrom' and stress in 'kB'.
             atoms.calc.results['energy'] *= to_eV
 
-            if xyz_format == XyzFormat.extxyz or xyz_format == XyzFormat.polar:
+            if xyz_format == XyzFormat.extxyz:
                 atoms.calc.results['forces'] *= to_eV_Angstrom
             else:
                 # Structures without forces are considered to be local minima so
@@ -149,13 +148,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
             etemp = atoms_utils.get_electron_temperature(atoms)
             key_value_pairs['eentropy'] = eentropy
             key_value_pairs['etemperature'] = etemp
-
-            if xyz_format == XyzFormat.polar:
-                data = {"polar": atoms_utils.get_polar_tensor(atoms)}
-            else:
-                data = None
-
-            database.write(atoms, data=data, key_value_pairs=key_value_pairs)
+            database.write(atoms, key_value_pairs=key_value_pairs)
             count += 1
 
             # Update the dict of `max_occurs` and print the parsing progress.
@@ -199,7 +192,7 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
     num_examples : int
         An `int` indicating the maximum number of examples to read.
     file_type : str
-        The type of the file. Maybe 'db', 'extxyz', 'xyz', 'stepmax' or 'polar'.
+        The type of the file. Maybe 'db', 'extxyz', 'xyz', 'stepmax'.
     verbose : bool
         If True, the reading progress shall be logged.
 

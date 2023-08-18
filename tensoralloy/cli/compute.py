@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import tqdm
 import argparse
 import glob
 import os
@@ -16,6 +17,7 @@ from os.path import dirname, join, basename, exists
 from ase.build import bulk
 from ase.io import read, write
 from ase.units import GPa, kB
+from matplotlib import pyplot as plt
 
 from tensoralloy.utils import ModeKeys
 from tensoralloy.calculator import TensorAlloyCalculator
@@ -49,7 +51,7 @@ class ComputeMetricsProgram(CLIProgram):
 
         self._programs = [
             ComputeEvaluationPercentileProgram(),
-            ComputePTErrorProgram(),
+            ComputeScatterProgram(),
             EquationOfStateProgram(),
             ComputeElasticTensorProgram(),
         ]
@@ -198,9 +200,9 @@ class ComputeElasticTensorProgram(CLIProgram):
         return func
 
 
-class ComputePTErrorProgram(CLIProgram):
+class ComputeScatterProgram(CLIProgram):
     """
-    Compute MAEs with respect to (P, T) using a checkpoint.
+    Compute MAEs with respect to a metric.
     """
 
     @property
@@ -208,7 +210,7 @@ class ComputePTErrorProgram(CLIProgram):
         """
         The name of this CLI program.
         """
-        return "pt"
+        return "scatter"
 
     @property
     def help(self):
@@ -227,9 +229,9 @@ class ComputePTErrorProgram(CLIProgram):
             help="The checkpoint file to use."
         )
         subparser.add_argument(
-            '--target-prop',
-            choices=['energy', 'free_energy', 'eentropy', 'forces'],
-            default='free_energy',
+            '--versus',
+            choices=['fmax', 'fnorm'],
+            default='fmax',
             help="The target property"
         )
         subparser.add_argument(
@@ -251,7 +253,7 @@ class ComputePTErrorProgram(CLIProgram):
             help="Use training data instead of test data."
         )
 
-        super(ComputePTErrorProgram, self).config_subparser(subparser)
+        super(ComputeScatterProgram, self).config_subparser(subparser)
 
     @property
     def main_func(self):
@@ -265,16 +267,16 @@ class ComputePTErrorProgram(CLIProgram):
                 warnings.warn(f"More than one TOML file in {model_dir}. "
                               f"Only {candidates[0]} will be used.")
             filename = candidates[0]
+
             config = InputReader(filename)
             config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
             config['dataset.tfrecords_dir'] = args.tf_records_dir
-
-            properties = ['stress', args.target_prop]
-            config['nn.minimize'] = properties
+            config['nn.minimize'] = ('energy', 'forces', 'stress')
             precision = config['precision']
 
             with precision_scope(precision):
                 with tf.Graph().as_default():
+
                     manager = TrainingManager(config, validate_tfrecords=True)
                     if args.use_train_data:
                         mode = ModeKeys.TRAIN
@@ -287,7 +289,8 @@ class ComputePTErrorProgram(CLIProgram):
                         batch_size = min(size, batch_size)
                         if size % batch_size != 0:
                             batch_size = 1
-                    n_used = size - divmod(size, batch_size)[1]
+                    natoms = sum(manager.dataset.max_occurs.values())
+
                     input_fn = manager.dataset.input_fn(
                         mode=mode,
                         batch_size=batch_size,
@@ -298,6 +301,7 @@ class ComputePTErrorProgram(CLIProgram):
                     predictions = manager.model.build(features=features,
                                                       mode=mode,
                                                       verbose=True)
+
                     if args.no_ema:
                         saver = tf.train.Saver(tf.trainable_variables())
                     else:
@@ -310,64 +314,55 @@ class ComputePTErrorProgram(CLIProgram):
                         saver.restore(sess, args.ckpt)
 
                         true_vals = {
-                            prop: []
-                            for prop in properties + ['total_pressure']}
+                            'energy': np.zeros(size, dtype=float),
+                            'stress': np.zeros((size, 6), dtype=float),
+                            'forces': np.zeros((size, natoms, 3), dtype=float),
+                            'f_norm': np.zeros(size, dtype=float),
+                            'f_max': np.zeros(size, dtype=float)
+                        }
                         pred_vals = {
-                            prop: []
-                            for prop in properties + ['total_pressure']}
-                        etemp_vals = []
-                        volume_vals = []
-                        n_atoms_vals = []
+                            'energy': np.zeros(size, dtype=float),
+                            'stress': np.zeros((size, 6), dtype=float),
+                            'forces': np.zeros((size, natoms, 3), dtype=float),
+                        }
 
-                        for i in range(size // batch_size):
-                            (predictions_, labels_, n_atoms_,
-                             volume_, etemp_, mask_) = sess.run([
+                        istart = 0
+                        for _ in tqdm.trange(10): # size // batch_size):
+                            predictions_, labels_, n_atoms_, mask_ = sess.run([
                                 predictions,
                                 labels,
                                 features["n_atoms_vap"],
-                                features["volume"],
-                                features["etemperature"],
                                 features["atom_masks"]])
                             mask_ = mask_[:, 1:].astype(bool)
-                            etemp_vals.extend(etemp_)
-                            volume_vals.extend(volume_)
-                            n_atoms_vals.extend(n_atoms_)
+                            iend = istart + batch_size
 
-                            for prop in properties:
-                                if prop in ('energy',
-                                            'free_energy',
-                                            'eentropy'):
-                                    true_vals[prop].extend(
-                                        labels_[prop] / n_atoms_)
-                                    pred_vals[prop].extend(
-                                        predictions_[prop] / n_atoms_)
+                            for prop in config['nn.minimize']:
+                                if prop == 'energy':
+                                    true_vals[prop][istart: iend] = labels_[prop] / n_atoms_
+                                    pred_vals[prop][istart: iend] = predictions_[prop] / n_atoms_
                                 elif prop == 'forces':
                                     f_true = labels_[prop][:, 1:, :]
-                                    f_pred = predictions_[prop]
-                                    for j in range(batch_size):
-                                        true_vals[prop].extend(
-                                            f_true[j, mask_[j], :].flatten())
-                                        pred_vals[prop].extend(
-                                            f_pred[j, mask_[j], :].flatten())
-                                elif prop == 'stress':
-                                    true_vals[prop].extend(labels_[prop] / GPa)
-                                    pred_vals[prop].extend(
-                                        predictions_[prop] / GPa)
-                                    p = -labels_[prop][:, :3].mean(axis=1) / GPa
-                                    true_vals['total_pressure'].extend(p)
-                                    p = -predictions_[prop][:, :3].mean(
-                                        axis=1) / GPa
-                                    pred_vals['total_pressure'].extend(p)
+                                    true_vals['f_norm'][istart: iend] = np.linalg.norm(f_true, axis=(1, 2)) / n_atoms_**0.5
+                                    true_vals['f_max'][istart: iend] = np.max(np.abs(f_true), axis=(1, 2))
+                                else:
+                                    true_vals[prop][istart: iend, :] = labels_[prop] / GPa
+                                    pred_vals[prop][istart: iend, :] = predictions_[prop] / GPa
 
-                pt = np.zeros((n_used, 5))
-                for i in range(n_used):
-                    p = np.round(true_vals['total_pressure'][i], 0)
-                    t = np.round(etemp_vals[i] / kB, 0)
-                    rho = np.round(volume_vals[i] / n_atoms_vals[i], 2)
-                    vtrue = true_vals[args.target_prop][i]
-                    vpred = pred_vals[args.target_prop][i]
-                    pt[i] = (p, t, rho, vtrue, vpred)
-                np.savez(f"pt_{mode}_{args.target_prop}.npz", pt=pt)
+                for prop in config['nn.minimize']:
+                    true_vals[prop] = np.array(true_vals[prop])
+                    pred_vals[prop] = np.array(pred_vals[prop])
+                
+                mae = {
+                    'energy': np.abs(true_vals['energy'] - pred_vals['energy']),
+                    'stress': np.mean(true_vals['stress'] - pred_vals['stress'], axis=1),
+                }
+                
+                if args.versus == 'fmax':
+                    plt.plot(true_vals['f_max'], mae['stress'], 'k.')
+                    plt.xlabel('f_max')
+                    plt.ylabel('MAE')
+                    plt.tight_layout()
+                    plt.savefig("test.png", dpi=150)
 
         return func
 

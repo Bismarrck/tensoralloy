@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from typing import List, Dict
 from atsim.potentials import writeSetFL
 from datetime import datetime
+from ase.calculators.lammps.coordinatetransform import Prism
+from ase.calculators.lammps.unitconvert import convert
+from ase.io.lammpsdata import _write_masses
+from ase.utils import writer
+from ase import Atoms
 
 from tensoralloy.utils import add_slots, get_elements_from_kbody_term
 
@@ -484,3 +489,199 @@ def _read_meam_spline_file(filename: str, element=None):
                         stage = 1
                         idx = 0
         return MeamSpline(elements, rho, phi, frho, fs, gs)
+
+
+@writer
+def write_lammps_data(
+    fd,
+    atoms: Atoms,
+    *,
+    specorder: list = None,
+    force_skew: bool = False,
+    prismobj: Prism = None,
+    masses: bool = False,
+    velocities: bool = False,
+    units: str = "metal",
+    atom_style: str = "atomic",
+    type_labels: bool = False,
+):
+    """Write atomic structure data to a LAMMPS data file.
+
+    Parameters
+    ----------
+    fd : file|str
+        File to which the output will be written.
+    atoms : Atoms
+        Atoms to be written.
+    specorder : list[str], optional
+        Chemical symbols in the order of LAMMPS atom types, by default None
+    force_skew : bool, optional
+        Force to write the cell as a
+        `triclinic <https://docs.lammps.org/Howto_triclinic.html>`__ box,
+        by default False
+    prismobj : Prism|None, optional
+        Prism, by default None
+    masses : bool, optional
+        Whether the atomic masses are written or not, by default False
+    velocities : bool, optional
+        Whether the atomic velocities are written or not, by default False
+    units : str, optional
+        `LAMMPS units <https://docs.lammps.org/units.html>`__,
+        by default "metal"
+    atom_style : {"atomic", "charge", "full"}, optional
+        `LAMMPS atom style <https://docs.lammps.org/atom_style.html>`__,
+        by default "atomic".
+    type_labels: bool, optional
+        The new type label feature: 
+        <https://docs.lammps.org/Howto_type_labels.html>
+
+    """
+
+    # FIXME: We should add a check here that the encoding of the file object
+    #        is actually ascii once the 'encoding' attribute of IOFormat objects
+    #        starts functioning in implementation (currently it doesn't do
+    #         anything).
+
+    if isinstance(atoms, list):
+        if len(atoms) > 1:
+            raise ValueError(
+                "Can only write one configuration to a lammps data file!"
+            )
+        atoms = atoms[0]
+
+    fd.write("(written by ASE)\n\n")
+
+    symbols = atoms.get_chemical_symbols()
+    n_atoms = len(symbols)
+    fd.write(f"{n_atoms} atoms\n")
+
+    if specorder is None:
+        # This way it is assured that LAMMPS atom types are always
+        # assigned predictably according to the alphabetic order
+        species = sorted(set(symbols))
+    else:
+        # To index elements in the LAMMPS data file
+        # (indices must correspond to order in the potential file)
+        species = specorder
+    n_atom_types = len(species)
+    fd.write(f"{n_atom_types} atom types\n\n")
+
+    if prismobj is None:
+        p = Prism(atoms.get_cell())
+    else:
+        p = prismobj
+
+    # Get cell parameters and convert from ASE units to LAMMPS units
+    xhi, yhi, zhi, xy, xz, yz = convert(p.get_lammps_prism(), "distance",
+                                        "ASE", units)
+
+    fd.write(f"0.0 {xhi:23.17g}  xlo xhi\n")
+    fd.write(f"0.0 {yhi:23.17g}  ylo yhi\n")
+    fd.write(f"0.0 {zhi:23.17g}  zlo zhi\n")
+
+    if force_skew or p.is_skewed():
+        fd.write(f"{xy:23.17g} {xz:23.17g} {yz:23.17g}  xy xz yz\n")
+    fd.write("\n")
+
+    if masses:
+        _write_masses(fd, atoms, species, units)
+    
+    if type_labels and specorder is not None:
+        fd.write("Atom Type Labels\n")
+        fd.write("\n")
+        for i, spec in enumerate(specorder):
+            fd.write(f"{i + 1} {spec}\n")
+        fd.write("\n")
+
+    # Write (unwrapped) atomic positions.  If wrapping of atoms back into the
+    # cell along periodic directions is desired, this should be done manually
+    # on the Atoms object itself beforehand.
+    fd.write(f"Atoms # {atom_style}\n\n")
+    pos = p.vector_to_lammps(atoms.get_positions(), wrap=False)
+
+    if atom_style == 'atomic':
+        if not type_labels:
+            for i, r in enumerate(pos):
+                # Convert position from ASE units to LAMMPS units
+                r = convert(r, "distance", "ASE", units)
+                s = species.index(symbols[i]) + 1
+                fd.write(
+                    "{0:>6} {1:>3} {2:23.17g} {3:23.17g} {4:23.17g}\n".format(
+                        *(i + 1, s) + tuple(r)
+                    )
+                )
+        else:
+            for i, r in enumerate(pos):
+                # Convert position from ASE units to LAMMPS units
+                r = convert(r, "distance", "ASE", units)
+                fd.write(
+                    "{0:>6} {1:>3} {2:23.17g} {3:23.17g} {4:23.17g}\n".format(
+                        *(i + 1, symbols[i]) + tuple(r)
+                    )
+                )
+
+    elif atom_style == 'charge':
+        charges = atoms.get_initial_charges()
+        for i, (q, r) in enumerate(zip(charges, pos)):
+            # Convert position and charge from ASE units to LAMMPS units
+            r = convert(r, "distance", "ASE", units)
+            q = convert(q, "charge", "ASE", units)
+            s = species.index(symbols[i]) + 1
+            fd.write("{0:>6} {1:>3} {2:>5} {3:23.17g} {4:23.17g} {5:23.17g}\n"
+                     .format(*(i + 1, s, q) + tuple(r)))
+    elif atom_style == 'full':
+        charges = atoms.get_initial_charges()
+        # The label 'mol-id' has apparenlty been introduced in read earlier,
+        # but so far not implemented here. Wouldn't a 'underscored' label
+        # be better, i.e. 'mol_id' or 'molecule_id'?
+        if atoms.has('mol-id'):
+            molecules = atoms.get_array('mol-id')
+            if not np.issubdtype(molecules.dtype, np.integer):
+                raise TypeError((
+                    "If 'atoms' object has 'mol-id' array, then"
+                    " mol-id dtype must be subtype of np.integer, and"
+                    " not {:s}.").format(str(molecules.dtype)))
+            if (len(molecules) != len(atoms)) or (molecules.ndim != 1):
+                raise TypeError((
+                    "If 'atoms' object has 'mol-id' array, then"
+                    " each atom must have exactly one mol-id."))
+        else:
+            # Assigning each atom to a distinct molecule id would seem
+            # preferableabove assigning all atoms to a single molecule
+            # id per default, as done within ase <= v 3.19.1. I.e.,
+            # molecules = np.arange(start=1, stop=len(atoms)+1,
+            # step=1, dtype=int) However, according to LAMMPS default
+            # behavior,
+            molecules = np.zeros(len(atoms), dtype=int)
+            # which is what happens if one creates new atoms within LAMMPS
+            # without explicitly taking care of the molecule id.
+            # Quote from docs at https://lammps.sandia.gov/doc/read_data.html:
+            #    The molecule ID is a 2nd identifier attached to an atom.
+            #    Normally, it is a number from 1 to N, identifying which
+            #    molecule the atom belongs to. It can be 0 if it is a
+            #    non-bonded atom or if you don't care to keep track of molecule
+            #    assignments.
+
+        for i, (m, q, r) in enumerate(zip(molecules, charges, pos)):
+            # Convert position and charge from ASE units to LAMMPS units
+            r = convert(r, "distance", "ASE", units)
+            q = convert(q, "charge", "ASE", units)
+            s = species.index(symbols[i]) + 1
+            fd.write("{0:>6} {1:>3} {2:>3} {3:>5} {4:23.17g} {5:23.17g} "
+                     "{6:23.17g}\n".format(*(i + 1, m, s, q) + tuple(r)))
+    else:
+        raise NotImplementedError
+
+    if velocities and atoms.get_velocities() is not None:
+        fd.write("\n\nVelocities\n\n")
+        vel = p.vector_to_lammps(atoms.get_velocities())
+        for i, v in enumerate(vel):
+            # Convert velocity from ASE units to LAMMPS units
+            v = convert(v, "velocity", "ASE", units)
+            fd.write(
+                "{0:>6} {1:23.17g} {2:23.17g} {3:23.17g}\n".format(
+                    *(i + 1,) + tuple(v)
+                )
+            )
+
+    fd.flush()
