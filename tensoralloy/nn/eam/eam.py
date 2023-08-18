@@ -21,15 +21,9 @@ from tensoralloy.nn.utils import get_activation_fn, log_tensor
 from tensoralloy.nn.partition import dynamic_partition
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.nn.eam.potentials import EamFSPotential, EamAlloyPotential
-from tensoralloy.nn.eam.potentials.spline import CubicSplinePotential
-from tensoralloy.nn.eam.potentials.spline import LinearlyExtendedSplinePotential
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
-
-
-_spline_pot_patt = re.compile(r"^spline@(.*)")
-_lext_spline_pot_patt = re.compile(r"^lspline@(.*)")
 
 
 def plot_potential(nx: int, dx: float, func: Callable, filename: str,
@@ -172,30 +166,10 @@ class EamNN(BasicNN):
         Check the availability of the potential.
         """
         name = name.lower()
-        if name == "nn" or \
-                name in available_potentials or \
-                name.startswith("spline@") or \
-                name.startswith("lspline@"):
+        if name == "nn" or name in available_potentials:
             return True
         else:
             return False
-
-    def _may_insert_spline_fn(self, name: str):
-        """
-        Insert the spline functions read from the given csv file.
-        """
-
-        for (patt, cls) in (
-                (_spline_pot_patt, CubicSplinePotential),
-                (_lext_spline_pot_patt, LinearlyExtendedSplinePotential)):
-            m = patt.search(name.strip())
-            if m:
-                json = m.group(1)
-                if json not in self._empirical_functions:
-                    spline = cls(json)
-                    self._empirical_functions[json] = spline
-                return json
-        return name
 
     def _get_nn_fn(self, section, key, variable_scope, verbose=False):
         """
@@ -223,7 +197,7 @@ class EamNN(BasicNN):
         kwargs = dict(element=element,
                       variable_scope=variable_scope,
                       verbose=verbose)
-        name = self._may_insert_spline_fn(self._potentials[element]['embed'])
+        name = self._potentials[element]['embed']
         if name == 'nn':
             return self._get_nn_fn(
                 section=element,
@@ -242,8 +216,7 @@ class EamNN(BasicNN):
         Return the electron density function of `name` for the given k-body
         term.
         """
-        name = self._may_insert_spline_fn(
-            self._potentials[element_or_kbody_term]['rho'])
+        name = self._potentials[element_or_kbody_term]['rho']
         if name == 'nn':
             return self._get_nn_fn(
                 section=element_or_kbody_term,
@@ -274,7 +247,7 @@ class EamNN(BasicNN):
         Return the pairwise potential function of `name` for the given k-body
         term.
         """
-        name = self._may_insert_spline_fn(self._potentials[kbody_term]['phi'])
+        name = self._potentials[kbody_term]['phi']
         if name == 'nn':
             return self._get_nn_fn(
                 section=kbody_term,

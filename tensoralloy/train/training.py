@@ -23,14 +23,11 @@ from tensoralloy.io.input import InputReader
 from tensoralloy.io.db import connect
 from tensoralloy.nn.atomic import TemperatureDependentAtomicNN, AtomicNN
 from tensoralloy.nn.atomic.sf import SymmetryFunction
-from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.atomic.grap import GenericRadialAtomicPotential
 from tensoralloy.nn.atomic.grap import GRAP_algorithms
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN
-from tensoralloy.nn.tersoff import Tersoff
-from tensoralloy.nn.atomic import special
 from tensoralloy.nn.eam.potentials import available_potentials
 from tensoralloy.transformer.universal import BatchUniversalTransformer
 from tensoralloy.utils import set_logging_configs, nested_set
@@ -55,33 +52,14 @@ class PairStyle:
         self._pair_style = pair_style
         self._angular = False
         self._td = False
-        self._special = False
 
         keys = pair_style.split("/")
-        if keys[0] == 'special':
-            if keys[1] == 'Be':
-                self._td = True
-                self._model = "grap"
-                self._angular = False
-                self._category = pair_style
-            elif keys[1] == 'polar':
-                self._td = False
-                self._model = "grap"
-                self._angular = False
-                self._category = pair_style
-            self._special = True
-        else:
-            self._category = keys[0]
-            self._model = keys[1] if len(keys) > 1 else pair_style
-            if len(keys) == 1:
-                assert pair_style == "tersoff"
-                self._angular = True
-                self._td = False
-                self._model = pair_style
-            elif len(keys) == 3:
-                assert keys[1] == 'sf' and keys[2] == 'angular'
-                self._angular = True
-                self._td = keys[0] == 'td'
+        self._category = keys[0]
+        self._model = keys[1] if len(keys) > 1 else pair_style
+        if len(keys) == 3:
+            assert keys[1] == 'sf' and keys[2] == 'angular'
+            self._angular = True
+            self._td = keys[0] == 'td'
 
     def __eq__(self, other):
         return self._pair_style == other
@@ -110,11 +88,6 @@ class PairStyle:
     def angular(self):
         """ Return True if angular interactions should be used. """
         return self._angular
-
-    @property
-    def special(self):
-        """ Return True if this is a special pair style. """
-        return self._special
 
 
 class TrainingManager:
@@ -248,8 +221,6 @@ class TrainingManager:
 
         if self._pair_style.model == 'sf':
             descriptor = SymmetryFunction(elements, **configs["sf"])
-        elif self._pair_style.model == 'deepmd':
-            descriptor = DeepPotSE(elements, **configs['deepmd'])
         else:
             algo = configs["grap"]["algorithm"]
             grap_kwargs = configs["grap"]
@@ -262,13 +233,6 @@ class TrainingManager:
         if self._pair_style.category == "td":
             cls = TemperatureDependentAtomicNN
             params['finite_temperature'] = configs['finite_temperature']
-        elif self._pair_style == "special/Be":
-            cls = special.BeNN
-            params['finite_temperature'] = configs['finite_temperature']
-        elif self._pair_style == "special/polar":
-            cls = special.PolarNN
-            params['inner_layers'] = configs['polar']['inner_layers']
-            params['polar_loss_weight'] = configs['polar']['polar_loss_weight']
         else:
             cls = AtomicNN
         params["descriptor"] = descriptor
@@ -314,16 +278,6 @@ class TrainingManager:
             return AdpNN(**kwargs)
         else:
             raise ValueError(f"Unknown pair_style {self._pair_style}")
-
-    def _get_tersoff_nn(self, kwargs: dict) -> Tersoff:
-        """
-        Initialize a `Tersoff` model.
-        """
-        symmetric_mixing = self._reader['nn.tersoff.symmetric_mixing']
-        potential_file = self._reader['nn.tersoff.file']
-        kwargs.update(dict(symmetric_mixing=symmetric_mixing,
-                           custom_potentials=potential_file))
-        return Tersoff(**kwargs)
 
     def _get_model(self):
         """
@@ -542,15 +496,10 @@ class TrainingManager:
                 checkpoint = tf.train.latest_checkpoint(
                     self._hparams.train.model_dir)
 
-            if mode == ModeKeys.LAMMPS:
-                pb_ext = "lmpb"
-            else:
-                pb_ext = "pb"
-
             if tag is not None:
-                graph_name = f'{self._dataset.name}.{tag}.{pb_ext}'
+                graph_name = f'{self._dataset.name}.{tag}.pb'
             else:
-                graph_name = f'{self._dataset.name}.{pb_ext}'
+                graph_name = f'{self._dataset.name}.pb'
             graph_path = join(self._hparams.train.model_dir, graph_name)
 
             if mode == ModeKeys.NATIVE:

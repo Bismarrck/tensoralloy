@@ -61,10 +61,11 @@ class ExportModelProgram(CLIProgram):
         )
         subparser.add_argument(
             '--mode',
-            default='infer',
-            choices=['infer', 'lammps', 'native'],
+            default='inference',
+            choices=['inference', 'lammps'],
             type=str,
-            help="Export mode: infer, lammps or kmc"
+            help="Export mode: inference (Python) or "
+                 "lammps (LAMMPS pair tyle tensormd)"
         )
         subparser.add_argument(
             "--precision",
@@ -149,9 +150,14 @@ class ExportModelProgram(CLIProgram):
                       'precision': args.precision}
 
             manager = TrainingManager(configs, validate_tfrecords=False)
+            if args.mode == 'inference':
+                mode = 'infer'
+            else:
+                mode = 'native'
+
             manager.export(ckpt,
                            tag=step_tag,
                            use_ema_variables=(not args.no_ema),
-                           mode=args.mode,
+                           mode=mode,
                            **kwargs)
         return func

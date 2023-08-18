@@ -5,7 +5,6 @@
 from __future__ import print_function, absolute_import
 
 from tensoralloy.nn.atomic.atomic import AtomicNN
-from tensoralloy.nn.atomic.deepmd import DeepPotSE
 from tensoralloy.nn.eam.alloy import EamAlloyNN
 from tensoralloy.nn.eam.fs import EamFsNN
 from tensoralloy.nn.eam.adp import AdpNN

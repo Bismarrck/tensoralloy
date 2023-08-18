@@ -114,17 +114,6 @@ activation = "softplus"
 layers = [128, 128]
 algo = "default"
 
-[nn.atomic.polar]
-inner_layers = [128, 128]
-polar_loss_weight = 1.0
-
-[nn.atomic.deepmd]
-rcs = 4.0
-m1 = 100
-m2 = 4
-embedding_sizes = [20, 40, 80]
-embedding_activation = 'tanh'
-
 [nn.atomic.sf]
 cutoff_function = 'cosine'
 eta = [0.01, 0.1, 0.5, 1.0, 4.0]
@@ -186,10 +175,6 @@ drho = 0.01
 
 [nn.eam.setfl.lattice.constant]
 [nn.eam.setfl.lattice.type]
-
-[nn.tersoff]
-file = "required"
-symmetric_mixing = false
 
 [opt]
 method = "adam"

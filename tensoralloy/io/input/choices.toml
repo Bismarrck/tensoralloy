@@ -2,10 +2,9 @@
 
 precision = ['high', 'medium']
 pair_style = [
-    'eam/alloy', 'eam/fs', 'eam/adp', 'tersoff',
-    'atomic/deepmd', 'atomic/sf', 'atomic/sf/angular', 'atomic/grap',
-    'td/deepmd', 'td/sf', 'td/sf/angular', 'td/grap',
-    'special/Be',
+    'eam/alloy', 'eam/fs', 'eam/adp',
+    'atomic/sf', 'atomic/sf/angular', 'atomic/grap',
+    'td/sf', 'td/sf/angular', 'td/grap'
 ]
 
 [nn.atomic]
