@@ -10,6 +10,7 @@ import tensorflow as tf
 from collections import Counter
 from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
+from ase.data import covalent_radii
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
@@ -222,7 +223,7 @@ class NNAlgorithm:
     """
 
     required_keys = ["activation_fn", "hidden_sizes", "num_filters",
-                     "use_reset_dt", "ckpt", "trainable"]
+                     "use_reset_dt", "ckpt", "trainable", "h_abck_modifier"]
     name = "nn"
 
     def __init__(self, parameters: dict):
@@ -232,6 +233,7 @@ class NNAlgorithm:
         self.num_filters = parameters.get("num_filters", 16)
         self.ckpt = parameters.get("ckpt", None)
         self.trainable = parameters.get("trainable", True)
+        self.h_abck_modifier = parameters.get("h_abck_modifier", 0)
 
     def __len__(self):
         return self.num_filters
@@ -255,13 +257,16 @@ class NNAlgorithm:
             self.hidden_sizes = npz["fnn::layer_sizes"].tolist()
             self.num_filters = self.hidden_sizes.pop(-1)
             self.use_resnet_dt = npz["fnn::use_resnet_dt"] == 1
+            self.trainable = npz["fnn::trainable"] == 1
+            self.h_abck_modifier = npz.get("fnn::h_abck_modifier", 0)
 
         return {"use_resnet_dt": self.use_resnet_dt,
                 "hidden_sizes": self.hidden_sizes,
                 "activation": self.activation,
                 "num_filters": self.num_filters,
                 "trainable": self.trainable,
-                "ckpt": self.ckpt}
+                "ckpt": self.ckpt,
+                "h_abck_modifier": self.h_abck_modifier}
 
 
 class GenericRadialAtomicPotential(Descriptor):
@@ -277,7 +282,8 @@ class GenericRadialAtomicPotential(Descriptor):
                  moment_tensors: Union[int, List[int]] = 0,
                  cutoff_function="cosine",
                  symmetric=False,
-                 legacy_mode=True):
+                 legacy_mode=True,
+                 h_abck_modifier=None):
         """
         Initialization method.
         """
@@ -553,8 +559,19 @@ class GenericRadialAtomicPotential(Descriptor):
                 fc = tf.multiply(fc, masks, name="fc/masked")
                 eps = tf.convert_to_tensor(1e-16, dtype=dtype, name="eps")
                 if isinstance(self._algo, NNAlgorithm):
+                    if self._algo.h_abck_modifier == 0:
+                        h_in = rij
+                    elif self._algo.h_abck_modifier == 1:
+                        rcov = covalent_radii[element]
+                        h_in = tf.divide(rij, rcov, name="h_in/linear")
+                    elif self._algo.h_abck_modifier == 2:
+                        rcov = covalent_radii[element]
+                        h_in = tf.exp(tf.negative(rij / rcov), name="h_in/exp")
+                    else:
+                        raise ValueError(
+                            f"Unknown H(r) modifier: {self._h_abck_modifier}")
                     H = convolution1x1(
-                        rij,
+                        h_in,
                         activation_fn=get_activation_fn(self._algo.activation),
                         hidden_sizes=self._algo.hidden_sizes,
                         num_out=len(self._algo),

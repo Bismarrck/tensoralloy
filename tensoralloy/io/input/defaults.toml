@@ -155,6 +155,7 @@ num_filters = 16
 use_resnet_dt = false
 ckpt = false
 trainable = true
+h_abck_modifier = 0
 
 [nn.atomic.layers]
 
