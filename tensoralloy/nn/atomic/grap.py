@@ -10,7 +10,7 @@ import tensorflow as tf
 from collections import Counter
 from typing import List, Dict, Union
 from sklearn.model_selection import ParameterGrid
-from ase.data import covalent_radii
+from ase.data import covalent_radii, atomic_numbers
 
 from tensoralloy.transformer import UniversalTransformer
 from tensoralloy.utils import get_elements_from_kbody_term, ModeKeys
@@ -562,10 +562,10 @@ class GenericRadialAtomicPotential(Descriptor):
                     if self._algo.h_abck_modifier == 0:
                         h_in = rij
                     elif self._algo.h_abck_modifier == 1:
-                        rcov = covalent_radii[element]
+                        rcov = covalent_radii[atomic_numbers[element]]
                         h_in = tf.divide(rij, rcov, name="h_in/linear")
                     elif self._algo.h_abck_modifier == 2:
-                        rcov = covalent_radii[element]
+                        rcov = covalent_radii[atomic_numbers[element]]
                         h_in = tf.exp(tf.negative(rij / rcov), name="h_in/exp")
                     else:
                         raise ValueError(

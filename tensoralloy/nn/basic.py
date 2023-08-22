@@ -973,10 +973,6 @@ class BasicNN:
                                  mode=mode,
                                  verbose=(mode == ModeKeys.TRAIN))
 
-        if mode == ModeKeys.LAMMPS:
-            raise ValueError(
-                "`model_fn` cannot be called for mode LAMMPS or KMC")
-
         if mode == ModeKeys.PREDICT:
             return EstimatorSpec(mode=mode, predictions=predictions)
 
