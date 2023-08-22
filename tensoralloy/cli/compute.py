@@ -241,6 +241,13 @@ class ComputeScatterProgram(CLIProgram):
             help="The directory where tfrecord files should be found."
         )
         subparser.add_argument(
+            '--xscale',
+            type=str,
+            choices=['linear', 'log'],
+            default='linear',
+            help="The x-axis scale."
+        )
+        subparser.add_argument(
             '--no-ema',
             action='store_true',
             default=False,
@@ -315,19 +322,17 @@ class ComputeScatterProgram(CLIProgram):
 
                         true_vals = {
                             'energy': np.zeros(size, dtype=float),
-                            'stress': np.zeros((size, 6), dtype=float),
-                            'forces': np.zeros((size, natoms, 3), dtype=float),
+                            'stress': np.zeros((size, 3), dtype=float),
                             'f_norm': np.zeros(size, dtype=float),
                             'f_max': np.zeros(size, dtype=float)
                         }
                         pred_vals = {
                             'energy': np.zeros(size, dtype=float),
-                            'stress': np.zeros((size, 6), dtype=float),
-                            'forces': np.zeros((size, natoms, 3), dtype=float),
+                            'stress': np.zeros((size, 3), dtype=float),
                         }
 
                         istart = 0
-                        for _ in tqdm.trange(10): # size // batch_size):
+                        for _ in tqdm.trange(size // batch_size):
                             predictions_, labels_, n_atoms_, mask_ = sess.run([
                                 predictions,
                                 labels,
@@ -338,31 +343,55 @@ class ComputeScatterProgram(CLIProgram):
 
                             for prop in config['nn.minimize']:
                                 if prop == 'energy':
-                                    true_vals[prop][istart: iend] = labels_[prop] / n_atoms_
-                                    pred_vals[prop][istart: iend] = predictions_[prop] / n_atoms_
+                                    true_vals[prop][istart: iend] = \
+                                        labels_[prop] / n_atoms_
+                                    pred_vals[prop][istart: iend] = \
+                                        predictions_[prop] / n_atoms_
                                 elif prop == 'forces':
                                     f_true = labels_[prop][:, 1:, :]
-                                    true_vals['f_norm'][istart: iend] = np.linalg.norm(f_true, axis=(1, 2)) / n_atoms_**0.5
-                                    true_vals['f_max'][istart: iend] = np.max(np.abs(f_true), axis=(1, 2))
+                                    true_vals['f_norm'][istart: iend] = \
+                                        np.linalg.norm(f_true, axis=(1, 2)) / \
+                                            n_atoms_**0.5
+                                    true_vals['f_max'][istart: iend] = \
+                                        np.max(np.abs(f_true), axis=(1, 2))
                                 else:
-                                    true_vals[prop][istart: iend, :] = labels_[prop] / GPa
-                                    pred_vals[prop][istart: iend, :] = predictions_[prop] / GPa
-
-                for prop in config['nn.minimize']:
-                    true_vals[prop] = np.array(true_vals[prop])
-                    pred_vals[prop] = np.array(pred_vals[prop])
+                                    true_vals[prop][istart: iend, :3] = \
+                                        labels_[prop][:, :3] / GPa
+                                    pred_vals[prop][istart: iend, :3] = \
+                                        predictions_[prop][:, :3] / GPa
                 
                 mae = {
-                    'energy': np.abs(true_vals['energy'] - pred_vals['energy']),
-                    'stress': np.mean(true_vals['stress'] - pred_vals['stress'], axis=1),
-                }
+                    'energy': np.abs(
+                        true_vals['energy'] - pred_vals['energy']),
+                    'stress': np.mean(
+                        np.abs(true_vals['stress'] - pred_vals['stress']), 
+                        axis=1)
+                    }
                 
                 if args.versus == 'fmax':
-                    plt.plot(true_vals['f_max'], mae['stress'], 'k.')
-                    plt.xlabel('f_max')
-                    plt.ylabel('MAE')
-                    plt.tight_layout()
-                    plt.savefig("test.png", dpi=150)
+                    key = 'f_max'
+                else:
+                    key = 'f_norm'
+
+                _, axes = plt.subplots(1, 2, figsize=[10, 4])
+                ax = axes[0]
+                ax.plot(true_vals['f_max'], mae['energy'], 'k.') 
+                ax.set_xlabel(r'$F_{max}$ (eV/$\AA$)', fontsize=16)
+                ax.set_ylabel(r'MAE (eV/atom)', fontsize=16)
+
+                if args.xscale == 'log':
+                    ax.set_xscale('log')
+
+                ax = axes[1]
+                ax.plot(true_vals['f_max'], mae['stress'], 'k.') 
+                ax.set_xlabel(r'$F_{max}$ (eV/$\AA$)', fontsize=16)
+                ax.set_ylabel(r'Stress (xx,yy,zz) (GPa)', fontsize=16)
+
+                if args.xscale == 'log':
+                    ax.set_xscale('log')
+
+                plt.tight_layout()
+                plt.savefig(f"scatter_{key}.png", dpi=150)
 
         return func
 
