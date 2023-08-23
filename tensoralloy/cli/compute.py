@@ -359,6 +359,8 @@ class ComputeScatterProgram(CLIProgram):
                                         labels_[prop][:, :3] / GPa
                                     pred_vals[prop][istart: iend, :3] = \
                                         predictions_[prop][:, :3] / GPa
+                            
+                            istart = iend
                 
                 mae = {
                     'energy': np.abs(
