@@ -452,13 +452,6 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             action='store_true',
             help="Use training data instead of test data."
         )
-        subparser.add_argument(
-            '--order',
-            type=str,
-            choices=['f_norm', 'dE'],
-            default=None,
-            help="Print the errors w.r.t RMS of true forces."
-        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -486,13 +479,9 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
             config['dataset.tfrecords_dir'] = args.tf_records_dir
 
-            avail_properties = ('energy', 'forces', 'stress', 'total_pressure')
+            avail_properties = ('energy', 'forces', 'stress')
             properties = [x for x in config['nn.minimize']
                           if x in avail_properties]
-            if args.order == 'f_norm':
-                if 'forces' not in properties:
-                    properties.append('forces')
-
             config['nn.minimize'] = properties
             precision = config['precision']
 
@@ -539,7 +528,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         true_vals['f_norm'] = []
                         pred_vals = {x: [] for x in properties}
 
-                        for i in range(size // batch_size):
+                        for i in tqdm.trange(size // batch_size):
                             predictions_, labels_, n_atoms_, mask_ = sess.run([
                                 predictions,
                                 labels,
@@ -579,51 +568,18 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                         np.subtract(np.array(true_vals[prop]),
                                     np.array(pred_vals[prop])))
 
-                if args.order is None:
-                    for q in range(0, 101, args.q):
-                        data['percentile'].append(q)
+                for q in range(0, 101, args.q):
+                    data['percentile'].append(q)
+                    if q == 100:
+                        data['percentile'].append('MAE')
+                        data['percentile'].append('Median')
+                    for prop in properties:
+                        data[prop].append(np.percentile(abs_diff[prop], q))
                         if q == 100:
-                            data['percentile'].append('MAE')
-                            data['percentile'].append('Median')
-                        for prop in properties:
-                            data[prop].append(np.percentile(abs_diff[prop], q))
-                            if q == 100:
-                                data[prop].append(np.mean(abs_diff[prop]))
-                                data[prop].append(np.median(abs_diff[prop]))
-                    dataframe = pd.DataFrame(data)
-                    dataframe.set_index('percentile', inplace=True)
-
-                else:
-                    order = args.order
-                    mapping = {'dE': 'energy', 'f_norm': 'f_norm'}
-                    key = mapping[order]
-
-                    if order == 'dE':
-                        emin = min(true_vals[key])
-                        true_vals[key] = np.asarray(true_vals[key]) - emin
-                    else:
-                        true_vals[key] = np.asarray(true_vals[key])
-                    indices = np.argsort(true_vals[key])
-
-                    reordered = {}
-                    for prop in ('energy', 'total_pressure'):
-                        if prop not in abs_diff:
-                            continue
-                        new_abs_diff = abs_diff[prop][indices]
-                        reordered[prop] = []
-                        for q in range(args.q, 101, args.q):
-                            rbound = int(n_used * np.round(q / 100.0, 2)) - 1
-                            reordered[prop].append(
-                                np.mean(new_abs_diff[:rbound]))
-
-                    reordered[order] = []
-                    true_vals[key] = np.asarray(true_vals[key])[indices]
-                    for q in range(args.q, 101, args.q):
-                        rbound = int(n_used * np.round(q / 100.0, 2)) - 1
-                        reordered[order].append(true_vals[key][rbound])
-
-                    dataframe = pd.DataFrame(reordered)
-                    dataframe.set_index(order, inplace=True)
+                            data[prop].append(np.mean(abs_diff[prop]))
+                            data[prop].append(np.median(abs_diff[prop]))
+                dataframe = pd.DataFrame(data)
+                dataframe.set_index('percentile', inplace=True)
 
                 # Convert to meV/atoms
                 dataframe['energy'] *= 1000.0
@@ -631,8 +587,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 name_mapping = {
                     'energy': 'Energy (meV/atom)',
                     'forces': 'Force (eV/Ang)',
-                    'stress': 'Stress (GPa)',
-                    'total_pressure': 'Pressure (GPa)'
+                    'stress': 'Stress (GPa)'
                 }
                 rename_cols = {old: new for old, new in name_mapping.items()
                                if old in dataframe.columns.to_list()}
@@ -642,7 +597,8 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 print(f"Mode: {mode} ({n_used}/{size})")
                 print(dataframe.to_string())
 
-                with open(f"percentile.{args.ckpt.replace('.', '_')}.dat", "w") as f:
+                with open(f"percentile.{args.ckpt.replace('.', '_')}.dat", 
+                          "w") as f:
                     f.write(f"Mode: {mode} ({n_used}/{size})\n")
                     f.write(dataframe.to_string())
                     f.write("\n")
