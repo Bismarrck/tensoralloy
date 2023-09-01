@@ -562,22 +562,26 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
 
                 data = {x: [] for x in properties}
                 data['percentile'] = []
-                abs_diff = {}
+                diff = {}
+                rmse = {}
                 for prop in properties:
-                    abs_diff[prop] = np.abs(
-                        np.subtract(np.array(true_vals[prop]),
-                                    np.array(pred_vals[prop])))
+                    x = np.array(true_vals[prop])
+                    y = np.array(pred_vals[prop])
+                    diff[prop] = np.abs(x - y)
+                    rmse[prop] = np.sqrt(np.mean(np.square(x - y)))
 
                 for q in range(0, 101, args.q):
                     data['percentile'].append(q)
                     if q == 100:
                         data['percentile'].append('MAE')
                         data['percentile'].append('Median')
+                        data['percentile'].append('RMSE')
                     for prop in properties:
-                        data[prop].append(np.percentile(abs_diff[prop], q))
+                        data[prop].append(np.percentile(diff[prop], q))
                         if q == 100:
-                            data[prop].append(np.mean(abs_diff[prop]))
-                            data[prop].append(np.median(abs_diff[prop]))
+                            data[prop].append(np.mean(diff[prop]))
+                            data[prop].append(np.median(diff[prop]))
+                            data[prop].append(rmse[prop])
                 dataframe = pd.DataFrame(data)
                 dataframe.set_index('percentile', inplace=True)
 
