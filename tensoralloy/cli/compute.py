@@ -13,10 +13,12 @@ import glob
 import os
 import warnings
 
+from pathlib import Path
 from os.path import dirname, join, basename, exists
 from ase.build import bulk
 from ase.io import read, write
 from ase.units import GPa, kB
+from ase.db import connect
 from matplotlib import pyplot as plt
 
 from tensoralloy.utils import ModeKeys
@@ -54,6 +56,7 @@ class ComputeMetricsProgram(CLIProgram):
             ComputeScatterProgram(),
             EquationOfStateProgram(),
             ComputeElasticTensorProgram(),
+            DatabaseForceStandardDeviationProgram(),
         ]
 
     @property
@@ -606,6 +609,59 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     f.write(f"Mode: {mode} ({n_used}/{size})\n")
                     f.write(dataframe.to_string())
                     f.write("\n")
+
+        return func
+
+
+class DatabaseForceStandardDeviationProgram(CLIProgram):
+    """
+    A program to compute the standard deviation of forces in the database.
+    """
+
+    @property
+    def name(self):
+        return "std"
+    
+    @property
+    def help(self):
+        return "Compute the standard deviation of forces in the database."
+    
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'database', type=str, help="The database")
+        subparser.add_argument(
+            "-i", "--interval", type=int, default=1,
+            help="The sampling interval."
+        )
+        return super().config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function.
+        """
+        def func(args: argparse.Namespace):
+            filename = Path(args.database)
+            if not filename.exists():
+                raise IOError(f"{args.database} does not exist!")
+            db = connect(filename)
+            size = len(db)
+            N = 0
+            mu = 0.0
+            var = 0.0
+            for i in tqdm.trange(1, size + 1, args.interval):
+                atoms = db.get_atoms(id=i, add_additional_information=True)
+                for f in atoms.get_forces().flatten():
+                    N = N + 1
+                    rho = 1.0 / N
+                    d = f - mu
+                    mu += rho * d
+                    var += rho * ((1 - rho) * d**2 - var)
+            std = np.sqrt(var)
+            print(f"Std: {std:.5f} eV/ang")
 
         return func
 
