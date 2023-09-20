@@ -291,11 +291,18 @@ class ComputeScatterProgram(CLIProgram):
                     if args.use_train_data:
                         mode = ModeKeys.TRAIN
                         size = manager.dataset.train_size
-                        batch_size = manager.hparams.train.batch_size
+                        if args.batch_size is not None:
+                            batch_size = args.batch_size
+                        else:
+                            batch_size = manager.hparams.train.batch_size
+                        batch_size = min(size, batch_size)
                     else:
                         mode = ModeKeys.EVAL
                         size = manager.dataset.test_size
-                        batch_size = manager.hparams.train.batch_size
+                        if args.batch_size is not None:
+                            batch_size = args.batch_size
+                        else:
+                            batch_size = manager.hparams.train.batch_size
                         batch_size = min(size, batch_size)
                         if size % batch_size != 0:
                             batch_size = 1
@@ -455,6 +462,12 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             action='store_true',
             help="Use training data instead of test data."
         )
+        subparser.add_argument(
+            '--batch-size',
+            default=None,
+            type=int,
+            help="Set the evaluation batch size."
+        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -495,11 +508,18 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     if args.use_train_data:
                         mode = ModeKeys.TRAIN
                         size = manager.dataset.train_size
-                        batch_size = manager.hparams.train.batch_size
+                        if args.batch_size is not None:
+                            batch_size = args.batch_size
+                        else:
+                            batch_size = manager.hparams.train.batch_size
+                        batch_size = min(size, batch_size)
                     else:
                         mode = ModeKeys.EVAL
                         size = manager.dataset.test_size
-                        batch_size = manager.hparams.train.batch_size
+                        if args.batch_size is not None:
+                            batch_size = args.batch_size
+                        else:
+                            batch_size = manager.hparams.train.batch_size
                         batch_size = min(size, batch_size)
                         if size % batch_size != 0:
                             batch_size = 1

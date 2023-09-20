@@ -62,7 +62,7 @@ class ExportModelProgram(CLIProgram):
         subparser.add_argument(
             '--mode',
             default='inference',
-            choices=['inference', 'lammps'],
+            choices=['inference', 'lammps', 'native'],
             type=str,
             help="Export mode: inference (Python) or "
                  "lammps (LAMMPS pair tyle tensormd)"
