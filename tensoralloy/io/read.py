@@ -67,15 +67,16 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
     """
     to_eV, to_eV_Angstrom, to_eV_Ang3 = get_conversion_units(units)
     count = 0
-    max_occurs = Counter()
     use_stress = None
     periodic = False
 
     if append_to is not None:
         database = connect(append_to, append=True)
+        max_occurs = Counter(database.metadata['max_occurs'])
     else:
         database = connect(name='{}.db'.format(splitext(filename)[0]),
                            append=False)
+        max_occurs = Counter()
 
     tic = time.time()
     if verbose:
