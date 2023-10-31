@@ -468,6 +468,13 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             type=int,
             help="Set the evaluation batch size."
         )
+        subparser.add_argument(
+            '--write',
+            default=None,
+            choices=['energy', 'forces', 'stress'],
+            nargs='*',
+            type=str
+        )
 
         super(ComputeEvaluationPercentileProgram, self).config_subparser(
             subparser)
@@ -629,6 +636,23 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     f.write(f"Mode: {mode} ({n_used}/{size})\n")
                     f.write(dataframe.to_string())
                     f.write("\n")
+                
+                if args.write is not None:
+                    if 'energy' in args.write:
+                        with open("energy.dat", "w") as fp:
+                            for x, y in zip(true_vals['energy'],
+                                            pred_vals['energy']):
+                                fp.write(f"{x} {y}\n")
+                    if 'forces' in args.write:
+                        with open("forces.dat", "w") as fp:
+                            for x, y in zip(true_vals['forces'],
+                                            pred_vals['forces']):
+                                fp.write(f"{x} {y}\n")
+                    if 'stress' in args.write:
+                        with open("stress.dat", "w") as fp:
+                            for x, y in zip(true_vals['stress'],
+                                            pred_vals['stress']):
+                                fp.write(f"{x} {y}\n")
 
         return func
 
