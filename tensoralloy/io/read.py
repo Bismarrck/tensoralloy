@@ -41,7 +41,7 @@ class XyzFormat(Enum):
 
 
 def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
-                 num_examples=None, append_to=None, verbose=True):
+                 num_examples=None, append_to=None, fmax=None, verbose=True):
     """
     Read `Atoms` objects from a `xyz` or an `extxyz` file.
 
@@ -56,6 +56,11 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
         The format of the xyz file.
     num_examples : int
         An `int` indicating the maximum number of examples to read.
+    append_to : str
+        Append the database built by the given file to an existing database.
+    fmax : float
+        If not None, structures with forces.abs().max() larger than `fmax` will 
+        be ignored.
     verbose : bool
         If True, the reading progress shall be logged.
 
@@ -109,6 +114,10 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
             reader = read_xyz(fp, index)
 
         for atoms in reader:
+
+            # Ignore structures with forces.abs().max() larger than `fmax`.
+            if fmax is not None and np.abs(atoms.get_forces()).max() > fmax:
+                continue
 
             # Make sure the property `cell` is a non-zero matrix or set it based
             # the size of the `Atoms`.
@@ -179,7 +188,7 @@ def _read_extxyz(filename, units, xyz_format=XyzFormat.extxyz,
 
 
 def read_file(filename, units=None, num_examples=None, file_type=None,
-              verbose=True, append_to=None):
+              verbose=True, append_to=None, fmax=None):
     """
     Read `Atoms` objects from a file.
 
@@ -219,8 +228,8 @@ def read_file(filename, units=None, num_examples=None, file_type=None,
 
     elif XyzFormat.has(file_type):
         return _read_extxyz(
-            filename, units, XyzFormat[file_type], num_examples, append_to, 
-            verbose)
+            filename, units, XyzFormat[file_type], num_examples=num_examples, 
+            append_to=append_to, fmax=fmax, verbose=verbose)
 
     else:
         raise ValueError("Unknown file type: {}".format(file_type))

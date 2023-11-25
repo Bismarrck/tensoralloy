@@ -137,6 +137,13 @@ class BuildDatabaseProgram(CLIProgram):
         subparser.add_argument(
             "--append-to",
             type=str,
-            default=None
+            default=None,
+            help="The database file to append to."
+        )
+        subparser.add_argument(
+            "--fmax",
+            type=float,
+            default=None,
+            help="The maximum force threshold."
         )
         super(BuildDatabaseProgram, self).config_subparser(subparser)
