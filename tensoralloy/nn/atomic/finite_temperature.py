@@ -516,7 +516,7 @@ class TemperatureDependentAtomicNN(AtomicNN):
                     data["fnn::use_resnet_dt"] = np.int32(algo["use_resnet_dt"])
                     data["fnn::apply_output_bias"] = np.int32(0)
                     data["fnn::h_abck_modifier"] = np.int32(
-                        algo["h_acbk_modifier"])
+                        algo.get("h_acbk_modifier", 0))
                     for j in range(data["fnn::nlayers"] - 1):
                         ops = [
                             graph.get_tensor_by_name(

@@ -502,7 +502,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
             config['dataset.sqlite3'] = basename(config['dataset.sqlite3'])
             config['dataset.tfrecords_dir'] = args.tf_records_dir
 
-            avail_properties = ('energy', 'forces', 'stress')
+            avail_properties = ('energy', 'forces', 'stress', 'eentropy')
             properties = [x for x in config['nn.minimize']
                           if x in avail_properties]
             config['nn.minimize'] = properties
@@ -621,7 +621,8 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                 name_mapping = {
                     'energy': 'Energy (meV/atom)',
                     'forces': 'Force (eV/Ang)',
-                    'stress': 'Stress (GPa)'
+                    'stress': 'Stress (GPa)',
+                    'eentropy': 'EENTRO (kB/atom)'
                 }
                 rename_cols = {old: new for old, new in name_mapping.items()
                                if old in dataframe.columns.to_list()}
