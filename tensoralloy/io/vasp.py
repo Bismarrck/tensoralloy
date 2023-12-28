@@ -205,12 +205,12 @@ def read_vasp_xml(filename='vasprun.xml',
         else:
             lastdipole = None
 
-        de = (float(lastscf.find('i[@name="e_0_energy"]').text) -
-              float(lastscf.find('i[@name="e_fr_energy"]').text))
+        delta = (float(lastscf.find('i[@name="e_0_energy"]').text) -
+                 float(lastscf.find('i[@name="e_fr_energy"]').text))
 
         eentropy = (float(lastscf.find('i[@name="e_fr_energy"]').text) -
                     float(lastscf.find('i[@name="e_wo_entrp"]').text))
-
+        
         if sigma is None or np.abs(sigma) < 1e-6:
             eentropy = 0
         else:
@@ -218,7 +218,12 @@ def read_vasp_xml(filename='vasprun.xml',
             eentropy = np.abs(-eentropy / sigma)
 
         free_energy = float(step.find('energy/i[@name="e_fr_energy"]').text)
-        energy = free_energy + de
+        energy = free_energy + delta
+
+        try:
+            kinetic_energy = float(step.find('energy/i[@name="kinetic"]').text)
+        except Exception:
+            kinetic_energy = None
 
         cell = np.zeros((3, 3), dtype=float)
         for i, vector in enumerate(step.find(
@@ -304,5 +309,6 @@ def read_vasp_xml(filename='vasprun.xml',
             atoms_utils.set_electron_temperature(atoms, sigma)
         if eentropy is not None:
             atoms_utils.set_electron_entropy(atoms, eentropy)
-
+        if kinetic_energy is not None:
+            atoms_utils.set_kinetic_energy(atoms, kinetic_energy)
         yield atoms

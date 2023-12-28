@@ -53,3 +53,17 @@ def set_electron_entropy(atoms: Atoms, eentropy: float):
     Set the electron entropy.
     """
     __set_property(atoms, 'eentropy', eentropy)
+
+
+def set_kinetic_energy(atoms: Atoms, ke: float):
+    """
+    Set the kinetic energy (eV).
+    """
+    __set_property(atoms, 'kinetic_energy', ke)
+
+
+def get_kinetic_energy(atoms: Atoms) -> float:
+    """
+    Return the kinetic energy (eV).
+    """
+    return __get_property(atoms, 'kinetic_energy', 0.0)

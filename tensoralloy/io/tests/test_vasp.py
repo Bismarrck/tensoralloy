@@ -13,6 +13,7 @@ from ase.units import kB, eV
 from tensoralloy.test_utils import test_dir
 from tensoralloy.io.vasp import read_vasp_xml
 from tensoralloy import atoms_utils
+from tensoralloy.atoms_utils import get_kinetic_energy
 
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
@@ -27,5 +28,14 @@ def test_read_vasp_xml():
     assert_almost_equal(eentropy, 0.2210591, delta=1e-6)
 
 
+def test_read_vasp_md_xml():
+    vasprun = join(test_dir(), "Be_md_vasprun.xml")
+    trajectory = [atoms for atoms in read_vasp_xml(vasprun, index=slice(0, 10), 
+                                                   finite_temperature=True)]
+    assert len(trajectory) == 10
+    assert_almost_equal(get_kinetic_energy(trajectory[4]), 
+                        48.64234933, delta=1e-8)
+
+
 if __name__ == "__main__":
-    nose.main()
+    test_read_vasp_md_xml()
