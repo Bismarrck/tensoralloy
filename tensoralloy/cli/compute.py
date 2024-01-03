@@ -583,9 +583,9 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                             f_pred[j, mask_[j], :].flatten())
                                         true_vals['f_norm'].append(f_norm[j])
                                 elif prop == 'stress':
-                                    true_vals[prop].extend(labels_[prop] / GPa)
+                                    true_vals[prop].extend(labels_[prop].flatten() / GPa)
                                     pred_vals[prop].extend(
-                                        predictions_[prop] / GPa)
+                                        predictions_[prop].flatten() / GPa)
                                 else:
                                     true_vals[prop].extend(labels_[prop])
                                     pred_vals[prop].extend(predictions_[prop])
