@@ -305,10 +305,11 @@ def read_vasp_xml(filename='vasprun.xml',
         atoms.calc.kpts = kpoints
         atoms.calc.parameters = parameters
 
-        if sigma is not None:
-            atoms_utils.set_electron_temperature(atoms, sigma)
-        if eentropy is not None:
-            atoms_utils.set_electron_entropy(atoms, eentropy)
+        if finite_temperature:
+            if sigma is not None:
+                atoms_utils.set_electron_temperature(atoms, sigma)
+            if eentropy is not None:
+                atoms_utils.set_electron_entropy(atoms, eentropy)
         if kinetic_energy is not None:
             atoms_utils.set_kinetic_energy(atoms, kinetic_energy)
         yield atoms
