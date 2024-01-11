@@ -495,7 +495,7 @@ class TensorDB:
             return False
         with open(metadata, "r") as fp:
             status = json.load(fp)
-        if status.get("elapsed (h)", -1) <= 0:
+        if status.get("SU", -1) <= 0:
             return False
         return True
         
@@ -561,6 +561,18 @@ class TensorDB:
         df = pd.DataFrame(status)
         df.set_index("phase", inplace=True)
         print(df.to_string())
+    
+    def list_unsubmitted_sampling_jobs(self):
+        """
+        List unsubmitted AIMD sampling jobs.
+        """
+        for task in self.sampling_task_iterator():
+            metadata = task / "metadata.json"
+            if not metadata.exists():
+                print(task)
+            status = self.update_status_of_sampling_job(task)
+            if status.get("nrun", -1) < 0:
+                print(task)
 
     # --------------------------------------------------------------------------
     # Post-processing
@@ -587,7 +599,8 @@ class TensorDB:
                 atoms for atoms in read_vasp_xml(vasprun_xml, 
                                                  index=slice(0, None, 1), 
                                                  finite_temperature=False)]
-        except Exception:
+        except Exception as excp:
+            print(f"[VASP/sampling/postprocess]: FAILED to read {vasprun_xml}")
             return
         if len(trajectory) == 0:
             return
@@ -791,20 +804,35 @@ class TensorDB:
             key = (sid, gid)
             if key not in accumulator:
                 if (gid + 1) * 100 <= subset_size[sid]:
-                    jobs = 100
+                    total_tasks = 100
                 else:
-                    jobs = aid % 100
+                    total_tasks = aid % 100
                 accumulator[key] = Counter({
                     'CPU*hours': 0.0, 'GPU*hours': 0.0, 
-                    'completed': 0, 'jobs': jobs})
+                    'completed': 0, 'total_tasks': total_tasks, 
+                    'completed_tasks': []})
             su = get_vasp_job_service_unit(taskdir / 'OUTCAR')
             if su is None:
                 continue
             accumulator[key]['completed'] += 1
+            accumulator[key]['completed_tasks'].append(str(taskdir))
             if su.device == "cpu":
                 accumulator[key]['CPU*hours'] += su.hours
             else:
                 accumulator[key]['GPU*hours'] += su.hours
+            # Update the metadata
+            with open(taskdir / "metadata.json", "w") as fp:
+                metadata["SU"] = su.__dict__
+                json.dump(metadata, fp, indent=2)
+                fp.write("\n")
+        
+        # Save the group metadata
+        for key in accumulator:
+            sid, gid = key
+            groupdir = Path(f"calc/{sid}atoms/group{gid}")
+            with open(groupdir / "metadata.json", "w") as fp:
+                json.dump(accumulator[key], fp, indent=2)
+                fp.write("\n")
         
         # Print the status
         for key, value in accumulator.items():
@@ -823,14 +851,21 @@ class TensorDB:
         print(df.to_string())
     
     # --------------------------------------------------------------------------
-    # List jobs that are not submitted
+    # Make the training dataset
     # --------------------------------------------------------------------------
     
+    def gather(self):
+        """
+        
+        """
+        for taskdir in self.accurate_dft_calc_iterator():
+            pass
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("input", help="The input file")
+    parser.add_argument("-i", "--input", default="config.toml", 
+                        help="The input file")
     parser.add_argument("--status", choices=["sampling", "calc"], 
                         default=None, help="Get the status of tasks.")
     parser.add_argument("--nvt", action="store_true", default=False, 
@@ -839,6 +874,8 @@ def main():
                         help="Generate NPT sampling tasks")
     parser.add_argument("--override", action="store_true", default=False, 
                         help="Override the existing tasks")
+    parser.add_argument("--list-unsubmitted", action="store_true", 
+                        default=False, help="List unsubmitted sampling tasks")
     parser.add_argument("--postprocess", action="store_true", default=False,
                         help="Post-process the sampling jobs")
     parser.add_argument("--create", action="store_true", default=False,
@@ -852,6 +889,8 @@ def main():
             kit.get_status_of_all_sampling_jobs()
         else:
             kit.get_accurate_dft_calculation_status()
+    elif args.list_unsubmitted:
+        kit.list_unsubmitted_sampling_jobs()
     elif args.postprocess:
         kit.post_process_all_sampling_jobs()
     elif args.create:
