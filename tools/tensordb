@@ -113,6 +113,8 @@ def get_vasp_job_service_unit(outcar) -> ServiceUnit:
     """
     Get the service unit (SU) of a completed VASP job.
     """
+    if not outcar.exists():
+        return None
     elapsed = get_vasp_elapsed_time(outcar)
     if elapsed < 0:
         return None
@@ -135,17 +137,20 @@ class TensorDB:
         Initialization method.
         """
         self.input_file = input_file
+        self.root = Path(input_file).parent
         self.config = dict(toml.load(input_file))
         self.species = self.config["species"]
         self.phases = self.config["phases"]
         self.base_phase_structures = self.init_phases()
         self.init_vasp()
-
+    
     def init_phases(self):
         """
         Initialize the base phase structures.
         """
-        workdir = Path("structures")
+        workdir = self.root / "structures"
+        if not workdir.exists():
+            raise IOError(f"Cannot find the structures directory: {workdir}")
         structures = {}
         for phase in self.config["phases"]:
             if phase == "liquid":
@@ -268,14 +273,14 @@ class TensorDB:
         """
         Iterate through all AIMD sampling job dirs. 
         """
-        workdir = Path("sampling")
+        workdir = self.root / "sampling"
         return workdir.glob("*/n[pv]t/*/?_*K_to_*K")   
 
     def accurate_dft_calc_iterator(self):
         """
         Iterate through all high precision dft calculation job dirs.
         """
-        workdir = Path("calc")
+        workdir = self.root / "calc"
         return workdir.glob("*atoms/group*/task*")
 
     # --------------------------------------------------------------------------
@@ -338,7 +343,7 @@ class TensorDB:
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
         """
-        workdir = Path("sampling")
+        workdir = self.root / "sampling"
         workdir.mkdir(exist_ok=True)
 
         # The NVT vasp parameters
@@ -422,7 +427,7 @@ class TensorDB:
         """
         Create VASP Parrinello-Rahman NPT sampling jobs
         """
-        workdir = Path("sampling")
+        workdir = self.root / "sampling"
         workdir.mkdir(exist_ok=True)
 
         # The NPT vasp parameters
@@ -650,7 +655,7 @@ class TensorDB:
         """
         Create VASP high precision DFT calculation tasks.
         """
-        workdir = Path("calc")
+        workdir = self.root / "calc"
         workdir.mkdir(exist_ok=True)
 
         # The global hash table
@@ -777,7 +782,7 @@ class TensorDB:
         """
 
         # Determine the total number of prepared jobs
-        hash_file = Path("calc/hash.json")
+        hash_file = self.root / "calc" / "hash.json"
         if not hash_file.exists():
             return
         with open(hash_file) as fp:
@@ -854,12 +859,45 @@ class TensorDB:
     # Make the training dataset
     # --------------------------------------------------------------------------
     
-    def gather(self):
+    def gather(self, output_file="database.extxyz", check_job_status=False):
         """
-        
+        Gather all completed high precision DFT calculations into a single file.
+
+        Parameters
+        ----------
+        output_file : str
+            The output file name.
+        check_job_status : bool
+            Check the job status before gathering. Default is False. 
+
         """
+        objects = []
         for taskdir in self.accurate_dft_calc_iterator():
-            pass
+            if check_job_status:
+                su = get_vasp_job_service_unit(taskdir / "OUTCAR")
+                if su is None:
+                    continue
+            else:
+                metadata = taskdir / "metadata.json"
+                if not metadata.exists():
+                    continue
+                with open(metadata, "r") as fp:
+                    metadata = json.load(fp)
+                if not metadata.get("SU", {}):
+                    continue
+                su = ServiceUnit(**metadata["SU"])
+            if su.hours <= 0:
+                continue
+            atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
+                                       finite_temperature=False, 
+                                       index=0))
+            atoms.info["hash"] = metadata["hash"]
+            atoms.info["aid"] = metadata["aid"]
+            atoms.info["group_id"] = metadata["group_id"]
+            atoms.info["task_id"] = metadata["task_id"]
+            objects.append(atoms)
+        print(f"[VASP/gather]: total {len(objects)} structures gathered")
+        write(output_file, objects, format="extxyz")
 
 
 def main():
@@ -881,6 +919,8 @@ def main():
     parser.add_argument("--create", action="store_true", default=False,
                         help="Create the high-precision DFT calculation tasks")
     parser.add_argument("--interval", type=int, default=50)
+    parser.add_argument("--gather", action="store_true", default=False,
+                        help="Gather all completed high precision DFT ")
     args = parser.parse_args()
     kit = TensorDB(args.input)
 
@@ -895,6 +935,8 @@ def main():
         kit.post_process_all_sampling_jobs()
     elif args.create:
         kit.create_vasp_accurate_dft_tasks(interval=args.interval)
+    elif args.gather:
+        kit.gather()
     else:
         if args.nvt:
             kit.create_vasp_sampling_nvt_tasks(override=args.override)
