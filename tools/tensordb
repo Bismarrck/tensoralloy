@@ -842,13 +842,13 @@ class TensorDB:
         # Print the status
         for key, value in accumulator.items():
             status["group"].append(f"{key[0]}.g{key[1]}")
-            status["jobs"].append(value["jobs"])
-            status["completed"].append(value["completed"])
+            status["total_jobs"].append(value["total_tasks"])
+            status["completed_jobs"].append(value["completed"])
             status["CPU*hours"].append(np.round(value["CPU*hours"], 2))
             status["GPU*hours"].append(np.round(value["GPU*hours"], 2))
         status["group"].append("overall")
-        status["jobs"].append(sum(status["jobs"]))
-        status["completed"].append(sum(status["completed"]))
+        status["total_jobs"].append(sum(status["total_tasks"]))
+        status["completed_jobs"].append(sum(status["completed"]))
         status["CPU*hours"].append(sum(status["CPU*hours"]))
         status["GPU*hours"].append(sum(status["GPU*hours"]))
         df = pd.DataFrame(status)
@@ -858,8 +858,37 @@ class TensorDB:
     # --------------------------------------------------------------------------
     # Make the training dataset
     # --------------------------------------------------------------------------
+        
+    def _gather_one(self, taskdir: Path, check_job_status=False):
+        """
+        Gather one completed high precision DFT calculation.
+        """
+        if check_job_status:
+            su = get_vasp_job_service_unit(taskdir / "OUTCAR")
+            if su is None:
+                return None
+        else:
+            metadata = taskdir / "metadata.json"
+            if not metadata.exists():
+                return None
+            with open(metadata, "r") as fp:
+                metadata = json.load(fp)
+            if not metadata.get("SU", {}):
+                return None
+            su = ServiceUnit(**metadata["SU"])
+        if su.hours <= 0:
+            return None
+        atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
+                                    finite_temperature=False, 
+                                    index=0))
+        atoms.info["hash"] = metadata["hash"]
+        atoms.info["aid"] = metadata["aid"]
+        atoms.info["group_id"] = metadata["group_id"]
+        atoms.info["task_id"] = metadata["task_id"]
+        return atoms
     
-    def gather(self, output_file="database.extxyz", check_job_status=False):
+    def gather(self, output_file='database.extxyz', nprocs=-2, 
+               check_job_status=False):
         """
         Gather all completed high precision DFT calculations into a single file.
 
@@ -867,37 +896,67 @@ class TensorDB:
         ----------
         output_file : str
             The output file name.
+        nprocs : int
+            The number of processes to use. Default is -2, which means using all
+            available CPUs but one.
         check_job_status : bool
             Check the job status before gathering. Default is False. 
 
         """
-        objects = []
-        for taskdir in self.accurate_dft_calc_iterator():
-            if check_job_status:
-                su = get_vasp_job_service_unit(taskdir / "OUTCAR")
-                if su is None:
-                    continue
-            else:
-                metadata = taskdir / "metadata.json"
-                if not metadata.exists():
-                    continue
-                with open(metadata, "r") as fp:
-                    metadata = json.load(fp)
-                if not metadata.get("SU", {}):
-                    continue
-                su = ServiceUnit(**metadata["SU"])
-            if su.hours <= 0:
-                continue
-            atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
-                                       finite_temperature=False, 
-                                       index=0))
-            atoms.info["hash"] = metadata["hash"]
-            atoms.info["aid"] = metadata["aid"]
-            atoms.info["group_id"] = metadata["group_id"]
-            atoms.info["task_id"] = metadata["task_id"]
-            objects.append(atoms)
+        from joblib import Parallel, delayed
+        all_tasks = [x for x in self.accurate_dft_calc_iterator()]
+        objects = Parallel(n_jobs=nprocs, verbose=1)(
+            delayed(self._gather_one)(taskdir, check_job_status)
+            for taskdir in all_tasks)
+        objects = [x for x in objects if x is not None]
         print(f"[VASP/gather]: total {len(objects)} structures gathered")
         write(output_file, objects, format="extxyz")
+    
+    # --------------------------------------------------------------------------
+    # Plot
+    # --------------------------------------------------------------------------
+    
+    def plot(self, extxyz_file):
+        """
+        Plot the training dataset.
+        """
+        from ase.units import GPa
+        import matplotlib
+        from matplotlib import pyplot as plt
+
+        trajectory = read(extxyz_file, index=":")
+        energies = []
+        forces = []
+        fnorms = []
+        volumes = []
+        stresses = []
+        pressures = []
+        for atoms in trajectory:
+            natoms = len(atoms)
+            volumes.append(atoms.get_volume() / natoms)
+            energies.append(atoms.get_potential_energy() / natoms)
+            forces.extend(atoms.get_forces().flatten().tolist())
+            fnorms.append(np.sqrt(np.sum(atoms.get_forces()**2) / natoms))
+            stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
+            pressures.append(atoms.get_stress(voigt=True).trace() / -3 / GPa)
+        
+        matplotlib.rcParams.update({'font.size': 14})
+
+        fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+
+        ax = axes[0, 0]
+        ax.plot(volumes, energies, "o", markersize=2)
+        ax.set_xlabel("Volume ($\AA^3$)")
+        ax.set_ylabel("Energy (eV/atom)")
+
+        plt.tight_layout()
+        plt.savefig("plot.png")
+    
+    def select(self, extxyz_file, condition):
+        """
+        
+        """
+        pass
 
 
 def main():
