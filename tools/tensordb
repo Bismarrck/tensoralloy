@@ -793,7 +793,7 @@ class TensorDB:
             i, j = [int(x) for x in aid.split(".")]
             subset_size[i] = max(subset_size[i], j + 1)
         
-        status = {"group": [], "jobs": [], "completed": [], 
+        status = {"group": [], "total_jobs": [], "completed_jobs": [], 
                   "CPU*hours": [], "GPU*hours": []}
         accumulator = {}
 
@@ -809,17 +809,17 @@ class TensorDB:
             key = (sid, gid)
             if key not in accumulator:
                 if (gid + 1) * 100 <= subset_size[sid]:
-                    total_tasks = 100
+                    n_total = 100
                 else:
-                    total_tasks = aid % 100
+                    n_total = aid % 100
                 accumulator[key] = Counter({
                     'CPU*hours': 0.0, 'GPU*hours': 0.0, 
-                    'completed': 0, 'total_tasks': total_tasks, 
+                    'n_completed': 0, 'n_total': n_total, 
                     'completed_tasks': []})
             su = get_vasp_job_service_unit(taskdir / 'OUTCAR')
             if su is None:
                 continue
-            accumulator[key]['completed'] += 1
+            accumulator[key]['n_completed'] += 1
             accumulator[key]['completed_tasks'].append(str(taskdir))
             if su.device == "cpu":
                 accumulator[key]['CPU*hours'] += su.hours
@@ -842,13 +842,13 @@ class TensorDB:
         # Print the status
         for key, value in accumulator.items():
             status["group"].append(f"{key[0]}.g{key[1]}")
-            status["total_jobs"].append(value["total_tasks"])
-            status["completed_jobs"].append(value["completed"])
+            status["total_jobs"].append(value["n_total"])
+            status["completed_jobs"].append(value["n_completed"])
             status["CPU*hours"].append(np.round(value["CPU*hours"], 2))
             status["GPU*hours"].append(np.round(value["GPU*hours"], 2))
         status["group"].append("overall")
-        status["total_jobs"].append(sum(status["total_tasks"]))
-        status["completed_jobs"].append(sum(status["completed"]))
+        status["total_jobs"].append(sum(status["total_jobs"]))
+        status["completed_jobs"].append(sum(status["completed_jobs"]))
         status["CPU*hours"].append(sum(status["CPU*hours"]))
         status["GPU*hours"].append(sum(status["GPU*hours"]))
         df = pd.DataFrame(status)
@@ -916,9 +916,15 @@ class TensorDB:
     # Plot
     # --------------------------------------------------------------------------
     
-    def plot(self, extxyz_file):
+    def plot(self, extxyz_file='database.extxyz'):
         """
-        Plot the training dataset.
+        Plot the database file. Currently, four plots are generated:
+
+        1. Energy vs. Volume
+        2. Force Norm vs. Volume
+        3. Energy vs. Pressure
+        4. Force Norm vs. Pressure
+
         """
         from ase.units import GPa
         import matplotlib
@@ -938,25 +944,40 @@ class TensorDB:
             forces.extend(atoms.get_forces().flatten().tolist())
             fnorms.append(np.sqrt(np.sum(atoms.get_forces()**2) / natoms))
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
-            pressures.append(atoms.get_stress(voigt=True).trace() / -3 / GPa)
+            pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
         
-        matplotlib.rcParams.update({'font.size': 14})
+        volumes = np.asarray(volumes)
+        pressures = np.asarray(pressures)
+        energies = np.asarray(energies)
+        forces = np.asarray(forces)
+        fnorms = np.asarray(fnorms)
+        stresses = np.asarray(stresses)
 
-        fig, axes = plt.subplots(2, 2, figsize=(8, 8))
-
+        _, axes = plt.subplots(2, 2, figsize=(8, 7))
+        cmap = matplotlib.colormaps['viridis']
+        
         ax = axes[0, 0]
-        ax.plot(volumes, energies, "o", markersize=2)
+        ax.plot(volumes, energies, "o", markersize=2, color=cmap(0.0))
         ax.set_xlabel("Volume ($\AA^3$)")
         ax.set_ylabel("Energy (eV/atom)")
 
+        ax = axes[0, 1]
+        ax.plot(volumes, fnorms, "o", markersize=2, color=cmap(0.25))
+        ax.set_xlabel("Volume ($\AA^3$)")
+        ax.set_ylabel("Pressure (GPa)")
+
+        ax = axes[1, 0]
+        ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.5))
+        ax.set_xlabel("Pressure (GPa)")
+        ax.set_ylabel("Energy (eV/atom)")
+
+        ax = axes[1, 1]
+        ax.plot(pressures, fnorms, "o", markersize=2, color=cmap(0.75))
+        ax.set_xlabel("Pressure (GPa)")
+        ax.set_ylabel("Force norm (eV/$\AA$)")
+
         plt.tight_layout()
         plt.savefig("plot.png")
-    
-    def select(self, extxyz_file, condition):
-        """
-        
-        """
-        pass
 
 
 def main():
@@ -980,6 +1001,8 @@ def main():
     parser.add_argument("--interval", type=int, default=50)
     parser.add_argument("--gather", action="store_true", default=False,
                         help="Gather all completed high precision DFT ")
+    parser.add_argument("--plot", action="store_true", default=False,
+                        help="Plot the training dataset")
     args = parser.parse_args()
     kit = TensorDB(args.input)
 
@@ -996,6 +1019,8 @@ def main():
         kit.create_vasp_accurate_dft_tasks(interval=args.interval)
     elif args.gather:
         kit.gather()
+    elif args.plot:
+        kit.plot()
     else:
         if args.nvt:
             kit.create_vasp_sampling_nvt_tasks(override=args.override)
