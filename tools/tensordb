@@ -7,17 +7,23 @@ import pandas as pd
 import toml
 import os
 import json
+import tqdm
 import hashlib
+import matplotlib
 from dataclasses import dataclass
 from pathlib import Path
 from ase.io import read, write
 from ase import Atoms
 from ase.build import bulk
 from ase.calculators.vasp import Vasp
+from ase.units import GPa
+from ase.neighborlist import neighbor_list
 from subprocess import PIPE, Popen
 from argparse import ArgumentParser
 from collections import Counter
 from tensoralloy.io.vasp import read_vasp_xml
+from matplotlib import pyplot as plt
+
 
 
 @dataclass(frozen=True)
@@ -926,10 +932,6 @@ class TensorDB:
         4. Force Norm vs. Pressure
 
         """
-        from ase.units import GPa
-        import matplotlib
-        from matplotlib import pyplot as plt
-
         trajectory = read(extxyz_file, index=":")
         energies = []
         forces = []
@@ -937,7 +939,8 @@ class TensorDB:
         volumes = []
         stresses = []
         pressures = []
-        for atoms in trajectory:
+        rdf = {}
+        for atoms in tqdm.tqdm(trajectory):
             natoms = len(atoms)
             volumes.append(atoms.get_volume() / natoms)
             energies.append(atoms.get_potential_energy() / natoms)
@@ -945,6 +948,13 @@ class TensorDB:
             fnorms.append(np.sqrt(np.sum(atoms.get_forces()**2) / natoms))
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
             pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
+            species = atoms.get_chemical_symbols()
+            ilist, jlist, dlist = neighbor_list('ijd', atoms, cutoff=6.0)
+            for i, j, d in zip(ilist, jlist, dlist):
+                key = tuple(sorted((species[i], species[j])))
+                if key not in rdf:
+                    rdf[key] = []
+                rdf[key].append(d)
         
         volumes = np.asarray(volumes)
         pressures = np.asarray(pressures)
@@ -953,7 +963,10 @@ class TensorDB:
         fnorms = np.asarray(fnorms)
         stresses = np.asarray(stresses)
 
-        _, axes = plt.subplots(2, 2, figsize=(8, 7))
+        for key in rdf:
+            rdf[key] = np.asarray(rdf[key])
+
+        _, axes = plt.subplots(2, 3, figsize=(12, 7))
         cmap = matplotlib.colormaps['viridis']
         
         ax = axes[0, 0]
@@ -962,22 +975,36 @@ class TensorDB:
         ax.set_ylabel("Energy (eV/atom)")
 
         ax = axes[0, 1]
-        ax.plot(volumes, fnorms, "o", markersize=2, color=cmap(0.25))
+        ax.plot(volumes, fnorms, "o", markersize=2, color=cmap(0.2))
+        ax.set_xlabel("Volume ($\AA^3$)")
+        ax.set_ylabel("Force norm (eV/$\AA$)")
+
+        ax = axes[0, 2]
+        ax.plot(volumes, pressures, "o", markersize=2, color=cmap(0.4))
         ax.set_xlabel("Volume ($\AA^3$)")
         ax.set_ylabel("Pressure (GPa)")
 
         ax = axes[1, 0]
-        ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.5))
+        ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.6))
         ax.set_xlabel("Pressure (GPa)")
         ax.set_ylabel("Energy (eV/atom)")
 
         ax = axes[1, 1]
-        ax.plot(pressures, fnorms, "o", markersize=2, color=cmap(0.75))
+        ax.plot(pressures, fnorms, "o", markersize=2, color=cmap(0.8))
         ax.set_xlabel("Pressure (GPa)")
         ax.set_ylabel("Force norm (eV/$\AA$)")
 
+        ax = axes[1, 2]
+        for key in rdf:
+            ax.hist(rdf[key], bins=100, density=True, weights=1.0 / rdf[key],
+                    label=f"{key[0]}-{key[1]}")
+        ax.legend()
+        ax.set_xlabel("Distance ($\AA$)")
+        ax.set_ylabel("Scaled Density")
+
         plt.tight_layout()
         plt.savefig("plot.png")
+        plt.close()
 
 
 def main():
