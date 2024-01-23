@@ -932,6 +932,8 @@ class TensorDB:
         4. Force Norm vs. Pressure
 
         """
+        from scipy.stats import gaussian_kde
+
         trajectory = read(extxyz_file, index=":")
         energies = []
         forces = []
@@ -996,8 +998,10 @@ class TensorDB:
 
         ax = axes[1, 2]
         for key in rdf:
-            ax.hist(rdf[key], bins=100, density=True, weights=1.0 / rdf[key],
-                    label=f"{key[0]}-{key[1]}")
+            density = gaussian_kde(rdf[key], weights=1.0 / rdf[key])
+            x = np.linspace(0, 6, 100)
+            fx = density(np.linspace(0, 6, 100))
+            ax.plot(x, fx, label=f"{key[0]}-{key[1]}")
         ax.legend()
         ax.set_xlabel("Distance ($\AA$)")
         ax.set_ylabel("Scaled Density")
