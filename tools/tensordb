@@ -25,12 +25,11 @@ from tensoralloy.io.vasp import read_vasp_xml
 from matplotlib import pyplot as plt
 
 
-
 @dataclass(frozen=True)
 class ServiceUnit:
-    """ 
+    """
     The data structure for estimating VASP costs.
-    
+
     Attributes
     ----------
     device : str
@@ -43,6 +42,7 @@ class ServiceUnit:
         The total deivce hours.
 
     """
+
     device: str = "cpu"
     n: int = 0
     elapsed: float = 0.0
@@ -149,7 +149,7 @@ class TensorDB:
         self.phases = self.config["phases"]
         self.base_phase_structures = self.init_phases()
         self.init_vasp()
-    
+
     def init_phases(self):
         """
         Initialize the base phase structures.
@@ -177,58 +177,58 @@ class TensorDB:
 
         Num species = 1: use the fcc phase.
         Num species > 1: use SAE (todo)
-        
+
         """
         if len(self.species) == 1:
             veq = self.config["liquid"]["veq"]
-            a = (4 * veq)**(1 / 3)
-            return bulk(self.species[0], crystalstructure="fcc", a=a, 
-                        cubic=True)
+            a = (4 * veq) ** (1 / 3)
+            return bulk(self.species[0], crystalstructure="fcc", a=a, cubic=True)
         else:
             raise NotImplementedError(
-                "Liquid phase for multi-species is not implemented yet.")
+                "Liquid phase for multi-species is not implemented yet."
+            )
 
     def get_base_structure(self, phase: str) -> Atoms:
         """
         Get the base phase structure.
         """
         return self.base_phase_structures[phase].copy()
-    
+
     def get_supercells_at_volume(self, phase: str, volume: float) -> Atoms:
         """
         Get the supercell structure at the given atomic volume.
         """
         base = self.get_base_structure(phase)
-        scale = (volume / base.get_volume() * len(base))**(1 / 3)
+        scale = (volume / base.get_volume() * len(base)) ** (1 / 3)
         base.set_cell(base.get_cell() * scale, scale_atoms=True)
         supercells = []
         for replicate in self.config[phase]["supercell"]:
             supercells.append(base * replicate)
         return supercells
-    
+
     def init_vasp(self):
         """
         Initialize the base VASP calculator.
         """
         params = getitem(self.config, ["vasp"])
-        
+
         # Setup the POTCARs path
         os.environ["VASP_PP_PATH"] = params["pp_path"]
 
-        # Setup PORCAR for each specie. 
+        # Setup PORCAR for each specie.
         # For ASE VASP calculator, only the suffix is used.
-        setups = {'base': 'recommended'}
+        setups = {"base": "recommended"}
         if "potcars" in params:
             for i, potcar in enumerate(params["potcars"]):
                 if potcar != self.species[i]:
-                    setups[potcar] = potcar[len(self.species[i]):]
+                    setups[potcar] = potcar[len(self.species[i]) :]
 
         # Initialize the VASP calculator for AIMD sampling jobs.
         self.vasp = Vasp(
             xc=params.get("xc", "pbe"),
-            setups=setups, 
+            setups=setups,
             ediff=params.get("ediff", 1e-5),
-            lreal=params.get("lreal", "Auto"), 
+            lreal=params.get("lreal", "Auto"),
             prec=params.get("prec", "Normal"),
             encut=params.get("encut", 400),
             ismear=params.get("ismear", 1),
@@ -246,8 +246,9 @@ class TensorDB:
             lcharg=params.get("lcharg", False),
             lwave=params.get("lwave", False),
             nblock=params.get("nblock", 1),
-            maxmix=params.get("maxmix", 60))  
-        
+            maxmix=params.get("maxmix", 60),
+        )
+
         # Initialize the VASP calculator for high-precision DFT calculations.
         self.prec_vasp = Vasp(
             xc=params.get("xc", "pbe"),
@@ -269,18 +270,19 @@ class TensorDB:
             lcharg=params.get("lcharg", False),
             lwave=params.get("lwave", False),
             nblock=params.get("nblock", 1),
-            maxmix=params.get("maxmix", 60))
-    
+            maxmix=params.get("maxmix", 60),
+        )
+
     # --------------------------------------------------------------------------
     # Iterators
     # --------------------------------------------------------------------------
 
     def sampling_task_iterator(self):
         """
-        Iterate through all AIMD sampling job dirs. 
+        Iterate through all AIMD sampling job dirs.
         """
         workdir = self.root / "sampling"
-        return workdir.glob("*/n[pv]t/*/?_*K_to_*K")   
+        return workdir.glob("*/n[pv]t/*/?_*K_to_*K")
 
     def accurate_dft_calc_iterator(self):
         """
@@ -309,12 +311,13 @@ class TensorDB:
         # ISIF = 2 for NVT ensemble
         # LANGEVIN_GAMMA: Langevin friction coefficient for atom species
         self.vasp.set(mdalgo=3, langevin_gamma=[gamma] * len(self.species))
-        self.vasp.set(ismear=ismear, sigma=sigma, npar=npar, kpar=1,
-                      encut=encut, ediff=ediff)
-        
-        # Special parameters for Parrinello-Rahman NPT. 
-        # ISIF = 3 for NPT ensemble. 
-        # LANGEVIN_GAMMA_L: Langevin friction coefficient for lattice degrees of 
+        self.vasp.set(
+            ismear=ismear, sigma=sigma, npar=npar, kpar=1, encut=encut, ediff=ediff
+        )
+
+        # Special parameters for Parrinello-Rahman NPT.
+        # ISIF = 3 for NPT ensemble.
+        # LANGEVIN_GAMMA_L: Langevin friction coefficient for lattice degrees of
         # freedom.
         # PMASS (optional tag for VASP) is ignored.
         if npt:
@@ -323,14 +326,14 @@ class TensorDB:
             self.vasp.set(isif=3, langevin_gamma_l=gamma)
 
     @staticmethod
-    def _get_nvt_sampling_task(jobdir: Path, t0: float, t1: float, 
-                               natoms: int, override=False):
+    def _get_nvt_sampling_task(
+        jobdir: Path, t0: float, t1: float, natoms: int, override=False
+    ):
         """
-        Returns (id, name) for the NVT sampling task. 
+        Returns (id, name) for the NVT sampling task.
         If the returned id is -1, the task should be skipped.
         """
-        files = [x.name 
-                for x in jobdir.glob(f"*_{natoms}atoms_*K_to_*K")]
+        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_*K_to_*K")]
         key = f"{natoms}atoms_{t0:.0f}K_to_{t1:.0f}K"
         exists = False
         for afile in files:
@@ -344,7 +347,7 @@ class TensorDB:
         else:
             newid = len(files) + 1
         return newid, f"{newid}_{key}"
-    
+
     def create_vasp_sampling_nvt_tasks(self, override=False):
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
@@ -360,7 +363,7 @@ class TensorDB:
             args = getitem(self.config, ["vasp", "sampling", "nvt", phase])
             if len(args) == 0:
                 continue
-            
+
             # Get the volumes and temperatures
             volumes = args.get("volumes", [])
             if len(volumes) == 0:
@@ -386,7 +389,8 @@ class TensorDB:
                 for supercell in supercells:
                     # Determine the task id and name
                     taskid, taskname = self._get_nvt_sampling_task(
-                        jobdir, t0[i], t1[i], len(supercell), override)
+                        jobdir, t0[i], t1[i], len(supercell), override
+                    )
                     if taskid < 0:
                         continue
                     # setup the Vasp calculator and generate input files.
@@ -396,9 +400,12 @@ class TensorDB:
                     self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps[i])
                     self.vasp.write_input(supercell)
                     metadata = {
-                        "phase": str(phase), "ensemble": "nvt",
-                        "P/V": f"v{vol:.2f}", "Tstart": int(t0[i]), 
-                        "Tstop": int(t1[i]), "nsw": int(steps[i])
+                        "phase": str(phase),
+                        "ensemble": "nvt",
+                        "P/V": f"v{vol:.2f}",
+                        "Tstart": int(t0[i]),
+                        "Tstop": int(t1[i]),
+                        "nsw": int(steps[i]),
                     }
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
@@ -406,15 +413,15 @@ class TensorDB:
                     print(f"[VASP/nvt/sampling/gen]: {taskdir}")
 
     @staticmethod
-    def _get_npt_sampling_task(jobdir: Path, t0: float, t1: float, v0: float,
-                               natoms: int, override=False):
+    def _get_npt_sampling_task(
+        jobdir: Path, t0: float, t1: float, v0: float, natoms: int, override=False
+    ):
         """
-        Returns (id, name) for the NVT sampling task. 
+        Returns (id, name) for the NVT sampling task.
         If the returned id is -1, the task should be skipped.
         """
         vkey = f"v{np.round(v0*100, 0):.0f}"
-        files = [x.name 
-                 for x in jobdir.glob(f"*_{natoms}atoms_{vkey}_*K_to_*K")]
+        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_{vkey}_*K_to_*K")]
         key = f"{natoms}atoms_{vkey}_{t0:.0f}K_to_{t1:.0f}K"
         exists = False
         for afile in files:
@@ -444,7 +451,7 @@ class TensorDB:
             args = getitem(self.config, ["vasp", "sampling", "npt", phase])
             if len(args) == 0:
                 continue
-            
+
             # Get desired pressures
             pressures = args.get("pressures", [])
             if len(pressures) == 0:
@@ -457,7 +464,7 @@ class TensorDB:
             t0 = scalar2array(args["tstart"], size, "tstart", n2)
             t1 = scalar2array(args["tstop"], size, "tstop", n2)
             steps = scalar2array(args["nsteps"], size, "nsteps", n2).astype(int)
-            
+
             # Loop through the pressures
             for i, pressure in enumerate(pressures):
                 jobdir = workdir / phase / f"npt/{pressure:.0f}GPa"
@@ -471,8 +478,8 @@ class TensorDB:
                 for supercell in supercells:
                     # Determine the task id and name
                     taskid, taskname = self._get_npt_sampling_task(
-                        jobdir, t0[i], t1[i], volumes[i], len(supercell), 
-                        override)
+                        jobdir, t0[i], t1[i], volumes[i], len(supercell), override
+                    )
                     if taskid < 0:
                         continue
                     # setup the Vasp calculator and generate input files.
@@ -483,15 +490,18 @@ class TensorDB:
                     self.vasp.set(pstress=pressure * 10)
                     self.vasp.write_input(supercell)
                     metadata = {
-                        "phase": str(phase), "ensemble": "npt", 
-                        "P/V": f"{pressure}GPa", "Tstart": int(t0[i]), 
-                        "Tstop": int(t1[i]), "nsw": int(steps[i])
+                        "phase": str(phase),
+                        "ensemble": "npt",
+                        "P/V": f"{pressure}GPa",
+                        "Tstart": int(t0[i]),
+                        "Tstop": int(t1[i]),
+                        "nsw": int(steps[i]),
                     }
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
                         fp.write("\n")
                     print(f"[VASP/npt/sampling/gen]: {taskdir}")
-    
+
     # --------------------------------------------------------------------------
     # Check the status of sampling jobs
     # --------------------------------------------------------------------------
@@ -509,7 +519,7 @@ class TensorDB:
         if status.get("SU", -1) <= 0:
             return False
         return True
-        
+
     def update_status_of_sampling_job(self, jobdir: Path):
         """
         Update and return the status of a sampling job at given jobdir.
@@ -517,25 +527,25 @@ class TensorDB:
         metadata = jobdir / "metadata.json"
         if not metadata.exists():
             return {}
-        
+
         with open(metadata, "r") as fp:
             status = json.load(fp)
-                
+
         status["nrun"] = -1
         status["device"] = ""
         status["SU"] = -1
         status["processed"] = "n"
-        
+
         oszicar = jobdir / "OSZICAR"
         if not oszicar.exists():
             return status
-        
+
         cmd = f"grep '.*T=.*E=.*' {oszicar} | tail -n 1"
         p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, _ = p.communicate()        
+        stdout, _ = p.communicate()
         if p.returncode != 0:
             return status
-        
+
         nrun = int(stdout.decode().split()[0])
         status["nrun"] = nrun
 
@@ -550,7 +560,7 @@ class TensorDB:
         with open(metadata, "w") as fp:
             json.dump(status, fp, indent=2)
             fp.write("\n")
-        
+
         # The job is already postprocessed.
         output_file = jobdir / "trajectory.extxyz"
         if output_file.exists():
@@ -559,7 +569,7 @@ class TensorDB:
         return status
 
     def get_status_of_all_sampling_jobs(self):
-        """ 
+        """
         Get the status of all sampling jobs.
         """
         status = {}
@@ -568,11 +578,13 @@ class TensorDB:
             if len(info) == 0:
                 continue
             for key, value in info.items():
-                status[key] = status.get(key, []) + [value, ]
+                status[key] = status.get(key, []) + [
+                    value,
+                ]
         df = pd.DataFrame(status)
         df.set_index("phase", inplace=True)
         print(df.to_string())
-    
+
     def list_unsubmitted_sampling_jobs(self):
         """
         List unsubmitted AIMD sampling jobs.
@@ -588,7 +600,7 @@ class TensorDB:
     # --------------------------------------------------------------------------
     # Post-processing
     # --------------------------------------------------------------------------
-    
+
     def post_process_sampling_job(self, jobdir: Path):
         """
         Post-processing a sampling job.
@@ -607,9 +619,11 @@ class TensorDB:
         # Read the xml file using the api `tensoralloy.io.vasp.read_vasp_xml`
         try:
             trajectory = [
-                atoms for atoms in read_vasp_xml(vasprun_xml, 
-                                                 index=slice(0, None, 1), 
-                                                 finite_temperature=False)]
+                atoms
+                for atoms in read_vasp_xml(
+                    vasprun_xml, index=slice(0, None, 1), finite_temperature=False
+                )
+            ]
         except Exception as excp:
             print(f"[VASP/sampling/postprocess]: FAILED to read {vasprun_xml}")
             return
@@ -618,23 +632,23 @@ class TensorDB:
         # Add the source information to the atoms.info
         for i, atoms in enumerate(trajectory):
             src = f"{str(jobdir)}@{i}"
-            atoms.info['_source'] = src
-            atoms.info['_hash'] = hashlib.md5(src.encode()).hexdigest()
+            atoms.info["_source"] = src
+            atoms.info["_hash"] = hashlib.md5(src.encode()).hexdigest()
         # Save the trajectory to an extxyz file
         write(output_file, trajectory, format="extxyz")
         print(f"[VASP/sampling/postprocess]: {jobdir}")
-    
+
     def post_process_all_sampling_jobs(self):
         """
         Post-processing all sampling jobs.
         """
         for task in self.sampling_task_iterator():
             self.post_process_sampling_job(task)
-    
+
     # --------------------------------------------------------------------------
     # High-precision DFT calculations
     # --------------------------------------------------------------------------
-            
+
     def setup_vasp_accurate_dft_parameters(self, atoms):
         """
         Setup the parameters for high-precision DFT calculations.
@@ -649,7 +663,7 @@ class TensorDB:
             else:
                 self.prec_vasp.set(**{key: value})
         if magmon_orig_value is not None:
-            if self.prec_vasp.bool_params['lsorbit']:
+            if self.prec_vasp.bool_params["lsorbit"]:
                 magmom = f"{len(atoms)*3}*{magmon_orig_value}"
             else:
                 magmom = f"{len(atoms)}*{magmon_orig_value}"
@@ -666,10 +680,10 @@ class TensorDB:
 
         # The global hash table
         hash_file = workdir / "hash.json"
-        
+
         # The global training structures file
         calc_file = workdir / "accurate_dft_calc.extxyz"
-        
+
         # May read existing results
         if hash_file.exists():
             with open(hash_file, "r") as fp:
@@ -678,11 +692,12 @@ class TensorDB:
             if len(calc_list) != len(hash_table):
                 raise IOError(
                     f"{calc_file}(n={len(calc_list)}) does not "
-                    f"match with {hash_file}(n={len(hash_table)})!")
+                    f"match with {hash_file}(n={len(hash_table)})!"
+                )
         else:
             hash_table = {}
-            calc_list = []    
-        
+            calc_list = []
+
         # Initialize the subsets
         subset_id = Counter()
         for atoms in calc_list:
@@ -690,7 +705,6 @@ class TensorDB:
 
         # Loop through all sampling tasks
         for task in self.sampling_task_iterator():
-            
             # Check if the trajectory file exists
             trajectory = task / "trajectory.extxyz"
             if not trajectory.exists():
@@ -699,11 +713,12 @@ class TensorDB:
             full = read(trajectory, index=slice(0, None, 1))
             if shuffle:
                 size = len(full) // interval
-                selected = np.random.choice(full[interval-1:], size=size, 
-                                            replace=False)
+                selected = np.random.choice(
+                    full[interval - 1 :], size=size, replace=False
+                )
             else:
                 # Select the last snapshot of each block(size=interval)
-                selected = full[interval-1::interval]
+                selected = full[interval - 1 :: interval]
             for atoms in selected:
                 hash_id = atoms.info["_hash"]
                 src = atoms.info["_source"]
@@ -715,19 +730,18 @@ class TensorDB:
                     aid = f"{natoms}.{subset_id[natoms]}"
                     hash_table[hash_id] = {"aid": aid, "source": src}
                     subset_id[len(atoms)] += 1
-       
+
         # Save the hash table
         with open(hash_file, "w") as fp:
             json.dump(hash_table, fp, indent=2)
             fp.write("\n")
-        
+
         # Save the structures
         write(calc_file, calc_list, format="extxyz")
 
         # Create VASP jobs
         subset_size = Counter()
         for atoms in calc_list:
-
             # The original structure id
             aid = hash_table[atoms.info["_hash"]]["aid"]
 
@@ -741,7 +755,7 @@ class TensorDB:
 
             # The group id. Each group contains 100 structures at most.
             sid = int(aid.split(".")[1])
-            group_id = sid // 100 
+            group_id = sid // 100
             groupdir = subsetdir / f"group{group_id}"
             groupdir.mkdir(exist_ok=True)
 
@@ -756,7 +770,7 @@ class TensorDB:
             # Write the input files
             self.prec_vasp.set(directory=str(taskdir))
             self.prec_vasp.write_input(atoms)
-            
+
             # Hack the MAGMOM tag for non-collinear calculations
             if magmom_dct is not None:
                 with open(taskdir / "INCAR", "a") as fp:
@@ -765,23 +779,25 @@ class TensorDB:
                         fp.write(f" {key} = {value}\n")
 
             subset_size[natoms][group_id] += 1
-            
+
             # Write the metadata
             metadata = {
                 "source": atoms.info["_source"],
                 "hash": atoms.info["_hash"],
                 "aid": aid,
                 "group_id": group_id,
-                "task_id": task_id}
+                "task_id": task_id,
+            }
             with open(taskdir / "metadata.json", "w") as fp:
                 json.dump(metadata, fp, indent=2)
                 fp.write("\n")
-        
+
         for natoms, group_size in subset_size.items():
             for group_id, size in group_size.items():
-                print(f"[VASP/calc/create/{natoms}]: "
-                      f"group{group_id} ({size} tasks)")
-    
+                print(
+                    f"[VASP/calc/create/{natoms}]: " f"group{group_id} ({size} tasks)"
+                )
+
     def get_accurate_dft_calculation_status(self):
         """
         Get the status of high precision dft calculations.
@@ -798,9 +814,14 @@ class TensorDB:
             aid = value["aid"]
             i, j = [int(x) for x in aid.split(".")]
             subset_size[i] = max(subset_size[i], j + 1)
-        
-        status = {"group": [], "total_jobs": [], "completed_jobs": [], 
-                  "CPU*hours": [], "GPU*hours": []}
+
+        status = {
+            "group": [],
+            "total_jobs": [],
+            "completed_jobs": [],
+            "CPU*hours": [],
+            "GPU*hours": [],
+        }
         accumulator = {}
 
         # Loop through all prepared jobs
@@ -818,25 +839,30 @@ class TensorDB:
                     n_total = 100
                 else:
                     n_total = aid % 100
-                accumulator[key] = Counter({
-                    'CPU*hours': 0.0, 'GPU*hours': 0.0, 
-                    'n_completed': 0, 'n_total': n_total, 
-                    'completed_tasks': []})
-            su = get_vasp_job_service_unit(taskdir / 'OUTCAR')
+                accumulator[key] = Counter(
+                    {
+                        "CPU*hours": 0.0,
+                        "GPU*hours": 0.0,
+                        "n_completed": 0,
+                        "n_total": n_total,
+                        "completed_tasks": [],
+                    }
+                )
+            su = get_vasp_job_service_unit(taskdir / "OUTCAR")
             if su is None:
                 continue
-            accumulator[key]['n_completed'] += 1
-            accumulator[key]['completed_tasks'].append(str(taskdir))
+            accumulator[key]["n_completed"] += 1
+            accumulator[key]["completed_tasks"].append(str(taskdir))
             if su.device == "cpu":
-                accumulator[key]['CPU*hours'] += su.hours
+                accumulator[key]["CPU*hours"] += su.hours
             else:
-                accumulator[key]['GPU*hours'] += su.hours
+                accumulator[key]["GPU*hours"] += su.hours
             # Update the metadata
             with open(taskdir / "metadata.json", "w") as fp:
                 metadata["SU"] = su.__dict__
                 json.dump(metadata, fp, indent=2)
                 fp.write("\n")
-        
+
         # Save the group metadata
         for key in accumulator:
             sid, gid = key
@@ -844,7 +870,7 @@ class TensorDB:
             with open(groupdir / "metadata.json", "w") as fp:
                 json.dump(accumulator[key], fp, indent=2)
                 fp.write("\n")
-        
+
         # Print the status
         for key, value in accumulator.items():
             status["group"].append(f"{key[0]}.g{key[1]}")
@@ -860,11 +886,11 @@ class TensorDB:
         df = pd.DataFrame(status)
         df.set_index("group", inplace=True)
         print(df.to_string())
-    
+
     # --------------------------------------------------------------------------
     # Make the training dataset
     # --------------------------------------------------------------------------
-        
+
     def _gather_one(self, taskdir: Path, check_job_status=False):
         """
         Gather one completed high precision DFT calculation.
@@ -884,17 +910,16 @@ class TensorDB:
             su = ServiceUnit(**metadata["SU"])
         if su.hours <= 0:
             return None
-        atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
-                                    finite_temperature=False, 
-                                    index=0))
+        atoms = next(
+            read_vasp_xml(taskdir / "vasprun.xml", finite_temperature=False, index=0)
+        )
         atoms.info["hash"] = metadata["hash"]
         atoms.info["aid"] = metadata["aid"]
         atoms.info["group_id"] = metadata["group_id"]
         atoms.info["task_id"] = metadata["task_id"]
         return atoms
-    
-    def gather(self, output_file='database.extxyz', nprocs=-2, 
-               check_job_status=False):
+
+    def gather(self, output_file="database.extxyz", nprocs=-2, check_job_status=False):
         """
         Gather all completed high precision DFT calculations into a single file.
 
@@ -906,23 +931,25 @@ class TensorDB:
             The number of processes to use. Default is -2, which means using all
             available CPUs but one.
         check_job_status : bool
-            Check the job status before gathering. Default is False. 
+            Check the job status before gathering. Default is False.
 
         """
         from joblib import Parallel, delayed
+
         all_tasks = [x for x in self.accurate_dft_calc_iterator()]
         objects = Parallel(n_jobs=nprocs, verbose=1)(
             delayed(self._gather_one)(taskdir, check_job_status)
-            for taskdir in all_tasks)
+            for taskdir in all_tasks
+        )
         objects = [x for x in objects if x is not None]
         print(f"[VASP/gather]: total {len(objects)} structures gathered")
         write(output_file, objects, format="extxyz")
-    
+
     # --------------------------------------------------------------------------
     # Plot
     # --------------------------------------------------------------------------
-    
-    def plot(self, extxyz_file='database.extxyz'):
+
+    def plot(self, extxyz_file="database.extxyz"):
         """
         Plot the database file. Currently, four plots are generated:
 
@@ -947,17 +974,17 @@ class TensorDB:
             volumes.append(atoms.get_volume() / natoms)
             energies.append(atoms.get_potential_energy() / natoms)
             forces.extend(atoms.get_forces().flatten().tolist())
-            fnorms.append(np.sqrt(np.sum(atoms.get_forces()**2) / natoms))
+            fnorms.append(np.sqrt(np.sum(atoms.get_forces() ** 2) / natoms))
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
             pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
             species = atoms.get_chemical_symbols()
-            ilist, jlist, dlist = neighbor_list('ijd', atoms, cutoff=6.0)
+            ilist, jlist, dlist = neighbor_list("ijd", atoms, cutoff=6.0)
             for i, j, d in zip(ilist, jlist, dlist):
                 key = tuple(sorted((species[i], species[j])))
                 if key not in rdf:
                     rdf[key] = []
                 rdf[key].append(d)
-        
+
         volumes = np.asarray(volumes)
         pressures = np.asarray(pressures)
         energies = np.asarray(energies)
@@ -969,8 +996,8 @@ class TensorDB:
             rdf[key] = np.asarray(rdf[key])
 
         _, axes = plt.subplots(2, 3, figsize=(12, 7))
-        cmap = matplotlib.colormaps['viridis']
-        
+        cmap = matplotlib.colormaps["viridis"]
+
         ax = axes[0, 0]
         ax.plot(volumes, energies, "o", markersize=2, color=cmap(0.0))
         ax.set_xlabel("Volume ($\AA^3$)")
@@ -1012,51 +1039,76 @@ class TensorDB:
 
 
 def main():
-    parser = ArgumentParser()
-    parser.add_argument("-i", "--input", default="config.toml", 
-                        help="The input file")
-    parser.add_argument("--status", choices=["sampling", "calc"], 
-                        default=None, help="Get the status of tasks.")
-    parser.add_argument("--nvt", action="store_true", default=False, 
-                        help="Generate NVT sampling tasks")
-    parser.add_argument("--npt", action="store_true", default=False,
-                        help="Generate NPT sampling tasks")
-    parser.add_argument("--override", action="store_true", default=False, 
-                        help="Override the existing tasks")
-    parser.add_argument("--list-unsubmitted", action="store_true", 
-                        default=False, help="List unsubmitted sampling tasks")
-    parser.add_argument("--postprocess", action="store_true", default=False,
-                        help="Post-process the sampling jobs")
-    parser.add_argument("--create", action="store_true", default=False,
-                        help="Create the high-precision DFT calculation tasks")
-    parser.add_argument("--interval", type=int, default=50)
-    parser.add_argument("--gather", action="store_true", default=False,
-                        help="Gather all completed high precision DFT ")
-    parser.add_argument("--plot", action="store_true", default=False,
-                        help="Plot the training dataset")
-    args = parser.parse_args()
-    kit = TensorDB(args.input)
+    root_parser = ArgumentParser()
 
-    if args.status is not None:
-        if args.status == "sampling":
-            kit.get_status_of_all_sampling_jobs()
-        else:
-            kit.get_accurate_dft_calculation_status()
-    elif args.list_unsubmitted:
-        kit.list_unsubmitted_sampling_jobs()
-    elif args.postprocess:
-        kit.post_process_all_sampling_jobs()
-    elif args.create:
-        kit.create_vasp_accurate_dft_tasks(interval=args.interval)
-    elif args.gather:
-        kit.gather()
-    elif args.plot:
-        kit.plot()
-    else:
-        if args.nvt:
-            kit.create_vasp_sampling_nvt_tasks(override=args.override)
-        if args.npt:
-            kit.create_vasp_sampling_npt_tasks(override=args.override)
+    # Common arguments
+    root_parser.add_argument(
+        "-i", "--input", default="config.toml", help="The input file"
+    )
+
+    # Subparsers
+    sub_parsers = root_parser.add_subparsers(dest="command", help="Sub-commands")
+
+    # The subparser for AIMD sampling
+    parser = sub_parsers.add_parser(
+        "sampling", help="Commands for creating sampling tasks."
+    )
+    parser.add_argument(
+        "--ensemble",
+        choices=["nvt", "npt"],
+        nargs="+",
+        default=["nvt", "npt"],
+        help="The MD ensemble to use, nvt or npt.",
+    )
+
+    # The subparser for getting task status
+    parser = sub_parsers.add_parser("status", help="Comannds for getting task status.")
+    parser.add_argument(
+        "type",
+        choices=["sampling", "calc", "unsubmitted"],
+        help="Choose the type of status: sampling for AIMD sampling jobs, calc for "
+             "high precision DFT calculations, unsubmitted for unsubmitted jobs.",
+    )
+
+    # The subparser for plotting
+    parser = sub_parsers.add_parser("plot", help="")
+    parser.add_argument("filename", type=Path, help="The database file to plot.")
+
+    # The subparser for the post-processing
+    parser = sub_parsers.add_parser("postprocess")
+
+    # The subparser for creating accurate dft jobs
+    parser = sub_parsers.add_parser("create")
+    parser.add_argument("--interval", type=int, default=50, 
+                        help="The sampling interval.")
+    
+    # The subparser for gathering calculated results
+    parser = sub_parsers.add_parser("gather")
+
+    # Parse the arguments
+    args = root_parser.parse_args()
+    db = TensorDB(args.input)
+    
+    if args.command == "sampling":
+        if "nvt" in args.ensemble:
+            db.create_vasp_sampling_nvt_tasks()
+        if "npt" in args.ensemble:
+            db.create_vasp_sampling_npt_tasks()
+    elif args.command == "status":
+        if args.type == "sampling":
+            db.get_status_of_all_sampling_jobs()
+        elif args.type == "calc":
+            db.get_accurate_dft_calculation_status()
+        elif args.type == "unsubmitted":
+            db.list_unsubmitted_sampling_jobs()
+    elif args.command == "postprocess":
+        db.post_process_all_sampling_jobs()
+    elif args.command == "create":
+        db.create_vasp_accurate_dft_tasks()
+    elif args.command == "gather":
+        db.gather()
+    elif args.command == "plot":
+        db.plot()
 
 
 if __name__ == "__main__":
