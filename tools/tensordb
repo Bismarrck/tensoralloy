@@ -949,7 +949,7 @@ class TensorDB:
     # Plot
     # --------------------------------------------------------------------------
 
-    def plot(self, extxyz_file="database.extxyz"):
+    def plot(self, filename: Path, figname=None, rcut=6.0):
         """
         Plot the database file. Currently, four plots are generated:
 
@@ -960,8 +960,16 @@ class TensorDB:
 
         """
         from scipy.stats import gaussian_kde
+        from ase.db import connect
 
-        trajectory = read(extxyz_file, index=":")
+        if filename.suffix == ".db":
+            db = connect(filename)
+            trajectory = []
+            for i in range(len(db)):
+                atoms = db.get_atoms(id=i + 1, add_additional_information=True)
+                trajectory.append(atoms)
+        else:
+            trajectory = read(filename, index=":")
         energies = []
         forces = []
         fnorms = []
@@ -978,7 +986,7 @@ class TensorDB:
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
             pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
             species = atoms.get_chemical_symbols()
-            ilist, jlist, dlist = neighbor_list("ijd", atoms, cutoff=6.0)
+            ilist, jlist, dlist = neighbor_list("ijd", atoms, cutoff=rcut)
             for i, j, d in zip(ilist, jlist, dlist):
                 key = tuple(sorted((species[i], species[j])))
                 if key not in rdf:
@@ -1034,7 +1042,10 @@ class TensorDB:
         ax.set_ylabel("Scaled Density")
 
         plt.tight_layout()
-        plt.savefig("plot.png")
+
+        if figname is None:
+            figname = filename.name.replace(filename.suffix, ".png")
+        plt.savefig(figname, dpi=150)
         plt.close()
 
 
@@ -1073,6 +1084,7 @@ def main():
     # The subparser for plotting
     parser = sub_parsers.add_parser("plot", help="")
     parser.add_argument("filename", type=Path, help="The database file to plot.")
+    parser.add_argument("--rcut", type=float, default=6.0, help="The cutoff radius.")
 
     # The subparser for the post-processing
     parser = sub_parsers.add_parser("postprocess")
@@ -1108,7 +1120,7 @@ def main():
     elif args.command == "gather":
         db.gather()
     elif args.command == "plot":
-        db.plot()
+        db.plot(filename=args.filename, rcut=args.rcut)
 
 
 if __name__ == "__main__":
