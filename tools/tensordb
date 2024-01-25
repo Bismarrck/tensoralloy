@@ -1060,6 +1060,27 @@ def main():
     # Subparsers
     sub_parsers = root_parser.add_subparsers(dest="command", help="Sub-commands")
 
+    # The subparser for creating DFT jobs
+    parser = sub_parsers.add_parser("create")
+    parser.add_argument("task", choices=["sampling", "calc"], 
+                        help="The type of the DFT jobs to create.")
+    parser.add_argument(
+        "--interval", 
+        type=int, 
+        default=50, 
+        help="The interval (in timesteps) for fetching snapshots from AIMD "
+             "trajectories. Only valid for 'calc' tasks.")
+    parser.add_argument(
+        "--nvt", 
+        default=False,
+        action="store_true", 
+        help="Create NVT sampling jobs. Only valid for 'sampling' tasks.")
+    parser.add_argument(
+        "--npt", 
+        default=False,
+        action="store_true", 
+        help="Create NPT sampling jobs. Only valid for 'sampling' tasks.")
+
     # The subparser for AIMD sampling
     parser = sub_parsers.add_parser(
         "sampling", help="Commands for creating sampling tasks."
@@ -1088,11 +1109,6 @@ def main():
 
     # The subparser for the post-processing
     parser = sub_parsers.add_parser("postprocess")
-
-    # The subparser for creating accurate dft jobs
-    parser = sub_parsers.add_parser("create")
-    parser.add_argument("--interval", type=int, default=50, 
-                        help="The sampling interval.")
     
     # The subparser for gathering calculated results
     parser = sub_parsers.add_parser("gather")
@@ -1101,11 +1117,17 @@ def main():
     args = root_parser.parse_args()
     db = TensorDB(args.input)
     
-    if args.command == "sampling":
-        if "nvt" in args.ensemble:
-            db.create_vasp_sampling_nvt_tasks()
-        if "npt" in args.ensemble:
-            db.create_vasp_sampling_npt_tasks()
+    if args.command == "create":
+        if args.task == "sampling":
+            if not (args.nvt or args.npt):
+                print("Please specify at least one ensemble, e.g., appending "
+                      "--nvt or --npt to the command.")
+            if args.nvt:
+                db.create_vasp_sampling_nvt_tasks()
+            if args.npt:
+                db.create_vasp_sampling_npt_tasks()
+        elif args.task == "calc":
+            db.create_vasp_accurate_dft_tasks(interval=args.interval)
     elif args.command == "status":
         if args.type == "sampling":
             db.get_status_of_all_sampling_jobs()
@@ -1115,8 +1137,6 @@ def main():
             db.list_unsubmitted_sampling_jobs()
     elif args.command == "postprocess":
         db.post_process_all_sampling_jobs()
-    elif args.command == "create":
-        db.create_vasp_accurate_dft_tasks()
     elif args.command == "gather":
         db.gather()
     elif args.command == "plot":
