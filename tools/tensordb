@@ -10,6 +10,8 @@ import json
 import tqdm
 import hashlib
 import matplotlib
+import re
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from ase.io import read, write
@@ -108,7 +110,7 @@ def get_vasp_running_device(outcar):
     """
     cmd = f"head -n 10 {str(outcar)} | grep GPUs"
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, _ = p.communicate()
+    p.communicate()
     if p.returncode == 0:
         return "gpu"
     else:
@@ -131,6 +133,38 @@ def get_vasp_job_service_unit(outcar) -> ServiceUnit:
     else:
         hours = mpi * omp * elapsed / 3600.0
     return ServiceUnit(device, mpi, elapsed, hours)
+
+
+def check_vasp_job_scf_convergence(outcar):
+    """
+    Check the SCF convergence of a VASP job.
+    """
+    outcar = Path(outcar)
+    oszicar = outcar.parent / "OSZICAR"
+    if not oszicar.exists():
+        return False
+    ediff_patt = re.compile(
+        r"\s+EDIFF\s+=\s+([0-9\-+E.]+)\s+stopping-criterion.*")
+    scf_patt = re.compile(r"(DAV|RMM):\s+(\d+)\s+([0-9\-+E.]+)\s+([0-9\-+E.]+)\s+(.*)")
+    ediff = 1e-6
+    with open(outcar) as fp:
+        for ln, line in enumerate(fp):
+            m = ediff_patt.search(line)
+            if m:
+                ediff = float(m.group(1))
+                break
+            if ln > 2000:
+                return False
+    dE = ediff * 10.0
+    with open(oszicar) as fp:
+        for line in fp:
+            m = scf_patt.search(line)
+            if m:
+                dE = abs(float(m.group(4)))
+    if dE <= ediff:
+        return True
+    else:
+        return False
 
 
 class TensorDB:
@@ -819,6 +853,7 @@ class TensorDB:
             "group": [],
             "total_jobs": [],
             "completed_jobs": [],
+            "converged_jobs": [],
             "CPU*hours": [],
             "GPU*hours": [],
         }
@@ -844,13 +879,19 @@ class TensorDB:
                         "CPU*hours": 0.0,
                         "GPU*hours": 0.0,
                         "n_completed": 0,
+                        "n_converged": 0,
                         "n_total": n_total,
                         "completed_tasks": [],
+                        "converged_tasks": [],
                     }
                 )
             su = get_vasp_job_service_unit(taskdir / "OUTCAR")
             if su is None:
                 continue
+            converged = check_vasp_job_scf_convergence(taskdir / "OUTCAR")
+            if converged:
+                accumulator[key]["n_converged"] += 1
+                accumulator[key]["converged_tasks"].append(str(taskdir))
             accumulator[key]["n_completed"] += 1
             accumulator[key]["completed_tasks"].append(str(taskdir))
             if su.device == "cpu":
@@ -860,6 +901,7 @@ class TensorDB:
             # Update the metadata
             with open(taskdir / "metadata.json", "w") as fp:
                 metadata["SU"] = su.__dict__
+                metadata["converged"] = converged
                 json.dump(metadata, fp, indent=2)
                 fp.write("\n")
 
@@ -875,17 +917,22 @@ class TensorDB:
         for key, value in accumulator.items():
             status["group"].append(f"{key[0]}.g{key[1]}")
             status["total_jobs"].append(value["n_total"])
+            status["converged_jobs"].append(value["n_converged"])
             status["completed_jobs"].append(value["n_completed"])
             status["CPU*hours"].append(np.round(value["CPU*hours"], 2))
             status["GPU*hours"].append(np.round(value["GPU*hours"], 2))
         status["group"].append("overall")
         status["total_jobs"].append(sum(status["total_jobs"]))
+        status["converged_jobs"].append(sum(status["converged_jobs"]))
         status["completed_jobs"].append(sum(status["completed_jobs"]))
         status["CPU*hours"].append(sum(status["CPU*hours"]))
         status["GPU*hours"].append(sum(status["GPU*hours"]))
         df = pd.DataFrame(status)
         df.set_index("group", inplace=True)
         print(df.to_string())
+        with open(self.root / "calc" / "status", "w") as fp:
+            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            df.to_string(fp)
 
     # --------------------------------------------------------------------------
     # Make the training dataset
@@ -899,17 +946,22 @@ class TensorDB:
             su = get_vasp_job_service_unit(taskdir / "OUTCAR")
             if su is None:
                 return None
+            converged = check_vasp_job_scf_convergence(taskdir / "OUTCAR")
+            if not converged:
+                return None
         else:
             metadata = taskdir / "metadata.json"
             if not metadata.exists():
                 return None
             with open(metadata, "r") as fp:
                 metadata = json.load(fp)
+            if not metadata.get("converged", False):
+                return None
             if not metadata.get("SU", {}):
                 return None
             su = ServiceUnit(**metadata["SU"])
-        if su.hours <= 0:
-            return None
+            if su.hours <= 0:
+                return None
         atoms = next(
             read_vasp_xml(taskdir / "vasprun.xml", finite_temperature=False, index=0)
         )
