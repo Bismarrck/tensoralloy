@@ -854,8 +854,10 @@ class TensorDB:
             "total_jobs": [],
             "completed_jobs": [],
             "converged_jobs": [],
-            "CPU*hours": [],
-            "GPU*hours": [],
+            "CPU(jobs)": [],
+            "CPU(hours)": [],
+            "GPU(jobs)": [],
+            "GPU(hours)": [],
         }
         accumulator = {}
 
@@ -876,9 +878,10 @@ class TensorDB:
                     n_total = aid % 100
                 accumulator[key] = Counter(
                     {
-                        "CPU*hours": 0.0,
-                        "GPU*hours": 0.0,
-                        "n_completed": 0,
+                        "CPU(hours)": 0.0,
+                        "GPU(hours)": 0.0,
+                        "CPU(jobs)": 0,
+                        "GPU(jobs)": 0,
                         "n_converged": 0,
                         "n_total": n_total,
                         "completed_tasks": [],
@@ -895,9 +898,11 @@ class TensorDB:
             accumulator[key]["n_completed"] += 1
             accumulator[key]["completed_tasks"].append(str(taskdir))
             if su.device == "cpu":
-                accumulator[key]["CPU*hours"] += su.hours
+                accumulator[key]["CPU(hours)"] += su.hours
+                accumulator[key]["CPU(jobs)"] += 1
             else:
-                accumulator[key]["GPU*hours"] += su.hours
+                accumulator[key]["GPU(hours)"] += su.hours
+                accumulator[key]["GPU(jobs)"] += 1
             # Update the metadata
             with open(taskdir / "metadata.json", "w") as fp:
                 metadata["SU"] = su.__dict__
@@ -919,14 +924,18 @@ class TensorDB:
             status["total_jobs"].append(value["n_total"])
             status["converged_jobs"].append(value["n_converged"])
             status["completed_jobs"].append(value["n_completed"])
-            status["CPU*hours"].append(np.round(value["CPU*hours"], 2))
-            status["GPU*hours"].append(np.round(value["GPU*hours"], 2))
+            status["CPU(jobs)"].append(value["CPU(jobs)"])
+            status["GPU(jobs)"].append(value["GPU(jobs)"])
+            status["CPU(hours)"].append(np.round(value["CPU(hours)"], 2))
+            status["GPU(hours)"].append(np.round(value["GPU(hours)"], 2))
         status["group"].append("overall")
         status["total_jobs"].append(sum(status["total_jobs"]))
-        status["converged_jobs"].append(sum(status["converged_jobs"]))
+        status["CPU(jobs)"].append(sum(status["CPU(jobs)"]))
+        status["GPU(jobs)"].append(sum(status["GPU(jobs)"]))
+        status["CPU(hours)"].append(sum(status["CPU(hours)"]))
+        status["GPU(hours)"].append(sum(status["GPU(hours)"]))
         status["completed_jobs"].append(sum(status["completed_jobs"]))
-        status["CPU*hours"].append(sum(status["CPU*hours"]))
-        status["GPU*hours"].append(sum(status["GPU*hours"]))
+        status["converged_jobs"].append(sum(status["converged_jobs"]))
         df = pd.DataFrame(status)
         df.set_index("group", inplace=True)
         print(df.to_string())
