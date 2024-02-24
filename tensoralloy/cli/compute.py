@@ -233,7 +233,7 @@ class ComputeScatterProgram(CLIProgram):
         )
         subparser.add_argument(
             '--versus',
-            choices=['fmax', 'fnorm'],
+            choices=['fmax', 'fnorm', 'energy'],
             default='fmax',
             help="The target property"
         )
@@ -261,6 +261,12 @@ class ComputeScatterProgram(CLIProgram):
             default=False,
             action='store_true',
             help="Use training data instead of test data."
+        )
+        subparser.add_argument(
+            '--batch-size',
+            default=None,
+            type=int,
+            help="Set the evaluation batch size."
         )
 
         super(ComputeScatterProgram, self).config_subparser(subparser)
@@ -380,30 +386,37 @@ class ComputeScatterProgram(CLIProgram):
                         axis=1)
                     }
                 
-                if args.versus == 'fmax':
-                    key = 'f_max'
+                if args.versus == "fmax":
+                    key = "f_max"
+                    xlabel = r"$F_{max}$ (eV/$\AA$)"
+                elif args.versus == "fnorm":
+                    key = "f_norm"
+                    xlabel = r"$F_{norm}$ (eV/$\AA$)"
                 else:
-                    key = 'f_norm'
+                    key = "energy"
+                    xlabel = r"Energy (eV/atom)"
 
                 _, axes = plt.subplots(1, 2, figsize=[10, 4])
                 ax = axes[0]
-                ax.plot(true_vals['f_max'], mae['energy'], 'k.') 
-                ax.set_xlabel(r'$F_{max}$ (eV/$\AA$)', fontsize=16)
+                ax.plot(true_vals[key], mae['energy'], 'k.') 
+                ax.set_xlabel(xlabel, fontsize=16)
                 ax.set_ylabel(r'MAE (eV/atom)', fontsize=16)
 
                 if args.xscale == 'log':
                     ax.set_xscale('log')
 
                 ax = axes[1]
-                ax.plot(true_vals['f_max'], mae['stress'], 'k.') 
-                ax.set_xlabel(r'$F_{max}$ (eV/$\AA$)', fontsize=16)
+                ax.plot(true_vals[key], mae['stress'], 'k.') 
+                ax.set_xlabel(xlabel, fontsize=16)
                 ax.set_ylabel(r'Stress (xx,yy,zz) (GPa)', fontsize=16)
 
                 if args.xscale == 'log':
                     ax.set_xscale('log')
 
                 plt.tight_layout()
-                plt.savefig(f"scatter_{key}.png", dpi=150)
+                plt.savefig(
+                    f"scatter_{key}-{'train' if args.use_train_data else 'eval'}.png", 
+                    dpi=150)
 
         return func
 
