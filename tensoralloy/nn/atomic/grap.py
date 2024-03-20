@@ -533,6 +533,65 @@ class GenericRadialAtomicPotential(Descriptor):
                         zabc = tf.gather(zabc_flat, abc_rows, name="zabc")
                         M_d.append(zabc)
             return tf.squeeze(tf.concat(M_d, axis=0), axis=-1, name="M")
+    
+    @staticmethod
+    def get_moment_tensor(rij: tf.Tensor, dij: tf.Tensor, max_moment: int):
+        """
+        The new algorithm to calculate the moment tensor.
+        """
+        dmax = {0: 1, 1: 4, 2: 13, 3: 40, 4: 121, 5: 364}[max_moment]
+        dtype = get_float_dtype()
+        with tf.name_scope("M_dnac"):
+            shape = tf.shape(rij, name="shape", out_type=tf.int32)
+            M_d = [tf.ones_like(rij, name="m/0", dtype=dtype)]
+            m_1 = tf.div_no_nan(dij, rij, name="m/1")
+            if max_moment > 0:
+                M_d.append(m_1)
+                if max_moment > 1:
+                    m_2 = tf.einsum("xnbacu, ynbacu->xynbacu", m_1, m_1)
+                    s_2 = tf.convert_to_tensor([9, 1, 1, 1, 1, 1], dtype=tf.int32, 
+                                               name="shape/2")
+                    m_2 = tf.reshape(m_2, shape=shape * s_2, name="m/2")
+                    M_d.append(m_2)
+                    if max_moment > 2:
+                        m_3 = tf.einsum("xnbacu, ynbacu->xynbacu", m_2, m_1)
+                        s_3 = tf.convert_to_tensor(
+                            [27, 1, 1, 1, 1, 1], dtype=tf.int32, name="shape/3")
+                        m_3 = tf.reshape(m_3, shape=shape * s_3, name="m/3")
+                        M_d.append(m_3)
+                        if max_moment > 3:
+                            m_4 = tf.einsum("xnbacu, ynbacu->xynbacu", m_3, m_1)
+                            s_4 = tf.convert_to_tensor(
+                                [81, 1, 1, 1, 1, 1], dtype=tf.int32, name="shape/4")
+                            m_4 = tf.reshape(m_4, shape=shape * s_4, name="m/4")
+                            M_d.append(m_4)
+                            if max_moment > 4:
+                                m_5 = tf.einsum("xnbacu, ynbacu->xynbacu", m_4, m_1)
+                                s_5 = tf.convert_to_tensor(
+                                    [243, 1, 1, 1, 1, 1], dtype=tf.int32, name="s/5")
+                                m_5 = tf.reshape(m_5, shape=shape * s_5, name="m_5")
+                                M_d.append(m_5)
+            return tf.squeeze(tf.concat(M_d, axis=0), axis=-1, name="M") 
+    
+    @staticmethod
+    def get_T_dm(max_moment: int):
+        dims = [1, 4, 13, 40, 121, 364]
+        if max_moment > 5:
+            raise ValueError("The maximum angular moment should be <= 5")
+        dmax = dims[max_moment]
+        array = np.zeros((dmax, max_moment + 1), dtype=np.float64)
+        array[0, 0] = 1
+        if max_moment > 0:
+            array[1: 4, 1] = 1
+        if max_moment > 1:
+            array[4: 13, 2] = 1
+        if max_moment > 2:
+            array[13: 40, 3] = 1
+        if max_moment > 3:
+            array[40: 121, 4] = 1
+        if max_moment > 4:
+            array[121: 364, 5] = 1
+        return tf.convert_to_tensor(array, dtype=get_float_dtype(), name="T_dm")
 
     def apply_model(self, clf: UniversalTransformer, dists_and_masks: dict,
                     mode: ModeKeys):
@@ -591,9 +650,9 @@ class GenericRadialAtomicPotential(Descriptor):
                             gx = tf.math.multiply(v, fc)
                             gtau.append(gx)
                     H = tf.concat(gtau, axis=-1, name="H")
-                M = self._get_moment_coeff_tensor(
+                M = self.get_moment_tensor(
                     tf.expand_dims(rij, 0), dij, max_moment)
-                T = self._get_multiplicity_tensor(max_moment, self._symmetric)
+                T = self.get_T_dm(max_moment)
                 P = tf.einsum("nback,dnbac->nbakd", H, M, name="P")
                 S = tf.square(P, name="S")
                 Q = tf.einsum("nbakd,dm->nabkm", S, T, name="Q")

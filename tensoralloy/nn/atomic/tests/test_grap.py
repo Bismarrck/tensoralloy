@@ -149,5 +149,56 @@ def test_sign():
                 assert_array_almost_equal(y, z, delta=1e-8)
 
 
+def test_T_and_M():
+    with tf.Graph().as_default():
+        with precision_scope("high"):
+
+            dij = tf.convert_to_tensor(
+                np.random.randn(3, 3, 1, 5, 8, 1), dtype=tf.float64, name="dij")
+            rij = tf.expand_dims(tf.sqrt(dij[0]**2 + dij[1]**2 + dij[2]**2), 0, 
+                                 name="rij")
+            
+            T_0 = GenericRadialAtomicPotential.get_T_dm(0)
+            T_1 = GenericRadialAtomicPotential.get_T_dm(1)
+            T_2 = GenericRadialAtomicPotential.get_T_dm(2)
+            T_3 = GenericRadialAtomicPotential.get_T_dm(3)
+
+            M_0 = GenericRadialAtomicPotential.get_moment_tensor(rij, dij, 0)
+            M_1 = GenericRadialAtomicPotential.get_moment_tensor(rij, dij, 1)
+            M_2 = GenericRadialAtomicPotential.get_moment_tensor(rij, dij, 2)
+            M_3 = GenericRadialAtomicPotential.get_moment_tensor(rij, dij, 3)
+
+            V_0 = tf.einsum('dm, dnbac->mnbac', T_0, M_0, name="V_0")
+            V_1 = tf.einsum('dm, dnbac->mnbac', T_1, M_1, name="V_1")
+            V_2 = tf.einsum('dm, dnbac->mnbac', T_2, M_2, name="V_2")
+            V_3 = tf.einsum('dm, dnbac->mnbac', T_3, M_3, name="V_3")
+
+            t_0 = GenericRadialAtomicPotential._get_multiplicity_tensor(0)
+            t_1 = GenericRadialAtomicPotential._get_multiplicity_tensor(1)
+            t_2 = GenericRadialAtomicPotential._get_multiplicity_tensor(2)
+            t_3 = GenericRadialAtomicPotential._get_multiplicity_tensor(3)
+
+            m_0 = GenericRadialAtomicPotential._get_moment_coeff_tensor(rij, dij, 0)
+            m_1 = GenericRadialAtomicPotential._get_moment_coeff_tensor(rij, dij, 1)
+            m_2 = GenericRadialAtomicPotential._get_moment_coeff_tensor(rij, dij, 2)
+            m_3 = GenericRadialAtomicPotential._get_moment_coeff_tensor(rij, dij, 3)
+
+            v_0 = tf.einsum('dm, dnbac->mnbac', t_0, m_0, name="v_0")
+            v_1 = tf.einsum('dm, dnbac->mnbac', t_1, m_1, name="v_1")
+            v_2 = tf.einsum('dm, dnbac->mnbac', t_2, m_2, name="v_2")
+            v_3 = tf.einsum('dm, dnbac->mnbac', t_3, m_3, name="v_3")
+
+            with tf.Session() as sess:
+                tf.global_variables_initializer().run()
+
+                v0, v1, v2, v3 = sess.run([V_0, V_1, V_2, V_3])
+                vv0, vv1, vv2, vv3 = sess.run([v_0, v_1, v_2, v_3])
+
+                assert_array_almost_equal(v0, vv0, delta=1e-8)
+                assert_array_almost_equal(v1, vv1, delta=1e-8)
+                assert_array_almost_equal(v2, vv2, delta=1e-8)
+                assert_array_almost_equal(v3, vv3, delta=1e-8)
+            
+
 if __name__ == "__main__":
-    nose.main()
+    test_T_and_M()
