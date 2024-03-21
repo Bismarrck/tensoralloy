@@ -1078,9 +1078,12 @@ class TensorDB:
         ax.set_ylabel("Force norm (eV/$\AA$)")
 
         ax = axes[0, 2]
-        ax.plot(volumes, pressures, "o", markersize=2, color=cmap(0.4))
+        density = gaussian_kde(volumes)
+        x = np.linspace(volumes.min(), volumes.max(), 100)
+        fx = density(x)
+        ax.plot(x, fx, label="Volume")
         ax.set_xlabel("Volume ($\AA^3$)")
-        ax.set_ylabel("Pressure (GPa)")
+        ax.set_ylabel("Scaled Density")
 
         ax = axes[1, 0]
         ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.6))
