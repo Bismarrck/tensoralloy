@@ -95,6 +95,7 @@ class _LossOptions:
     The basic options for a loss.
     """
     weight: Union[float, Tuple[float, float]] = 1.0
+    logscaled_dynamic_weight: bool = True
 
 
 @add_slots

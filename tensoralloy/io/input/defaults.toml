@@ -23,16 +23,19 @@ export = ['energy', 'forces', 'stress']
 weight = 1.0
 per_atom_loss = true
 method = "rmse"
+logscaled_dynamic_weight = false
 
 [nn.loss.eentropy]
 weight = 1.0
 per_atom_loss = true
 method = "ylogy"
+logscaled_dynamic_weight = false
 
 [nn.loss.free_energy]
 weight = 1.0
 per_atom_loss = true
 method = "rmse"
+logscaled_dynamic_weight = false
 
 [nn.loss.rose]
 weight = 1.0
@@ -76,14 +79,17 @@ minimize = ["energy"]
 [nn.loss.forces]
 weight = 1.0
 method = "rmse"
+logscaled_dynamic_weight = false
 
 [nn.loss.stress]
 weight = 1.0
 method = "rmse"
+logscaled_dynamic_weight = false
 
 [nn.loss.total_pressure]
 weight = 1.0
 method = "rmse"
+logscaled_dynamic_weight = false
 
 [nn.loss.l2]
 weight = 0.00

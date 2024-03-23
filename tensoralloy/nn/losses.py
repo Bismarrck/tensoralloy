@@ -168,27 +168,37 @@ def _get_weighted_loss(loss_weight: tf.Tensor,
     return loss
 
 
-def _get_static_or_dyn_weight_tensor(weight: Union[float, Tuple[float, float]],
-                                     max_train_steps: Union[int, tf.Tensor],
-                                     dtype=tf.float32):
+def get_static_or_dyn_weight_tensor(weight: Union[float, Tuple[float, float]],
+                                    max_train_steps: Union[int, tf.Tensor],
+                                    dtype=tf.float32, logscale=False):
     """
     Create the static or dynamic loss weight tensor.
     """
     if isinstance(weight, float):
         return tf.convert_to_tensor(weight, dtype=dtype, name='weight')
+    
+    assert len(weight) == 2    
+    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.cast(global_step, dtype, name='global_step')
+    max_train_steps = tf.convert_to_tensor(max_train_steps, dtype=dtype,
+                                          name='max_steps')
+    w0 = tf.convert_to_tensor(weight[0], dtype=dtype, name='w0')
+    w1 = tf.convert_to_tensor(weight[1], dtype=dtype, name='w1')
+
+    if logscale:
+        ten = tf.constant(10.0, dtype=dtype, name='ten')
+        base = tf.log(ten, name='base')
+        l0 = tf.truediv(tf.log(w0), base, name='l0')
+        l1 = tf.truediv(tf.log(w1), base, name='l1')
+        slope = tf.truediv(l1 - l0, max_train_steps, name='slope')
+        weight = tf.pow(ten, l0 + slope * global_step, name='weight')
     else:
-        assert len(weight) == 2
-        global_step = tf.train.get_or_create_global_step()
-        global_step = tf.cast(global_step, dtype, name='global_step')
-        max_train_steps = tf.convert_to_tensor(max_train_steps, dtype=dtype,
-                                               name='max_steps')
-        w0 = tf.convert_to_tensor(weight[0], dtype=dtype, name='w0')
-        w1 = tf.convert_to_tensor(weight[1], dtype=dtype, name='w1')
         slope = tf.truediv(w1 - w0, max_train_steps, name='slope')
         weight = tf.add(w0, slope * global_step, name='weight')
-        if is_first_replica():
-            tf.add_to_collection(GraphKeys.TRAIN_METRICS, weight)
-        return weight
+
+    if is_first_replica():
+        tf.add_to_collection(GraphKeys.TRAIN_METRICS, weight)
+    return weight
 
 
 def get_energy_loss(labels,
@@ -266,8 +276,9 @@ def get_energy_loss(labels,
                 is_per_atom_loss=per_atom_loss,
                 sample_weight=sample_weight, 
                 normalized_weight=normalized_weight)
-        weight = _get_static_or_dyn_weight_tensor(
-            options.weight, max_train_steps, dtype=raw_loss.dtype)
+        weight = get_static_or_dyn_weight_tensor(
+            options.weight, max_train_steps, dtype=raw_loss.dtype,
+            logscale=options.logscaled_dynamic_weight)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
@@ -367,10 +378,10 @@ def get_forces_loss(labels,
             labels = tf.split(
                 labels, [1, -1], axis=1, name='split')[1]
         method = LossMethod[options.method]
-        weight = _get_static_or_dyn_weight_tensor(
+        weight = get_static_or_dyn_weight_tensor(
             options.weight, 
             max_train_steps, 
-            labels.dtype)
+            labels.dtype, logscale=options.logscaled_dynamic_weight)
         raw_loss, mae = _absolute_forces_loss(
             labels, predictions,
             atom_masks=atom_masks,
@@ -438,8 +449,10 @@ def get_stress_loss(labels,
                 is_per_atom_loss=False, 
                 sample_weight=sample_weight,
                 normalized_weight=normalized_weight)
-        weight = _get_static_or_dyn_weight_tensor(options.weight, max_train_steps,
-                                                  dtype=mae.dtype)
+        weight = get_static_or_dyn_weight_tensor(
+            options.weight, max_train_steps,
+            dtype=mae.dtype, 
+            logscale=options.logscaled_dynamic_weight)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
@@ -484,8 +497,10 @@ def get_pressure_loss(labels,
         else:
             raw_loss, mae = _get_logcosh_loss(labels, predictions,
                                               is_per_atom_loss=False)
-        weight = _get_static_or_dyn_weight_tensor(options.weight, max_train_steps,
-                                                  dtype=labels.dtype)
+        weight = get_static_or_dyn_weight_tensor(
+            options.weight, max_train_steps,
+            dtype=labels.dtype, 
+            logscale=options.logscaled_dynamic_weight)
         return _get_weighted_loss(weight, raw_loss, mae, collections)
 
 
