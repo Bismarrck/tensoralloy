@@ -618,6 +618,9 @@ class TensorDB:
         df = pd.DataFrame(status)
         df.set_index("phase", inplace=True)
         print(df.to_string())
+        with open(self.root / "sampling" / "status", "w") as fp:
+            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            df.to_string(fp)
 
     def list_unsubmitted_sampling_jobs(self):
         """
