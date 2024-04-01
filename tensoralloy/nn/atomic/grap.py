@@ -655,7 +655,8 @@ class GenericRadialAtomicPotential(Descriptor):
                         tf.expand_dims(rij, 0), dij, max_moment)
                     T = self.get_T_dm(max_moment)
                 else:
-                    M = self._get_moment_coeff_tensor(rij, dij, max_moment)
+                    M = self._get_moment_coeff_tensor(
+                        tf.expand_dims(rij, 0), dij, max_moment)
                     T = self._get_multiplicity_tensor(max_moment, self._symmetric)
                 P = tf.einsum("nback,dnbac->nbakd", H, M, name="P")
                 S = tf.square(P, name="S")
