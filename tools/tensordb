@@ -1013,7 +1013,8 @@ class TensorDB:
     # Plot
     # --------------------------------------------------------------------------
 
-    def plot(self, filename: Path, figname=None, rcut=6.0):
+    @staticmethod
+    def plot(filename: Path, figname=None, rcut=6.0):
         """
         Plot the database file. Currently, four plots are generated:
 
@@ -1207,7 +1208,7 @@ def main():
     elif args.command == "gather":
         db.gather()
     elif args.command == "plot":
-        db.plot(filename=args.filename, rcut=args.rcut)
+        TensorDB.plot(filename=args.filename, rcut=args.rcut)
 
 
 if __name__ == "__main__":
