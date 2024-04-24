@@ -3,6 +3,7 @@ import h5py
 import numpy as np
 import os.path
 import joblib
+
 from pathlib import Path
 from ase.atoms import Atoms
 from ase.neighborlist import neighbor_list
@@ -13,63 +14,12 @@ from collections import Counter, namedtuple
 from typing import List
 from functools import partial
 from sklearn.linear_model import ElasticNet, LinearRegression, Ridge
-from sklearn.model_selection import ParameterGrid
 from numpy import einsum as contract
 
 from tensoralloy.linear.ops import setup_tensors, kernel_F1, kernel_F2, sum_forces, \
                                    sum_dG, fill_tensors
-
-filter_presets = {
-    "pexp": {
-        "small": {
-            "rl": np.linspace(1.0, 4.0, num=8, endpoint=True),
-            "pl": np.linspace(3.0, 1.0, num=8, endpoint=True)
-        },
-        "medium": {
-            "rl": np.linspace(1.0, 4.0, num=16, endpoint=True),
-            "pl": np.linspace(3.0, 1.0, num=16, endpoint=True)
-        },
-        "large": {
-            "rl": np.linspace(1.0, 4.0, num=32, endpoint=True),
-            "pl": np.linspace(3.0, 1.0, num=32, endpoint=True)
-        }
-    },
-    "morse": {
-        "small": {
-            "D": np.ones(1, dtype=float),
-            "r0": np.linspace(1.4, 3.2, num=10, endpoint=True),
-            "gamma": np.ones(1, dtype=float)
-        },
-        "medium": {
-            "D": np.ones(1, dtype=float),
-            "r0": np.linspace(1.4, 3.2, num=10, endpoint=True),
-            "gamma": np.array([1.0, 2.0])
-        },
-        "large": {
-            "D": np.array([0.8, 1.2]),
-            "r0": np.linspace(1.4, 3.2, num=10, endpoint=True),
-            "gamma": np.array([1.0, 2.0])
-        }
-    }
-}
-
-
-def cantor_pairing(x, y):
-    """
-    The Cantor Pairing function:
-
-        f(x, y) = (x + y)(x + y + 1) // 2 + y
-
-    f(x, y) will only be unique if x and y are integers.
-
-    See Also
-    --------
-    https://en.wikipedia.org/wiki/Pairing_function#Cantor_pairing_function
-
-    """
-    x = np.asarray(x)
-    y = np.asarray(y)
-    return (x + y) * (x + y + 1) // 2 + y
+from tensoralloy.linear.preset import get_filter_preset, filter_presets, fcut
+from tensoralloy.utils import cantor_pairing
 
 
 def get_T_dm(max_moment, symmetric=False):
@@ -103,67 +53,8 @@ def get_T_dm(max_moment, symmetric=False):
     return array
 
 
-def fcut(x: np.ndarray, cutforce: float):
-    """
-    The cosine cutoff function.
-    """
-    z = np.minimum(1.0, x / cutforce) * np.pi
-    f = 0.5 * (np.cos(z) + 1)
-    df = -0.5 * np.pi / cutforce * np.sin(z)
-    return f, df
-
-
-def pexp(x: np.ndarray, r: float, p: float):
-    """
-    The parameterized exponential function.
-    """
-    f = np.exp(-(x / r) ** p)
-    df = -f * p * (x / r) ** (p - 1.0) / r
-    return f, df
-
-
-def morse(x: np.ndarray, D, gamma, r0):
-    """
-    The morse function.
-    f(x) = d * [ exp(-2 * gamma * (r - r0)) - 2 * exp(-gamma * (r - r0)) ]
-    """
-    dr = gamma * (x - r0)
-    f = D * (np.exp(-2 * dr) - 2 * np.exp(-dr))
-    df = -D * gamma * 2 * (np.exp(-2 * dr) - np.exp(-dr))
-    return f, df
-
-
-def get_filter_preset(key: str):
-    """
-    Return a pre-defined collection of filter functions.
-    """
-    vals = key.split("@")
-    if len(vals) != 2:
-        raise KeyError(f"{key} is not valid preset. Should be func@size")
-    func = vals[0]
-    size = vals[1]
-    if func == "pexp":
-        params = filter_presets[func][size]
-        filters = [partial(pexp, r=params['rl'][i], p=params['pl'][i])
-                   for i in range(len(params['rl']))]
-    elif func == "morse":
-        params = filter_presets[func][size]
-        grid = ParameterGrid(params)
-        filters = []
-        for row in grid:
-            D = row["D"]
-            r0 = row["r0"]
-            gamma = row["gamma"]
-            filters.append(partial(morse, D=D, r0=r0, gamma=gamma))
-    else:
-        raise KeyError("Only morse or pexp functions are supported")
-    return filters
-
-
-def calculate_linear_mtp_parameters(atoms: Atoms, species: List[str], rcut=5.0,
-                                    max_moment=3, filters='small',
-                                    fill_tensors_op=fill_tensors,
-                                    sum_dG_op=sum_dG):
+def calculate_tensormd_parameters(atoms: Atoms, species: List[str], rcut=5.0,
+                                  max_moment=3, filters='small'):
     """
     Compute the linear moment tensor potential parameters.
     """
@@ -242,9 +133,9 @@ def calculate_linear_mtp_parameters(atoms: Atoms, species: List[str], rcut=5.0,
     i_l = i_l.astype(np.int32)
     j_l = j_l.astype(np.int32)
 
-    fill_tensors_op(eltmap, eltypes, i_l, j_l, neigh, loc, R_abc, R_l,
-                    drdrx_abcx, D_lx, H_abck, H_lk, dHdr_abck, dH_lk, i_abc,
-                    j_abc, t_a, M_abcd, dMdrx_abcdx, np.int32(max_moment))
+    fill_tensors(eltmap, eltypes, i_l, j_l, neigh, loc, R_abc, R_l,
+                 drdrx_abcx, D_lx, H_abck, H_lk, dHdr_abck, dH_lk, i_abc,
+                 j_abc, t_a, M_abcd, dMdrx_abcdx, np.int32(max_moment))
 
     P_abkd = contract("abcd,abck->abkd", M_abcd, H_abck)
     sign = np.sign(P_abkd[:, :, :, 0])
@@ -262,9 +153,9 @@ def calculate_linear_mtp_parameters(atoms: Atoms, species: List[str], rcut=5.0,
     dGdh_axybkm = np.zeros((adim, xdim, xdim, bdim, kdim, mdim))
     dGdrx_baxbkm = np.zeros((bdim, adim, xdim, bdim, kdim, mdim))
 
-    sum_dG_op(np.int32(adim), np.int32(bdim), np.int32(cdim), np.int32(kdim),
-              np.int32(mdim), i_abc, j_abc, t_a, dGdrx_baxbkm,
-              dG_abkmxc, dGdh_axybkm, drdrx_abcx, R_abc)
+    sum_dG(np.int32(adim), np.int32(bdim), np.int32(cdim), np.int32(kdim),
+           np.int32(mdim), i_abc, j_abc, t_a, dGdrx_baxbkm,
+           dG_abkmxc, dGdh_axybkm, drdrx_abcx, R_abc)
 
     splits = np.cumsum([0] + [eltnum[specie] for specie in species])[1:-1]
     if len(species) > 1:
@@ -286,14 +177,14 @@ def calculate_linear_mtp_parameters(atoms: Atoms, species: List[str], rcut=5.0,
     return results, loc, reordered
 
 
-class LinearPotential(Calculator):
+class LinearTensorMD(Calculator):
     """
     The dynamic linear moment tensor potential.
 
     >>> from tensoralloy.io.db import snap
     >>> from ase.build import bulk
     >>> db = snap("Ni")
-    >>> lp = LinearPotential(["Ni"], "medium", 3, 6.0)
+    >>> lp = LinearTensorMD(["Ni"], "medium", 3, 6.0)
     >>> for atoms_id in range(1, len(db) + 1):
     >>>     lp.add(db.get_atoms(id=atoms_id, add_additional_information=True))
     >>> lp.fit()
@@ -334,7 +225,7 @@ class LinearPotential(Calculator):
             The maximum size of the database in GB.
 
         """
-        super(LinearPotential, self).__init__()
+        super(LinearTensorMD, self).__init__()
 
         self._species = sorted(species)
         self._eltmap = np.zeros((len(species), len(species)), dtype=int)
@@ -578,7 +469,7 @@ class LinearPotential(Calculator):
         self._acquire_datasets(num_add)
 
         pipeline = partial(
-            calculate_linear_mtp_parameters,
+            calculate_tensormd_parameters,
             species=self._species,
             filters=self._filters,
             rcut=self._rcut,
@@ -595,7 +486,7 @@ class LinearPotential(Calculator):
         """
         Add an `Atoms` to the database.
         """
-        results, loc, _ = calculate_linear_mtp_parameters(
+        results, loc, _ = calculate_tensormd_parameters(
             atoms,
             self._species,
             filters=self._filters,
@@ -693,7 +584,7 @@ class LinearPotential(Calculator):
         """
         Calculate energy, forces and stress of the given `atoms`.
         """
-        results, loc, reordered = calculate_linear_mtp_parameters(
+        results, loc, reordered = calculate_tensormd_parameters(
             atoms,
             self._species,
             filters=self._filters,
@@ -814,71 +705,6 @@ class LinearPotential(Calculator):
             data[f"biases_{i}_0"] = eatom
 
         np.savez(filename, **data)
-
-
-class LinearPotentialCalculator(Calculator):
-    """
-    Lightweight LinearPotential calculator.
-    """
-
-    # ASE Calculator properties
-    implemented_properties = ["energy", "forces", "stress"]
-    nolabel = True
-
-    def __init__(self, species: List[str], solution: np.ndarray, preset: str,
-                 max_moment=3, rcut=5.0):
-        """
-        Initialization.
-        """
-        Calculator.__init__(self)
-        self.species = species
-        self.filters = get_filter_preset(preset)
-        self.solution = np.array(solution)
-        self.preset = preset
-        self.max_moment = max_moment
-        self.rcut = rcut
-        self.bkm_shape = (len(species), len(self.filters), max_moment + 1)
-        self.bkm_val = len(species) * (max_moment + 1) * len(self.filters)
-
-    def calculate(self, atoms=None, properties=None,
-                  system_changes=all_changes):
-        """
-        The ase.calculator.Calculator.calculate method.
-        """
-        if properties is None:
-            properties = self.implemented_properties
-        Calculator.calculate(self, atoms, properties, system_changes)
-
-        results, loc, reordered = calculate_linear_mtp_parameters(
-            atoms,
-            self.species,
-            filters=self.filters,
-            rcut=self.rcut,
-            max_moment=self.max_moment)
-        energy = 0.0
-        forces = np.zeros((len(atoms), 3))
-        virial = np.zeros((3, 3))
-        vol = atoms.get_volume()
-
-        for i, specie in enumerate(self.species):
-            ii = i * (self.bkm_val + 1)
-            it = ii + (self.bkm_val + 1)
-            eatom = self.solution[ii]
-            c_bkm = self.solution[ii + 1: it].reshape(self.bkm_shape)
-            o = results[specie]
-            energy += o.G_abkm.shape[0] * eatom
-            energy += np.einsum("abkm,bkm->a", o.G_abkm, c_bkm).sum()
-            forces += np.einsum("axbkm,bkm->ax", o.dGdrx_axbkm, c_bkm)
-            virial += np.einsum("axybkm,bkm->xy", o.dGdh_axybkm, c_bkm)
-
-        if reordered:
-            forces = forces[loc]
-        stress = virial / vol
-        stress = stress[[0, 1, 2, 1, 0, 0], [0, 1, 2, 2, 2, 1]]
-
-        self.results["energy"] = energy
-        self.results["forces"] = forces
-        self.results["stress"] = stress
         
         
 class TensorMDPythonCalculator(Calculator):
@@ -1067,7 +893,7 @@ def benchmark():
     hdf5_file = f"MoNi_{max_moment}_{preset}_{rcut:.1f}.hdf5"
     if os.path.exists(hdf5_file):
         os.remove(hdf5_file)
-    pot = LinearPotential(
+    pot = LinearTensorMD(
         species, preset, max_moment, rcut, database=hdf5_file)
     t0 = time.time()
     for atoms_id in tqdm.trange(1, len(db) + 1, args.interval):
@@ -1092,14 +918,14 @@ def test_copy_hdf5():
     kwargs = {"species": ["Mo", "Ni"], "rcut": 6.0, "max_moment": 3,
               "preset": "pexp@medium", "use_stress": True, "use_forces": True}
 
-    h1 = LinearPotential(database="h1.hdf5", **kwargs)
+    h1 = LinearTensorMD(database="h1.hdf5", **kwargs)
     stack = []
     for i in range(1, 5):
         atoms = db.get_atoms(id=i, add_additional_information=True)
         stack.append(atoms)
     h1.parallel_add(stack, n_jobs=1)
 
-    h2 = LinearPotential(database="h2.hdf5", **kwargs)
+    h2 = LinearTensorMD(database="h2.hdf5", **kwargs)
     stack = []
     for i in range(1, 3):
         atoms = db.get_atoms(id=i, add_additional_information=True)
@@ -1107,7 +933,7 @@ def test_copy_hdf5():
     h2.parallel_add(stack, n_jobs=1)
     h2.close()
 
-    h3 = LinearPotential(database="h2a.hdf5", **kwargs)
+    h3 = LinearTensorMD(database="h2a.hdf5", **kwargs)
     h3.copy_hdf5("h2.hdf5")
     stack = []
     for i in range(3, 5):
