@@ -12,5 +12,4 @@ from tensoralloy.nn.eam.adp import AdpNN
 __author__ = 'Xin Chen'
 __email__ = 'Bismarrck@me.com'
 
-__all__ = ["DeepPotSE", "AtomicNN",
-           "EamAlloyNN", "EamFsNN", "AdpNN"]
+__all__ = ["AtomicNN", "EamAlloyNN", "EamFsNN", "AdpNN"]
