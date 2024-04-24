@@ -13,12 +13,14 @@ import glob
 import os
 import warnings
 
+from collections import Counter
 from pathlib import Path
 from os.path import dirname, join, basename, exists
 from ase.build import bulk
 from ase.io import read, write
 from ase.units import GPa, kB
 from ase.db import connect
+from ase.calculators.singlepoint import SinglePointCalculator
 from matplotlib import pyplot as plt
 
 from tensoralloy.utils import ModeKeys
@@ -57,6 +59,7 @@ class ComputeMetricsProgram(CLIProgram):
             EquationOfStateProgram(),
             ComputeElasticTensorProgram(),
             DatabaseForceStandardDeviationProgram(),
+            DatabaseNumMetricsProgram()
         ]
 
     @property
@@ -669,6 +672,59 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                             pred_vals['stress']):
                                 fp.write(f"{x} {y}\n")
 
+        return func
+
+
+class DatabaseNumMetricsProgram(CLIProgram):
+    """
+    A program to compute the number of training metrics in the database.
+    """
+
+    @property
+    def name(self):
+        return "metric"
+    
+    @property
+    def help(self):
+        return "Compute the number of training metrics in the database."
+    
+    def config_subparser(self, subparser: argparse.ArgumentParser):
+        """
+        Config the parser.
+        """
+        subparser.add_argument(
+            'database', type=str, help="The database")
+        return super().config_subparser(subparser)
+
+    @property
+    def main_func(self):
+        """
+        The main function.
+        """
+        def func(args: argparse.Namespace):
+            filename = Path(args.database)
+            if not filename.exists():
+                raise IOError(f"{args.database} does not exist!")
+            db = connect(filename)
+            size = len(db)
+            metrics = Counter({'energy': 0, 'forces': 0, 'stress': 0, 'free_energy': 0})
+            for i in tqdm.trange(1, size + 1):
+                atoms = db.get_atoms(id=i, add_additional_information=True)
+                if not isinstance(atoms.calc, SinglePointCalculator):
+                    continue
+                n = len(atoms)
+                if 'energy' in atoms.calc.results:
+                    metrics['energy'] += 1
+                if 'forces' in atoms.calc.results:
+                    metrics['forces'] += n * 3
+                if 'stress' in atoms.calc.results:
+                    metrics['stress'] += 6
+                if 'free_energy' in atoms.calc.results:
+                    metrics['free_energy'] += 1
+            metrics['total'] = sum(metrics.values())
+            print(f"Total number of metrics in <{filename}>")
+            for key, value in metrics.items():
+                print(f"  * {key:<12s}: {value}")
         return func
 
 
