@@ -18,7 +18,7 @@ from ase.io import read, write
 from ase import Atoms
 from ase.build import bulk
 from ase.calculators.vasp import Vasp
-from ase.units import GPa
+from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from subprocess import PIPE, Popen
 from argparse import ArgumentParser
@@ -167,6 +167,19 @@ def check_vasp_job_scf_convergence(outcar):
         return False
 
 
+def asarray_or_eval(array):
+    """
+    Convert the 'array' to an array by eval if it is a string.
+    """
+    if isinstance(array, str):
+        return eval(array)
+    else:
+        z = np.asarray(array)
+        if z.ndim == 0:
+            return np.atleast_1d(z)
+        else:
+            return z
+
 class TensorDB:
     """
     The database generation kit for TensorAlloy.
@@ -179,6 +192,10 @@ class TensorDB:
         self.input_file = input_file
         self.root = Path(input_file).parent
         self.config = dict(toml.load(input_file))
+        if self.config.get("finite_temperature", False):
+            self.is_finite_temperature = True
+        else:
+            self.is_finite_temperature = False
         self.species = self.config["species"]
         self.phases = self.config["phases"]
         self.base_phase_structures = self.init_phases()
@@ -251,11 +268,13 @@ class TensorDB:
 
         # Setup PORCAR for each specie.
         # For ASE VASP calculator, only the suffix is used.
-        setups = {"base": "recommended"}
+        setups = {}
         if "potcars" in params:
             for i, potcar in enumerate(params["potcars"]):
                 if potcar != self.species[i]:
-                    setups[potcar] = potcar[len(self.species[i]) :]
+                    setups[self.species[i]] = potcar[len(self.species[i]):]
+        else:
+            setups["base"] = "recommended"
 
         # Initialize the VASP calculator for AIMD sampling jobs.
         self.vasp = Vasp(
@@ -271,8 +290,6 @@ class TensorDB:
             isym=params.get("isym", 0),
             nelmin=params.get("nelmin", 4),
             isif=params.get("isif", 2),
-            kpar=params.get("kpar", 1),
-            npar=params.get("npar", 8),
             ibrion=params.get("ibrion", 0),
             nsw=params.get("nsw", 10000),
             potim=params.get("potim", 1),
@@ -282,6 +299,12 @@ class TensorDB:
             nblock=params.get("nblock", 1),
             maxmix=params.get("maxmix", 60),
         )
+        if "npar" in params:
+            self.vasp.set(npar=params["npar"])
+        if "kpar" in params:
+            self.vasp.set(kpar=params["kpar"])
+        if "ncore" in params:
+            self.vasp.set(ncore=params["ncore"])
 
         # Initialize the VASP calculator for high-precision DFT calculations.
         self.prec_vasp = Vasp(
@@ -306,6 +329,12 @@ class TensorDB:
             nblock=params.get("nblock", 1),
             maxmix=params.get("maxmix", 60),
         )
+        if "npar" in params:
+            self.prec_vasp.set(npar=params["npar"])
+        if "kpar" in params:
+            self.prec_vasp.set(kpar=params["kpar"])
+        if "ncore" in params:
+            self.prec_vasp.set(ncore=params["ncore"])
 
     # --------------------------------------------------------------------------
     # Iterators
@@ -335,9 +364,13 @@ class TensorDB:
         """
         params = getitem(self.config, ["vasp", "sampling"])
         gamma = params.get("langevin_gamma", 10)
-        ismear = params.get("ismear", 0)
-        sigma = params.get("sigma", 0.1)
-        npar = params.get("npar", 8)
+        if self.is_finite_temperature:
+            # The Mermin smearing method, sigma is reserved
+            ismear = -1
+            sigma = 0.0
+        else:
+            ismear = params.get("ismear", 0)
+            sigma = params.get("sigma", 0.1)
         encut = params.get("encut", 350)
         ediff = params.get("ediff", 1e-5)
 
@@ -345,9 +378,7 @@ class TensorDB:
         # ISIF = 2 for NVT ensemble
         # LANGEVIN_GAMMA: Langevin friction coefficient for atom species
         self.vasp.set(mdalgo=3, langevin_gamma=[gamma] * len(self.species))
-        self.vasp.set(
-            ismear=ismear, sigma=sigma, npar=npar, kpar=1, encut=encut, ediff=ediff
-        )
+        self.vasp.set(ismear=ismear, sigma=sigma, encut=encut, ediff=ediff)
 
         # Special parameters for Parrinello-Rahman NPT.
         # ISIF = 3 for NPT ensemble.
@@ -382,6 +413,41 @@ class TensorDB:
             newid = len(files) + 1
         return newid, f"{newid}_{key}"
 
+    @staticmethod
+    def _get_temperatures(args: dict, vt_method: str, size: int):
+        """
+        Check the temperature related arguments.
+        """
+        if "temperatures" in args:
+            if "tstart" in args or "tstop" in args:
+                raise ValueError("Cannot specify both temperatures and tstart/tstop")
+            tarray = asarray_or_eval(args["temperatures"])
+            if vt_method == "grid":
+                return tarray, tarray
+            else:
+                if len(tarray) != size:
+                    raise ValueError("The length of temperatures should be "
+                                     "equal to volumes")
+                return tarray, tarray
+        else:
+            if "tstart" not in args or "tstop" not in args:
+                raise ValueError(
+                    "Either temperatures or tstart/tstop should be specified")
+            if vt_method == "grid":
+                raise ValueError("Cannot specify tstart/tstop for grid VT method")
+            if isinstance(args["tstart"], str):
+                t0 = asarray_or_eval(args["tstart"])
+            else:
+                t0 = scalar2array(args["tstart"], size, "tstart", "volumes")
+            if isinstance(args["tstop"], str):
+                t1 = asarray_or_eval(args["tstop"])
+            else:
+                t1 = scalar2array(args["tstop"], size, "tstop", "volumes")
+            if len(t0) != size or len(t1) != size:
+                raise ValueError("The length of tstart/tstop should be equal to "
+                                 "volumes")
+            return t0, t1
+
     def create_vasp_sampling_nvt_tasks(self, override=False):
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
@@ -398,17 +464,26 @@ class TensorDB:
             if len(args) == 0:
                 continue
 
-            # Get the volumes and temperatures
-            volumes = args.get("volumes", [])
+            # Get the volumes. If the volumes is a string, eval it. 
+            volumes = asarray_or_eval(args.get("volumes", []))
             if len(volumes) == 0:
                 continue
             size = len(volumes)
-            n2 = "volumes"
 
-            # Get initial & final temperatures and steps
-            t0 = scalar2array(args["tstart"], size, "tstart", n2)
-            t1 = scalar2array(args["tstop"], size, "tstop", n2)
-            steps = scalar2array(args["nsteps"], size, "nsteps", n2).astype(int)
+            # Get the temperatures. 
+            vt_method = args.get("vt_method", "pair")
+            t0, t1 = self._get_temperatures(args, vt_method, size)
+
+            # Make (V, T) grid if needed
+            if vt_method == "grid":
+                _, t0 = np.meshgrid(volumes, t0)
+                volumes, t1 = np.meshgrid(volumes, t1)
+                volumes = volumes.flatten()
+                t0 = t0.flatten()
+                t1 = t1.flatten()
+
+            # Get the number of steps
+            steps = args["nsteps"]
 
             # Loop through the volumes
             for i, vol in enumerate(volumes):
@@ -431,7 +506,10 @@ class TensorDB:
                     taskdir = jobdir / taskname
                     taskdir.mkdir(exist_ok=True)
                     self.vasp.set(directory=str(taskdir))
-                    self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps[i])
+                    self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps)
+                    if self.is_finite_temperature:
+                        avg_temp = (t0[i] + t1[i]) / 2
+                        self.vasp.set(sigma=avg_temp * kB)
                     self.vasp.write_input(supercell)
                     metadata = {
                         "phase": str(phase),
@@ -439,7 +517,7 @@ class TensorDB:
                         "P/V": f"v{vol:.2f}",
                         "Tstart": int(t0[i]),
                         "Tstop": int(t1[i]),
-                        "nsw": int(steps[i]),
+                        "nsw": int(steps),
                     }
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
