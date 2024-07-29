@@ -66,6 +66,8 @@ def scalar2array(obj, size, n1=None, n2=None):
     """
     if hasattr(obj, "__len__"):
         if len(obj) != size:
+            if len(obj) == 1:
+                return np.asarray([obj[0]] * size)
             if n1 is not None and n2 is not None:
                 msg = f"The length of {n1} is not equal to {n2}"
             else:
@@ -179,6 +181,7 @@ def asarray_or_eval(array):
             return np.atleast_1d(z)
         else:
             return z
+
 
 class TensorDB:
     """
@@ -311,7 +314,7 @@ class TensorDB:
             xc=params.get("xc", "pbe"),
             setups=setups,
             ediff=params.get("ediff", 1e-6),
-            lreal=params.get("lreal", "False"),
+            lreal=params.get("lreal", False),
             prec=params.get("prec", "Accurate"),
             encut=params.get("encut", 500),
             ismear=params.get("ismear", 1),
@@ -322,7 +325,6 @@ class TensorDB:
             isif=params.get("isif", 2),
             ibrion=params.get("ibrion", -1),
             nsw=params.get("nsw", 1),
-            potim=params.get("potim", 0),
             nwrite=params.get("nwrite", 1),
             lcharg=params.get("lcharg", False),
             lwave=params.get("lwave", False),
@@ -370,8 +372,8 @@ class TensorDB:
             sigma = 0.0
         else:
             ismear = params.get("ismear", 0)
-            sigma = params.get("sigma", 0.1)
-        encut = params.get("encut", 350)
+            sigma = params.get("sigma", 0.05)
+        encut = params.get("encut", 500)
         ediff = params.get("ediff", 1e-5)
 
         # MDALGO = 3 for Langevin thermostat
@@ -414,7 +416,7 @@ class TensorDB:
         return newid, f"{newid}_{key}"
 
     @staticmethod
-    def _get_temperatures(args: dict, vt_method: str, size: int):
+    def _get_temperatures(args: dict, vt_method: str, size: int, npt=False):
         """
         Check the temperature related arguments.
         """
@@ -483,7 +485,7 @@ class TensorDB:
                 t1 = t1.flatten()
 
             # Get the number of steps
-            steps = args["nsteps"]
+            steps = args.get("nsteps", 5000)
 
             # Loop through the volumes
             for i, vol in enumerate(volumes):
@@ -565,17 +567,19 @@ class TensorDB:
                 continue
 
             # Get desired pressures
-            pressures = args.get("pressures", [])
+            pressures = asarray_or_eval(args.get("pressures", []))
             if len(pressures) == 0:
                 continue
             size = len(pressures)
 
-            # Get initial volumes, intial & final temperatures and steps
-            n2 = "pressures"
-            volumes = scalar2array(args["volumes"], size, "volumes", n2)
-            t0 = scalar2array(args["tstart"], size, "tstart", n2)
-            t1 = scalar2array(args["tstop"], size, "tstop", n2)
-            steps = scalar2array(args["nsteps"], size, "nsteps", n2).astype(int)
+            # Get temperatures
+            volumes = scalar2array(asarray_or_eval(args["volumes"]), size, 
+                                   n1="volumes", n2="pressures")
+            t0 = scalar2array(asarray_or_eval(args["tstart"]), size, 
+                              n1="tstart", n2="pressures")
+            t1 = scalar2array(asarray_or_eval(args["tstop"]), size, 
+                              n1="tstop", n2="pressures")
+            steps = args.get("nsteps", 5000)
 
             # Loop through the pressures
             for i, pressure in enumerate(pressures):
@@ -598,8 +602,11 @@ class TensorDB:
                     taskdir = jobdir / taskname
                     taskdir.mkdir(exist_ok=True)
                     self.vasp.set(directory=str(taskdir))
-                    self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps[i])
+                    self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps)
                     self.vasp.set(pstress=pressure * 10)
+                    if self.is_finite_temperature:
+                        avg_temp = (t0[i] + t1[i]) / 2
+                        self.vasp.set(sigma=avg_temp * kB)
                     self.vasp.write_input(supercell)
                     metadata = {
                         "phase": str(phase),
@@ -607,7 +614,7 @@ class TensorDB:
                         "P/V": f"{pressure}GPa",
                         "Tstart": int(t0[i]),
                         "Tstop": int(t1[i]),
-                        "nsw": int(steps[i]),
+                        "nsw": int(steps),
                     }
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
@@ -736,7 +743,9 @@ class TensorDB:
             trajectory = [
                 atoms
                 for atoms in read_vasp_xml(
-                    vasprun_xml, index=slice(0, None, 1), finite_temperature=False
+                    vasprun_xml, 
+                    index=slice(0, None, 1), 
+                    finite_temperature=self.is_finite_temperature
                 )
             ]
         except Exception as excp:
@@ -784,6 +793,9 @@ class TensorDB:
                 magmom = f"{len(atoms)}*{magmon_orig_value}"
         else:
             magmom = None
+        if self.is_finite_temperature:
+            self.prec_vasp.set(sigma=atoms.info['etemperature'])
+            self.prec_vasp.set(ismear=-1)
         return {"MAGMOM": magmom}
 
     def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
@@ -891,7 +903,8 @@ class TensorDB:
                 with open(taskdir / "INCAR", "a") as fp:
                     fp.write("\n")
                     for key, value in magmom_dct.items():
-                        fp.write(f" {key} = {value}\n")
+                        if value is not None:
+                            fp.write(f" {key} = {value}\n")
 
             subset_size[natoms][group_id] += 1
 
@@ -903,6 +916,8 @@ class TensorDB:
                 "group_id": group_id,
                 "task_id": task_id,
             }
+            if self.is_finite_temperature:
+                metadata["etemperature(K)"] = atoms.info["etemperature"] / kB
             with open(taskdir / "metadata.json", "w") as fp:
                 json.dump(metadata, fp, indent=2)
                 fp.write("\n")
