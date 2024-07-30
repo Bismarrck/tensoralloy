@@ -315,6 +315,7 @@ class TensorDB:
             setups=setups,
             ediff=params.get("ediff", 1e-6),
             lreal=params.get("lreal", False),
+            kspacing=params.get("kspacing", 0.2),
             prec=params.get("prec", "Accurate"),
             encut=params.get("encut", 500),
             ismear=params.get("ismear", 1),
