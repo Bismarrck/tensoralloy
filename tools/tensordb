@@ -457,6 +457,7 @@ class TensorDB:
         """
         workdir = self.root / "sampling"
         workdir.mkdir(exist_ok=True)
+        batch_jobs = []
 
         # The NVT vasp parameters
         self.setup_vasp_sampling_parameters(npt=False)
@@ -526,6 +527,9 @@ class TensorDB:
                         json.dump(metadata, fp, indent=2)
                         fp.write("\n")
                     print(f"[VASP/nvt/sampling/gen]: {taskdir}")
+                    batch_jobs.append(str(taskdir.relative_to('sampling')))
+        with open(workdir / "batch_jobs", "a") as fp:
+            fp.write("\n".join(batch_jobs) + "\n")
 
     @staticmethod
     def _get_npt_sampling_task(
@@ -557,6 +561,7 @@ class TensorDB:
         """
         workdir = self.root / "sampling"
         workdir.mkdir(exist_ok=True)
+        batch_jobs = []
 
         # The NPT vasp parameters
         self.setup_vasp_sampling_parameters(npt=True)
@@ -621,6 +626,9 @@ class TensorDB:
                         json.dump(metadata, fp, indent=2)
                         fp.write("\n")
                     print(f"[VASP/npt/sampling/gen]: {taskdir}")
+                    batch_jobs.append(str(taskdir.relative_to('sampling')))
+        with open(workdir / "batch_jobs", "a") as fp:
+            fp.write("\n".join(batch_jobs) + "\n")
 
     # --------------------------------------------------------------------------
     # Check the status of sampling jobs
