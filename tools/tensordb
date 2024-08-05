@@ -348,7 +348,7 @@ class TensorDB:
         Iterate through all AIMD sampling job dirs.
         """
         workdir = self.root / "sampling"
-        return workdir.glob("*/n[pv]t/*/?_*K_to_*K")
+        return workdir.glob("*/n[pv]t/*/*_*K_to_*K")
 
     def accurate_dft_calc_iterator(self):
         """
