@@ -1085,7 +1085,7 @@ class TensorDB:
         atoms.info["task_id"] = metadata["task_id"]
         return atoms
 
-    def gather(self, output_file="database.extxyz", nprocs=-2, check_job_status=False):
+    def gather(self, output_file=None, nprocs=-2, check_job_status=False):
         """
         Gather all completed high precision DFT calculations into a single file.
 
@@ -1109,6 +1109,10 @@ class TensorDB:
         )
         objects = [x for x in objects if x is not None]
         print(f"[VASP/gather]: total {len(objects)} structures gathered")
+
+        if output_file is None:
+            date = datetime.now().strftime("%Y%m%d")
+            output_file = f"database_N{len(objects)}_{date}.extxyz"
         write(output_file, objects, format="extxyz")
 
     # --------------------------------------------------------------------------
