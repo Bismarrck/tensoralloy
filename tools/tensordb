@@ -210,7 +210,7 @@ class TensorDB:
         """
         workdir = self.root / "structures"
         if not workdir.exists():
-            raise IOError(f"Cannot find the structures directory: {workdir}")
+            raise IOError(f"Cannot find the directory 'structures' in {str(self.root)}")
         structures = {}
         for phase in self.config["phases"]:
             if phase == "liquid":
@@ -264,7 +264,7 @@ class TensorDB:
         """
         Initialize the base VASP calculator.
         """
-        params = getitem(self.config, ["vasp"])
+        params = getitem(self.config, ["vasp", "pot"])
 
         # Setup the POTCARs path
         os.environ["VASP_PP_PATH"] = params["pp_path"]
@@ -278,10 +278,15 @@ class TensorDB:
                     setups[self.species[i]] = potcar[len(self.species[i]):]
         else:
             setups["base"] = "recommended"
+        xc = params.get("xc", "pbe")
+
+        # The NBANDS for VASP calculations.
+        self.vasp_nbands = {}
 
         # Initialize the VASP calculator for AIMD sampling jobs.
+        params = getitem(self.config, ["vasp", "sampling"])
         self.vasp = Vasp(
-            xc=params.get("xc", "pbe"),
+            xc=xc,
             setups=setups,
             ediff=params.get("ediff", 1e-5),
             lreal=params.get("lreal", "Auto"),
@@ -294,7 +299,7 @@ class TensorDB:
             nelmin=params.get("nelmin", 4),
             isif=params.get("isif", 2),
             ibrion=params.get("ibrion", 0),
-            nsw=params.get("nsw", 10000),
+            nsw=params.get("nsw", 5000),
             potim=params.get("potim", 1),
             nwrite=params.get("nwrite", 1),
             lcharg=params.get("lcharg", False),
@@ -308,8 +313,10 @@ class TensorDB:
             self.vasp.set(kpar=params["kpar"])
         if "ncore" in params:
             self.vasp.set(ncore=params["ncore"])
+        self.vasp_nbands["sampling"] = params.get("nbands", None)
 
         # Initialize the VASP calculator for high-precision DFT calculations.
+        params = getitem(self.config, ["vasp", "calc"])
         self.prec_vasp = Vasp(
             xc=params.get("xc", "pbe"),
             setups=setups,
@@ -338,6 +345,7 @@ class TensorDB:
             self.prec_vasp.set(kpar=params["kpar"])
         if "ncore" in params:
             self.prec_vasp.set(ncore=params["ncore"])
+        self.vasp_nbands["calc"] = params.get("nbands", None)
 
     # --------------------------------------------------------------------------
     # Iterators
@@ -361,27 +369,17 @@ class TensorDB:
     # Generate VASP AIMD sampling jobs
     # --------------------------------------------------------------------------
 
-    def setup_vasp_sampling_parameters(self, npt=False):
+    def init_vasp_sampling_parameters(self, npt=False):
         """
         Setup the sampling parameters for VASP.
         """
         params = getitem(self.config, ["vasp", "sampling"])
         gamma = params.get("langevin_gamma", 10)
-        if self.is_finite_temperature:
-            # The Mermin smearing method, sigma is reserved
-            ismear = -1
-            sigma = 0.0
-        else:
-            ismear = params.get("ismear", 0)
-            sigma = params.get("sigma", 0.05)
-        encut = params.get("encut", 500)
-        ediff = params.get("ediff", 1e-5)
 
         # MDALGO = 3 for Langevin thermostat
         # ISIF = 2 for NVT ensemble
         # LANGEVIN_GAMMA: Langevin friction coefficient for atom species
         self.vasp.set(mdalgo=3, langevin_gamma=[gamma] * len(self.species))
-        self.vasp.set(ismear=ismear, sigma=sigma, encut=encut, ediff=ediff)
 
         # Special parameters for Parrinello-Rahman NPT.
         # ISIF = 3 for NPT ensemble.
@@ -460,7 +458,7 @@ class TensorDB:
         batch_jobs = []
 
         # The NVT vasp parameters
-        self.setup_vasp_sampling_parameters(npt=False)
+        self.init_vasp_sampling_parameters(npt=False)
 
         for phase in self.phases:
             # The phase sampling parameters
@@ -513,7 +511,13 @@ class TensorDB:
                     self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps)
                     if self.is_finite_temperature:
                         avg_temp = (t0[i] + t1[i]) / 2
-                        self.vasp.set(sigma=avg_temp * kB)
+                        self.vasp.set(sigma=avg_temp * kB, ismear=-1)
+                    nbands = self.vasp_nbands["sampling"]
+                    if nbands is not None:
+                        if isinstance(nbands, dict):
+                            self.vasp.set(nbands=nbands[str(len(supercell))])
+                        else:
+                            self.vasp.set(nbands=nbands)
                     self.vasp.write_input(supercell)
                     metadata = {
                         "phase": str(phase),
@@ -805,6 +809,12 @@ class TensorDB:
         if self.is_finite_temperature:
             self.prec_vasp.set(sigma=atoms.info['etemperature'])
             self.prec_vasp.set(ismear=-1)
+        nbands = self.vasp_nbands["calc"]
+        if nbands is not None:
+            if isinstance(nbands, dict):
+                self.prec_vasp.set(nbands=nbands[str(len(atoms))])
+            else:
+                self.prec_vasp.set(nbands=nbands)
         return {"MAGMOM": magmom}
 
     def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
