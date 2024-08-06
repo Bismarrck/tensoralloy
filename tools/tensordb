@@ -1214,8 +1214,8 @@ class TensorDB:
             ax.set_ylabel("Temperature (K)")
 
             ax = axes[1, 1]
-            ax.plot(fnorms, temperatures, "o", markersize=2)
-            ax.set_xlabel("Force norm (eV/$\AA$)")
+            ax.plot(pressures, temperatures, "o", markersize=2)
+            ax.set_xlabel("Pressure (GPa)")
             ax.set_ylabel("Temperature (K)")
         else:
             ax = axes[1, 0]
