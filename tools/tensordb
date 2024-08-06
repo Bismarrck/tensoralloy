@@ -1076,9 +1076,9 @@ class TensorDB:
             su = ServiceUnit(**metadata["SU"])
             if su.hours <= 0:
                 return None
-        atoms = next(
-            read_vasp_xml(taskdir / "vasprun.xml", finite_temperature=False, index=0)
-        )
+        atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
+                                   finite_temperature=self.is_finite_temperature, 
+                                   index=0))
         atoms.info["hash"] = metadata["hash"]
         atoms.info["aid"] = metadata["aid"]
         atoms.info["group_id"] = metadata["group_id"]
@@ -1115,8 +1115,7 @@ class TensorDB:
     # Plot
     # --------------------------------------------------------------------------
 
-    @staticmethod
-    def plot(filename: Path, figname=None, rcut=6.0):
+    def plot(self, filename: Path, figname=None, rcut=6.0):
         """
         Plot the database file. Currently, four plots are generated:
 
@@ -1144,6 +1143,7 @@ class TensorDB:
         stresses = []
         pressures = []
         rdf = {}
+        temperatures = []
         for atoms in tqdm.tqdm(trajectory):
             natoms = len(atoms)
             volumes.append(atoms.get_volume() / natoms)
@@ -1152,6 +1152,8 @@ class TensorDB:
             fnorms.append(np.sqrt(np.sum(atoms.get_forces() ** 2) / natoms))
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
             pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
+            if self.is_finite_temperature:
+                temperatures.append(atoms.info["etemperature"] / kB)
             species = atoms.get_chemical_symbols()
             ilist, jlist, dlist = neighbor_list("ijd", atoms, cutoff=rcut)
             for i, j, d in zip(ilist, jlist, dlist):
@@ -1190,16 +1192,27 @@ class TensorDB:
         ax.plot(x, fx, label="Volume")
         ax.set_xlabel("Volume ($\AA^3$)")
         ax.set_ylabel("Scaled Density")
+    
+        if self.is_finite_temperature:
+            ax = axes[1, 0]
+            ax.plot(volumes, temperatures, "o", markersize=2)
+            ax.set_xlabel("Volume ($\AA^3$)")
+            ax.set_ylabel("Temperature (K)")
 
-        ax = axes[1, 0]
-        ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.6))
-        ax.set_xlabel("Pressure (GPa)")
-        ax.set_ylabel("Energy (eV/atom)")
+            ax = axes[1, 1]
+            ax.plot(fnorms, temperatures, "o", markersize=2)
+            ax.set_xlabel("Force norm (eV/$\AA$)")
+            ax.set_ylabel("Temperature (K)")
+        else:
+            ax = axes[1, 0]
+            ax.plot(pressures, energies, "o", markersize=2, color=cmap(0.6))
+            ax.set_xlabel("Pressure (GPa)")
+            ax.set_ylabel("Energy (eV/atom)")
 
-        ax = axes[1, 1]
-        ax.plot(pressures, fnorms, "o", markersize=2, color=cmap(0.8))
-        ax.set_xlabel("Pressure (GPa)")
-        ax.set_ylabel("Force norm (eV/$\AA$)")
+            ax = axes[1, 1]
+            ax.plot(pressures, fnorms, "o", markersize=2, color=cmap(0.8))
+            ax.set_xlabel("Pressure (GPa)")
+            ax.set_ylabel("Force norm (eV/$\AA$)")
 
         ax = axes[1, 2]
         for key in rdf:
@@ -1310,7 +1323,7 @@ def main():
     elif args.command == "gather":
         db.gather()
     elif args.command == "plot":
-        TensorDB.plot(filename=args.filename, rcut=args.rcut)
+        db.plot(filename=args.filename, rcut=args.rcut)
 
 
 if __name__ == "__main__":
