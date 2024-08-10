@@ -1122,7 +1122,9 @@ class TensorDB:
 
         if output_file is None:
             date = datetime.now().strftime("%Y%m%d")
-            output_file = f"database_N{len(objects)}_{date}.extxyz"
+            output_dir = self.root / "database"
+            output_dir.mkdir(exist_ok=True)
+            output_file = output_dir / f"database_N{len(objects)}_{date}.extxyz"
         write(output_file, objects, format="extxyz")
 
     # --------------------------------------------------------------------------
