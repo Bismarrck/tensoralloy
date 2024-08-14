@@ -603,8 +603,11 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                                     pred_vals[prop].extend(
                                         predictions_[prop].flatten() / GPa)
                                 else:
-                                    true_vals[prop].extend(labels_[prop])
-                                    pred_vals[prop].extend(predictions_[prop])
+                                    # Convert to meV/K/atom
+                                    true_vals[prop].extend(
+                                        labels_[prop] / n_atoms_ * kB * 1000)
+                                    pred_vals[prop].extend(
+                                        predictions_[prop] / n_atoms_ * kB * 1000)
 
                 data = {x: [] for x in properties}
                 data['percentile'] = []
@@ -638,7 +641,7 @@ class ComputeEvaluationPercentileProgram(CLIProgram):
                     'energy': 'Energy (meV/atom)',
                     'forces': 'Force (eV/Ang)',
                     'stress': 'Stress (GPa)',
-                    'eentropy': 'EENTRO (kB/atom)'
+                    'eentropy': 'EENTRO (meV/K/atom)',
                 }
                 rename_cols = {old: new for old, new in name_mapping.items()
                                if old in dataframe.columns.to_list()}
