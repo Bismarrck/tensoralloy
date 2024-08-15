@@ -1243,7 +1243,7 @@ class TensorDB:
         plt.tight_layout()
 
         if figname is None:
-            figname = filename.name.replace(filename.suffix, ".png")
+            figname = filename.parent / filename.name.replace(filename.suffix, ".png")
         plt.savefig(figname, dpi=150)
         plt.close()
 
