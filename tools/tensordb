@@ -10,9 +10,7 @@ import json
 import tqdm
 import hashlib
 import matplotlib
-import re
 from datetime import datetime
-from dataclasses import dataclass
 from pathlib import Path
 from ase.io import read, write
 from ase import Atoms
@@ -24,31 +22,8 @@ from subprocess import PIPE, Popen
 from argparse import ArgumentParser
 from collections import Counter
 from tensoralloy.io.vasp import read_vasp_xml
+from tensordb.vaspkit import ServiceUnit, VaspJob
 from matplotlib import pyplot as plt
-
-
-@dataclass(frozen=True)
-class ServiceUnit:
-    """
-    The data structure for estimating VASP costs.
-
-    Attributes
-    ----------
-    device : str
-        The device type, cpu or gpu.
-    n : int
-        The number of CPUs or GPUs used for this task.
-    t : float
-        The walltime in seconds for this task.
-    hours : float
-        The total deivce hours.
-
-    """
-
-    device: str = "cpu"
-    n: int = 0
-    elapsed: float = 0.0
-    hours: float = 0.0
 
 
 def getitem(obj, keys):
@@ -76,97 +51,6 @@ def scalar2array(obj, size, n1=None, n2=None):
         return np.asarray(obj)
     else:
         return np.asarray([obj] * size)
-
-
-def get_vasp_elapsed_time(outcar):
-    """
-    Get the elapsed time (seconds) of a VASP job given its OUTCAR.
-    """
-    cmd = f"tail -n 10 {str(outcar)} | grep Elapsed"
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, _ = p.communicate()
-    if p.returncode != 0:
-        return -1.0
-    return float(stdout.decode().split()[3])
-
-
-def get_vasp_mpi_omp_ranks(outcar):
-    """
-    Get the number of mpi and openmp ranks of a VASP job given its OUTCAR.
-    """
-    cmd = f"head -n 10 {str(outcar)} | grep mpi-ranks"
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, _ = p.communicate()
-    if p.returncode == 0:
-        values = stdout.decode().split()
-        mpi = int(values[1])
-        omp = int(values[4])
-        return mpi, omp
-    else:
-        return 0, 0
-
-
-def get_vasp_running_device(outcar):
-    """
-    Return the deivce (cpu or gpu) used to run the VASP job.
-    """
-    cmd = f"head -n 10 {str(outcar)} | grep GPUs"
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    p.communicate()
-    if p.returncode == 0:
-        return "gpu"
-    else:
-        return "cpu"
-
-
-def get_vasp_job_service_unit(outcar) -> ServiceUnit:
-    """
-    Get the service unit (SU) of a completed VASP job.
-    """
-    if not outcar.exists():
-        return None
-    elapsed = get_vasp_elapsed_time(outcar)
-    if elapsed < 0:
-        return None
-    mpi, omp = get_vasp_mpi_omp_ranks(outcar)
-    device = get_vasp_running_device(outcar)
-    if device == "gpu":
-        hours = mpi * elapsed / 3600.0
-    else:
-        hours = mpi * omp * elapsed / 3600.0
-    return ServiceUnit(device, mpi, elapsed, hours)
-
-
-def check_vasp_job_scf_convergence(outcar):
-    """
-    Check the SCF convergence of a VASP job.
-    """
-    outcar = Path(outcar)
-    oszicar = outcar.parent / "OSZICAR"
-    if not oszicar.exists():
-        return False
-    ediff_patt = re.compile(
-        r"\s+EDIFF\s+=\s+([0-9\-+E.]+)\s+stopping-criterion.*")
-    scf_patt = re.compile(r"(DAV|RMM):\s+(\d+)\s+([0-9\-+E.]+)\s+([0-9\-+E.]+)\s+(.*)")
-    ediff = 1e-6
-    with open(outcar) as fp:
-        for ln, line in enumerate(fp):
-            m = ediff_patt.search(line)
-            if m:
-                ediff = float(m.group(1))
-                break
-            if ln > 2000:
-                return False
-    dE = ediff * 10.0
-    with open(oszicar) as fp:
-        for line in fp:
-            m = scf_patt.search(line)
-            if m:
-                dE = abs(float(m.group(4)))
-    if dE <= ediff:
-        return True
-    else:
-        return False
 
 
 def asarray_or_eval(array):
@@ -686,7 +570,8 @@ class TensorDB:
             return status
 
         # The simulation is finished
-        su = get_vasp_job_service_unit(jobdir / "OUTCAR")
+        job = VaspJob(jobdir)
+        su = job.get_service_unit()
         status["device"] = su.device
         status["SU"] = np.round(su.hours, 2)
         with open(metadata, "w") as fp:
@@ -1003,10 +888,11 @@ class TensorDB:
                         "converged_tasks": [],
                     }
                 )
-            su = get_vasp_job_service_unit(taskdir / "OUTCAR")
+            job = VaspJob(taskdir)
+            su = job.get_vasp_job_service_unit()
             if su is None:
                 continue
-            converged = check_vasp_job_scf_convergence(taskdir / "OUTCAR")
+            converged = job.check_vasp_job_scf_convergence()
             if converged:
                 accumulator[key]["n_converged"] += 1
                 accumulator[key]["converged_tasks"].append(str(taskdir))
@@ -1067,10 +953,11 @@ class TensorDB:
         Gather one completed high precision DFT calculation.
         """
         if check_job_status:
-            su = get_vasp_job_service_unit(taskdir / "OUTCAR")
+            job = VaspJob(taskdir)
+            su = job.get_vasp_job_service_unit()
             if su is None:
                 return None
-            converged = check_vasp_job_scf_convergence(taskdir / "OUTCAR")
+            converged = job.check_vasp_job_scf_convergence()
             if not converged:
                 return None
         else:
