@@ -23,48 +23,9 @@ from argparse import ArgumentParser
 from collections import Counter
 from tensoralloy.io.vasp import read_vasp_xml
 from tensordb.vaspkit import ServiceUnit, VaspJob
+from tensordb.sampler import VaspAimdSampler
+from tensordb.utils import asarray_or_eval, scalar2array, getitem
 from matplotlib import pyplot as plt
-
-
-def getitem(obj, keys):
-    """
-    Get the item from the nested dictionary.
-    """
-    for key in keys:
-        obj = obj.get(key, {})
-    return obj
-
-
-def scalar2array(obj, size, n1=None, n2=None):
-    """
-    Convert the scalar to an array.
-    """
-    if hasattr(obj, "__len__"):
-        if len(obj) != size:
-            if len(obj) == 1:
-                return np.asarray([obj[0]] * size)
-            if n1 is not None and n2 is not None:
-                msg = f"The length of {n1} is not equal to {n2}"
-            else:
-                msg = f"The length of obj is not equal to {size}"
-            raise ValueError(msg)
-        return np.asarray(obj)
-    else:
-        return np.asarray([obj] * size)
-
-
-def asarray_or_eval(array):
-    """
-    Convert the 'array' to an array by eval if it is a string.
-    """
-    if isinstance(array, str):
-        return eval(array)
-    else:
-        z = np.asarray(array)
-        if z.ndim == 0:
-            return np.atleast_1d(z)
-        else:
-            return z
 
 
 class TensorDB:
@@ -87,6 +48,7 @@ class TensorDB:
         self.phases = self.config["phases"]
         self.base_phase_structures = self.init_phases()
         self.init_vasp()
+        self.samplers = [VaspAimdSampler(self.config), ]
 
     def init_phases(self):
         """
@@ -571,7 +533,7 @@ class TensorDB:
 
         # The simulation is finished
         job = VaspJob(jobdir)
-        su = job.get_service_unit()
+        su = job.get_vasp_job_service_unit()
         status["device"] = su.device
         status["SU"] = np.round(su.hours, 2)
         with open(metadata, "w") as fp:

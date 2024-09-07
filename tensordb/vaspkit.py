@@ -79,11 +79,11 @@ class VaspJob:
         """
         if not self.outcar.exists():
             return None
-        elapsed = self.get_vasp_elapsed_time(self.outcar)
+        elapsed = self.get_vasp_elapsed_time()
         if elapsed < 0:
             return None
-        mpi, omp = self.get_vasp_mpi_omp_ranks(self.outcar)
-        device = self.get_vasp_running_device(self.outcar)
+        mpi, omp = self.get_vasp_mpi_omp_ranks()
+        device = self.get_running_device()
         if device == "gpu":
             hours = mpi * elapsed / 3600.0
         else:
