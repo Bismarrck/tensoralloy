@@ -34,6 +34,34 @@ class VaspJob:
     def __init__(self, jobdir: Path) -> None:
         self.jobdir = jobdir
         self.outcar = jobdir / "OUTCAR"
+        self.params = {}
+    
+    def get_incar_parameter(self, key: str) -> str:
+        """
+        Return the string value of a given INCAR parameter.
+        """
+        if not self.params:
+            self._parse_incar()
+        return self.params.get(key.lower(), None)
+
+    def _parse_incar(self):
+        """
+        A private method to parse the INCAR file of a VASP job.
+        """
+        incar = self.jobdir / "INCAR"
+        if not incar.exists():
+            return
+        with open(incar) as fp:
+            for ln, line in enumerate(fp):
+                if ln == 0:
+                    continue
+                line = line.strip()
+                if line.startswith("#"):
+                    continue
+                if line == "":
+                    continue
+                key, value = line.split("=")
+                self.params[key.strip().lower()] = value.strip()
 
     def get_running_device(self) -> str:
         """
@@ -94,7 +122,7 @@ class VaspJob:
         """
         Check the SCF convergence of a VASP job.
         """
-        outcar = Path(outcar)
+        outcar = Path(self.outcar)
         oszicar = outcar.parent / "OSZICAR"
         if not oszicar.exists():
             return False

@@ -151,7 +151,6 @@ class TensorDB:
             lcharg=params.get("lcharg", False),
             lwave=params.get("lwave", False),
             nblock=params.get("nblock", 1),
-            maxmix=params.get("maxmix", 60),
         )
         if "npar" in params:
             self.vasp.set(npar=params["npar"])
@@ -183,7 +182,6 @@ class TensorDB:
             lcharg=params.get("lcharg", False),
             lwave=params.get("lwave", False),
             nblock=params.get("nblock", 1),
-            maxmix=params.get("maxmix", 60),
         )
         if "npar" in params:
             self.prec_vasp.set(npar=params["npar"])
