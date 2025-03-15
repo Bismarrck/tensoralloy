@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import numpy as np
 import re
 from dataclasses import dataclass
 from subprocess import Popen, PIPE
@@ -137,7 +138,7 @@ class VaspJob:
                 if m:
                     ediff = float(m.group(1))
                     break
-                if ln > 2000:
+                if ln > 5000:
                     return False
         dE = ediff * 10.0
         with open(oszicar) as fp:
@@ -149,3 +150,75 @@ class VaspJob:
             return True
         else:
             return False
+    
+    def get_band_occupation(self):
+        """
+        Get the band occupation of a VASP job.
+        """
+        outcar = Path(self.outcar)
+        if not outcar.exists():
+            return None
+        nkpts_patt = re.compile(r"k-points\s+NKPTS\s=\s+(\d+).*NBANDS=\s+(\d+)")
+        nsw_patt = re.compile(r"\s+NSW\s+=\s+(\d+)\s+number\sof\ssteps\sfor\sIOM")
+        headers_patt = re.compile(r"\sband\sNo.\s+band\senergies\s+occupation")
+        ispin_patt = re.compile(r"\s+ISPIN\s+=\s+(\d)\s+spin\spolarized\scalculation")
+        nbands = None
+        nkpoints = None
+        occupations = None
+        ikpt = 0
+        ispin = -1
+        iband = 0
+        stage = 0
+        with open(outcar) as fp:
+            for line in fp:
+                if stage == 0:
+                    m = nkpts_patt.search(line)
+                    if m:
+                        nkpoints = int(m.group(1))
+                        nbands = int(m.group(2))
+                        occupations = np.zeros((nkpoints, nbands))
+                        stage = 1
+                elif stage == 1:
+                    m = ispin_patt.search(line)
+                    if m:
+                        ispin = int(m.group(1))
+                        stage = 2
+                elif stage == 2:
+                    m = nsw_patt.search(line)
+                    if m: 
+                        if int(m.group(1)) > 1:
+                            raise ValueError("The current implementation of "
+                                             "get_band_occupation() only works for "
+                                             "single point calculation!")
+                        stage = 3
+                elif stage == 3:
+                    m = headers_patt.search(line)
+                    if m:
+                        ikpt += 1
+                        stage = 4
+                elif stage == 4:
+                    values = line.split()
+                    if len(values) != 3:
+                        raise ValueError("Failed to parse the band occupation!")
+                    iband = int(values[0])
+                    occupations[ikpt - 1, iband - 1] = float(values[2])
+                    if iband == nbands:
+                        if ikpt == nkpoints:
+                            break
+                        stage = 3
+        return ispin, occupations
+    
+    def check_band_occ(self, threshold=0.0001, check_lowest=False):
+        """
+        Check if the band occupations are reasonable.
+        The occupation number of the highest band should be close to zero.
+        For high-temperature calculations, the occupation number of the lowest band 
+        should be close to one (spin localized) or two (non spin localized).
+        """
+        ispin, occupations = self.get_band_occupation()
+        if occupations[:, -1].max() > threshold:
+            return False
+        if check_lowest:
+            if occupations[:, 0].min() < ispin * 0.99:
+                return False
+        return True
