@@ -4,13 +4,17 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import hashlib
 from datetime import datetime
 from subprocess import Popen, PIPE
 from ase.units import kB
 from ase.calculators.vasp import Vasp
+from ase.io import write, read
 from pathlib import Path
+from collections import Counter
 from tensordb.utils import getitem, asarray_or_eval, scalar2array
 from tensordb.vaspkit import VaspJob
+from tensoralloy.io.vasp import read_vasp_xml
 
 
 class VaspAimdSampler:
@@ -245,7 +249,14 @@ class VaspAimdSampler:
                         self.vasp.set(sigma=avg_temp * kB, ismear=-1)
                     nbands = self.vasp_nbands["sampling"]
                     if nbands is not None:
-                        if isinstance(nbands, dict):
+                        if isinstance(nbands, str) and nbands.startswith("lambda"):
+                            a = supercell
+                            n = len(a)
+                            v = a.get_volume() / n
+                            t = max(t0[i], t1[i])
+                            nval = eval(nbands)(a, n, v, t)
+                            self.vasp.set(nbands=nval)
+                        elif isinstance(nbands, dict):
                             self.vasp.set(nbands=nbands[str(len(supercell))])
                         else:
                             self.vasp.set(nbands=nbands)
@@ -463,3 +474,348 @@ class VaspAimdSampler:
             status = self.update_status_of_sampling_job(task)
             if status.get("nrun", -1) < 0:
                 print(task)
+    
+    # --------------------------------------------------------------------------
+    # Post-processing
+    # --------------------------------------------------------------------------
+
+    def post_process_sampling_job(self, jobdir: Path):
+        """
+        Post-processing a sampling job.
+        """
+        # Check if the job is finished
+        if not self._is_sampling_job_finished(jobdir):
+            return
+        # Check if the vasprun.xml file exists
+        vasprun_xml = jobdir / "vasprun.xml"
+        if not vasprun_xml.exists():
+            return
+        # Check if the trajectory file exists
+        output_file = jobdir / "trajectory.extxyz"
+        if output_file.exists():
+            return
+        # Read the xml file using the api `tensoralloy.io.vasp.read_vasp_xml`
+        try:
+            trajectory = [
+                atoms
+                for atoms in read_vasp_xml(
+                    vasprun_xml, 
+                    index=slice(0, None, 1), 
+                    finite_temperature=self.is_finite_temperature
+                )
+            ]
+        except Exception as excp:
+            print(f"[VASP/sampling/postprocess]: FAILED to read {vasprun_xml}")
+            return
+        if len(trajectory) == 0:
+            return
+        # Add the source information to the atoms.info
+        for i, atoms in enumerate(trajectory):
+            src = f"{str(jobdir)}@{i}"
+            atoms.info["_source"] = src
+            atoms.info["_hash"] = hashlib.md5(src.encode()).hexdigest()
+        # Save the trajectory to an extxyz file
+        write(output_file, trajectory, format="extxyz")
+        print(f"[VASP/sampling/postprocess]: {jobdir}")
+
+    def post_process_all_sampling_jobs(self):
+        """
+        Post-processing all sampling jobs.
+        """
+        for task in self.sampling_task_iterator():
+            self.post_process_sampling_job(task)
+
+
+class VaspHighPrecDftCalculator:
+    """
+    The fundamental DFT calculator.
+    """
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.species = self.config["species"]
+        self.phases = self.config["phases"]
+
+    # --------------------------------------------------------------------------
+    # High-precision DFT calculations
+    # --------------------------------------------------------------------------
+
+    def setup_vasp_accurate_dft_parameters(self, atoms):
+        """
+        Setup the parameters for high-precision DFT calculations.
+
+        ASE doe not implement the non-collinear settings, so we should hack it.
+        """
+        params = getitem(self.config, ["vasp", "calc"])
+        magmon_orig_value = None
+        for key, value in params.items():
+            if key == "magmom":
+                magmon_orig_value = value
+            else:
+                self.prec_vasp.set(**{key: value})
+        if magmon_orig_value is not None:
+            if self.prec_vasp.bool_params["lsorbit"]:
+                magmom = f"{len(atoms)*3}*{magmon_orig_value}"
+            else:
+                magmom = f"{len(atoms)}*{magmon_orig_value}"
+        else:
+            magmom = None
+        if self.is_finite_temperature:
+            self.prec_vasp.set(sigma=atoms.info['etemperature'])
+            self.prec_vasp.set(ismear=-1)
+        nbands = self.vasp_nbands["calc"]
+        if nbands is not None:
+            if isinstance(nbands, str) and nbands.startswith("lambda"):
+                a = atoms
+                n = len(a)
+                v = a.get_volume() / n
+                t = atoms.info['etemperature']
+                nval = eval(nbands)(a, n, v, t)
+                self.prec_vasp.set(nbands=nval)
+            elif isinstance(nbands, dict):
+                self.prec_vasp.set(nbands=nbands[str(len(atoms))])
+            else:
+                self.prec_vasp.set(nbands=nbands)
+        return {"MAGMOM": magmom}
+
+    def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
+        """
+        Create VASP high precision DFT calculation tasks.
+        """
+        workdir = self.root / "calc"
+        workdir.mkdir(exist_ok=True)
+
+        # The global hash table
+        hash_file = workdir / "hash.json"
+
+        # The global training structures file
+        calc_file = workdir / "accurate_dft_calc.extxyz"
+
+        # May read existing results
+        if hash_file.exists():
+            with open(hash_file, "r") as fp:
+                hash_table = json.load(fp)
+            calc_list = read(calc_file, index=":")
+            if len(calc_list) != len(hash_table):
+                raise IOError(
+                    f"{calc_file}(n={len(calc_list)}) does not "
+                    f"match with {hash_file}(n={len(hash_table)})!"
+                )
+        else:
+            hash_table = {}
+            calc_list = []
+
+        # Initialize the subsets
+        subset_id = Counter()
+        for atoms in calc_list:
+            subset_id[len(atoms)] += 1
+
+        # Loop through all sampling tasks
+        for task in self.sampling_task_iterator():
+            # Check if the trajectory file exists
+            trajectory = task / "trajectory.extxyz"
+            if not trajectory.exists():
+                continue
+            # Read the trajectory file
+            full = read(trajectory, index=slice(0, None, 1))
+            if shuffle:
+                size = len(full) // interval
+                selected = np.random.choice(
+                    full[interval - 1 :], size=size, replace=False
+                )
+            else:
+                # Select the last snapshot of each block(size=interval)
+                selected = full[interval - 1 :: interval]
+            for atoms in selected:
+                hash_id = atoms.info["_hash"]
+                src = atoms.info["_source"]
+                if hash_id in hash_table:
+                    continue
+                else:
+                    calc_list.append(atoms)
+                    natoms = len(atoms)
+                    aid = f"{natoms}.{subset_id[natoms]}"
+                    hash_table[hash_id] = {"aid": aid, "source": src}
+                    subset_id[len(atoms)] += 1
+
+        # Save the hash table
+        with open(hash_file, "w") as fp:
+            json.dump(hash_table, fp, indent=2)
+            fp.write("\n")
+
+        # Save the structures
+        write(calc_file, calc_list, format="extxyz")
+
+        # Create VASP jobs
+        subset_size = Counter()
+        for atoms in calc_list:
+            # The original structure id
+            aid = hash_table[atoms.info["_hash"]]["aid"]
+
+            # For structures of different sizes, we may use different CPU/GPU
+            # settings. Hence, 'natoms' is the first metric for makeing subsets.
+            natoms = len(atoms)
+            subsetdir = workdir / f"{natoms}atoms"
+            subsetdir.mkdir(exist_ok=True)
+            if natoms not in subset_size:
+                subset_size[natoms] = Counter()
+
+            # The group id. Each group contains 100 structures at most.
+            sid = int(aid.split(".")[1])
+            group_id = sid // 100
+            groupdir = subsetdir / f"group{group_id}"
+            groupdir.mkdir(exist_ok=True)
+
+            # The task id.
+            task_id = sid % 100
+            taskdir = groupdir / f"task{task_id}"
+            taskdir.mkdir(exist_ok=True)
+
+            # Setup the VASP calculator
+            magmom_dct = self.setup_vasp_accurate_dft_parameters(atoms)
+
+            # Write the input files
+            self.prec_vasp.set(directory=str(taskdir))
+            self.prec_vasp.write_input(atoms)
+
+            # Hack the MAGMOM tag for non-collinear calculations
+            if magmom_dct is not None:
+                with open(taskdir / "INCAR", "a") as fp:
+                    fp.write("\n")
+                    for key, value in magmom_dct.items():
+                        if value is not None:
+                            fp.write(f" {key} = {value}\n")
+
+            subset_size[natoms][group_id] += 1
+
+            # Write the metadata
+            metadata = {
+                "source": atoms.info["_source"],
+                "hash": atoms.info["_hash"],
+                "aid": aid,
+                "group_id": group_id,
+                "task_id": task_id,
+            }
+            if self.is_finite_temperature:
+                metadata["etemperature(K)"] = atoms.info["etemperature"] / kB
+            with open(taskdir / "metadata.json", "w") as fp:
+                json.dump(metadata, fp, indent=2)
+                fp.write("\n")
+
+        for natoms, group_size in subset_size.items():
+            for group_id, size in group_size.items():
+                print(
+                    f"[VASP/calc/create/{natoms}]: " f"group{group_id} ({size} tasks)"
+                )
+
+    def get_accurate_dft_calculation_status(self):
+        """
+        Get the status of high precision dft calculations.
+        """
+
+        # Determine the total number of prepared jobs
+        hash_file = self.root / "calc" / "hash.json"
+        if not hash_file.exists():
+            return
+        with open(hash_file) as fp:
+            hash_table = json.load(fp)
+        subset_size = Counter()
+        for key, value in hash_table.items():
+            aid = value["aid"]
+            i, j = [int(x) for x in aid.split(".")]
+            subset_size[i] = max(subset_size[i], j + 1)
+
+        status = {
+            "group": [],
+            "total_jobs": [],
+            "completed_jobs": [],
+            "converged_jobs": [],
+            "CPU(jobs)": [],
+            "CPU(hours)": [],
+            "GPU(jobs)": [],
+            "GPU(hours)": [],
+        }
+        accumulator = {}
+
+        # Loop through all prepared jobs
+        for taskdir in self.accurate_dft_calc_iterator():
+            metadata = taskdir / "metadata.json"
+            if not metadata.exists():
+                continue
+            with open(metadata, "r") as fp:
+                metadata = json.load(fp)
+            sid, aid = [int(x) for x in metadata["aid"].split(".")]
+            gid = metadata["group_id"]
+            key = (sid, gid)
+            if key not in accumulator:
+                if (gid + 1) * 100 <= subset_size[sid]:
+                    n_total = 100
+                else:
+                    n_total = aid % 100
+                accumulator[key] = Counter(
+                    {
+                        "CPU(hours)": 0.0,
+                        "GPU(hours)": 0.0,
+                        "CPU(jobs)": 0,
+                        "GPU(jobs)": 0,
+                        "n_converged": 0,
+                        "n_total": n_total,
+                        "completed_tasks": [],
+                        "converged_tasks": [],
+                    }
+                )
+            job = VaspJob(taskdir)
+            su = job.get_vasp_job_service_unit()
+            if su is None:
+                continue
+            converged = job.check_vasp_job_scf_convergence()
+            if converged:
+                accumulator[key]["n_converged"] += 1
+                accumulator[key]["converged_tasks"].append(str(taskdir))
+            accumulator[key]["n_completed"] += 1
+            accumulator[key]["completed_tasks"].append(str(taskdir))
+            if su.device == "cpu":
+                accumulator[key]["CPU(hours)"] += su.hours
+                accumulator[key]["CPU(jobs)"] += 1
+            else:
+                accumulator[key]["GPU(hours)"] += su.hours
+                accumulator[key]["GPU(jobs)"] += 1
+            # Update the metadata
+            with open(taskdir / "metadata.json", "w") as fp:
+                metadata["SU"] = su.__dict__
+                metadata["converged"] = converged
+                json.dump(metadata, fp, indent=2)
+                fp.write("\n")
+
+        # Save the group metadata
+        for key in accumulator:
+            sid, gid = key
+            groupdir = Path(f"calc/{sid}atoms/group{gid}")
+            with open(groupdir / "metadata.json", "w") as fp:
+                json.dump(accumulator[key], fp, indent=2)
+                fp.write("\n")
+
+        # Print the status
+        for key, value in accumulator.items():
+            status["group"].append(f"{key[0]}.g{key[1]}")
+            status["total_jobs"].append(value["n_total"])
+            status["converged_jobs"].append(value["n_converged"])
+            status["completed_jobs"].append(value["n_completed"])
+            status["CPU(jobs)"].append(value["CPU(jobs)"])
+            status["GPU(jobs)"].append(value["GPU(jobs)"])
+            status["CPU(hours)"].append(np.round(value["CPU(hours)"], 2))
+            status["GPU(hours)"].append(np.round(value["GPU(hours)"], 2))
+        status["group"].append("overall")
+        status["total_jobs"].append(sum(status["total_jobs"]))
+        status["CPU(jobs)"].append(sum(status["CPU(jobs)"]))
+        status["GPU(jobs)"].append(sum(status["GPU(jobs)"]))
+        status["CPU(hours)"].append(sum(status["CPU(hours)"]))
+        status["GPU(hours)"].append(sum(status["GPU(hours)"]))
+        status["completed_jobs"].append(sum(status["completed_jobs"]))
+        status["converged_jobs"].append(sum(status["converged_jobs"]))
+        df = pd.DataFrame(status)
+        df.set_index("group", inplace=True)
+        print(df.to_string())
+        with open(self.root / "calc" / "status", "w") as fp:
+            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            df.to_string(fp)
