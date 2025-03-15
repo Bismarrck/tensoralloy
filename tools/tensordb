@@ -358,7 +358,14 @@ class TensorDB:
                         self.vasp.set(sigma=avg_temp * kB, ismear=-1)
                     nbands = self.vasp_nbands["sampling"]
                     if nbands is not None:
-                        if isinstance(nbands, dict):
+                        if isinstance(nbands, str) and nbands.startswith("lambda"):
+                            a = supercell
+                            n = len(a)
+                            v = a.get_volume() / n
+                            t = max(t0[i], t1[i])
+                            nval = eval(nbands)(a, n, v, t)
+                            self.vasp.set(nbands=nval)
+                        elif isinstance(nbands, dict):
                             self.vasp.set(nbands=nbands[str(len(supercell))])
                         else:
                             self.vasp.set(nbands=nbands)
@@ -656,7 +663,14 @@ class TensorDB:
             self.prec_vasp.set(ismear=-1)
         nbands = self.vasp_nbands["calc"]
         if nbands is not None:
-            if isinstance(nbands, dict):
+            if isinstance(nbands, str) and nbands.startswith("lambda"):
+                a = atoms
+                n = len(a)
+                v = a.get_volume() / n
+                t = atoms.info['etemperature']
+                nval = eval(nbands)(a, n, v, t)
+                self.prec_vasp.set(nbands=nval)
+            elif isinstance(nbands, dict):
                 self.prec_vasp.set(nbands=nbands[str(len(atoms))])
             else:
                 self.prec_vasp.set(nbands=nbands)
