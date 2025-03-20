@@ -7,8 +7,10 @@ import json
 import hashlib
 from datetime import datetime
 from subprocess import Popen, PIPE
+from ase import Atoms
 from ase.units import kB
 from ase.calculators.vasp import Vasp
+from ase.build import bulk
 from ase.io import write, read
 from pathlib import Path
 from collections import Counter
@@ -17,15 +19,63 @@ from tensordb.vaspkit import VaspJob
 from tensoralloy.io.vasp import read_vasp_xml
 
 
-class VaspAimdSampler:
+class VaspSampler:
+
+    def __init__(self, root, config: dict):
+        """
+        Initialize the VASP sampler.
+        """
+        self.root = root
+        self.config = config
+        self.species = self.config["species"]
+        self.phases = self.config["phases"]
+        self.workdir = root
+    
+    def init_liquid_structure(self):
+        """
+        Initialize the liquid phase structure.
+
+        Num species = 1: use the fcc phase.
+        Num species > 1: use SAE (todo)
+
+        """
+        if len(self.species) == 1:
+            veq = self.config["liquid"]["veq"]
+            a = (4 * veq) ** (1 / 3)
+            return bulk(self.species[0], crystalstructure="fcc", a=a, cubic=True)
+        else:
+            raise NotImplementedError(
+                "Liquid phase for multi-species is not implemented yet."
+            )
+
+    def get_base_structure(self, phase: str) -> Atoms:
+        """
+        Get the base phase structure.
+        """
+        return self.base_phase_structures[phase].copy()
+
+    def get_supercells_at_volume(self, phase: str, volume: float) -> Atoms:
+        """
+        Get the supercell structure at the given atomic volume.
+        """
+        base = self.get_base_structure(phase)
+        scale = (volume / base.get_volume() * len(base)) ** (1 / 3)
+        base.set_cell(base.get_cell() * scale, scale_atoms=True)
+        supercells = []
+        for replicate in self.config[phase]["supercell"]:
+            supercells.append(base * replicate)
+        return supercells
+
+
+class VaspAimdSampler(VaspSampler):
     """
     The fundamental ab initio molecular dynamics simulation (AIMD) sampler.
     """
 
-    def __init__(self, config: dict):
-        self.config = config
-        self.species = self.config["species"]
-        self.phases = self.config["phases"]
+    def __init__(self, root, config):
+        super().__init__(root, config)
+        self.workdir = self.root / "sampling"
+        self.init_vasp()
 
     def init_vasp(self):
         """
@@ -46,9 +96,6 @@ class VaspAimdSampler:
         else:
             setups["base"] = "recommended"
         xc = params.get("xc", "pbe")
-
-        # The NBANDS for VASP calculations.
-        self.vasp_nbands = {}
 
         # Initialize the VASP calculator for AIMD sampling jobs.
         params = getitem(self.config, ["vasp", "sampling"])
@@ -80,7 +127,7 @@ class VaspAimdSampler:
             self.vasp.set(kpar=params["kpar"])
         if "ncore" in params:
             self.vasp.set(ncore=params["ncore"])
-        self.vasp_nbands["sampling"] = params.get("nbands", None)
+        self.vasp_nbands = params.get("nbands", None)
 
     # --------------------------------------------------------------------------
     # Iterators
@@ -90,15 +137,7 @@ class VaspAimdSampler:
         """
         Iterate through all AIMD sampling job dirs.
         """
-        workdir = self.root / "sampling"
-        return workdir.glob("*/n[pv]t/*/*_*K_to_*K")
-
-    def accurate_dft_calc_iterator(self):
-        """
-        Iterate through all high precision dft calculation job dirs.
-        """
-        workdir = self.root / "calc"
-        return workdir.glob("*atoms/group*/task*")
+        return self.workdir.glob("*/n[pv]t/*/*_*K_to_*K")
 
     # --------------------------------------------------------------------------
     # Generate VASP AIMD sampling jobs
@@ -188,8 +227,7 @@ class VaspAimdSampler:
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
         """
-        workdir = self.root / "sampling"
-        workdir.mkdir(exist_ok=True)
+        self.workdir.mkdir(exist_ok=True)
         batch_jobs = []
 
         # The NVT vasp parameters
@@ -224,7 +262,7 @@ class VaspAimdSampler:
 
             # Loop through the volumes
             for i, vol in enumerate(volumes):
-                jobdir = workdir / phase / f"nvt/v{np.round(vol*100, 0):.0f}"
+                jobdir = self.workdir / phase / f"nvt/v{np.round(vol*100, 0):.0f}"
                 jobdir.mkdir(parents=True, exist_ok=True)
 
                 # Get the supercell structures
@@ -274,7 +312,7 @@ class VaspAimdSampler:
                         fp.write("\n")
                     print(f"[VASP/nvt/sampling/gen]: {taskdir}")
                     batch_jobs.append(str(taskdir.relative_to('sampling')))
-        with open(workdir / "batch_jobs", "a") as fp:
+        with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")
 
     @staticmethod
@@ -305,8 +343,7 @@ class VaspAimdSampler:
         """
         Create VASP Parrinello-Rahman NPT sampling jobs
         """
-        workdir = self.root / "sampling"
-        workdir.mkdir(exist_ok=True)
+        self.workdir.mkdir(exist_ok=True)
         batch_jobs = []
 
         # The NPT vasp parameters
@@ -335,7 +372,7 @@ class VaspAimdSampler:
 
             # Loop through the pressures
             for i, pressure in enumerate(pressures):
-                jobdir = workdir / phase / f"npt/{pressure:.0f}GPa"
+                jobdir = self.workdir / phase / f"npt/{pressure:.0f}GPa"
                 jobdir.mkdir(parents=True, exist_ok=True)
 
                 # Get the supercell structures
@@ -373,7 +410,7 @@ class VaspAimdSampler:
                         fp.write("\n")
                     print(f"[VASP/npt/sampling/gen]: {taskdir}")
                     batch_jobs.append(str(taskdir.relative_to('sampling')))
-        with open(workdir / "batch_jobs", "a") as fp:
+        with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")
 
     # --------------------------------------------------------------------------
@@ -526,15 +563,65 @@ class VaspAimdSampler:
             self.post_process_sampling_job(task)
 
 
-class VaspHighPrecDftCalculator:
+class VaspHighPrecDftCalculator(VaspSampler):
     """
     The fundamental DFT calculator.
     """
 
-    def __init__(self, config: dict):
-        self.config = config
-        self.species = self.config["species"]
-        self.phases = self.config["phases"]
+    def __init__(self, root: Path, config: dict):
+        super().__init__(root, config)
+        self.workdir = self.root / "calc"
+        self.init_vasp()
+    
+    def init_vasp(self):
+        """
+        Initialize the base VASP calculator.
+        """
+        params = getitem(self.config, ["vasp", "pot"])
+
+        # Setup the POTCARs path
+        os.environ["VASP_PP_PATH"] = params["pp_path"]
+
+        # Setup PORCAR for each specie.
+        # For ASE VASP calculator, only the suffix is used.
+        setups = {}
+        if "potcars" in params:
+            for i, potcar in enumerate(params["potcars"]):
+                if potcar != self.species[i]:
+                    setups[self.species[i]] = potcar[len(self.species[i]):]
+        else:
+            setups["base"] = "recommended"
+
+        # Initialize the VASP calculator for high-precision DFT calculations.
+        params = getitem(self.config, ["vasp", "calc"])
+        self.vasp = Vasp(
+            xc=params.get("xc", "pbe"),
+            setups=setups,
+            ediff=params.get("ediff", 1e-6),
+            lreal=params.get("lreal", False),
+            kspacing=params.get("kspacing", 0.2),
+            prec=params.get("prec", "Accurate"),
+            encut=params.get("encut", 500),
+            ismear=params.get("ismear", 1),
+            sigma=params.get("sigma", 0.05),
+            algo=params.get("algo", "normal"),
+            isym=params.get("isym", 0),
+            nelmin=params.get("nelmin", 4),
+            isif=params.get("isif", 2),
+            ibrion=params.get("ibrion", -1),
+            nsw=params.get("nsw", 1),
+            nwrite=params.get("nwrite", 1),
+            lcharg=params.get("lcharg", False),
+            lwave=params.get("lwave", False),
+            nblock=params.get("nblock", 1),
+        )
+        if "npar" in params:
+            self.vasp.set(npar=params["npar"])
+        if "kpar" in params:
+            self.vasp.set(kpar=params["kpar"])
+        if "ncore" in params:
+            self.vasp.set(ncore=params["ncore"])
+        self.vasp_nbands = params.get("nbands", None)
 
     # --------------------------------------------------------------------------
     # High-precision DFT calculations
@@ -552,18 +639,18 @@ class VaspHighPrecDftCalculator:
             if key == "magmom":
                 magmon_orig_value = value
             else:
-                self.prec_vasp.set(**{key: value})
+                self.vasp.set(**{key: value})
         if magmon_orig_value is not None:
-            if self.prec_vasp.bool_params["lsorbit"]:
+            if self.vasp.bool_params["lsorbit"]:
                 magmom = f"{len(atoms)*3}*{magmon_orig_value}"
             else:
                 magmom = f"{len(atoms)}*{magmon_orig_value}"
         else:
             magmom = None
         if self.is_finite_temperature:
-            self.prec_vasp.set(sigma=atoms.info['etemperature'])
-            self.prec_vasp.set(ismear=-1)
-        nbands = self.vasp_nbands["calc"]
+            self.vasp.set(sigma=atoms.info['etemperature'])
+            self.vasp.set(ismear=-1)
+        nbands = self.vasp_nbands
         if nbands is not None:
             if isinstance(nbands, str) and nbands.startswith("lambda"):
                 a = atoms
@@ -571,25 +658,24 @@ class VaspHighPrecDftCalculator:
                 v = a.get_volume() / n
                 t = atoms.info['etemperature']
                 nval = eval(nbands)(a, n, v, t)
-                self.prec_vasp.set(nbands=nval)
+                self.vasp.set(nbands=nval)
             elif isinstance(nbands, dict):
-                self.prec_vasp.set(nbands=nbands[str(len(atoms))])
+                self.vasp.set(nbands=nbands[str(len(atoms))])
             else:
-                self.prec_vasp.set(nbands=nbands)
+                self.vasp.set(nbands=nbands)
         return {"MAGMOM": magmom}
 
     def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
         """
         Create VASP high precision DFT calculation tasks.
         """
-        workdir = self.root / "calc"
-        workdir.mkdir(exist_ok=True)
+        self.workdir.mkdir(exist_ok=True)
 
         # The global hash table
-        hash_file = workdir / "hash.json"
+        hash_file = self.workdir / "hash.json"
 
         # The global training structures file
-        calc_file = workdir / "accurate_dft_calc.extxyz"
+        calc_file = self.workdir / "accurate_dft_calc.extxyz"
 
         # May read existing results
         if hash_file.exists():
@@ -655,7 +741,7 @@ class VaspHighPrecDftCalculator:
             # For structures of different sizes, we may use different CPU/GPU
             # settings. Hence, 'natoms' is the first metric for makeing subsets.
             natoms = len(atoms)
-            subsetdir = workdir / f"{natoms}atoms"
+            subsetdir = self.workdir / f"{natoms}atoms"
             subsetdir.mkdir(exist_ok=True)
             if natoms not in subset_size:
                 subset_size[natoms] = Counter()
@@ -675,8 +761,8 @@ class VaspHighPrecDftCalculator:
             magmom_dct = self.setup_vasp_accurate_dft_parameters(atoms)
 
             # Write the input files
-            self.prec_vasp.set(directory=str(taskdir))
-            self.prec_vasp.write_input(atoms)
+            self.vasp.set(directory=str(taskdir))
+            self.vasp.write_input(atoms)
 
             # Hack the MAGMOM tag for non-collinear calculations
             if magmom_dct is not None:
