@@ -1,0 +1,5 @@
+# The customized gitignore file
+sampling/
+calc/
+output.*
+error.*

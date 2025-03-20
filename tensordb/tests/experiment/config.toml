@@ -1,0 +1,48 @@
+# ----------------- Basic settings ---------------------------------------------
+species = ["Cu"]
+phases = ["fcc", "bcc"]
+finite_temperature = true
+
+# ----------------- Phase settings ---------------------------------------------
+
+[bcc]
+supercell = [[3, 3, 3]]
+
+[fcc]
+supercell = [[2, 2, 2]]
+
+# ----------------- VASP settings ----------------------------------------------
+
+# Basic VASP settings
+[vasp.pot]
+pp_path = "/share/home/chenxin/work/potcars"
+xc = "pbe"
+potcars = ["Cu"]
+
+# VASP AIMD sampling parameters
+[vasp.sampling]
+encut = 600
+langevin_gamma = 10
+ediff = 1e-5
+nsim = 64
+
+# VASP high precision calculation parameters
+[vasp.calc]
+encut = 600
+kspacing = 0.20
+nsim = 64
+nbands = "lambda a,n,v,t: 16*n+(t//10000*n)"
+
+# ----------------- AIMD sampling settings for phase ---------------------------
+
+[vasp.sampling.nvt.bcc]
+volumes = [11.8, ]
+temperatures = [300, ]
+vt_method = "grid"
+nsteps = 200
+
+[vasp.sampling.nvt.fcc]
+volumes = [11.0, ]
+temperatures = [1000, ]
+vt_method = "grid"
+nsteps = 200
