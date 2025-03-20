@@ -20,11 +20,15 @@ from tensordb.vaspkit import VaspJob
 from tensoralloy.io.vasp import read_vasp_xml
 
 
-class VaspSampler:
+class BaseSampler:
+    """
+    The base sampler class.
+    A sampler is used to generate structures for high accuracy DFT calculations.
+    """
 
     def __init__(self, root, config: dict):
         """
-        Initialize the VASP sampler.
+        Initialize the base sampler.
         """
         self.root = root
         self.config = config
@@ -32,6 +36,7 @@ class VaspSampler:
         self.phases = self.config["phases"]
         self.base_phase_structures = self.init_phases()
         self.workdir = None
+        self.init_ab_initio_calculator()
     
     def purge(self):
         """
@@ -95,19 +100,133 @@ class VaspSampler:
         for replicate in self.config[phase]["supercell"]:
             supercells.append(base * replicate)
         return supercells
+    
+    def init_ab_initio_calculator(self):
+        """
+        Initialize the ab initio calculator.
+        """
+        raise NotImplementedError("init_ab_initio_calculator() is not implemented yet.")
+    
+    def task_iterator(self):
+        """
+        Iterate through all sampling tasks.
+        """
+        raise NotImplementedError("task_iterator() is not implemented yet.")
+    
+    def create_tasks(self, override=False):
+        """
+        Create all sampling tasks.
+        """
+        raise NotImplementedError("create_tasks() is not implemented yet.")
+    
+    @staticmethod
+    def is_task_finished(taskdir: Path):
+        """
+        Return True if the task is finished.
+        """
+        metadata = taskdir / "metadata.json"
+        if not metadata.exists():
+            return False
+        with open(metadata, "r") as fp:
+            status = json.load(fp)
+        if status.get("SU", -1) <= 0:
+            return False
+        return True
+    
+    def update_status_of_task(self, taskdir: Path):
+        """
+        Update the status of task at `taskdir`.
+        """
+        raise NotImplementedError("update_status_of_task() is not implemented yet.")
+
+    def update_status(self):
+        """
+        Update the status of all tasks.
+        """
+        status = {}
+        for task in self.task_iterator():
+            info = self.update_status_of_task(task)
+            if len(info) == 0:
+                continue
+            for key, value in info.items():
+                status[key] = status.get(key, []) + [
+                    value,
+                ]
+        df = pd.DataFrame(status)
+        df.set_index("phase", inplace=True)
+        print(df.to_string())
+        with open(self.root / "sampling" / "status", "w") as fp:
+            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            df.to_string(fp)
+
+    def list_unsubmitted_tasks(self):
+        """
+        List unsubmitted tasks.
+        """
+        for task in self.task_iterator():
+            metadata = task / "metadata.json"
+            if not metadata.exists():
+                print(task)
+            status = self.update_status_of_task(task)
+            if status.get("nrun", -1) < 0:
+                print(task)
+    
+    def post_process_task(self, jobdir: Path):
+        """
+        Post-process a task.
+        """
+        raise NotImplementedError("post_process_a_task() is not implemented yet.")
+    
+    def post_process(self):
+        """
+        Post-processing all sampling jobs.
+        """
+        for task in self.task_iterator():
+            self.post_process_task(task)
 
 
-class VaspAimdSampler(VaspSampler):
-    """
-    The fundamental ab initio molecular dynamics simulation (AIMD) sampler.
-    """
-
+class AimdSampler(BaseSampler):
+    
     def __init__(self, root, config):
+        """
+        Initialize the AIMD sampler. 
+        The workdir is <root>/sampling for all AIMD samplers.
+        """
         super().__init__(root, config)
         self.workdir = self.root / "sampling"
-        self.init_vasp()
     
-    def init_vasp(self):
+    def task_iterator(self):
+        """
+        Iterate through all AIMD sampling tasks.
+        """
+        return self.workdir.glob("*/n[pv]t/*/*_*K_to_*K")
+    
+    def create_tasks(self, override=False):
+        """
+        Create all VASP AIMD sampling tasks.
+        """
+        self.create_aimd_nvt_tasks(override=override)
+        self.create_aimd_npt_tasks(override=override)
+
+    def create_aimd_nvt_tasks(self, override=False):
+        """
+        Create VASP Langevin NVT sampling jobs.
+        """
+        raise NotImplementedError("create_aimd_nvt_tasks() is not implemented yet.")
+    
+    def create_aimd_npt_tasks(self, override=False):
+        """
+        Create VASP Parrinello-Rahman NPT sampling jobs.
+        """
+        raise NotImplementedError("create_aimd_npt_tasks() is not implemented yet.")
+
+
+class VaspAimdSampler(AimdSampler):
+    """
+    The basic VASP + AIMD sampler.
+    """
+    
+    def init_ab_initio_calculator(self):
         """
         Initialize the base VASP calculator.
         """
@@ -158,16 +277,6 @@ class VaspAimdSampler(VaspSampler):
         if "ncore" in params:
             self.vasp.set(ncore=params["ncore"])
         self.vasp_nbands = params.get("nbands", None)
-
-    # --------------------------------------------------------------------------
-    # Iterators
-    # --------------------------------------------------------------------------
-
-    def sampling_task_iterator(self):
-        """
-        Iterate through all AIMD sampling job dirs.
-        """
-        return self.workdir.glob("*/n[pv]t/*/*_*K_to_*K")
 
     # --------------------------------------------------------------------------
     # Generate VASP AIMD sampling jobs
@@ -253,7 +362,7 @@ class VaspAimdSampler(VaspSampler):
                                  "volumes")
             return t0, t1
 
-    def create_vasp_sampling_nvt_tasks(self, override=False):
+    def create_aimd_nvt_tasks(self, override=False):
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
         """
@@ -369,7 +478,7 @@ class VaspAimdSampler(VaspSampler):
             newid = len(files) + 1
         return newid, f"{newid}_{key}"
 
-    def create_vasp_sampling_npt_tasks(self, override=False):
+    def create_aimd_npt_tasks(self, override=False):
         """
         Create VASP Parrinello-Rahman NPT sampling jobs
         """
@@ -442,26 +551,8 @@ class VaspAimdSampler(VaspSampler):
                     batch_jobs.append(str(taskdir.relative_to('sampling')))
         with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")
-
-    # --------------------------------------------------------------------------
-    # Check the status of sampling jobs
-    # --------------------------------------------------------------------------
-
-    @staticmethod
-    def _is_sampling_job_finished(jobdir: Path):
-        """
-        Return True if the sampling job is finished.
-        """
-        metadata = jobdir / "metadata.json"
-        if not metadata.exists():
-            return False
-        with open(metadata, "r") as fp:
-            status = json.load(fp)
-        if status.get("SU", -1) <= 0:
-            return False
-        return True
-
-    def update_status_of_sampling_job(self, jobdir: Path):
+    
+    def update_status_of_task(self, jobdir: Path):
         """
         Update and return the status of a sampling job at given jobdir.
         """
@@ -509,44 +600,8 @@ class VaspAimdSampler(VaspSampler):
             status["processed"] = "y"
 
         return status
-
-    def get_status_of_all_sampling_jobs(self):
-        """
-        Get the status of all sampling jobs.
-        """
-        status = {}
-        for task in self.sampling_task_iterator():
-            info = self.update_status_of_sampling_job(task)
-            if len(info) == 0:
-                continue
-            for key, value in info.items():
-                status[key] = status.get(key, []) + [
-                    value,
-                ]
-        df = pd.DataFrame(status)
-        df.set_index("phase", inplace=True)
-        print(df.to_string())
-        with open(self.root / "sampling" / "status", "w") as fp:
-            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-            df.to_string(fp)
-
-    def list_unsubmitted_sampling_jobs(self):
-        """
-        List unsubmitted AIMD sampling jobs.
-        """
-        for task in self.sampling_task_iterator():
-            metadata = task / "metadata.json"
-            if not metadata.exists():
-                print(task)
-            status = self.update_status_of_sampling_job(task)
-            if status.get("nrun", -1) < 0:
-                print(task)
     
-    # --------------------------------------------------------------------------
-    # Post-processing
-    # --------------------------------------------------------------------------
-
-    def post_process_sampling_job(self, jobdir: Path):
+    def post_process_task(self, jobdir: Path):
         """
         Post-processing a sampling job.
         """
@@ -585,15 +640,8 @@ class VaspAimdSampler(VaspSampler):
         write(output_file, trajectory, format="extxyz")
         print(f"[VASP/sampling/postprocess]: {jobdir}")
 
-    def post_process_all_sampling_jobs(self):
-        """
-        Post-processing all sampling jobs.
-        """
-        for task in self.sampling_task_iterator():
-            self.post_process_sampling_job(task)
 
-
-class VaspHighPrecDftCalculator(VaspSampler):
+class VaspHighPrecDftCalculator(BaseSampler):
     """
     The fundamental DFT calculator.
     """
@@ -601,9 +649,8 @@ class VaspHighPrecDftCalculator(VaspSampler):
     def __init__(self, root: Path, config: dict):
         super().__init__(root, config)
         self.workdir = self.root / "calc"
-        self.init_vasp()
     
-    def init_vasp(self):
+    def init_ab_initio_calculator(self):
         """
         Initialize the base VASP calculator.
         """
@@ -652,6 +699,12 @@ class VaspHighPrecDftCalculator(VaspSampler):
         if "ncore" in params:
             self.vasp.set(ncore=params["ncore"])
         self.vasp_nbands = params.get("nbands", None)
+    
+    def task_iterator(self):
+        """
+        Iterate through all high-precision DFT calculation job dirs.
+        """
+        return self.workdir.glob("*atoms/group*/task*")
 
     # --------------------------------------------------------------------------
     # High-precision DFT calculations
@@ -695,7 +748,7 @@ class VaspHighPrecDftCalculator(VaspSampler):
                 self.vasp.set(nbands=nbands)
         return {"MAGMOM": magmom}
 
-    def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
+    def create_tasks(self, interval=50, shuffle=False):
         """
         Create VASP high precision DFT calculation tasks.
         """
@@ -727,7 +780,7 @@ class VaspHighPrecDftCalculator(VaspSampler):
             subset_id[len(atoms)] += 1
 
         # Loop through all sampling tasks
-        for task in self.sampling_task_iterator():
+        for task in self.task_iterator():
             # Check if the trajectory file exists
             trajectory = task / "trajectory.extxyz"
             if not trajectory.exists():
@@ -854,7 +907,7 @@ class VaspHighPrecDftCalculator(VaspSampler):
         accumulator = {}
 
         # Loop through all prepared jobs
-        for taskdir in self.accurate_dft_calc_iterator():
+        for taskdir in self.task_iterator():
             metadata = taskdir / "metadata.json"
             if not metadata.exists():
                 continue
@@ -935,3 +988,23 @@ class VaspHighPrecDftCalculator(VaspSampler):
         with open(self.root / "calc" / "status", "w") as fp:
             fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
             df.to_string(fp)
+
+
+class PorousSampler(VaspHighPrecDftCalculator):
+    """
+    This sampler is used to create porous structures by randomly removing atoms from 
+    AIMD snapshots.
+    """
+
+    def __init__(self, root, config):
+        super().__init__(root, config)
+        self.workdir = self.root / "porous"
+        self.init_vasp()
+
+    def task_iterator(self):
+        """
+        Iterate through all porous sampling job dirs.
+        """
+        return self.workdir.glob("*atoms/group*/task*")
+
+

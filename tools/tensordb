@@ -43,24 +43,6 @@ class TensorDB:
         self.dft_calculator.purge()
 
     # --------------------------------------------------------------------------
-    # Iterators
-    # --------------------------------------------------------------------------
-
-    def sampling_task_iterator(self):
-        """
-        Iterate through all AIMD sampling job dirs.
-        """
-        workdir = self.root / "sampling"
-        return workdir.glob("*/n[pv]t/*/*_*K_to_*K")
-
-    def accurate_dft_calc_iterator(self):
-        """
-        Iterate through all high precision dft calculation job dirs.
-        """
-        workdir = self.root / "calc"
-        return workdir.glob("*atoms/group*/task*")
-
-    # --------------------------------------------------------------------------
     # Generate VASP AIMD sampling jobs
     # --------------------------------------------------------------------------
 
