@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import json
 import hashlib
+import shutil
 from datetime import datetime
 from subprocess import Popen, PIPE
 from ase import Atoms
@@ -29,8 +30,37 @@ class VaspSampler:
         self.config = config
         self.species = self.config["species"]
         self.phases = self.config["phases"]
-        self.workdir = root
+        self.base_phase_structures = self.init_phases()
+        self.workdir = None
     
+    def purge(self):
+        """
+        Purge the sampling directory.
+        """
+        if isinstance(self.workdir, Path) and self.workdir.exists():
+            shutil.rmtree(self.workdir, ignore_errors=True)
+    
+    def init_phases(self):
+        """
+        Initialize the base phase structures.
+        """
+        workdir = self.root / "structures"
+        if not workdir.exists():
+            raise IOError(f"Cannot find the directory 'structures' in {str(self.root)}")
+        structures = {}
+        for phase in self.config["phases"]:
+            if phase == "liquid":
+                structures[phase] = self.init_liquid_structure()
+            else:
+                candidates = [x for x in workdir.glob(f"{phase}.*")]
+                if len(candidates) == 0:
+                    raise ValueError(f"Cannot find the poscar for {phase}")
+                if len(candidates) > 1:
+                    raise ValueError(f"Multiple poscars for {phase}")
+                poscar = candidates[0]
+                structures[phase] = read(str(poscar))
+        return structures
+
     def init_liquid_structure(self):
         """
         Initialize the liquid phase structure.
@@ -76,7 +106,7 @@ class VaspAimdSampler(VaspSampler):
         super().__init__(root, config)
         self.workdir = self.root / "sampling"
         self.init_vasp()
-
+    
     def init_vasp(self):
         """
         Initialize the base VASP calculator.
@@ -282,10 +312,10 @@ class VaspAimdSampler(VaspSampler):
                     taskdir.mkdir(exist_ok=True)
                     self.vasp.set(directory=str(taskdir))
                     self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps)
-                    if self.is_finite_temperature:
+                    if self.config.get("finite_temperature", False):
                         avg_temp = (t0[i] + t1[i]) / 2
                         self.vasp.set(sigma=avg_temp * kB, ismear=-1)
-                    nbands = self.vasp_nbands["sampling"]
+                    nbands = self.vasp_nbands
                     if nbands is not None:
                         if isinstance(nbands, str) and nbands.startswith("lambda"):
                             a = supercell
@@ -393,7 +423,7 @@ class VaspAimdSampler(VaspSampler):
                     self.vasp.set(directory=str(taskdir))
                     self.vasp.set(tebeg=t0[i], teend=t1[i], nsw=steps)
                     self.vasp.set(pstress=pressure * 10)
-                    if self.is_finite_temperature:
+                    if self.config.get("finite_temperature", False):
                         avg_temp = (t0[i] + t1[i]) / 2
                         self.vasp.set(sigma=avg_temp * kB)
                     self.vasp.write_input(supercell)
@@ -538,7 +568,7 @@ class VaspAimdSampler(VaspSampler):
                 for atoms in read_vasp_xml(
                     vasprun_xml, 
                     index=slice(0, None, 1), 
-                    finite_temperature=self.is_finite_temperature
+                    finite_temperature=self.config.get("finite_temperature", False)
                 )
             ]
         except Exception as excp:
@@ -647,7 +677,7 @@ class VaspHighPrecDftCalculator(VaspSampler):
                 magmom = f"{len(atoms)}*{magmon_orig_value}"
         else:
             magmom = None
-        if self.is_finite_temperature:
+        if self.config.get("finite_temperature", False):
             self.vasp.set(sigma=atoms.info['etemperature'])
             self.vasp.set(ismear=-1)
         nbands = self.vasp_nbands
@@ -782,7 +812,7 @@ class VaspHighPrecDftCalculator(VaspSampler):
                 "group_id": group_id,
                 "task_id": task_id,
             }
-            if self.is_finite_temperature:
+            if self.config.get("finite_temperature", False):
                 metadata["etemperature(K)"] = atoms.info["etemperature"] / kB
             with open(taskdir / "metadata.json", "w") as fp:
                 json.dump(metadata, fp, indent=2)

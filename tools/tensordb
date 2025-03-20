@@ -31,13 +31,16 @@ class TensorDB:
         self.input_file = input_file
         self.root = Path(input_file).parent
         self.config = dict(toml.load(input_file))
-        if self.config.get("finite_temperature", False):
-            self.is_finite_temperature = True
-        else:
-            self.is_finite_temperature = False
         self.aimd_sampler = VaspAimdSampler(self.root, self.config)
         self.porous_sampler = None
         self.dft_calculator = VaspHighPrecDftCalculator(self.root, self.config)
+    
+    def purge(self):
+        """
+        Cleanup all files. Be cautious when using this method.
+        """
+        self.aimd_sampler.purge()
+        self.dft_calculator.purge()
 
     # --------------------------------------------------------------------------
     # Iterators
@@ -383,6 +386,9 @@ def main():
     # The subparser for gathering calculated results
     parser = sub_parsers.add_parser("gather")
 
+    # The subparser for purging
+    parser = sub_parsers.add_parser("purge")
+
     # Parse the arguments
     args = root_parser.parse_args()
     db = TensorDB(args.input)
@@ -409,6 +415,8 @@ def main():
         db.post_process_all_sampling_jobs()
     elif args.command == "gather":
         db.gather()
+    elif args.command == "purge":
+        db.purge()
     elif args.command == "plot":
         db.plot(filename=args.filename, rcut=args.rcut)
 
