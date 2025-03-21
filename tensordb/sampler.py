@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# This module defines samplers, which are used to generate structures for high-precision 
+# DFT calculations.
+
 import numpy as np
 import pandas as pd
 import os
@@ -14,15 +17,17 @@ from ase.calculators.vasp import Vasp
 from ase.build import bulk
 from ase.io import write, read
 from pathlib import Path
-from collections import Counter
 from tensordb.utils import getitem, asarray_or_eval, scalar2array
 from tensordb.vaspkit import VaspJob
 from tensoralloy.io.vasp import read_vasp_xml
 
 
+__all__ = ["BaseSampler", "AimdSampler", "VaspAimdSampler", "PorousSampler"]
+
+
 class BaseSampler:
     """
-    The base sampler class.
+    The base class for all types of samplers.
     A sampler is used to generate structures for high accuracy DFT calculations.
     """
 
@@ -44,6 +49,15 @@ class BaseSampler:
         """
         if isinstance(self.workdir, Path) and self.workdir.exists():
             shutil.rmtree(self.workdir, ignore_errors=True)
+
+    # --------------------------------------------------------------------------
+    # Initialization methods
+    # 1. init_phases: initialize the base phase structures.
+    # 2. init_liquid_structure: initialize the liquid phase structure.
+    # 3. get_base_structure: get the base phase structure.
+    # 4. get_supercells_at_volume: get the supercell structure at the given volume.
+    # 5. init_ab_initio_calculator: initialize the ab initio calculator.
+    # --------------------------------------------------------------------------
     
     def init_phases(self):
         """
@@ -106,6 +120,18 @@ class BaseSampler:
         Initialize the ab initio calculator.
         """
         raise NotImplementedError("init_ab_initio_calculator() is not implemented yet.")
+
+    # --------------------------------------------------------------------------
+    # Task manupulation methods
+    # 1. task_iterator: iterate through all tasks.
+    # 2. create_tasks: create all tasks.
+    # 3. is_task_finished: check if the task is finished.
+    # 4. update_status_of_task: update the status of a task.
+    # 5. update_status: update the status of all tasks.
+    # 6. list_unsubmitted_tasks: list unsubmitted tasks.
+    # 7. post_process_task: post-process a task.
+    # 8. post_process: post-process all tasks.
+    # --------------------------------------------------------------------------
     
     def task_iterator(self):
         """
@@ -183,9 +209,21 @@ class BaseSampler:
         """
         for task in self.task_iterator():
             self.post_process_task(task)
+    
+    # --------------------------------------------------------------------------
+    # Sample generation methods
+    # 1. get_samples: get samples from a task.
+    # --------------------------------------------------------------------------
 
+    def get_samples(self, task: Path, **kwargs):
+        raise NotImplementedError("get_samples() is not implemented yet.")
 
 class AimdSampler(BaseSampler):
+    """
+    The base class for ab initio molecular dynamics (AIMD) based samplers.
+    """
+
+    TRAJECTORY_FILE = "trajectory.extxyz"
     
     def __init__(self, root, config):
         """
@@ -207,6 +245,63 @@ class AimdSampler(BaseSampler):
         """
         self.create_aimd_nvt_tasks(override=override)
         self.create_aimd_npt_tasks(override=override)
+    
+    @staticmethod
+    def get_nvt_sampling_task(jobdir: Path, t0: float, t1: float, natoms: int, 
+                              override=False):
+        """
+        Returns (id, name) for the NVT sampling task.
+        If the returned id is -1, the task should be skipped.
+        """
+        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_*K_to_*K")]
+        key = f"{natoms}atoms_{t0:.0f}K_to_{t1:.0f}K"
+        exists = False
+        for afile in files:
+            if afile.endswith(key):
+                exists = True
+                break
+        if exists and not override:
+            return -1, None
+        if override:
+            newid = len(files)
+        else:
+            newid = len(files) + 1
+        return newid, f"{newid}_{key}"
+
+    @staticmethod
+    def get_temperatures(args: dict, vt_method: str, size: int, npt=False):
+        """
+        Check the temperature related arguments.
+        """
+        if "temperatures" in args:
+            if "tstart" in args or "tstop" in args:
+                raise ValueError("Cannot specify both temperatures and tstart/tstop")
+            tarray = asarray_or_eval(args["temperatures"])
+            if vt_method == "grid":
+                return tarray, tarray
+            else:
+                if len(tarray) != size:
+                    raise ValueError("The length of temperatures should be "
+                                     "equal to volumes")
+                return tarray, tarray
+        else:
+            if "tstart" not in args or "tstop" not in args:
+                raise ValueError(
+                    "Either temperatures or tstart/tstop should be specified")
+            if vt_method == "grid":
+                raise ValueError("Cannot specify tstart/tstop for grid VT method")
+            if isinstance(args["tstart"], str):
+                t0 = asarray_or_eval(args["tstart"])
+            else:
+                t0 = scalar2array(args["tstart"], size, "tstart", "volumes")
+            if isinstance(args["tstop"], str):
+                t1 = asarray_or_eval(args["tstop"])
+            else:
+                t1 = scalar2array(args["tstop"], size, "tstop", "volumes")
+            if len(t0) != size or len(t1) != size:
+                raise ValueError("The length of tstart/tstop should be equal to "
+                                 "volumes")
+            return t0, t1
 
     def create_aimd_nvt_tasks(self, override=False):
         """
@@ -214,16 +309,60 @@ class AimdSampler(BaseSampler):
         """
         raise NotImplementedError("create_aimd_nvt_tasks() is not implemented yet.")
     
+    @staticmethod
+    def get_npt_sampling_task(jobdir: Path, t0: float, t1: float, v0: float, 
+                              natoms: int, override=False):
+        """
+        Returns (id, name) for the NVT sampling task.
+        If the returned id is -1, the task should be skipped.
+        """
+        vkey = f"v{np.round(v0*100, 0):.0f}"
+        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_{vkey}_*K_to_*K")]
+        key = f"{natoms}atoms_{vkey}_{t0:.0f}K_to_{t1:.0f}K"
+        exists = False
+        for afile in files:
+            if afile.endswith(key):
+                exists = True
+                break
+        if exists and not override:
+            return -1, None
+        if override:
+            newid = len(files)
+        else:
+            newid = len(files) + 1
+        return newid, f"{newid}_{key}"
+    
     def create_aimd_npt_tasks(self, override=False):
         """
         Create VASP Parrinello-Rahman NPT sampling jobs.
         """
         raise NotImplementedError("create_aimd_npt_tasks() is not implemented yet.")
+    
+    def get_samples(self, task: Path, interval=50, shuffle=False, **kwargs):
+        """
+        Get samples from the AIMD sampling tasks.
+        """
+        selected = []
+        # Check if the trajectory file exists
+        trajectory = task / self.TRAJECTORY_FILE
+        if not trajectory.exists():
+            return selected
+        # Read the trajectory file
+        full = read(trajectory, index=slice(0, None, 1))
+        if shuffle:
+            size = len(full) // interval
+            selected = np.random.choice(
+                full[interval - 1 :], size=size, replace=False
+            )
+        else:
+            # Select the last snapshot of each block(size=interval)
+            selected = full[interval - 1 :: interval]
+        return selected
 
 
 class VaspAimdSampler(AimdSampler):
     """
-    The basic VASP + AIMD sampler.
+    The AIMD sampler based on VASP.
     """
     
     def init_ab_initio_calculator(self):
@@ -304,64 +443,6 @@ class VaspAimdSampler(AimdSampler):
             gamma = npt_params.get("langevin_gamma_l", 10)
             self.vasp.set(isif=3, langevin_gamma_l=gamma)
 
-    @staticmethod
-    def _get_nvt_sampling_task(
-        jobdir: Path, t0: float, t1: float, natoms: int, override=False
-    ):
-        """
-        Returns (id, name) for the NVT sampling task.
-        If the returned id is -1, the task should be skipped.
-        """
-        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_*K_to_*K")]
-        key = f"{natoms}atoms_{t0:.0f}K_to_{t1:.0f}K"
-        exists = False
-        for afile in files:
-            if afile.endswith(key):
-                exists = True
-                break
-        if exists and not override:
-            return -1, None
-        if override:
-            newid = len(files)
-        else:
-            newid = len(files) + 1
-        return newid, f"{newid}_{key}"
-
-    @staticmethod
-    def _get_temperatures(args: dict, vt_method: str, size: int, npt=False):
-        """
-        Check the temperature related arguments.
-        """
-        if "temperatures" in args:
-            if "tstart" in args or "tstop" in args:
-                raise ValueError("Cannot specify both temperatures and tstart/tstop")
-            tarray = asarray_or_eval(args["temperatures"])
-            if vt_method == "grid":
-                return tarray, tarray
-            else:
-                if len(tarray) != size:
-                    raise ValueError("The length of temperatures should be "
-                                     "equal to volumes")
-                return tarray, tarray
-        else:
-            if "tstart" not in args or "tstop" not in args:
-                raise ValueError(
-                    "Either temperatures or tstart/tstop should be specified")
-            if vt_method == "grid":
-                raise ValueError("Cannot specify tstart/tstop for grid VT method")
-            if isinstance(args["tstart"], str):
-                t0 = asarray_or_eval(args["tstart"])
-            else:
-                t0 = scalar2array(args["tstart"], size, "tstart", "volumes")
-            if isinstance(args["tstop"], str):
-                t1 = asarray_or_eval(args["tstop"])
-            else:
-                t1 = scalar2array(args["tstop"], size, "tstop", "volumes")
-            if len(t0) != size or len(t1) != size:
-                raise ValueError("The length of tstart/tstop should be equal to "
-                                 "volumes")
-            return t0, t1
-
     def create_aimd_nvt_tasks(self, override=False):
         """
         Create VASP Langeven NVT sampling jobs: gamma-only.
@@ -386,7 +467,7 @@ class VaspAimdSampler(AimdSampler):
 
             # Get the temperatures. 
             vt_method = args.get("vt_method", "pair")
-            t0, t1 = self._get_temperatures(args, vt_method, size)
+            t0, t1 = self.get_temperatures(args, vt_method, size)
 
             # Make (V, T) grid if needed
             if vt_method == "grid":
@@ -411,7 +492,7 @@ class VaspAimdSampler(AimdSampler):
 
                 for supercell in supercells:
                     # Determine the task id and name
-                    taskid, taskname = self._get_nvt_sampling_task(
+                    taskid, taskname = self.get_nvt_sampling_task(
                         jobdir, t0[i], t1[i], len(supercell), override
                     )
                     if taskid < 0:
@@ -454,30 +535,6 @@ class VaspAimdSampler(AimdSampler):
         with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")
 
-    @staticmethod
-    def _get_npt_sampling_task(
-        jobdir: Path, t0: float, t1: float, v0: float, natoms: int, override=False
-    ):
-        """
-        Returns (id, name) for the NVT sampling task.
-        If the returned id is -1, the task should be skipped.
-        """
-        vkey = f"v{np.round(v0*100, 0):.0f}"
-        files = [x.name for x in jobdir.glob(f"*_{natoms}atoms_{vkey}_*K_to_*K")]
-        key = f"{natoms}atoms_{vkey}_{t0:.0f}K_to_{t1:.0f}K"
-        exists = False
-        for afile in files:
-            if afile.endswith(key):
-                exists = True
-                break
-        if exists and not override:
-            return -1, None
-        if override:
-            newid = len(files)
-        else:
-            newid = len(files) + 1
-        return newid, f"{newid}_{key}"
-
     def create_aimd_npt_tasks(self, override=False):
         """
         Create VASP Parrinello-Rahman NPT sampling jobs
@@ -486,7 +543,7 @@ class VaspAimdSampler(AimdSampler):
         batch_jobs = []
 
         # The NPT vasp parameters
-        self.setup_vasp_sampling_parameters(npt=True)
+        self.init_vasp_sampling_parameters(npt=True)
 
         for phase in self.phases:
             # The phase sampling parameters
@@ -521,7 +578,7 @@ class VaspAimdSampler(AimdSampler):
 
                 for supercell in supercells:
                     # Determine the task id and name
-                    taskid, taskname = self._get_npt_sampling_task(
+                    taskid, taskname = self.get_npt_sampling_task(
                         jobdir, t0[i], t1[i], volumes[i], len(supercell), override
                     )
                     if taskid < 0:
@@ -587,7 +644,7 @@ class VaspAimdSampler(AimdSampler):
 
         # The simulation is finished
         job = VaspJob(jobdir)
-        su = job.get_service_unit()
+        su = job.get_vasp_job_service_unit()
         status["device"] = su.device
         status["SU"] = np.round(su.hours, 2)
         with open(metadata, "w") as fp:
@@ -595,7 +652,7 @@ class VaspAimdSampler(AimdSampler):
             fp.write("\n")
 
         # The job is already postprocessed.
-        output_file = jobdir / "trajectory.extxyz"
+        output_file = jobdir / self.TRAJECTORY_FILE
         if output_file.exists():
             status["processed"] = "y"
 
@@ -606,14 +663,14 @@ class VaspAimdSampler(AimdSampler):
         Post-processing a sampling job.
         """
         # Check if the job is finished
-        if not self._is_sampling_job_finished(jobdir):
+        if not self.is_task_finished(jobdir):
             return
         # Check if the vasprun.xml file exists
         vasprun_xml = jobdir / "vasprun.xml"
         if not vasprun_xml.exists():
             return
         # Check if the trajectory file exists
-        output_file = jobdir / "trajectory.extxyz"
+        output_file = jobdir / self.TRAJECTORY_FILE
         if output_file.exists():
             return
         # Read the xml file using the api `tensoralloy.io.vasp.read_vasp_xml`
@@ -641,356 +698,7 @@ class VaspAimdSampler(AimdSampler):
         print(f"[VASP/sampling/postprocess]: {jobdir}")
 
 
-class VaspHighPrecDftCalculator(BaseSampler):
-    """
-    The fundamental DFT calculator.
-    """
-
-    def __init__(self, root: Path, config: dict):
-        super().__init__(root, config)
-        self.workdir = self.root / "calc"
-    
-    def init_ab_initio_calculator(self):
-        """
-        Initialize the base VASP calculator.
-        """
-        params = getitem(self.config, ["vasp", "pot"])
-
-        # Setup the POTCARs path
-        os.environ["VASP_PP_PATH"] = params["pp_path"]
-
-        # Setup PORCAR for each specie.
-        # For ASE VASP calculator, only the suffix is used.
-        setups = {}
-        if "potcars" in params:
-            for i, potcar in enumerate(params["potcars"]):
-                if potcar != self.species[i]:
-                    setups[self.species[i]] = potcar[len(self.species[i]):]
-        else:
-            setups["base"] = "recommended"
-
-        # Initialize the VASP calculator for high-precision DFT calculations.
-        params = getitem(self.config, ["vasp", "calc"])
-        self.vasp = Vasp(
-            xc=params.get("xc", "pbe"),
-            setups=setups,
-            ediff=params.get("ediff", 1e-6),
-            lreal=params.get("lreal", False),
-            kspacing=params.get("kspacing", 0.2),
-            prec=params.get("prec", "Accurate"),
-            encut=params.get("encut", 500),
-            ismear=params.get("ismear", 1),
-            sigma=params.get("sigma", 0.05),
-            algo=params.get("algo", "normal"),
-            isym=params.get("isym", 0),
-            nelmin=params.get("nelmin", 4),
-            isif=params.get("isif", 2),
-            ibrion=params.get("ibrion", -1),
-            nsw=params.get("nsw", 1),
-            nwrite=params.get("nwrite", 1),
-            lcharg=params.get("lcharg", False),
-            lwave=params.get("lwave", False),
-            nblock=params.get("nblock", 1),
-        )
-        if "npar" in params:
-            self.vasp.set(npar=params["npar"])
-        if "kpar" in params:
-            self.vasp.set(kpar=params["kpar"])
-        if "ncore" in params:
-            self.vasp.set(ncore=params["ncore"])
-        self.vasp_nbands = params.get("nbands", None)
-    
-    def task_iterator(self):
-        """
-        Iterate through all high-precision DFT calculation job dirs.
-        """
-        return self.workdir.glob("*atoms/group*/task*")
-
-    # --------------------------------------------------------------------------
-    # High-precision DFT calculations
-    # --------------------------------------------------------------------------
-
-    def setup_vasp_accurate_dft_parameters(self, atoms):
-        """
-        Setup the parameters for high-precision DFT calculations.
-
-        ASE doe not implement the non-collinear settings, so we should hack it.
-        """
-        params = getitem(self.config, ["vasp", "calc"])
-        magmon_orig_value = None
-        for key, value in params.items():
-            if key == "magmom":
-                magmon_orig_value = value
-            else:
-                self.vasp.set(**{key: value})
-        if magmon_orig_value is not None:
-            if self.vasp.bool_params["lsorbit"]:
-                magmom = f"{len(atoms)*3}*{magmon_orig_value}"
-            else:
-                magmom = f"{len(atoms)}*{magmon_orig_value}"
-        else:
-            magmom = None
-        if self.config.get("finite_temperature", False):
-            self.vasp.set(sigma=atoms.info['etemperature'])
-            self.vasp.set(ismear=-1)
-        nbands = self.vasp_nbands
-        if nbands is not None:
-            if isinstance(nbands, str) and nbands.startswith("lambda"):
-                a = atoms
-                n = len(a)
-                v = a.get_volume() / n
-                t = atoms.info['etemperature']
-                nval = eval(nbands)(a, n, v, t)
-                self.vasp.set(nbands=nval)
-            elif isinstance(nbands, dict):
-                self.vasp.set(nbands=nbands[str(len(atoms))])
-            else:
-                self.vasp.set(nbands=nbands)
-        return {"MAGMOM": magmom}
-
-    def create_tasks(self, interval=50, shuffle=False):
-        """
-        Create VASP high precision DFT calculation tasks.
-        """
-        self.workdir.mkdir(exist_ok=True)
-
-        # The global hash table
-        hash_file = self.workdir / "hash.json"
-
-        # The global training structures file
-        calc_file = self.workdir / "accurate_dft_calc.extxyz"
-
-        # May read existing results
-        if hash_file.exists():
-            with open(hash_file, "r") as fp:
-                hash_table = json.load(fp)
-            calc_list = read(calc_file, index=":")
-            if len(calc_list) != len(hash_table):
-                raise IOError(
-                    f"{calc_file}(n={len(calc_list)}) does not "
-                    f"match with {hash_file}(n={len(hash_table)})!"
-                )
-        else:
-            hash_table = {}
-            calc_list = []
-
-        # Initialize the subsets
-        subset_id = Counter()
-        for atoms in calc_list:
-            subset_id[len(atoms)] += 1
-
-        # Loop through all sampling tasks
-        for task in self.task_iterator():
-            # Check if the trajectory file exists
-            trajectory = task / "trajectory.extxyz"
-            if not trajectory.exists():
-                continue
-            # Read the trajectory file
-            full = read(trajectory, index=slice(0, None, 1))
-            if shuffle:
-                size = len(full) // interval
-                selected = np.random.choice(
-                    full[interval - 1 :], size=size, replace=False
-                )
-            else:
-                # Select the last snapshot of each block(size=interval)
-                selected = full[interval - 1 :: interval]
-            for atoms in selected:
-                hash_id = atoms.info["_hash"]
-                src = atoms.info["_source"]
-                if hash_id in hash_table:
-                    continue
-                else:
-                    calc_list.append(atoms)
-                    natoms = len(atoms)
-                    aid = f"{natoms}.{subset_id[natoms]}"
-                    hash_table[hash_id] = {"aid": aid, "source": src}
-                    subset_id[len(atoms)] += 1
-
-        # Save the hash table
-        with open(hash_file, "w") as fp:
-            json.dump(hash_table, fp, indent=2)
-            fp.write("\n")
-
-        # Save the structures
-        write(calc_file, calc_list, format="extxyz")
-
-        # Create VASP jobs
-        subset_size = Counter()
-        for atoms in calc_list:
-            # The original structure id
-            aid = hash_table[atoms.info["_hash"]]["aid"]
-
-            # For structures of different sizes, we may use different CPU/GPU
-            # settings. Hence, 'natoms' is the first metric for makeing subsets.
-            natoms = len(atoms)
-            subsetdir = self.workdir / f"{natoms}atoms"
-            subsetdir.mkdir(exist_ok=True)
-            if natoms not in subset_size:
-                subset_size[natoms] = Counter()
-
-            # The group id. Each group contains 100 structures at most.
-            sid = int(aid.split(".")[1])
-            group_id = sid // 100
-            groupdir = subsetdir / f"group{group_id}"
-            groupdir.mkdir(exist_ok=True)
-
-            # The task id.
-            task_id = sid % 100
-            taskdir = groupdir / f"task{task_id}"
-            taskdir.mkdir(exist_ok=True)
-
-            # Setup the VASP calculator
-            magmom_dct = self.setup_vasp_accurate_dft_parameters(atoms)
-
-            # Write the input files
-            self.vasp.set(directory=str(taskdir))
-            self.vasp.write_input(atoms)
-
-            # Hack the MAGMOM tag for non-collinear calculations
-            if magmom_dct is not None:
-                with open(taskdir / "INCAR", "a") as fp:
-                    fp.write("\n")
-                    for key, value in magmom_dct.items():
-                        if value is not None:
-                            fp.write(f" {key} = {value}\n")
-
-            subset_size[natoms][group_id] += 1
-
-            # Write the metadata
-            metadata = {
-                "source": atoms.info["_source"],
-                "hash": atoms.info["_hash"],
-                "aid": aid,
-                "group_id": group_id,
-                "task_id": task_id,
-            }
-            if self.config.get("finite_temperature", False):
-                metadata["etemperature(K)"] = atoms.info["etemperature"] / kB
-            with open(taskdir / "metadata.json", "w") as fp:
-                json.dump(metadata, fp, indent=2)
-                fp.write("\n")
-
-        for natoms, group_size in subset_size.items():
-            for group_id, size in group_size.items():
-                print(
-                    f"[VASP/calc/create/{natoms}]: " f"group{group_id} ({size} tasks)"
-                )
-
-    def get_accurate_dft_calculation_status(self):
-        """
-        Get the status of high precision dft calculations.
-        """
-
-        # Determine the total number of prepared jobs
-        hash_file = self.root / "calc" / "hash.json"
-        if not hash_file.exists():
-            return
-        with open(hash_file) as fp:
-            hash_table = json.load(fp)
-        subset_size = Counter()
-        for key, value in hash_table.items():
-            aid = value["aid"]
-            i, j = [int(x) for x in aid.split(".")]
-            subset_size[i] = max(subset_size[i], j + 1)
-
-        status = {
-            "group": [],
-            "total_jobs": [],
-            "completed_jobs": [],
-            "converged_jobs": [],
-            "CPU(jobs)": [],
-            "CPU(hours)": [],
-            "GPU(jobs)": [],
-            "GPU(hours)": [],
-        }
-        accumulator = {}
-
-        # Loop through all prepared jobs
-        for taskdir in self.task_iterator():
-            metadata = taskdir / "metadata.json"
-            if not metadata.exists():
-                continue
-            with open(metadata, "r") as fp:
-                metadata = json.load(fp)
-            sid, aid = [int(x) for x in metadata["aid"].split(".")]
-            gid = metadata["group_id"]
-            key = (sid, gid)
-            if key not in accumulator:
-                if (gid + 1) * 100 <= subset_size[sid]:
-                    n_total = 100
-                else:
-                    n_total = aid % 100
-                accumulator[key] = Counter(
-                    {
-                        "CPU(hours)": 0.0,
-                        "GPU(hours)": 0.0,
-                        "CPU(jobs)": 0,
-                        "GPU(jobs)": 0,
-                        "n_converged": 0,
-                        "n_total": n_total,
-                        "completed_tasks": [],
-                        "converged_tasks": [],
-                    }
-                )
-            job = VaspJob(taskdir)
-            su = job.get_vasp_job_service_unit()
-            if su is None:
-                continue
-            converged = job.check_vasp_job_scf_convergence()
-            if converged:
-                accumulator[key]["n_converged"] += 1
-                accumulator[key]["converged_tasks"].append(str(taskdir))
-            accumulator[key]["n_completed"] += 1
-            accumulator[key]["completed_tasks"].append(str(taskdir))
-            if su.device == "cpu":
-                accumulator[key]["CPU(hours)"] += su.hours
-                accumulator[key]["CPU(jobs)"] += 1
-            else:
-                accumulator[key]["GPU(hours)"] += su.hours
-                accumulator[key]["GPU(jobs)"] += 1
-            # Update the metadata
-            with open(taskdir / "metadata.json", "w") as fp:
-                metadata["SU"] = su.__dict__
-                metadata["converged"] = converged
-                json.dump(metadata, fp, indent=2)
-                fp.write("\n")
-
-        # Save the group metadata
-        for key in accumulator:
-            sid, gid = key
-            groupdir = Path(f"calc/{sid}atoms/group{gid}")
-            with open(groupdir / "metadata.json", "w") as fp:
-                json.dump(accumulator[key], fp, indent=2)
-                fp.write("\n")
-
-        # Print the status
-        for key, value in accumulator.items():
-            status["group"].append(f"{key[0]}.g{key[1]}")
-            status["total_jobs"].append(value["n_total"])
-            status["converged_jobs"].append(value["n_converged"])
-            status["completed_jobs"].append(value["n_completed"])
-            status["CPU(jobs)"].append(value["CPU(jobs)"])
-            status["GPU(jobs)"].append(value["GPU(jobs)"])
-            status["CPU(hours)"].append(np.round(value["CPU(hours)"], 2))
-            status["GPU(hours)"].append(np.round(value["GPU(hours)"], 2))
-        status["group"].append("overall")
-        status["total_jobs"].append(sum(status["total_jobs"]))
-        status["CPU(jobs)"].append(sum(status["CPU(jobs)"]))
-        status["GPU(jobs)"].append(sum(status["GPU(jobs)"]))
-        status["CPU(hours)"].append(sum(status["CPU(hours)"]))
-        status["GPU(hours)"].append(sum(status["GPU(hours)"]))
-        status["completed_jobs"].append(sum(status["completed_jobs"]))
-        status["converged_jobs"].append(sum(status["converged_jobs"]))
-        df = pd.DataFrame(status)
-        df.set_index("group", inplace=True)
-        print(df.to_string())
-        with open(self.root / "calc" / "status", "w") as fp:
-            fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
-            df.to_string(fp)
-
-
-class PorousSampler(VaspHighPrecDftCalculator):
+class PorousSampler(BaseSampler):
     """
     This sampler is used to create porous structures by randomly removing atoms from 
     AIMD snapshots.

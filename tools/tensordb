@@ -4,18 +4,17 @@ The automatic database generation for TensorAlloy.
 """
 import numpy as np
 import toml
-import json
 import tqdm
 import matplotlib
 from datetime import datetime
+from typing import List
 from pathlib import Path
 from ase.io import read, write
 from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
-from tensoralloy.io.vasp import read_vasp_xml
-from tensordb.vaspkit import ServiceUnit, VaspJob
-from tensordb.sampler import VaspAimdSampler, VaspHighPrecDftCalculator
+from tensordb.sampler import BaseSampler, VaspAimdSampler
+from tensordb.calculator import BaseCalculator, VaspCalculator
 from matplotlib import pyplot as plt
 
 
@@ -31,125 +30,79 @@ class TensorDB:
         self.input_file = input_file
         self.root = Path(input_file).parent
         self.config = dict(toml.load(input_file))
-        self.aimd_sampler = VaspAimdSampler(self.root, self.config)
-        self.porous_sampler = None
-        self.dft_calculator = VaspHighPrecDftCalculator(self.root, self.config)
-    
+        self.samplers: List[BaseSampler] = [
+            VaspAimdSampler(self.root, self.config),
+        ]
+        self.calculators: List[BaseCalculator] = [
+            VaspCalculator(self.root, self.config),
+        ]
+
     def purge(self):
         """
         Cleanup all files. Be cautious when using this method.
         """
-        self.aimd_sampler.purge()
-        self.dft_calculator.purge()
+        for sampler in self.samplers:
+            sampler.purge()
+        for calculator in self.calculators:
+            calculator.purge()
 
     # --------------------------------------------------------------------------
-    # Generate VASP AIMD sampling jobs
+    # Sampling section
     # --------------------------------------------------------------------------
 
-    def create_vasp_sampling_nvt_tasks(self, override=False):
+    def create_sampling_tasks(self, override=False):
         """
-        Create VASP Langeven NVT sampling jobs: gamma-only.
+        Create sampling tasks.
         """
-        self.aimd_sampler.create_vasp_sampling_nvt_tasks(override=override)
+        for sampler in self.samplers:
+            sampler.create_tasks(override=override)
 
-    def create_vasp_sampling_npt_tasks(self, override=False):
+    def update_sampling_status(self):
         """
-        Create VASP Parrinello-Rahman NPT sampling jobs
+        Update the status of all sampling tasks.
         """
-        self.aimd_sampler.create_vasp_sampling_npt_tasks(override=override)
+        for sampler in self.samplers:
+            sampler.update_status()
 
-    # --------------------------------------------------------------------------
-    # Check the status of sampling jobs
-    # --------------------------------------------------------------------------
-
-    def update_status_of_sampling_job(self, jobdir: Path):
+    def list_unsubmitted_sampling_tasks(self):
         """
-        Update and return the status of a sampling job at given jobdir.
+        List unsubmitted sampling tasks.
         """
-        self.aimd_sampler.update_status_of_sampling_job(jobdir)
-
-    def get_status_of_all_sampling_jobs(self):
-        """
-        Get the status of all sampling jobs.
-        """
-        self.aimd_sampler.get_status_of_all_sampling_jobs()
-
-    def list_unsubmitted_sampling_jobs(self):
-        """
-        List unsubmitted AIMD sampling jobs.
-        """
-        self.aimd_sampler.list_unsubmitted_sampling_jobs()
+        for sampler in self.samplers:
+            sampler.list_unsubmitted_tasks()
 
     # --------------------------------------------------------------------------
-    # Post-processing
+    # Post-process section
     # --------------------------------------------------------------------------
 
-    def post_process_sampling_job(self, jobdir: Path):
+    def post_process(self):
         """
-        Post-processing a sampling job.
+        Post-processing all sampling tasks.
         """
-        self.aimd_sampler.post_process_sampling_job(jobdir)
-
-    def post_process_all_sampling_jobs(self):
-        """
-        Post-processing all sampling jobs.
-        """
-        self.aimd_sampler.post_process_all_sampling_jobs()
+        for sampler in self.samplers:
+            sampler.post_process()
 
     # --------------------------------------------------------------------------
-    # High-precision DFT calculations
+    # High-precision DFT section
     # --------------------------------------------------------------------------
 
-    def create_vasp_accurate_dft_tasks(self, interval=50, shuffle=False):
+    def create_accurate_dft_tasks(self, interval=50, shuffle=False):
         """
         Create VASP high precision DFT calculation tasks.
         """
-        self.dft_calculator.create_vasp_accurate_dft_tasks(
-            interval=interval, shuffle=shuffle)
+        for calculator in self.calculators:
+            calculator.create_tasks(self.samplers, interval=interval, shuffle=shuffle)
 
-    def get_accurate_dft_calculation_status(self):
+    def update_accurate_dft_tasks_status(self):
         """
         Get the status of high precision dft calculations.
         """
-        self.dft_calculator.get_accurate_dft_calculation_status()
+        for calculator in self.calculators:
+            calculator.update_status()
         
     # --------------------------------------------------------------------------
     # Make the training dataset
     # --------------------------------------------------------------------------
-
-    def _gather_one(self, taskdir: Path, check_job_status=False):
-        """
-        Gather one completed high precision DFT calculation.
-        """
-        if check_job_status:
-            job = VaspJob(taskdir)
-            su = job.get_vasp_job_service_unit()
-            if su is None:
-                return None
-            converged = job.check_vasp_job_scf_convergence()
-            if not converged:
-                return None
-        else:
-            metadata = taskdir / "metadata.json"
-            if not metadata.exists():
-                return None
-            with open(metadata, "r") as fp:
-                metadata = json.load(fp)
-            if not metadata.get("converged", False):
-                return None
-            if not metadata.get("SU", {}):
-                return None
-            su = ServiceUnit(**metadata["SU"])
-            if su.hours <= 0:
-                return None
-        atoms = next(read_vasp_xml(taskdir / "vasprun.xml", 
-                                   finite_temperature=self.is_finite_temperature, 
-                                   index=0))
-        atoms.info["hash"] = metadata["hash"]
-        atoms.info["aid"] = metadata["aid"]
-        atoms.info["group_id"] = metadata["group_id"]
-        atoms.info["task_id"] = metadata["task_id"]
-        return atoms
 
     def gather(self, output_file=None, nprocs=-2, check_job_status=False):
         """
@@ -168,20 +121,23 @@ class TensorDB:
         """
         from joblib import Parallel, delayed
 
-        all_tasks = [x for x in self.accurate_dft_calc_iterator()]
-        objects = Parallel(n_jobs=nprocs, verbose=1)(
-            delayed(self._gather_one)(taskdir, check_job_status)
-            for taskdir in all_tasks
-        )
-        objects = [x for x in objects if x is not None]
-        print(f"[VASP/gather]: total {len(objects)} structures gathered")
-
-        if output_file is None:
-            date = datetime.now().strftime("%Y%m%d")
-            output_dir = self.root / "database"
-            output_dir.mkdir(exist_ok=True)
-            output_file = output_dir / f"database_N{len(objects)}_{date}.extxyz"
-        write(output_file, objects, format="extxyz")
+        objects = []
+        for calculator in self.calculators:
+            all_tasks = [x for x in calculator.task_iterator()]
+            sets = Parallel(n_jobs=nprocs, verbose=1)(
+                delayed(calculator.get_atoms)(taskdir, check_job_status)
+                for taskdir in all_tasks
+            )
+            sets = [x for x in objects if x is not None]
+            print(f"[{calculator.software}/gather]: total {len(sets)} structures")
+            objects.extend(sets)
+            if output_file is None:
+                date = datetime.now().strftime("%Y%m%d")
+                output_dir = self.root / "database"
+                output_dir.mkdir(exist_ok=True)
+                filename = f"{calculator.software}_N{len(objects)}_{date}.extxyz"
+                output_file = output_dir / filename
+            write(output_file, objects, format="extxyz")
 
     # --------------------------------------------------------------------------
     # Plot
@@ -377,24 +333,18 @@ def main():
     
     if args.command == "create":
         if args.task == "sampling":
-            if not (args.nvt or args.npt):
-                print("Please specify at least one ensemble, e.g., appending "
-                      "--nvt or --npt to the command.")
-            if args.nvt:
-                db.create_vasp_sampling_nvt_tasks()
-            if args.npt:
-                db.create_vasp_sampling_npt_tasks()
+            db.create_sampling_tasks(override=True)
         elif args.task == "calc":
-            db.create_vasp_accurate_dft_tasks(interval=args.interval)
+            db.create_accurate_dft_tasks(interval=args.interval)
     elif args.command == "status":
         if args.type == "sampling":
-            db.get_status_of_all_sampling_jobs()
+            db.update_sampling_status()
         elif args.type == "calc":
-            db.get_accurate_dft_calculation_status()
+            db.update_accurate_dft_tasks_status()
         elif args.type == "unsubmitted":
-            db.list_unsubmitted_sampling_jobs()
+            db.list_unsubmitted_sampling_tasks()
     elif args.command == "postprocess":
-        db.post_process_all_sampling_jobs()
+        db.post_process()
     elif args.command == "gather":
         db.gather()
     elif args.command == "purge":

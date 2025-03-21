@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# VASPKit: A Python module for VASP helper functions.
 import numpy as np
 import re
 from dataclasses import dataclass
 from subprocess import Popen, PIPE
 from pathlib import Path
+
+# TODO: 1. move `read_vasp_xml` and `atoms_utils` to tensordb package
+# TODO: 2. make Vaspjob a subclass of ase.calculators.vasp.Vasp
+from tensoralloy.io.vasp import read_vasp_xml
+
+
+__author__ = 'Xin Chen'
+__email__ = 'Bismarrck@me.com'
 
 
 @dataclass(frozen=True)
@@ -43,7 +53,16 @@ class VaspJob:
         """
         if not self.params:
             self._parse_incar()
-        return self.params.get(key.lower(), None)
+        return self.params.get(key.lower(), None)        
+
+    def get_atoms(self, index=-1, is_finite_temperature=False):
+        """
+        Get the atoms object of a VASP job.
+        """
+        if not self.outcar.exists():
+            return None
+        return next(read_vasp_xml(self.outcar, index=index, 
+                                  finite_temperature=is_finite_temperature))
 
     def _parse_incar(self):
         """
