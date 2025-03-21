@@ -14,7 +14,7 @@ from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
 from tensordb.sampler import BaseSampler, VaspAimdSampler
-from tensordb.calculator import BaseCalculator, VaspCalculator
+from tensordb.calculator import BaseCalculator, VaspCalculator, VaspPorousCalculator
 from matplotlib import pyplot as plt
 
 
@@ -36,6 +36,8 @@ class TensorDB:
         self.calculators: List[BaseCalculator] = [
             VaspCalculator(self.root, self.config),
         ]
+        if "porosity" in self.config:
+            self.calculators.append(VaspPorousCalculator(self.root, self.config))
 
     def purge(self):
         """
@@ -273,7 +275,7 @@ def main():
 
     # The subparser for creating DFT jobs
     parser = sub_parsers.add_parser("create")
-    parser.add_argument("task", choices=["sampling", "calc"], 
+    parser.add_argument("task", choices=["sampling", "calc", "porosity"], 
                         help="The type of the DFT jobs to create.")
     parser.add_argument(
         "--interval", 

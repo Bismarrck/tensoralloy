@@ -1,5 +1,6 @@
 # The customized gitignore file
 sampling/
 calc/
+porous/
 output.*
 error.*

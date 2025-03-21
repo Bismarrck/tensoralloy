@@ -22,7 +22,7 @@ from tensordb.vaspkit import VaspJob
 from tensoralloy.io.vasp import read_vasp_xml
 
 
-__all__ = ["BaseSampler", "AimdSampler", "VaspAimdSampler", "PorousSampler"]
+__all__ = ["BaseSampler", "AimdSampler", "VaspAimdSampler"]
 
 
 class BaseSampler:
@@ -218,6 +218,7 @@ class BaseSampler:
     def get_samples(self, task: Path, **kwargs):
         raise NotImplementedError("get_samples() is not implemented yet.")
 
+
 class AimdSampler(BaseSampler):
     """
     The base class for ab initio molecular dynamics (AIMD) based samplers.
@@ -357,6 +358,10 @@ class AimdSampler(BaseSampler):
         else:
             # Select the last snapshot of each block(size=interval)
             selected = full[interval - 1 :: interval]
+            # If the interval is larger than the length of the trajectory, select the 
+            # last one.
+            if not selected:
+                selected = [full[-1]]
         return selected
 
 
@@ -696,23 +701,3 @@ class VaspAimdSampler(AimdSampler):
         # Save the trajectory to an extxyz file
         write(output_file, trajectory, format="extxyz")
         print(f"[VASP/sampling/postprocess]: {jobdir}")
-
-
-class PorousSampler(BaseSampler):
-    """
-    This sampler is used to create porous structures by randomly removing atoms from 
-    AIMD snapshots.
-    """
-
-    def __init__(self, root, config):
-        super().__init__(root, config)
-        self.workdir = self.root / "porous"
-        self.init_vasp()
-
-    def task_iterator(self):
-        """
-        Iterate through all porous sampling job dirs.
-        """
-        return self.workdir.glob("*atoms/group*/task*")
-
-

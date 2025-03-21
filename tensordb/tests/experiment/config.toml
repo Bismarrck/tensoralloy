@@ -2,6 +2,7 @@
 species = ["Cu"]
 phases = ["fcc", "bcc"]
 finite_temperature = true
+ab_initio = "vasp"
 
 # ----------------- Phase settings ---------------------------------------------
 
@@ -46,3 +47,9 @@ volumes = [11.0, ]
 temperatures = [1000, ]
 vt_method = "grid"
 nsteps = 200
+
+# ----------------- Porosity settings ------------------------------------------
+
+[porosity]
+interval = 500
+porosity = [1.1, 2.0]

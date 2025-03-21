@@ -10,7 +10,7 @@ import os
 import json
 from pathlib import Path
 from collections import Counter
-from typing import List
+from typing import List, Callable
 from ase import Atoms
 from ase.calculators.vasp.vasp import Vasp
 from ase.io import read, write
@@ -24,6 +24,10 @@ class BaseCalculator:
     """
     The base class for all high-precision DFT calculators.
     """
+
+    HASH_FILE = 'hash.json'
+    CALC_FILE = 'accurate_dft_calc.extxyz'
+
     
     def __init__(self, root: Path, config: dict):
         self.root = root
@@ -58,11 +62,73 @@ class BaseCalculator:
         """
         raise NotImplementedError("task_iterator() is not implemented.")
     
+    def may_modify_atoms(self, atoms: Atoms) -> Atoms:
+        """
+        Should this calculator modify to the atoms object for high-precision DFT 
+        calculations?
+
+        By default, it does nothing and returns the original atoms object.
+        """
+        return atoms
+    
     def create_tasks(self, samplers: List[BaseSampler], **kwargs):
         """
         Create high precision DFT calculation tasks.
         """
-        raise NotImplementedError("create_tasks() is not implemented.")
+        self.workdir.mkdir(exist_ok=True)
+
+        # The global hash table
+        hash_file = self.workdir / self.HASH_FILE
+
+        # The global training structures file
+        calc_file = self.workdir / self.CALC_FILE
+
+        # May read existing results
+        if hash_file.exists():
+            with open(hash_file, "r") as fp:
+                hash_table = json.load(fp)
+            calc_list = read(calc_file, index=":")
+            if len(calc_list) != len(hash_table):
+                raise IOError(
+                    f"{calc_file}(n={len(calc_list)}) does not "
+                    f"match with {hash_file}(n={len(hash_table)})!"
+                )
+        else:
+            hash_table = {}
+            calc_list = []
+
+        # Initialize the subsets
+        subset_id = Counter()
+        for atoms in calc_list:
+            subset_id[len(atoms)] += 1
+
+        # Loop through all samplers
+        for sampler in samplers:
+            # Iterate through all sampling tasks
+            for task in sampler.task_iterator():
+                selected = sampler.get_samples(task, **kwargs)
+                for atoms in selected:
+                    atoms = self.may_modify_atoms(atoms)
+                    hash_id = atoms.info["_hash"]
+                    src = atoms.info["_source"]
+                    if hash_id in hash_table:
+                        continue
+                    else:
+                        calc_list.append(atoms)
+                        natoms = len(atoms)
+                        aid = f"{natoms}.{subset_id[natoms]}"
+                        hash_table[hash_id] = {"aid": aid, "source": src}
+                        subset_id[len(atoms)] += 1
+
+        # Save the hash table
+        with open(hash_file, "w") as fp:
+            json.dump(hash_table, fp, indent=2)
+            fp.write("\n")
+
+        # Save the structures
+        write(calc_file, calc_list, format="extxyz")
+
+        return calc_list, hash_table
     
     def update_status(self):
         """
@@ -76,7 +142,7 @@ class BaseCalculator:
         """
         raise NotImplementedError("get_atoms() is not implemented.")
 
-
+ 
 class VaspCalculator(BaseCalculator):
     """
     The high-precision DFT calculator class for VASP.
@@ -192,56 +258,7 @@ class VaspCalculator(BaseCalculator):
         """
         Create VASP high precision DFT calculation tasks.
         """
-        self.workdir.mkdir(exist_ok=True)
-
-        # The global hash table
-        hash_file = self.workdir / "hash.json"
-
-        # The global training structures file
-        calc_file = self.workdir / "accurate_dft_calc.extxyz"
-
-        # May read existing results
-        if hash_file.exists():
-            with open(hash_file, "r") as fp:
-                hash_table = json.load(fp)
-            calc_list = read(calc_file, index=":")
-            if len(calc_list) != len(hash_table):
-                raise IOError(
-                    f"{calc_file}(n={len(calc_list)}) does not "
-                    f"match with {hash_file}(n={len(hash_table)})!"
-                )
-        else:
-            hash_table = {}
-            calc_list = []
-
-        # Initialize the subsets
-        subset_id = Counter()
-        for atoms in calc_list:
-            subset_id[len(atoms)] += 1
-
-        # Loop through all sampling tasks
-        for sampler in samplers:
-            for task in sampler.task_iterator():
-                selected = sampler.get_samples(task, **kwargs)
-                for atoms in selected:
-                    hash_id = atoms.info["_hash"]
-                    src = atoms.info["_source"]
-                    if hash_id in hash_table:
-                        continue
-                    else:
-                        calc_list.append(atoms)
-                        natoms = len(atoms)
-                        aid = f"{natoms}.{subset_id[natoms]}"
-                        hash_table[hash_id] = {"aid": aid, "source": src}
-                        subset_id[len(atoms)] += 1
-
-        # Save the hash table
-        with open(hash_file, "w") as fp:
-            json.dump(hash_table, fp, indent=2)
-            fp.write("\n")
-
-        # Save the structures
-        write(calc_file, calc_list, format="extxyz")
+        calc_list, hash_table = super().create_tasks(samplers, **kwargs)
 
         # Create VASP jobs
         subset_size = Counter()
@@ -302,7 +319,8 @@ class VaspCalculator(BaseCalculator):
         for natoms, group_size in subset_size.items():
             for group_id, size in group_size.items():
                 print(
-                    f"[VASP/calc/create/{natoms}]: " f"group{group_id} ({size} tasks)"
+                    f"{self.__class__.__name__} creates "
+                    f"{natoms}atoms/group{group_id} ({size} tasks)"
                 )
 
     def update_status(self):
@@ -311,7 +329,7 @@ class VaspCalculator(BaseCalculator):
         """
 
         # Determine the total number of prepared jobs
-        hash_file = self.root / "calc" / "hash.json"
+        hash_file = self.workdir / self.HASH_FILE
         if not hash_file.exists():
             return
         with open(hash_file) as fp:
@@ -387,7 +405,7 @@ class VaspCalculator(BaseCalculator):
         # Save the group metadata
         for key in accumulator:
             sid, gid = key
-            groupdir = Path(f"calc/{sid}atoms/group{gid}")
+            groupdir = self.workdir / f"{sid}atoms/group{gid}"
             with open(groupdir / "metadata.json", "w") as fp:
                 json.dump(accumulator[key], fp, indent=2)
                 fp.write("\n")
@@ -413,7 +431,7 @@ class VaspCalculator(BaseCalculator):
         df = pd.DataFrame(status)
         df.set_index("group", inplace=True)
         print(df.to_string())
-        with open(self.root / "calc" / "status", "w") as fp:
+        with open(self.workdir / "status", "w") as fp:
             fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
             df.to_string(fp)
     
@@ -450,3 +468,64 @@ class VaspCalculator(BaseCalculator):
         atoms.info["group_id"] = metadata["group_id"]
         atoms.info["task_id"] = metadata["task_id"]
         return atoms
+
+
+class VaspPorousCalculator(VaspCalculator):
+    """
+    This sampler is used to create porous structures by randomly removing atoms from 
+    AIMD snapshots.
+    """
+
+    def __init__(self, root, config):
+        super().__init__(root, config)
+        self.workdir = self.root / "porous"
+        
+        params = getitem(self.config, ["porosity", ])
+        if "porosity" not in params:
+            raise ValueError(
+                "The 'porosity' key is not found in the 'porosity' section.")
+        porosity = params["porosity"]
+        if isinstance(porosity, (int, float)):
+            self.get_porosity = lambda : porosity
+        else:
+            assert len(porosity) == 2, "The 'porosity' should be a list of two floats."
+            pmin, pmax = porosity
+            if pmin > pmax:
+                pmin, pmax = pmax, pmin
+            if pmin <= 1:
+                print("Warning: The minimum porosity should be larger than 1!")
+                pmin = 1.01
+            if pmax > 3:
+                print(f"Warning: The maximum porosity is {pmax}, you should know what "
+                      f"you are doing!")
+            self.get_porosity = lambda : np.random.uniform(pmin, pmax)
+        self.interval = params.get("interval", 500)
+
+    def task_iterator(self):
+        """
+        Iterate through all high-precision DFT calculation job dirs.
+        """
+        return self.workdir.glob("*atoms/group*/task*")
+
+    def may_modify_atoms(self, atoms):
+        """
+        Create porous structures by randomly removing atoms.
+        """
+        porosity = self.get_porosity()
+        n = len(atoms)
+        nd = max(1, n - int(n / porosity))
+        indices = np.random.choice(n, nd, replace=False)
+        obj = atoms.copy()
+        del obj[indices]
+        return obj
+
+    def create_tasks(self, samplers: List[BaseSampler], **kwargs):
+        """
+        Create VASP high precision DFT calculation tasks.
+        For VaspPorousCalculator, the random seed is fixed to 0.
+        """
+        np.random.seed(0)
+        key_val_pairs = dict(kwargs)
+        if "interval" in key_val_pairs:
+            key_val_pairs["interval"] = self.interval
+        super().create_tasks(samplers, **key_val_pairs)
