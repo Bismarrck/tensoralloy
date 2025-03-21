@@ -3,14 +3,14 @@
 # This module defines calculators, which are used to execute high-precision DFT 
 # calculations.
 
-import datetime
 import pandas as pd
 import numpy as np
 import os
 import json
+from datetime import datetime
 from pathlib import Path
 from collections import Counter
-from typing import List, Callable
+from typing import List
 from ase import Atoms
 from ase.calculators.vasp.vasp import Vasp
 from ase.io import read, write
@@ -247,7 +247,7 @@ class VaspCalculator(BaseCalculator):
                 v = a.get_volume() / n
                 t = atoms.info['etemperature']
                 nval = eval(nbands)(a, n, v, t)
-                self.vasp.set(nbands=nval)
+                self.vasp.set(nbands=int(nval))
             elif isinstance(nbands, dict):
                 self.vasp.set(nbands=nbands[str(len(atoms))])
             else:
@@ -430,6 +430,7 @@ class VaspCalculator(BaseCalculator):
         status["converged_jobs"].append(sum(status["converged_jobs"]))
         df = pd.DataFrame(status)
         df.set_index("group", inplace=True)
+        print(f"{self.__class__.__name__} status: ")
         print(df.to_string())
         with open(self.workdir / "status", "w") as fp:
             fp.write("# " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")

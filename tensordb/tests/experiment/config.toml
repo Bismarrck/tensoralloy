@@ -22,16 +22,17 @@ potcars = ["Cu"]
 
 # VASP AIMD sampling parameters
 [vasp.sampling]
-encut = 600
+encut = 400
 langevin_gamma = 10
 ediff = 1e-5
 nsim = 64
 
 # VASP high precision calculation parameters
 [vasp.calc]
-encut = 600
-kspacing = 0.20
+encut = 400
+kspacing = 0.5
 nsim = 64
+kpar = 2
 nbands = "lambda a,n,v,t: 16*n+(t//10000*n)"
 
 # ----------------- AIMD sampling settings for phase ---------------------------

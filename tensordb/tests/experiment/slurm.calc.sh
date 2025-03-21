@@ -1,14 +1,14 @@
 #!/bin/bash
-# This script is used to test the high-accuracy dft calculation capability of TensorDB.
+# # This script is used to test the high-accuracy dft calculation capability of TensorDB.
 
 #SBATCH --job-name=calc
-#SBATCH --output=calc.out
-#SBATCH --error=calc.out
+#SBATCH --output=output.calc
+#SBATCH --error=error.calc
 #SBATCH --nodes=1
 #SBATCH --partition=2gpu
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=32
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 
 module purge
 module load vasp-gpu/6.5.0
@@ -33,11 +33,23 @@ if [ "$SLURM_NTASKS_PER_NODE" != "1" ]; then
 fi
 workdir=`pwd`
 
-for jobid in `seq 1 1 2`; do
-    cd sampling
-    jobdir=$(sed -n "${jobid}p" batch_jobs)
+declare -a jobdirs=(
+    "calc/32atoms/group0/task0"
+    "calc/32atoms/group0/task1"
+    "calc/32atoms/group0/task2" 
+    "calc/32atoms/group0/task3"
+    "calc/54atoms/group0/task0"
+    "calc/54atoms/group0/task1"
+    "calc/54atoms/group0/task2"
+    "calc/54atoms/group0/task3"
+    "porous/20atoms/group0/task0"
+    "porous/35atoms/group0/task0"
+)
+
+for jobdir in "${jobdirs[@]}"; do
     cd $jobdir
-    mpirun -np $nprocs --map-by ppr:$pps:socket:PE=$OMP_NUM_THREADS --bind-to core vasp_gam
+    echo "Running $jobdir, `date`"
+    mpirun -np $nprocs --map-by ppr:$pps:socket:PE=$OMP_NUM_THREADS --bind-to core vasp_std
     sleep 1
     cd $workdir
 done

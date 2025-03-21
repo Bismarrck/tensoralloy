@@ -518,7 +518,7 @@ class VaspAimdSampler(AimdSampler):
                             v = a.get_volume() / n
                             t = max(t0[i], t1[i])
                             nval = eval(nbands)(a, n, v, t)
-                            self.vasp.set(nbands=nval)
+                            self.vasp.set(nbands=int(nval))
                         elif isinstance(nbands, dict):
                             self.vasp.set(nbands=nbands[str(len(supercell))])
                         else:
