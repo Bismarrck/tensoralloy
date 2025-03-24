@@ -115,6 +115,10 @@ class BaseCalculator:
                 selected = sampler.get_samples(task, **kwargs)
                 for atoms in selected:
                     atoms = self.may_modify_atoms(atoms)
+                    # Skip the atoms object if it is None. This may happen when the 
+                    # modification failed due to some reasons.
+                    if atoms is None:
+                        continue
                     hash_id = atoms.info["_hash"]
                     src = atoms.info["_source"]
                     if hash_id in hash_table:

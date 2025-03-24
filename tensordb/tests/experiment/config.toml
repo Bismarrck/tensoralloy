@@ -62,4 +62,6 @@ interval = 100
 
 [aging.transmutation]
 Cu-Fe = {prob=1.0, nmax=2}
-Cu-He = {prob=1.0, ratio=2, nmax=1}
+
+[aging.helium_bubble]
+Cu = {prob=1.0, ratio=2, nmax=1}
