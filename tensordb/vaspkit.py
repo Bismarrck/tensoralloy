@@ -45,6 +45,7 @@ class VaspJob:
     def __init__(self, jobdir: Path) -> None:
         self.jobdir = jobdir
         self.outcar = jobdir / "OUTCAR"
+        self.vaspxml = jobdir / "vasprun.xml"
         self.params = {}
     
     def get_incar_parameter(self, key: str) -> str:
@@ -59,9 +60,9 @@ class VaspJob:
         """
         Get the atoms object of a VASP job.
         """
-        if not self.outcar.exists():
+        if not self.vaspxml.exists():
             return None
-        return next(read_vasp_xml(self.outcar, index=index, 
+        return next(read_vasp_xml(self.vaspxml, index=index, 
                                   finite_temperature=is_finite_temperature))
 
     def _parse_incar(self):

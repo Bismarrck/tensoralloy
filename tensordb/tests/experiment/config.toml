@@ -54,3 +54,12 @@ nsteps = 200
 [porosity]
 interval = 500
 porosity = [1.1, 2.0]
+
+# ----------------- Aging settings ---------------------------------------------
+
+[aging]
+interval = 100
+
+[aging.transmutation]
+Cu-Fe = {prob=1.0, nmax=2}
+Cu-He = {prob=1.0, ratio=2, nmax=1}
