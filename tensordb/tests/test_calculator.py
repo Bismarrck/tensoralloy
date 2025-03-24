@@ -4,8 +4,7 @@ import nose
 import unittest
 from pathlib import Path
 from ase.build import bulk
-from nose.tools import assert_almost_equal, assert_equal, assert_true
-from tensordb.calculator import VaspAgingCalculator
+from tensordb.aging import VaspAgingCalculator
 
 
 class TestVaspAgingCalculator(unittest.TestCase):
