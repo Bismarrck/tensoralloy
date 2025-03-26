@@ -27,14 +27,22 @@ class Transmutation:
 
 
 @dataclass
-class HeliumBubbleInjection(Transmutation):
+class HeliumBubbleInjection:
     """
     The dataclass for defining an irradiation-induced helium bubble injection.
     """
-    ratio = 1
-    dist_mean = 1.5
-    dist_std = 0.5
+    target: str
+    max_target_size: int
+    max_bubble_size: int
+    max_ratio: float = 3.0
+    min_ratio: float = 1.0
+    cutoff: float = 4.0
 
+    def __post_init__(self):
+        assert 1 <= self.max_target_size <= 5
+        assert 1 <= self.max_bubble_size <= 10
+        assert self.max_ratio <= 4.0
+        assert 0.5 <= self.min_ratio <= self.max_ratio
 
 class VaspAgingCalculator(VaspCalculator):
     """
@@ -90,19 +98,16 @@ class VaspAgingCalculator(VaspCalculator):
             self.transmutations.append(Transmutation(src, dst, prob, nmax=nmax))
         
         # Parse the helium bubble injections
-        self.helium_bubbles = []
-        for src, value in params.get("helium_bubble", {}).items():
-            if not isinstance(value, dict):
-                raise ValueError(f"The value of {key} should be a dictionary.")
-            prob = value.get("prob", self.defaults["prob"])
-            ratio = value.get("ratio", self.defaults["ratio"])
-            nmax = value.get("nmax", self.defaults["nmax"])
-            dist_mean = value.get("dist_mean", self.defaults["dist_mean"])
-            dist_std = value.get("dist_std", self.defaults["dist_std"])
-            self.helium_bubbles.append(
-                HeliumBubbleInjection(
-                    src=src, dst="He", prob=prob, ratio=ratio,
-                    nmax=nmax, dist_mean=dist_mean, dist_std=dist_std))
+        self.helium_bubble_injection = None
+        args = params.get("helium_bubble", {})
+        if len(args) > 0:
+            self.helium_bubble_injection = HeliumBubbleInjection(
+                target=args["target"], 
+                max_target_size=args["max_target_size"],
+                max_bubble_size=args["max_bubble_size"],
+                max_ratio=args["max_ratio"],
+                cutoff=args.get("cutoff", self.defaults["cutoff"])
+            )
 
     @property
     def random_seed(self):
@@ -110,17 +115,29 @@ class VaspAgingCalculator(VaspCalculator):
 
     def may_inject_helium_bubble(self, atoms: Atoms, indices: np.ndarray):
         """
-        The method for injecting a small helium cluster into the structure.
+        The method for injecting a small helium bubble into the structure.
         """
-        n = len(atoms)
-        # Reserve the space for the points
-        points = np.zeros((n * 2, 3))
-        for i in indices:
-            if atoms.info["modified"][i]:
-                continue
-            points[0] = atoms[i].position
-            D = neighbor_list('D', atoms, cutoff=self.cutoff)
-            points[1: len(D) + 1] = D + points[0]
+        if self.helium_bubble_injection is None:
+            return
+
+        # Initialize the helium bubble injector
+        args = self.helium_bubble_injection
+        injector = FibnonacciSphereHeliumBubbleInjector(cutoff=args.cutoff)
+        
+        # Setup the sizes
+        n = 0
+        while n < 100:
+            cluster_size = np.random.randint(1, args.max_target_size + 1)
+            bubble_size = np.random.randint(1, args.max_bubble_size + 1)
+            ratio = bubble_size / cluster_size
+            if args.min_ratio <= ratio <= args.max_ratio:
+                break
+            n += 1
+        else:
+            raise ValueError("Cannot find a valid cluster size and bubble size.")
+
+        # Do the injection
+        injector.inject(atoms, indices[0], cluster_size, bubble_size, inplace=True)
 
     def may_modify_atoms(self, atoms: Atoms):
         """
@@ -144,7 +161,10 @@ class VaspAgingCalculator(VaspCalculator):
         obj.info["modified"] = np.zeros(n, dtype=bool)
         shuffled_indices = np.random.permutation(n)
         
-        # 3. Loop through each transmutation.
+        # 3. Loop through each helium bubble injection.
+        self.may_inject_helium_bubble(obj, shuffled_indices)
+
+        # 4. Loop through each transmutation.
         for transmutation in self.transmutations:
             for i in shuffled_indices:
                 if obj.info["modified"][i]:
@@ -158,11 +178,6 @@ class VaspAgingCalculator(VaspCalculator):
                         transmutation.used += 1
                         if transmutation.used >= transmutation.nmax:
                             break
-        
-        # 4. Loop through each helium bubble injection.
-        for helium_bubble in self.helium_bubbles:
-            self.may_inject_helium_bubble(obj, shuffled_indices)
-        
         return obj
 
     def create_tasks(self, samplers: List[BaseSampler], **kwargs):
@@ -205,7 +220,7 @@ class HeliumBubbleInjector:
         return np.mean(adjusted_positions, axis=0)
 
     def inject(self, atoms: Atoms, center_atom_idx: int, cluster_size: int, 
-               bubble_size: int) -> Atoms:
+               bubble_size: int, inplace=False) -> Atoms:
         """
         Inject helium bubbles into 'atoms'.
 
@@ -214,17 +229,20 @@ class HeliumBubbleInjector:
             center_atom_idx: Index of the center atom
             cluster_size: Number of atoms in the cluster
             bubble_size: Number of helium atoms to inject
+            inplace: Modify the input Atoms object in place
 
         """
         cluster_indices = find_cluster_neighbor_list_method(
             atoms, center_atom_idx, cluster_size, self.cutoff)
-        return self.replace_cluster(atoms, cluster_indices, "He", bubble_size)
+        return self.replace_cluster(atoms, cluster_indices, "He", bubble_size, 
+                                    inplace=inplace)
 
     def replace_cluster(self, 
                         atoms: Atoms, 
                         cluster_indices: list, 
                         new_element: str, 
-                        new_atom_count: int) -> Atoms:
+                        new_atom_count: int, 
+                        inplace: bool = False) -> Atoms:
         """
         Replace a cluster of atoms with a new element and optimize the positions.
         """
@@ -254,7 +272,8 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
                         atoms: Atoms, 
                         cluster_indices: list, 
                         new_element: str,
-                        new_atom_count: int) -> Atoms:
+                        new_atom_count: int,
+                        inplace=False) -> Atoms:
         """
         Replace a cluster of atoms with a new element and optimize the positions.
         """
@@ -289,10 +308,16 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
         
         # Update the atom positions
         optimized_positions = result.x.reshape(-1, 3)
-        self.replace_atoms(new_atoms, cluster_indices, 
+
+        if inplace:
+            self.replace_atoms(atoms, cluster_indices,
+                               new_element, optimized_positions)
+            return atoms
+        else:
+            self.replace_atoms(new_atoms, cluster_indices, 
                            new_element, optimized_positions)
         
-        return new_atoms
+            return new_atoms
     
     def calculate_loss(self, atoms: Atoms, indices: np.ndarray, centroid: np.ndarray):
         """
@@ -387,7 +412,7 @@ def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int,
     
     """
     # Validate inputs
-    assert 2 <= cluster_size < 5, "cluster_size must be between 2 and 4"
+    assert 1 <= cluster_size < 5, "cluster_size must be between 2 and 4"
     
     # Step 1: Filter target element atoms
     eltype = atoms[center_atom_idx].symbol

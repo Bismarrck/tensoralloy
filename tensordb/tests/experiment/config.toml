@@ -64,4 +64,9 @@ interval = 100
 Cu-Fe = {prob=1.0, nmax=2}
 
 [aging.helium_bubble]
-Cu = {prob=1.0, ratio=2, nmax=1}
+target = "Cu"
+max_target_size = 3
+max_bubble_size = 8
+max_ratio = 3.0
+min_ratio = 0.8
+cutoff = 4.0

@@ -29,7 +29,7 @@ class TestVaspAgingCalculator(unittest.TestCase):
         atoms.positions += np.random.rand(*atoms.positions.shape) * 0.1
 
         injector = FibnonacciSphereHeliumBubbleInjector(cutoff=cutoff)
-        new_atoms = injector.inject(atoms, 0, 3, 5)
+        new_atoms = injector.inject(atoms, 0, 1, 2)
         ilist, jlist, dlist = neighbor_list('ijd', new_atoms, cutoff=cutoff)
         chemical_symbols = new_atoms.get_chemical_symbols()
         mindist = Counter()
