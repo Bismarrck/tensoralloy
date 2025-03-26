@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import List
 from ase import Atoms, Atom
 from ase.neighborlist import neighbor_list, NeighborList
+from ase.geometry import get_distances, find_mic
 from ase.data import covalent_radii, atomic_numbers
 from scipy.optimize import minimize
 from tensordb.calculator import VaspCalculator
@@ -182,6 +183,26 @@ class HeliumBubbleInjector:
         """
         self.cutoff = cutoff
         self.optimization_steps = optimization_steps
+    
+    @staticmethod
+    def pbc_aware_centroid(positions, cell, pbc):
+        """
+        Calculate centroid considering periodic boundaries using MIC
+        """
+        if not np.any(pbc):  # No PBC in any direction
+            return np.mean(positions, axis=0)
+        
+        # Reference point (first atom in cluster)
+        ref_pos = positions[0]
+        displacements = positions - ref_pos
+        
+        # Apply minimum image convention to all displacements
+        adjusted_displacements, _ = find_mic(displacements, cell, pbc)
+        
+        # Reconstruct absolute positions in reference image
+        adjusted_positions = ref_pos + adjusted_displacements
+        
+        return np.mean(adjusted_positions, axis=0)
 
     def inject(self, atoms: Atoms, center_atom_idx: int, cluster_size: int, 
                bubble_size: int) -> Atoms:
@@ -220,6 +241,7 @@ class HeliumBubbleInjector:
             atoms.append(Atom(new_element, position=pos))
             new_indices.append(n)
             n += 1
+        atoms.wrap()
         return new_indices
 
 
@@ -241,8 +263,8 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
         new_atoms = atoms.copy()
         
         # Obtain the initial cluster information
-        old_positions = new_atoms.positions[cluster_indices]
-        centroid = np.mean(old_positions, axis=0)
+        centroid = self.pbc_aware_centroid(
+            atoms.positions[cluster_indices], atoms.cell, atoms.pbc)
         
         # Generate new atom positions (Fibonacci sphere distribution)
         sphere = self.fibonacci_sphere(new_atom_count, radius=1.0)
@@ -253,15 +275,13 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
         # Scale initial positions using safe radius
         initial_positions = centroid + sphere * safe_radius * new_atom_count**0.33
 
-        # Define the optimization procedure    
+        # Define the optimization procedure
         def loss_function(positions):
             positions = positions.reshape(-1, 3)
             trial = new_atoms.copy()
-            new_indices = self.replace_atoms(
+            indices = self.replace_atoms(
                 trial, cluster_indices, new_element, positions)
-            neighbor_positions = self.get_neighbor_positions(
-                trial, new_indices, self.cutoff)
-            return self.calculate_loss(positions, neighbor_positions, centroid)
+            return self.calculate_loss(trial, indices, centroid)
         
         result = minimize(loss_function, initial_positions.flatten(),
                           method='L-BFGS-B', 
@@ -273,23 +293,53 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
                            new_element, optimized_positions)
         
         return new_atoms
+    
+    def calculate_loss(self, atoms: Atoms, indices: np.ndarray, centroid: np.ndarray):
+        """
+        Calculate the loss function for the optimization.
+        The loss function is a weighted sum of three terms: repulsion, self-interaction, 
+        and attraction.
+        """
 
-    def get_neighbor_positions(self, atoms, indices, cutoff):
-        """
-        Obtain the positions of neighbors of selected atoms.
-        """
-        nl = NeighborList([cutoff/2]*len(atoms), self_interaction=False)
+        # Initialize cutoffs. Only the selected atoms have a cutoff.
+        cutoffs = np.zeros(len(atoms))
+        cutoffs[indices] = self.cutoff
+
+        # Build neighbor lists
+        nl = NeighborList(cutoffs=cutoffs, skin=0.3, self_interaction=False, 
+                          bothways=True)
         nl.update(atoms)
-        
-        neighbor_set = set()
+
+        # Repulsion term: the new positions should be not too close to their neighbors.
+        repulsion = 0.0
+        R = atoms.positions
         for idx in indices:
             neighbors, offsets = nl.get_neighbors(idx)
-            for n, offset in zip(neighbors, offsets):
-                if n not in indices:
-                    true_pos = atoms.positions[n] + offset @ atoms.get_cell()
-                    neighbor_set.add(tuple(true_pos))
+            D = R[neighbors] + offsets @ atoms.get_cell() - R[idx]
+            repulsion += 1.0 / np.min(np.linalg.norm(D, axis=1))
         
-        return np.array(list(neighbor_set))
+        # Self-interaction term: the interatomic distances should be uniform.
+        self_dists = get_distances(
+            atoms.positions[indices], 
+            atoms.positions[indices], 
+            cell=atoms.cell, pbc=True)[1]
+        dists = []
+        for i in range(len(indices)):
+            dists.extend(self_dists[i, i+1:])
+        dists = np.array(dists)
+        self_interaction = np.linalg.norm(dists - dists.mean())
+                
+        # Attraction term: the new positions should be not far from the centroid
+        new_positions = atoms.positions[indices]
+        center_disp = get_distances(new_positions, centroid, cell=atoms.cell, pbc=True)
+        center_term = center_disp[1].mean()
+        
+        # Weighted sum (adjusted weights)
+        return (
+            0.6 * repulsion +
+            0.2 * self_interaction +
+            0.2 * center_term
+        )
 
     def fibonacci_sphere(self, n, radius=1.0, min_distance=1.0):
         """
@@ -317,37 +367,6 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
             points.extend(new_points[:n-len(points)])
         
         return np.array(points[:n])
-
-    def calculate_loss(self, new_positions, neighbor_positions, centroid, 
-                       target_dist=2.5, hard_cutoff=1.2):
-        """
-        A composite loss function that includes distance matching and uniform 
-        distribution.
-        """
-        # Hard repulsion term for any distances below cutoff
-        dist_matrix = np.linalg.norm(
-            new_positions[:, None] - neighbor_positions, axis=2)
-        repulsion = np.sum(np.where(dist_matrix < hard_cutoff, 
-                                    (hard_cutoff - dist_matrix)**3, 0))
-        
-        # Distance matching term
-        target_dist_term = np.mean((dist_matrix - target_dist)**2)
-        
-        # Self-repulsion term
-        self_dist = np.linalg.norm(new_positions[:, None] - new_positions, axis=2)
-        np.fill_diagonal(self_dist, np.inf)
-        self_repulsion = np.sum(1/(self_dist**2 + 1e-6))
-        
-        # Centering term
-        center_term = np.mean(np.linalg.norm(new_positions - centroid, axis=1))
-        
-        # Weighted sum (adjusted weights)
-        return (
-            5.0 * repulsion +
-            0.8 * target_dist_term +
-            0.2 * self_repulsion +
-            0.2 * center_term
-        )
 
 
 def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int, 
