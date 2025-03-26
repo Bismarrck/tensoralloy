@@ -4,10 +4,10 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import List
-from ase import Atoms
-from ase.neighborlist import neighbor_list
+from ase import Atoms, Atom
+from ase.neighborlist import neighbor_list, NeighborList
+from ase.data import covalent_radii, atomic_numbers
 from scipy.optimize import minimize
-from scipy.spatial.distance import cdist
 from tensordb.calculator import VaspCalculator
 from tensordb.sampler import BaseSampler
 from tensordb.utils import getitem
@@ -171,94 +171,231 @@ class VaspAgingCalculator(VaspCalculator):
         super().create_tasks(samplers, **kwargs)
 
 
-def replace_point_with_gaussian(points: np.ndarray, k=2, d1=1.0, d2=0.1, 
-                                d3=2.0, lambda_param=1.0, max_iter=100):
+class HeliumBubbleInjector:
     """
-    Randomly replace a point in a 3D point set with k new points.
-    * The distance between the new points and the replaced point is less than d3.
-    * The distance between the new points follows a Gaussian distribution N(d1, d2).
-    * The new points are as far away from other points as possible.
-
-    Parameters:
-    * points: The original point set (a list of 3D coordinates).
-    * k: The number of new points to generate (2 to N).
-    * d1: The mean of the Gaussian distribution.
-    * d2: The standard deviation of the Gaussian distribution.
-    * d3: The maximum distance to the replaced point.
-    * lambda_param: The weight of the Gaussian distribution constraint.
-    * max_iter: The maximum number of optimization iterations.
-
+    The class for injecting helium bubbles into the structure.
     """
+
+    def __init__(self, cutoff=4.0, optimization_steps=100):
+        """
+        The initialization method.
+        """
+        self.cutoff = cutoff
+        self.optimization_steps = optimization_steps
+
+    def inject(self, atoms: Atoms, center_atom_idx: int, cluster_size: int, 
+               bubble_size: int) -> Atoms:
+        """
+        Inject helium bubbles into 'atoms'.
+
+        Args:
+            atoms: ASE Atoms object
+            center_atom_idx: Index of the center atom
+            cluster_size: Number of atoms in the cluster
+            bubble_size: Number of helium atoms to inject
+
+        """
+        cluster_indices = find_cluster_neighbor_list_method(
+            atoms, center_atom_idx, cluster_size, self.cutoff)
+        return self.replace_cluster(atoms, cluster_indices, "He", bubble_size)
+
+    def replace_cluster(self, 
+                        atoms: Atoms, 
+                        cluster_indices: list, 
+                        new_element: str, 
+                        new_atom_count: int) -> Atoms:
+        """
+        Replace a cluster of atoms with a new element and optimize the positions.
+        """
+        raise NotImplementedError
     
-    # 1. Setup
-    replace_idx = 0
-    P = points[replace_idx]
-    other_points = points[1:]
-    
-    # 2. Generate the initial points (randomly distributed around P)
-    np.random.seed(3)
-    initial_guess = []
-    for _ in range(k):
-        # Generate a random direction and normalize it
-        direction = np.random.normal(size=3)
-        direction /= np.linalg.norm(direction)
-        # Generate a random radius (0 to d3)
-        radius = np.random.uniform(0, d3)
-        Q = P + direction * radius
-        initial_guess.extend(Q)
-    initial_guess = np.array(initial_guess)
-    
-    # 3. The objective function. 
-    # The rule is maximizing the minimum distance with Gaussian distribution constraint.
-    def objective(vars, other_points, P, d1, d2, lambda_param):
-        new_points = vars.reshape(-1, 3)
-        k = new_points.shape[0]
+    def replace_atoms(self, atoms, old_indices, new_element, new_positions):
+        """
+        Replace a group of atoms with new atoms in the structure
+        """
+        del atoms[old_indices]
+        new_indices = []
+        n = len(atoms)
+        for pos in new_positions:
+            atoms.append(Atom(new_element, position=pos))
+            new_indices.append(n)
+            n += 1
+        return new_indices
+
+
+class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
+    """
+    The class for injecting helium bubbles using the Fibonacci sphere method.
+    """
+
+    def replace_cluster(self,
+                        atoms: Atoms, 
+                        cluster_indices: list, 
+                        new_element: str,
+                        new_atom_count: int) -> Atoms:
+        """
+        Replace a cluster of atoms with a new element and optimize the positions.
+        """
+
+        # Make a copy of the input atoms object
+        new_atoms = atoms.copy()
         
-        # Calculate the minimum distance to other points
-        if len(other_points) > 0:
-            min_dists = cdist(new_points, other_points)
-            min_d = np.min(min_dists)
-        else:
-            min_d = np.inf
+        # Obtain the initial cluster information
+        old_positions = new_atoms.positions[cluster_indices]
+        centroid = np.mean(old_positions, axis=0)
         
-        # Calculate the mean and variance of the pairwise distances
-        pairwise_dists = cdist(new_points, new_points)
-        triu_indices = np.triu_indices(k, 1)
-        valid_dists = pairwise_dists[triu_indices]
+        # Generate new atom positions (Fibonacci sphere distribution)
+        sphere = self.fibonacci_sphere(new_atom_count, radius=1.0)
+        element_radius = covalent_radii[atomic_numbers[new_element]]
+        neighbor_radius = np.max([covalent_radii[atom.number] for atom in atoms])
+        safe_radius = 2 * (element_radius + neighbor_radius)  # 2 * sum of radii
         
-        if len(valid_dists) == 0:
-            mean_dist, var_dist = 0.0, 0.0
-        else:
-            mean_dist = np.mean(valid_dists)
-            var_dist = np.var(valid_dists)
+        # Scale initial positions using safe radius
+        initial_positions = centroid + sphere * safe_radius * new_atom_count**0.33
+
+        # Define the optimization procedure    
+        def loss_function(positions):
+            positions = positions.reshape(-1, 3)
+            trial = new_atoms.copy()
+            new_indices = self.replace_atoms(
+                trial, cluster_indices, new_element, positions)
+            neighbor_positions = self.get_neighbor_positions(
+                trial, new_indices, self.cutoff)
+            return self.calculate_loss(positions, neighbor_positions, centroid)
         
-        # Maximize the minimum distance + Gaussian distribution penalty
-        loss = -min_d + lambda_param * ((mean_dist - d1)**2 + (var_dist - d2**2)**2)
-        return loss
+        result = minimize(loss_function, initial_positions.flatten(),
+                          method='L-BFGS-B', 
+                          options={'maxiter': self.optimization_steps})
+        
+        # Update the atom positions
+        optimized_positions = result.x.reshape(-1, 3)
+        self.replace_atoms(new_atoms, cluster_indices, 
+                           new_element, optimized_positions)
+        
+        return new_atoms
+
+    def get_neighbor_positions(self, atoms, indices, cutoff):
+        """
+        Obtain the positions of neighbors of selected atoms.
+        """
+        nl = NeighborList([cutoff/2]*len(atoms), self_interaction=False)
+        nl.update(atoms)
+        
+        neighbor_set = set()
+        for idx in indices:
+            neighbors, offsets = nl.get_neighbors(idx)
+            for n, offset in zip(neighbors, offsets):
+                if n not in indices:
+                    true_pos = atoms.positions[n] + offset @ atoms.get_cell()
+                    neighbor_set.add(tuple(true_pos))
+        
+        return np.array(list(neighbor_set))
+
+    def fibonacci_sphere(self, n, radius=1.0, min_distance=1.0):
+        """
+        Generate n points on a sphere using the Fibonacci lattice method.
+        """
+        points = []
+        while len(points) < n:
+            indices = np.arange(len(points), len(points)+1000)
+            phi = np.arccos(1 - 2*(indices+0.5)/(n+1000))
+            theta = np.pi * (1 + 5**0.5) * indices
+            
+            new_points = np.stack([
+                radius * np.sin(phi) * np.cos(theta),
+                radius * np.sin(phi) * np.sin(theta),
+                radius * np.cos(phi)
+            ], axis=1)
+            
+            # Filter points that are too close
+            if points:
+                distances = np.linalg.norm(new_points[:, None] - np.array(points), 
+                                           axis=2)
+                mask = np.all(distances > min_distance, axis=1)
+                new_points = new_points[mask]
+                
+            points.extend(new_points[:n-len(points)])
+        
+        return np.array(points[:n])
+
+    def calculate_loss(self, new_positions, neighbor_positions, centroid, 
+                       target_dist=2.5, hard_cutoff=1.2):
+        """
+        A composite loss function that includes distance matching and uniform 
+        distribution.
+        """
+        # Hard repulsion term for any distances below cutoff
+        dist_matrix = np.linalg.norm(
+            new_positions[:, None] - neighbor_positions, axis=2)
+        repulsion = np.sum(np.where(dist_matrix < hard_cutoff, 
+                                    (hard_cutoff - dist_matrix)**3, 0))
+        
+        # Distance matching term
+        target_dist_term = np.mean((dist_matrix - target_dist)**2)
+        
+        # Self-repulsion term
+        self_dist = np.linalg.norm(new_positions[:, None] - new_positions, axis=2)
+        np.fill_diagonal(self_dist, np.inf)
+        self_repulsion = np.sum(1/(self_dist**2 + 1e-6))
+        
+        # Centering term
+        center_term = np.mean(np.linalg.norm(new_positions - centroid, axis=1))
+        
+        # Weighted sum (adjusted weights)
+        return (
+            5.0 * repulsion +
+            0.8 * target_dist_term +
+            0.2 * self_repulsion +
+            0.2 * center_term
+        )
+
+
+def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int, 
+                                      cluster_size: int, cutoff: float = 5.0) -> list:
+    """
+    Find approximate minimum-distance cluster using neighbor lists with element 
+    filtering.
     
-    # 4. Define constraints (the distance between each point and P <= d3)
-    constraints = []
-    for i in range(k):
-        def make_con(i):
-            def con_func(vars):
-                new_points = vars.reshape(-1, 3)
-                return d3 - np.linalg.norm(new_points[i] - P)
-            return con_func
-        constraints.append({'type': 'ineq', 'fun': make_con(i)})
+    Args:
+        atoms: ASE Atoms object
+        M: Cluster size (must include center_atom_idx)
+        center_atom_idx: Index of the mandatory atom
+        eltype: Target element symbol
+        cutoff: Neighbor search radius (angstrom)
+        
+    Returns:
+        List of atom indices in the cluster
     
-    # 5. Do optimization
-    result = minimize(
-        objective, initial_guess,
-        args=(other_points, P, d1, d2, lambda_param),
-        constraints=constraints,
-        method='SLSQP',
-        options={'maxiter': max_iter}
+    """
+    # Validate inputs
+    assert 2 <= cluster_size < 5, "cluster_size must be between 2 and 4"
+    
+    # Step 1: Filter target element atoms
+    eltype = atoms[center_atom_idx].symbol
+    target_indices = [i for i, atom in enumerate(atoms) if atom.symbol == eltype]
+    assert len(target_indices) >= cluster_size, "Insufficient target element atoms"
+    
+    # Step 2: Build neighbor list (only for target elements)
+    # Create a mask to ignore non-target atoms
+    nl = NeighborList(
+        cutoffs=[cutoff if i in target_indices else 0.0 for i in range(len(atoms))],
+        self_interaction=False,
+        bothways=True
     )
+    nl.update(atoms)
     
-    # 6. Process the result
-    if result.success:
-        new_points = result.x.reshape(-1, 3)
-    else:
-        new_points = initial_guess.reshape(-1, 3)
+    # Step 3: Get neighbors of center_atom_idx (already filtered by target_indices)
+    neighbors, offsets = nl.get_neighbors(center_atom_idx)
     
-    return [tuple(p) for p in other_points] + [tuple(p) for p in new_points]
+    # Step 4: Select closest M-1 neighbors
+    valid_neighbors = []
+    for n, offset in zip(neighbors, offsets):
+        if atoms[n].symbol != eltype:
+            continue
+        true_position = atoms.positions[n] + np.dot(offset, atoms.get_cell())
+        distance = np.linalg.norm(true_position - atoms.positions[center_atom_idx])
+        valid_neighbors.append((distance, n))
+    
+    # Pick top M-1 closest valid neighbors
+    valid_neighbors.sort()
+    return [center_atom_idx] + [n for _, n in valid_neighbors[:cluster_size - 1]]
