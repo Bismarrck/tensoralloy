@@ -7,14 +7,13 @@ import toml
 import tqdm
 import matplotlib
 from datetime import datetime
-from typing import List
 from pathlib import Path
 from ase.io import read, write
 from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
-from tensordb.sampler import BaseSampler, VaspAimdSampler
-from tensordb.calculator import BaseCalculator, VaspCalculator, VaspPorousCalculator
+from tensordb.sampler import VaspAimdSampler
+from tensordb.calculator import VaspCalculator, VaspPorousCalculator
 from matplotlib import pyplot as plt
 
 
@@ -30,22 +29,22 @@ class TensorDB:
         self.input_file = input_file
         self.root = Path(input_file).parent
         self.config = dict(toml.load(input_file))
-        self.samplers: List[BaseSampler] = [
-            VaspAimdSampler(self.root, self.config),
-        ]
-        self.calculators: List[BaseCalculator] = [
-            VaspCalculator(self.root, self.config),
-        ]
+        self.samplers = {
+            "aimd": VaspAimdSampler(self.root, self.config),
+        }
+        self.calculators = {
+            "calc": VaspCalculator(self.root, self.config),
+        }
         if "porosity" in self.config:
-            self.calculators.append(VaspPorousCalculator(self.root, self.config))
+            self.calculators["porosity"] = VaspPorousCalculator(self.root, self.config)
 
     def purge(self):
         """
         Cleanup all files. Be cautious when using this method.
         """
-        for sampler in self.samplers:
+        for _, sampler in self.samplers.items():
             sampler.purge()
-        for calculator in self.calculators:
+        for calculator in self.calculators.items():
             calculator.purge()
 
     # --------------------------------------------------------------------------
@@ -56,21 +55,21 @@ class TensorDB:
         """
         Create sampling tasks.
         """
-        for sampler in self.samplers:
+        for _, sampler in self.samplers.items():
             sampler.create_tasks(override=override)
 
     def update_sampling_status(self):
         """
         Update the status of all sampling tasks.
         """
-        for sampler in self.samplers:
+        for _, sampler in self.samplers.items():
             sampler.update_status()
 
     def list_unsubmitted_sampling_tasks(self):
         """
         List unsubmitted sampling tasks.
         """
-        for sampler in self.samplers:
+        for _, sampler in self.samplers.items():
             sampler.list_unsubmitted_tasks()
 
     # --------------------------------------------------------------------------
@@ -81,7 +80,7 @@ class TensorDB:
         """
         Post-processing all sampling tasks.
         """
-        for sampler in self.samplers:
+        for _, sampler in self.samplers.items():
             sampler.post_process()
 
     # --------------------------------------------------------------------------
@@ -92,14 +91,14 @@ class TensorDB:
         """
         Create VASP high precision DFT calculation tasks.
         """
-        for calculator in self.calculators:
+        for _, calculator in self.calculators.items():
             calculator.create_tasks(self.samplers, interval=interval, shuffle=shuffle)
 
     def update_accurate_dft_tasks_status(self):
         """
         Get the status of high precision dft calculations.
         """
-        for calculator in self.calculators:
+        for _, calculator in self.calculators.items():
             calculator.update_status()
         
     # --------------------------------------------------------------------------
@@ -124,7 +123,7 @@ class TensorDB:
         from joblib import Parallel, delayed
 
         objects = []
-        for calculator in self.calculators:
+        for _, calculator in self.calculators.items():
             all_tasks = [x for x in calculator.task_iterator()]
             sets = Parallel(n_jobs=nprocs, verbose=1)(
                 delayed(calculator.get_atoms)(taskdir, check_job_status)
