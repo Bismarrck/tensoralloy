@@ -10,7 +10,7 @@ import toml
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
-from typing import List, Union
+from typing import List, Union, Dict
 from ase import Atoms
 from ase.calculators.vasp.vasp import Vasp
 from ase.io import read, write
@@ -77,7 +77,7 @@ class BaseCalculator:
         """
         return atoms
     
-    def create_tasks(self, samplers: List[BaseSampler], **kwargs):
+    def create_tasks(self, samplers: Dict[str, BaseSampler], **kwargs):
         """
         Create high precision DFT calculation tasks.
         """
@@ -109,7 +109,7 @@ class BaseCalculator:
             subset_id[len(atoms)] += 1
 
         # Loop through all samplers
-        for sampler in samplers:
+        for _, sampler in samplers.items():
             # Iterate through all sampling tasks
             for task in sampler.task_iterator():
                 selected = sampler.get_samples(task, **kwargs)

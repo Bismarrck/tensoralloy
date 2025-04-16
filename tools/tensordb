@@ -125,20 +125,21 @@ class TensorDB:
         objects = []
         for _, calculator in self.calculators.items():
             all_tasks = [x for x in calculator.task_iterator()]
-            sets = Parallel(n_jobs=nprocs, verbose=1)(
+            results = Parallel(n_jobs=nprocs, verbose=1)(
                 delayed(calculator.get_atoms)(taskdir, check_job_status)
                 for taskdir in all_tasks
             )
-            sets = [x for x in objects if x is not None]
-            print(f"[{calculator.software}/gather]: total {len(sets)} structures")
-            objects.extend(sets)
-            if output_file is None:
-                date = datetime.now().strftime("%Y%m%d")
-                output_dir = self.root / "database"
-                output_dir.mkdir(exist_ok=True)
-                filename = f"{calculator.software}_N{len(objects)}_{date}.extxyz"
-                output_file = output_dir / filename
-            write(output_file, objects, format="extxyz")
+            trajectory = [x for x in results if x is not None]
+            print(f"[{calculator.software}/gather]: total {len(trajectory)} structures")
+            objects.extend(trajectory)
+
+        if output_file is None:
+            date = datetime.now().strftime("%Y%m%d")
+            output_dir = self.root / "database"
+            output_dir.mkdir(exist_ok=True)
+            filename = f"{calculator.software}_N{len(objects)}_{date}.extxyz"
+            output_file = output_dir / filename
+        write(output_file, objects, format="extxyz")
 
     # --------------------------------------------------------------------------
     # Plot
