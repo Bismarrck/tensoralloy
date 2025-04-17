@@ -1,5 +1,6 @@
 #!coding=utf-8
 
+import toml
 import nose
 import numpy as np
 import unittest
@@ -10,6 +11,7 @@ from ase.io import write
 from ase.neighborlist import neighbor_list
 from tensordb.aging import VaspAgingCalculator
 from tensordb.aging import FibnonacciSphereHeliumBubbleInjector
+from tensordb.calculator import VaspNonEquilibriumCalculator
 
 
 class TestVaspAgingCalculator(unittest.TestCase):
@@ -38,11 +40,52 @@ class TestVaspAgingCalculator(unittest.TestCase):
             mindist[key] = min(mindist[key], d) if key in mindist else d
         for key, value in mindist.items():
             print(key, value)
-        write('fib.POSCAR', new_atoms, vasp5=True)
+
+
+class TestVaspNonEquilibriumCalculator(unittest.TestCase):
+
+    def setUp(self):
+        self.root = Path(__file__).parent / 'experiment'
+        with open(self.root / 'config.toml') as f:
+            self.config = toml.load(f)
+    
+    def test_move_1(self):
+        self.config['non_equilibrium']['nmax'] = 1
+        calc = VaspNonEquilibriumCalculator(self.root, self.config)
+        atoms = bulk('Cu', cubic=True) * [2, 2, 2]
+        obj = calc.may_modify_atoms(atoms)
+        dlist = neighbor_list('d', obj, cutoff=4.0)
+        write('neq1.POSCAR', obj, format='vasp')
+        assert dlist.min() >= 1.2
+    
+    def test_move_2(self):
+        self.config['non_equilibrium']['nmax'] = 2
+        calc = VaspNonEquilibriumCalculator(self.root, self.config)
+        atoms = bulk('Cu', cubic=True) * [2, 2, 2]
+        obj = calc.may_modify_atoms(atoms)
+        dlist = neighbor_list('d', obj, cutoff=4.0)
+        write('neq2.POSCAR', obj, format='vasp')
+        assert dlist.min() >= 1.2
+
+    def test_move_3(self):
+        np.random.seed(0)
+        self.config['non_equilibrium']['nmax'] = 3
+        calc = VaspNonEquilibriumCalculator(self.root, self.config)
+        atoms = bulk('Cu', cubic=True) * [2, 2, 2]
+        atoms.positions += np.random.rand(*atoms.positions.shape) * 0.4
+        obj = calc.may_modify_atoms(atoms)
+        dlist = neighbor_list('d', obj, cutoff=4.0)
+        write('neq3.POSCAR', obj, format='vasp')
+        assert dlist.min() >= 1.2
+
+
+def main():
+    c1 = TestVaspNonEquilibriumCalculator()
+    c1.setUp()
+    c1.test_move_1()
+    c1.test_move_2()
+    c1.test_move_3()
 
 
 if __name__ == '__main__':
-    a = TestVaspAgingCalculator()
-    a.setUp()
-    print("Fibonacci Sphere Helium Bubble Injector: ")
-    a.test_fibonacci_sphere_injector()
+    main()

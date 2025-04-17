@@ -49,6 +49,13 @@ temperatures = [1000, ]
 vt_method = "grid"
 nsteps = 200
 
+# ----------------- Non-equilibrium settings -----------------------------------
+
+[non_equilibrium]
+interval = 100
+dmin = 1.2
+nmax = 1
+
 # ----------------- Porosity settings ------------------------------------------
 
 [porosity]
