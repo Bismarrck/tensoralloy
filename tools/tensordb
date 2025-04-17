@@ -16,6 +16,7 @@ from argparse import ArgumentParser
 from tensordb.sampler import VaspAimdSampler, ExistedTrajectorySampler
 from tensordb.calculator.microstructure.porous import VaspPorousCalculator
 from tensordb.calculator.microstructure.neq import VaspNonEquilibriumCalculator
+from tensordb.calculator.microstructure.aging import VaspAgingCalculator
 from tensordb.calculator.calculator import VaspCalculator
 from matplotlib import pyplot as plt
 
@@ -27,6 +28,7 @@ class CalcTaskType(Enum):
     calc = "calc"
     porosity = "porosity"
     neq = "neq"
+    aging = "aging"
 
 
 class TensorDB:
@@ -70,6 +72,8 @@ class TensorDB:
         if "neq" in self.config:
             self.calculators["neq"] = VaspNonEquilibriumCalculator(
                 self.root, self.config)
+        if "aging" in self.config:
+            self.calculators["aging"] = VaspAgingCalculator(self.root, self.config)
 
     def purge(self):
         """
@@ -321,14 +325,14 @@ def main():
 
     # The subparser for creating high-precision DFT jobs
     parser = sub_parsers.add_parser("create")
-    parser.add_argument("task", choices=["calc", "porosity", "neq"], 
+    parser.add_argument("task", choices=["calc", "porosity", "neq", "aging"], 
                         help="The type of the DFT jobs to create.")
 
     # The subparser for getting task status
     parser = sub_parsers.add_parser("status", help="Comannds for getting task status.")
     parser.add_argument(
         "type",
-        choices=["sampling", "calc", "neq", "porosity", "unsubmitted"],
+        choices=["sampling", "calc", "neq", "porosity", "aging", "unsubmitted"],
         help="Choose the type of status: sampling for AIMD sampling jobs, calc for "
              "high precision DFT calculations, unsubmitted for unsubmitted jobs.",
     )
@@ -360,6 +364,8 @@ def main():
             task_type = CalcTaskType.porosity
         elif args.task == "neq":
             task_type = CalcTaskType.neq
+        elif args.task == "aging":
+            task_type = CalcTaskType.aging
         else:
             raise ValueError(f"Unknown task type {args.task}")
         db.create_accurate_dft_tasks(task_type)

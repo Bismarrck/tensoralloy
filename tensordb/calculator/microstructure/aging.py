@@ -80,7 +80,7 @@ class VaspAgingCalculator(VaspCalculator):
         self.workdir = self.root / "aging"
 
         params = getitem(self.config, ["aging", ])
-        self.interval = params.get("interval", self.defaults["interval"])
+        self.sampling_interval = params.get("interval", self.defaults["interval"])
         self.cutoff = params.get("cutoff", self.defaults["cutoff"])
 
         # Parse the transmutations

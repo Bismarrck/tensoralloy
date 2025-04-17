@@ -1,5 +1,5 @@
 # ----------------- Basic settings ---------------------------------------------
-species = ["Cu", "Fe"]
+species = ["Cu", "Fe", "He"]
 finite_temperature = false
 
 # ----------------- VASP settings ----------------------------------------------
@@ -8,31 +8,23 @@ finite_temperature = false
 [vasp.pot]
 pp_path = "/share/home/chenxin/work/potcars"
 xc = "pbe"
-potcars = ["Cu", "Fe"]
+potcars = ["Cu", "Fe", "He"]
 
 # VASP high precision calculation parameters
 [vasp.calc]
 encut = 400
-kspacing = 0.5
-nsim = 64
-kpar = 8
-npar = 4
-
-# ----------------- Basic high-precision DFT settings --------------------------
-
-[calc]
-interval = 1
+kspacing = 0.3
 
 # ----------------- External trajectory files ----------------------------------
 
 [external]
-directory = "files"
+directory = "external"
 recursive = true
 
 # ----------------- Aging settings ---------------------------------------------
 
 [aging]
-interval = 100
+interval = 10
 
 [aging.transmutation]
 Cu-Fe = {prob=1.0, nmax=2}
