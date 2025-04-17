@@ -1,0 +1,46 @@
+# ----------------- Basic settings ---------------------------------------------
+species = ["Cu", "Fe"]
+finite_temperature = false
+
+# ----------------- VASP settings ----------------------------------------------
+
+# Basic VASP settings
+[vasp.pot]
+pp_path = "/share/home/chenxin/work/potcars"
+xc = "pbe"
+potcars = ["Cu", "Fe"]
+
+# VASP high precision calculation parameters
+[vasp.calc]
+encut = 400
+kspacing = 0.5
+nsim = 64
+kpar = 8
+npar = 4
+
+# ----------------- Basic high-precision DFT settings --------------------------
+
+[calc]
+interval = 1
+
+# ----------------- External trajectory files ----------------------------------
+
+[external]
+directory = "files"
+recursive = true
+
+# ----------------- Aging settings ---------------------------------------------
+
+[aging]
+interval = 100
+
+[aging.transmutation]
+Cu-Fe = {prob=1.0, nmax=2}
+
+[aging.helium_bubble]
+target = "Cu"
+max_target_size = 3
+max_bubble_size = 8
+max_ratio = 3.0
+min_ratio = 0.8
+cutoff = 4.0
