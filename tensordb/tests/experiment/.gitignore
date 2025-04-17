@@ -3,6 +3,7 @@ sampling/
 calc/
 porous/
 neq/
+database/
 output.*
 error.*
 nohup.out
