@@ -8,13 +8,25 @@ import tqdm
 import matplotlib
 from datetime import datetime
 from pathlib import Path
+from enum import Enum
 from ase.io import read, write
 from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
 from tensordb.sampler import VaspAimdSampler
 from tensordb.calculator import VaspCalculator, VaspPorousCalculator
+from tensordb.calculator import VaspNonEquilibriumCalculator
 from matplotlib import pyplot as plt
+
+
+
+class CalcTaskType(Enum):
+    """
+    The type of the DFT calculation task.
+    """
+    calc = "calc"
+    porosity = "porosity"
+    neq = "neq"
 
 
 class TensorDB:
@@ -37,6 +49,9 @@ class TensorDB:
         }
         if "porosity" in self.config:
             self.calculators["porosity"] = VaspPorousCalculator(self.root, self.config)
+        if "neq" in self.config:
+            self.calculators["neq"] = VaspNonEquilibriumCalculator(
+                self.root, self.config)
 
     def purge(self):
         """
@@ -87,12 +102,15 @@ class TensorDB:
     # High-precision DFT section
     # --------------------------------------------------------------------------
 
-    def create_accurate_dft_tasks(self, interval=50, shuffle=False):
+    def create_accurate_dft_tasks(self, calc_type: CalcTaskType):
         """
         Create VASP high precision DFT calculation tasks.
         """
-        for _, calculator in self.calculators.items():
-            calculator.create_tasks(self.samplers, interval=interval, shuffle=shuffle)
+        calculator = self.calculators.get(calc_type.name)
+        if calculator is None:
+            raise ValueError(f"Calculator type {calc_type.name} not initialized. "
+                             f"Maybe you should check config.toml")
+        calculator.create_tasks(self.samplers)
 
     def update_accurate_dft_tasks_status(self):
         """
@@ -275,7 +293,7 @@ def main():
 
     # The subparser for creating DFT jobs
     parser = sub_parsers.add_parser("create")
-    parser.add_argument("task", choices=["sampling", "calc", "porosity"], 
+    parser.add_argument("task", choices=["sampling", "calc", "porosity", "neq"], 
                         help="The type of the DFT jobs to create.")
     parser.add_argument(
         "--interval", 
@@ -337,7 +355,11 @@ def main():
         if args.task == "sampling":
             db.create_sampling_tasks(override=True)
         elif args.task == "calc":
-            db.create_accurate_dft_tasks(interval=args.interval)
+            db.create_accurate_dft_tasks(CalcTaskType.calc)
+        elif args.task == "porosity":
+            db.create_accurate_dft_tasks(CalcTaskType.porosity)
+        elif args.task == "neq":
+            db.create_accurate_dft_tasks(CalcTaskType.neq)
     elif args.command == "status":
         if args.type == "sampling":
             db.update_sampling_status()

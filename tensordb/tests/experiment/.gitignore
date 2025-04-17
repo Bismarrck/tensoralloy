@@ -2,6 +2,7 @@
 sampling/
 calc/
 porous/
+neq/
 output.*
 error.*
 nohup.out

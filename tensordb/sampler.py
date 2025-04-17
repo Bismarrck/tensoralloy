@@ -215,7 +215,7 @@ class BaseSampler:
     # 1. get_samples: get samples from a task.
     # --------------------------------------------------------------------------
 
-    def get_samples(self, task: Path, **kwargs):
+    def get_samples(self, task: Path, interval=50, **kwargs):
         raise NotImplementedError("get_samples() is not implemented yet.")
 
 
@@ -460,7 +460,7 @@ class VaspAimdSampler(AimdSampler):
 
         for phase in self.phases:
             # The phase sampling parameters
-            args = getitem(self.config, ["vasp", "sampling", "nvt", phase])
+            args = getitem(self.config, ["aimd", "sampling", "nvt", phase])
             if len(args) == 0:
                 continue
 
@@ -535,7 +535,7 @@ class VaspAimdSampler(AimdSampler):
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
                         fp.write("\n")
-                    print(f"[VASP/nvt/sampling/gen]: {taskdir}")
+                    print(f"[aimd/nvt/sampling]: {taskdir}")
                     batch_jobs.append(str(taskdir.relative_to('sampling')))
         with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")
@@ -552,7 +552,7 @@ class VaspAimdSampler(AimdSampler):
 
         for phase in self.phases:
             # The phase sampling parameters
-            args = getitem(self.config, ["vasp", "sampling", "npt", phase])
+            args = getitem(self.config, ["aimd", "sampling", "npt", phase])
             if len(args) == 0:
                 continue
 
@@ -609,7 +609,7 @@ class VaspAimdSampler(AimdSampler):
                     with open(taskdir / "metadata.json", "w") as fp:
                         json.dump(metadata, fp, indent=2)
                         fp.write("\n")
-                    print(f"[VASP/npt/sampling/gen]: {taskdir}")
+                    print(f"[aimd/npt/sampling]: {taskdir}")
                     batch_jobs.append(str(taskdir.relative_to('sampling')))
         with open(self.workdir / "batch_jobs", "a") as fp:
             fp.write("\n".join(batch_jobs) + "\n")

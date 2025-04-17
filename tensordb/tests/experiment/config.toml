@@ -32,18 +32,19 @@ nsim = 64
 encut = 400
 kspacing = 0.5
 nsim = 64
-kpar = 2
+kpar = 8
+npar = 4
 nbands = "lambda a,n,v,t: 16*n+(t//10000*n)"
 
 # ----------------- AIMD sampling settings for phase ---------------------------
 
-[vasp.sampling.nvt.bcc]
+[aimd.sampling.nvt.bcc]
 volumes = [11.8, ]
 temperatures = [300, ]
 vt_method = "grid"
 nsteps = 200
 
-[vasp.sampling.nvt.fcc]
+[aimd.sampling.nvt.fcc]
 volumes = [11.0, ]
 temperatures = [1000, ]
 vt_method = "grid"
@@ -51,7 +52,7 @@ nsteps = 200
 
 # ----------------- Non-equilibrium settings -----------------------------------
 
-[non_equilibrium]
+[neq]
 interval = 100
 dmin = 1.2
 nmax = 1

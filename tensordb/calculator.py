@@ -41,6 +41,7 @@ class BaseCalculator:
             self.config = config
         self.species = self.config["species"]
         self.workdir: Path = None
+        self.sampling_interval = 50
         self.init_ab_initio_calculator()
     
     @property
@@ -113,7 +114,10 @@ class BaseCalculator:
         for _, sampler in samplers.items():
             # Iterate through all sampling tasks
             for task in sampler.task_iterator():
-                selected = sampler.get_samples(task, **kwargs)
+                selected = sampler.get_samples(
+                    task=task, 
+                    interval=self.sampling_interval, 
+                    **kwargs)
                 for atoms in selected:
                     atoms = self.may_modify_atoms(atoms)
                     # Skip the atoms object if it is None. This may happen when the 
@@ -511,7 +515,7 @@ class VaspPorousCalculator(VaspCalculator):
                 print(f"Warning: The maximum porosity is {pmax}, you should know what "
                       f"you are doing!")
             self.get_porosity = lambda : np.random.uniform(pmin, pmax)
-        self.interval = params.get("interval", 500)
+        self.sampling_interval = params.get("interval", 500)
     
     @property
     def random_seed(self):
@@ -541,10 +545,7 @@ class VaspPorousCalculator(VaspCalculator):
         For VaspPorousCalculator, the random seed is fixed to 0.
         """
         np.random.seed(self.random_seed)
-        key_val_pairs = dict(kwargs)
-        if "interval" in key_val_pairs:
-            key_val_pairs["interval"] = self.interval
-        super().create_tasks(samplers, **key_val_pairs)
+        super().create_tasks(samplers, **kwargs)
 
 
 class VaspNonEquilibriumCalculator(VaspCalculator):
@@ -555,9 +556,9 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
 
     def __init__(self, root, config):
         super().__init__(root, config)
-        self.workdir = self.root / "non_equilibrium"
+        self.workdir = self.root / "neq"
 
-        params = getitem(self.config, ["non_equilibrium", ])
+        params = getitem(self.config, ["neq", ])
         self.dmin = params.get("dmin", 1.2)
         if self.dmin <= 1.0:
             print(f"Warning: The 'dmin' is {self.dmin}, too small!")
@@ -566,7 +567,7 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
             raise ValueError("The 'nmax' should be larger than 1!")
         if self.nmax > 4:
             print(f"Warning: The 'nmax' is {self.nmax}, too large!")
-        self.interval = params.get("interval", 500)
+        self.sampling_interval = params.get("interval", 500)
     
     @property
     def random_seed(self):
@@ -618,7 +619,4 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
         For VaspNonEquilibriumCalculator, the random seed is fixed to 1.
         """
         np.random.seed(self.random_seed)
-        key_val_pairs = dict(kwargs)
-        if "interval" in key_val_pairs:
-            key_val_pairs["interval"] = self.interval
         return super().create_tasks(samplers, **kwargs)
