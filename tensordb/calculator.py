@@ -368,7 +368,6 @@ class VaspCalculator(BaseCalculator):
             "GPU(hours)": [],
         }
         accumulator = {}
-        print(subset_size)
 
         # Loop through all prepared jobs
         for taskdir in self.task_iterator():
@@ -562,12 +561,10 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
         params = getitem(self.config, ["neq", ])
         self.dmin = params.get("dmin", 1.2)
         if self.dmin <= 1.0:
-            print(f"Warning: The 'dmin' is {self.dmin}, too small!")
+            print(f"Warning: The 'dmin' is {self.dmin}, maybe too small!")
         self.nmax = params.get("nmax", 3)
         if self.nmax < 1:
             raise ValueError("The 'nmax' should be larger than 1!")
-        if self.nmax > 4:
-            print(f"Warning: The 'nmax' is {self.nmax}, too large!")
         self.move_factor = params.get("move_factor", 0.6)
         if self.move_factor <= 0:
             raise ValueError("The 'move_factor' should be larger than 0!")

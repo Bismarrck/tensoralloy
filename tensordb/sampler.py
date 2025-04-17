@@ -752,8 +752,8 @@ class ExistedTrajectorySampler(BaseSampler):
                     atoms.info["_source"] = src
                     atoms.info["_hash"] = hashlib.md5(src.encode()).hexdigest()
                     trajectory.append(atoms)
-                trajectory.extend(o)
-        return trajectory[::interval]
+        selected = trajectory[::interval]
+        return selected
 
     # --------------------------------------------------------------------------
     # Below methods are not implemented in this class.
