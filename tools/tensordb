@@ -13,11 +13,10 @@ from ase.io import read, write
 from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
-from tensordb.sampler import VaspAimdSampler
+from tensordb.sampler import VaspAimdSampler, ExistedTrajectorySampler
 from tensordb.calculator import VaspCalculator, VaspPorousCalculator
 from tensordb.calculator import VaspNonEquilibriumCalculator
 from matplotlib import pyplot as plt
-
 
 
 class CalcTaskType(Enum):
@@ -38,15 +37,33 @@ class TensorDB:
         """
         Initialization method.
         """
-        self.input_file = input_file
-        self.root = Path(input_file).parent
-        self.config = dict(toml.load(input_file))
-        self.samplers = {
-            "aimd": VaspAimdSampler(self.root, self.config),
-        }
+        if input_file is not None:
+            self.input_file = Path(input_file)
+            if not self.input_file.exists():
+                print(f"Warning: TensorDB is not initialized as the input config file "
+                      f"does not exist.")
+                return
+            else:
+                self.__post_init()
+    
+    def __post_init(self):
+        self.root = self.input_file.parent
+        self.config = dict(toml.load(self.input_file))
+
+        # Initialize samplers
+        self.samplers = {}
+        if "aimd" in self.config:
+            self.samplers["aimd"] = VaspAimdSampler(self.root, self.config)
+        if "external" in self.config:
+            self.samplers["external"] = ExistedTrajectorySampler(
+                self.root, self.config)
+
+        # Initialize the base calculator
         self.calculators = {
             "calc": VaspCalculator(self.root, self.config),
         }
+
+        # Initialize specialized calculators
         if "porosity" in self.config:
             self.calculators["porosity"] = VaspPorousCalculator(self.root, self.config)
         if "neq" in self.config:
@@ -59,7 +76,7 @@ class TensorDB:
         """
         for _, sampler in self.samplers.items():
             sampler.purge()
-        for calculator in self.calculators.items():
+        for _, calculator in self.calculators.items():
             calculator.purge()
 
     # --------------------------------------------------------------------------
@@ -112,12 +129,15 @@ class TensorDB:
                              f"Maybe you should check config.toml")
         calculator.create_tasks(self.samplers)
 
-    def update_accurate_dft_tasks_status(self):
+    def update_accurate_dft_tasks_status(self, calc_type: CalcTaskType):
         """
         Get the status of high precision dft calculations.
         """
-        for _, calculator in self.calculators.items():
-            calculator.update_status()
+        calculator = self.calculators.get(calc_type.name)
+        if calculator is None:
+            raise ValueError(f"Calculator type {calc_type.name} not initialized. "
+                             f"Maybe you should check config.toml")
+        calculator.update_status()
         
     # --------------------------------------------------------------------------
     # Make the training dataset
@@ -291,44 +311,23 @@ def main():
     # Subparsers
     sub_parsers = root_parser.add_subparsers(dest="command", help="Sub-commands")
 
-    # The subparser for creating DFT jobs
-    parser = sub_parsers.add_parser("create")
-    parser.add_argument("task", choices=["sampling", "calc", "porosity", "neq"], 
-                        help="The type of the DFT jobs to create.")
+    # The subparser for creating sampling jobs
+    parser = sub_parsers.add_parser("sampling")
     parser.add_argument(
-        "--interval", 
-        type=int, 
-        default=50, 
-        help="The interval (in timesteps) for fetching snapshots from AIMD "
-             "trajectories. Only valid for 'calc' tasks.")
-    parser.add_argument(
-        "--nvt", 
-        default=False,
-        action="store_true", 
-        help="Create NVT sampling jobs. Only valid for 'sampling' tasks.")
-    parser.add_argument(
-        "--npt", 
-        default=False,
-        action="store_true", 
-        help="Create NPT sampling jobs. Only valid for 'sampling' tasks.")
+        "type", 
+        choices=["aimd", ], 
+        help="Choose the sampling method. Currently only AIMD is implemented.")
 
-    # The subparser for AIMD sampling
-    parser = sub_parsers.add_parser(
-        "sampling", help="Commands for creating sampling tasks."
-    )
-    parser.add_argument(
-        "--ensemble",
-        choices=["nvt", "npt"],
-        nargs="+",
-        default=["nvt", "npt"],
-        help="The MD ensemble to use, nvt or npt.",
-    )
+    # The subparser for creating high-precision DFT jobs
+    parser = sub_parsers.add_parser("create")
+    parser.add_argument("task", choices=["calc", "porosity", "neq"], 
+                        help="The type of the DFT jobs to create.")
 
     # The subparser for getting task status
     parser = sub_parsers.add_parser("status", help="Comannds for getting task status.")
     parser.add_argument(
         "type",
-        choices=["sampling", "calc", "unsubmitted"],
+        choices=["sampling", "calc", "neq", "porosity", "unsubmitted"],
         help="Choose the type of status: sampling for AIMD sampling jobs, calc for "
              "high precision DFT calculations, unsubmitted for unsubmitted jobs.",
     )
@@ -351,22 +350,26 @@ def main():
     args = root_parser.parse_args()
     db = TensorDB(args.input)
     
-    if args.command == "create":
-        if args.task == "sampling":
-            db.create_sampling_tasks(override=True)
-        elif args.task == "calc":
-            db.create_accurate_dft_tasks(CalcTaskType.calc)
+    if args.command == "sampling":
+        db.create_sampling_tasks(override=True)
+    elif args.command == "create":
+        if args.task == "calc":
+            task_type = CalcTaskType.calc
         elif args.task == "porosity":
-            db.create_accurate_dft_tasks(CalcTaskType.porosity)
+            task_type = CalcTaskType.porosity
         elif args.task == "neq":
-            db.create_accurate_dft_tasks(CalcTaskType.neq)
+            task_type = CalcTaskType.neq
+        else:
+            raise ValueError(f"Unknown task type {args.task}")
+        db.create_accurate_dft_tasks(task_type)
     elif args.command == "status":
         if args.type == "sampling":
             db.update_sampling_status()
-        elif args.type == "calc":
-            db.update_accurate_dft_tasks_status()
         elif args.type == "unsubmitted":
             db.list_unsubmitted_sampling_tasks()
+        else:
+            task_type = CalcTaskType[args.type]
+            db.update_accurate_dft_tasks_status(task_type)
     elif args.command == "postprocess":
         db.post_process()
     elif args.command == "gather":

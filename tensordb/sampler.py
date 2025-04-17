@@ -701,3 +701,94 @@ class VaspAimdSampler(AimdSampler):
         # Save the trajectory to an extxyz file
         write(output_file, trajectory, format="extxyz")
         print(f"[VASP/sampling/postprocess]: {jobdir}")
+
+
+class ExistedTrajectorySampler(BaseSampler):
+    """
+    This sampler is used to sample from an existing trajectory file.
+    The format should be extxyz.
+    """
+
+    def __init__(self, root, config: dict):
+        """
+        Initialization method.
+        """
+        self.root = root
+        self.config = config
+
+        # TODO: add support for finite temperature sampling using external trajectories
+        if config.get("finite_temperature", False):
+            raise ValueError("Currently the ExistedTrajectorySampler does not support "
+                             "finite temperature sampling.")
+
+        params = getitem(config, ["external", ])
+        if "directory" not in params:
+            raise ValueError(
+                "The 'directory' key is not found in the 'external' section.")
+        self.workdir = self.root / params["directory"]
+        if not self.workdir.exists():
+            raise ValueError(f"Cannot find the directory {self.workdir}")
+        self.recursive = params.get("recursive", True)
+    
+    def task_iterator(self):
+        if not self.recursive:
+            return next([self.workdir, ])
+        else:
+            for dirpath, _, _ in os.walk(self.workdir):
+                yield Path(dirpath).absolute()
+
+    def get_samples(self, task: Path, interval=50, **kwargs):
+        trajectory = []
+        for afile in task.glob("*.extxyz"):
+            o = read(afile, index=":")
+            if isinstance(o, Atoms):
+                src = f"{str(afile)}@0"
+                o.info["_source"] = src
+                o.info["_hash"] = hashlib.md5(src.encode()).hexdigest()
+                trajectory.append(o)
+            else:
+                for i, atoms in enumerate(o):
+                    src = f"{str(afile)}@{i}"
+                    atoms.info["_source"] = src
+                    atoms.info["_hash"] = hashlib.md5(src.encode()).hexdigest()
+                    trajectory.append(atoms)
+                trajectory.extend(o)
+        return trajectory[::interval]
+
+    # --------------------------------------------------------------------------
+    # Below methods are not implemented in this class.
+    # --------------------------------------------------------------------------
+    
+    def purge(self):
+        pass
+
+    def init_phases(self):
+        pass
+
+    def init_liquid_structure(self):
+        pass
+
+    def get_base_structure(self, phase):
+        pass
+
+    def get_supercells_at_volume(self, phase, volume):
+        pass
+
+    def init_ab_initio_calculator(self):
+        pass
+    
+    def create_tasks(self, override=False):
+        pass
+
+    @staticmethod
+    def is_task_finished(self, taskdir):
+        return True
+    
+    def update_status(self):
+        pass
+
+    def list_unsubmitted_tasks(self):
+        pass
+
+    def post_process(self):
+        pass

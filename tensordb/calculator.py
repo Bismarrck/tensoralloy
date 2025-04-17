@@ -41,7 +41,9 @@ class BaseCalculator:
             self.config = config
         self.species = self.config["species"]
         self.workdir: Path = None
-        self.sampling_interval = 50
+
+        params = getitem(self.config, ["calc", ])
+        self.sampling_interval = params.get("interval", 50)
         self.init_ab_initio_calculator()
     
     @property
@@ -269,7 +271,7 @@ class VaspCalculator(BaseCalculator):
                 self.vasp.set(nbands=nbands)
         return {"MAGMOM": magmom}
 
-    def create_tasks(self, samplers: List[BaseSampler], **kwargs):
+    def create_tasks(self, samplers: Dict[str, BaseSampler], **kwargs):
         """
         Create VASP high precision DFT calculation tasks.
         """
@@ -366,6 +368,7 @@ class VaspCalculator(BaseCalculator):
             "GPU(hours)": [],
         }
         accumulator = {}
+        print(subset_size)
 
         # Loop through all prepared jobs
         for taskdir in self.task_iterator():
@@ -378,10 +381,6 @@ class VaspCalculator(BaseCalculator):
             gid = metadata["group_id"]
             key = (sid, gid)
             if key not in accumulator:
-                if (gid + 1) * 100 <= subset_size[sid]:
-                    n_total = 100
-                else:
-                    n_total = aid % 100
                 accumulator[key] = Counter(
                     {
                         "CPU(hours)": 0.0,
@@ -389,11 +388,13 @@ class VaspCalculator(BaseCalculator):
                         "CPU(jobs)": 0,
                         "GPU(jobs)": 0,
                         "n_converged": 0,
-                        "n_total": n_total,
+                        "n_total": 1,
                         "completed_tasks": [],
                         "converged_tasks": [],
                     }
                 )
+            else:
+                accumulator[key]["n_total"] += 1
             job = VaspJob(taskdir)
             su = job.get_vasp_job_service_unit()
             if su is None:
