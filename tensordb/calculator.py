@@ -15,6 +15,7 @@ from ase import Atoms
 from ase.calculators.vasp.vasp import Vasp
 from ase.io import read, write
 from ase.units import kB
+from ase.neighborlist import NeighborList
 from tensordb.utils import getitem
 from tensordb.vaspkit import VaspJob, ServiceUnit
 from tensordb.sampler import *
@@ -534,7 +535,7 @@ class VaspPorousCalculator(VaspCalculator):
         del obj[indices]
         return obj
 
-    def create_tasks(self, samplers: List[BaseSampler], **kwargs):
+    def create_tasks(self, samplers: Dict[str, BaseSampler], **kwargs):
         """
         Create VASP high precision DFT calculation tasks.
         For VaspPorousCalculator, the random seed is fixed to 0.
@@ -544,3 +545,80 @@ class VaspPorousCalculator(VaspCalculator):
         if "interval" in key_val_pairs:
             key_val_pairs["interval"] = self.interval
         super().create_tasks(samplers, **key_val_pairs)
+
+
+class VaspNonEquilibriumCalculator(VaspCalculator):
+    """
+    This calculator is used to create non-equilibrium structures by randomly moving
+    atoms to their neighboring sites.
+    """
+
+    def __init__(self, root, config):
+        super().__init__(root, config)
+        self.workdir = self.root / "non_equilibrium"
+
+        params = getitem(self.config, ["non_equilibrium", ])
+        self.dmin = params.get("dmin", 1.2)
+        if self.dmin <= 1.0:
+            print(f"Warning: The 'dmin' is {self.dmin}, too small!")
+        self.nmax = params.get("nmax", 3)
+        if self.nmax < 1:
+            raise ValueError("The 'nmax' should be larger than 1!")
+        if self.nmax > 4:
+            print(f"Warning: The 'nmax' is {self.nmax}, too large!")
+        self.interval = params.get("interval", 500)
+    
+    @property
+    def random_seed(self):
+        return 1
+
+    def may_modify_atoms(self, atoms):
+        size = len(atoms)
+        n = min(size // 4, np.random.randint(1, self.nmax + 1))
+        if n == 0:
+            return atoms
+        
+        # Copy the original atoms object
+        obj = atoms.copy()
+        
+        # Select random atoms
+        indices = np.random.choice(size, n, replace=False)
+
+        # Get the neighbor list
+        cutoffs = np.zeros(size)
+        cutoffs[indices] = 5.0
+        nl = NeighborList(cutoffs, self_interaction=False, bothways=True)
+
+        # For each selected atom, move to its nearest neighbor
+        for i in indices:
+            nl.update(obj)
+            R = obj.positions
+            neighbors, offsets = nl.get_neighbors(i)
+            # Calculate the displacements
+            D = R[neighbors] + offsets @ obj.get_cell() - R[i]
+            # Find the nearest neighbor
+            d = np.linalg.norm(D, axis=1)
+            j = np.argmin(d)
+            # Skip the atom if it is too close to the selected atom
+            if d[j] < self.dmin:
+                continue
+            smax = self.dmin / d[j]
+            # Make a trial move
+            for s in np.arange(smax * 0.7, 0.0, -0.05):
+                x = R[i] + D[j] * s
+                # Check the distances between the new position and other neighbors
+                if np.all(np.linalg.norm(R[i] + D - x, axis=1) >= self.dmin):
+                    obj.positions[i] = x
+                    break
+        return obj
+
+    def create_tasks(self, samplers, **kwargs):
+        """
+        Create VASP high precision DFT calculation tasks.
+        For VaspNonEquilibriumCalculator, the random seed is fixed to 1.
+        """
+        np.random.seed(self.random_seed)
+        key_val_pairs = dict(kwargs)
+        if "interval" in key_val_pairs:
+            key_val_pairs["interval"] = self.interval
+        return super().create_tasks(samplers, **kwargs)
