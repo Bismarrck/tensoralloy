@@ -1,0 +1,46 @@
+# ----------------- Basic settings ---------------------------------------------
+species = ["Cu"]
+finite_temperature = false
+
+# ----------------- Phase settings ---------------------------------------------
+
+[bcc]
+supercell = [[3, 3, 3]]
+
+[fcc]
+supercell = [[2, 2, 2]]
+
+# ----------------- VASP settings ----------------------------------------------
+
+# Basic VASP settings
+[vasp.pot]
+pp_path = "/share/home/chenxin/work/potcars"
+xc = "pbe"
+potcars = ["Cu"]
+
+# VASP high precision calculation parameters
+[vasp.calc]
+encut = 400
+kspacing = 0.5
+nsim = 64
+kpar = 8
+npar = 4
+
+# ----------------- Basic high-precision DFT settings --------------------------
+
+[calc]
+interval = 1
+
+# ----------------- External trajectory files ----------------------------------
+
+[external]
+directory = "files"
+recursive = true
+
+# ----------------- Non-equilibrium settings -----------------------------------
+
+[neq]
+interval = 50
+dmin = 1.2
+nmax = 3
+move_factor = 0.6
