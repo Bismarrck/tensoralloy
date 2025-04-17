@@ -4,14 +4,13 @@
 #SBATCH --job-name=calc
 #SBATCH --output=output.calc
 #SBATCH --error=error.calc
-#SBATCH --nodes=1
-#SBATCH --partition=2gpu
-#SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=32
-#SBATCH --gres=gpu:2
+#SBATCH --nodes=2
+#SBATCH --partition=cpu
+#SBATCH --ntasks-per-node=64
+#SBATCH --cpus-per-task=1
 
 module purge
-module load vasp-gpu/6.5.0
+module load vasp/6.4.2
 
 # OpenACC + OpenMP
 export MKL_THREADLING_LAYER=INTEL
@@ -44,12 +43,16 @@ declare -a jobdirs=(
     "calc/54atoms/group0/task3"
     "porous/20atoms/group0/task0"
     "porous/35atoms/group0/task0"
+    "neq/32atoms/group0/task0"
+    "neq/32atoms/group0/task1"
+    "neq/54atoms/group0/task0"
+    "neq/54atoms/group0/task1"
 )
 
 for jobdir in "${jobdirs[@]}"; do
     cd $jobdir
     echo "Running $jobdir, `date`"
-    mpirun -np $nprocs --map-by ppr:$pps:socket:PE=$OMP_NUM_THREADS --bind-to core vasp_std
+    mpirun -np $nprocs vasp_std
     sleep 1
     cd $workdir
 done

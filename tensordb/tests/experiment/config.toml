@@ -53,9 +53,10 @@ nsteps = 200
 # ----------------- Non-equilibrium settings -----------------------------------
 
 [neq]
-interval = 100
+interval = 50
 dmin = 1.2
-nmax = 1
+nmax = 3
+move_factor = 0.6
 
 # ----------------- Porosity settings ------------------------------------------
 

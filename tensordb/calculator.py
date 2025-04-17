@@ -567,6 +567,11 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
             raise ValueError("The 'nmax' should be larger than 1!")
         if self.nmax > 4:
             print(f"Warning: The 'nmax' is {self.nmax}, too large!")
+        self.move_factor = params.get("move_factor", 0.6)
+        if self.move_factor <= 0:
+            raise ValueError("The 'move_factor' should be larger than 0!")
+        if self.move_factor >= 1:
+            print(f"Warning: The 'move_factor' should be smaller than 1!")
         self.sampling_interval = params.get("interval", 500)
     
     @property
@@ -577,7 +582,7 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
         size = len(atoms)
         n = min(size // 4, np.random.randint(1, self.nmax + 1))
         if n == 0:
-            return atoms
+            return None
         
         # Copy the original atoms object
         obj = atoms.copy()
@@ -603,9 +608,9 @@ class VaspNonEquilibriumCalculator(VaspCalculator):
             # Skip the atom if it is too close to the selected atom
             if d[j] < self.dmin:
                 continue
-            smax = self.dmin / d[j]
+            smax = min(self.dmin / d[j], 1.0)
             # Make a trial move
-            for s in np.arange(smax * 0.7, 0.0, -0.05):
+            for s in np.arange(smax * self.move_factor, 0.0, -0.05):
                 x = R[i] + D[j] * s
                 # Check the distances between the new position and other neighbors
                 if np.all(np.linalg.norm(R[i] + D - x, axis=1) >= self.dmin):

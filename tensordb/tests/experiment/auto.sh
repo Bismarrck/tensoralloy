@@ -41,6 +41,8 @@ tensordb postprocess
 
 # 4. Create high-precision dft jobs.
 tensordb create calc
+tensordb create porosity
+tensordb create neq
 
 # 5. Submit the high-precision dft jobs and wait for completion. It will take some time.
 slurm_run slurm.calc.sh
