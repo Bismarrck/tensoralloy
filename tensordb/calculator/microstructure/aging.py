@@ -5,11 +5,11 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List
 from ase import Atoms, Atom
-from ase.neighborlist import neighbor_list, NeighborList
+from ase.neighborlist import NeighborList
 from ase.geometry import get_distances, find_mic
 from ase.data import covalent_radii, atomic_numbers
 from scipy.optimize import minimize
-from tensordb.calculator import VaspCalculator
+from tensordb.calculator.calculator import VaspCalculator
 from tensordb.sampler import BaseSampler
 from tensordb.utils import getitem
 

@@ -14,8 +14,9 @@ from ase.units import GPa, kB
 from ase.neighborlist import neighbor_list
 from argparse import ArgumentParser
 from tensordb.sampler import VaspAimdSampler, ExistedTrajectorySampler
-from tensordb.calculator import VaspCalculator, VaspPorousCalculator
-from tensordb.calculator import VaspNonEquilibriumCalculator
+from tensordb.calculator.microstructure.porous import VaspPorousCalculator
+from tensordb.calculator.microstructure.neq import VaspNonEquilibriumCalculator
+from tensordb.calculator.calculator import VaspCalculator
 from matplotlib import pyplot as plt
 
 

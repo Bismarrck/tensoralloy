@@ -9,9 +9,9 @@ from pathlib import Path
 from ase.build import bulk
 from ase.io import write
 from ase.neighborlist import neighbor_list
-from tensordb.aging import VaspAgingCalculator
-from tensordb.aging import FibnonacciSphereHeliumBubbleInjector
-from tensordb.calculator import VaspNonEquilibriumCalculator
+from tensordb.calculator.microstructure.aging import VaspAgingCalculator
+from tensordb.calculator.microstructure.aging import FibnonacciSphereHeliumBubbleInjector
+from tensordb.calculator.microstructure.neq import VaspNonEquilibriumCalculator
 
 
 class TestVaspAgingCalculator(unittest.TestCase):
