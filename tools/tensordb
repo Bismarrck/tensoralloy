@@ -173,6 +173,8 @@ class TensorDB:
                 for taskdir in all_tasks
             )
             trajectory = [x for x in results if x is not None]
+            if not trajectory:
+                continue
             print(f"[{calculator.software}/gather]: total {len(trajectory)} structures")
             objects.extend(trajectory)
 
