@@ -261,7 +261,7 @@ class AimdSampler(BaseSampler):
             if afile.endswith(key):
                 exists = True
                 break
-        if exists and not override:
+        if exists and override:
             return -1, None
         if override:
             newid = len(files)
@@ -325,7 +325,7 @@ class AimdSampler(BaseSampler):
             if afile.endswith(key):
                 exists = True
                 break
-        if exists and not override:
+        if exists and override:
             return -1, None
         if override:
             newid = len(files)
@@ -737,6 +737,9 @@ class ExistedTrajectorySampler(BaseSampler):
             for dirpath, _, _ in os.walk(self.workdir):
                 yield Path(dirpath).absolute()
 
+    # TODO: check the hash
+    # aid = hash_table[atoms.info["_hash"]]["aid"]
+    # KeyError: 3.0367319226449605e+30
     def get_samples(self, task: Path, interval=50, **kwargs):
         trajectory = []
         for afile in task.glob("*.extxyz"):
