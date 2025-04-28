@@ -227,7 +227,7 @@ class TensorDB:
             fnorms.append(np.sqrt(np.sum(atoms.get_forces() ** 2) / natoms))
             stresses.extend(atoms.get_stress(voigt=True).flatten().tolist())
             pressures.append(atoms.get_stress(voigt=True)[:3].mean() / -GPa)
-            if self.is_finite_temperature:
+            if self.config.get("finite_temperature", False):
                 temperatures.append(atoms.info["etemperature"] / kB)
             species = atoms.get_chemical_symbols()
             ilist, jlist, dlist = neighbor_list("ijd", atoms, cutoff=rcut)
@@ -268,7 +268,7 @@ class TensorDB:
         ax.set_xlabel("Volume ($\AA^3$)")
         ax.set_ylabel("Scaled Density")
     
-        if self.is_finite_temperature:
+        if self.config.get("finite_temperature", False):
             ax = axes[1, 0]
             ax.plot(volumes, temperatures, "o", markersize=2)
             ax.set_xlabel("Volume ($\AA^3$)")
