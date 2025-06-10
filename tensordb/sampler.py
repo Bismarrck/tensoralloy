@@ -737,7 +737,7 @@ class ExistedTrajectorySampler(BaseSampler):
             for dirpath, _, _ in os.walk(self.workdir):
                 yield Path(dirpath).absolute()
 
-    # TODO: check the hash
+    # TODO: bug report, not checked yet.
     # aid = hash_table[atoms.info["_hash"]]["aid"]
     # KeyError: 3.0367319226449605e+30
     def get_samples(self, task: Path, interval=50, **kwargs):
