@@ -732,7 +732,7 @@ class ExistedTrajectorySampler(BaseSampler):
     
     def task_iterator(self):
         if not self.recursive:
-            return next([self.workdir, ])
+            yield Path(self.workdir).absolute()
         else:
             for dirpath, _, _ in os.walk(self.workdir):
                 yield Path(dirpath).absolute()
