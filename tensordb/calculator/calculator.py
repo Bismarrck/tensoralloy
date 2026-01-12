@@ -9,6 +9,7 @@ import json
 import toml
 from datetime import datetime
 from pathlib import Path
+import joblib
 from collections import Counter
 from typing import Union, Dict
 from ase import Atoms
@@ -110,6 +111,9 @@ class BaseCalculator:
         subset_id = Counter()
         for atoms in calc_list:
             subset_id[len(atoms)] += 1
+        
+        # The number of parallel jobs for joblib
+        npar = os.getenv("JOBLIB_NPAR", -2)
 
         # Loop through all samplers
         for _, sampler in samplers.items():
@@ -119,10 +123,14 @@ class BaseCalculator:
                     task=task, 
                     interval=self.sampling_interval, 
                     **kwargs)
-                for atoms in selected:
-                    atoms = self.may_modify_atoms(atoms)
-                    # Skip the atoms object if it is None. This may happen when the 
-                    # modification failed due to some reasons.
+                produced = joblib.Parallel(n_jobs=npar)(
+                    joblib.delayed(self.may_modify_atoms)(atoms) for atoms in selected
+                )
+                # for atoms in selected:
+                #     atoms = self.may_modify_atoms(atoms)
+                # Skip the atoms object if it is None. This may happen when the 
+                # modification failed due to some reasons.
+                for atoms in produced:
                     if atoms is None:
                         continue
                     hash_id = atoms.info["_hash"]
