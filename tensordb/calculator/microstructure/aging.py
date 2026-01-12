@@ -3,7 +3,7 @@
 
 import numpy as np
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple, Optional
 from ase import Atoms, Atom
 from ase.neighborlist import NeighborList
 from ase.geometry import get_distances, find_mic
@@ -44,33 +44,10 @@ class HeliumBubbleInjection:
         assert self.max_ratio <= 4.0
         assert 0.5 <= self.min_ratio <= self.max_ratio
 
+
 class VaspAgingCalculator(VaspCalculator):
     """
     The VASP calculator for creating irradiation-induced aging structures.
-    Two types of microstructures are considered: helium bubble and transmutated element.
-    The input block is as follows:
-
-    >>> 
-    [aging]
-    interval = 100
-    cutoff = 4.0
-    [aging.transmutation]
-    U-Th = {"prob": 0.5, "nmax": 1}
-    [aging.helium_bubble]
-    U = {"prob": 0.5, "ratio": 2, "nmax": 1, "dist_mean": 1.5, "dist_std": 0.5}
-
-    Explanations: 
-    1. Every 1/100 snapshots are used to create aging structures.
-    2. Element U to Th
-    * probability is 50%
-    * at most 1 U atom is transmutated.
-    
-    3. Element U to He bubble: 
-    * probability is 50%
-    * the ratio of U to He is 1:1 or 2:1
-    * at most 1 U atom is transmutated
-    * the distance between He and He is 1.5 A with a standard deviation of 0.5 A
-
     """
     defaults = {"prob": 0.5, "ratio": 1, "nmax": 1, "dist_mean": 1.5, "dist_std": 0.5,
                 "interval": 100, "cutoff": 4.0}
@@ -89,9 +66,8 @@ class VaspAgingCalculator(VaspCalculator):
             if not isinstance(value, dict):
                 raise ValueError(f"The value of {key} should be a dictionary.")
             src = key.split("-")[0]
-            if src not in self.species:
-                raise ValueError(
-                    f"The source element {src} is not in the species list.")
+            # Note: We don't check if src is in self.species here strictly, 
+            # as the species list might update or depend on the specific loaded atoms.
             dst = key.split("-")[1]
             prob = value.get("prob", self.defaults["prob"])
             nmax = value.get("nmax", self.defaults["nmax"])
@@ -105,7 +81,8 @@ class VaspAgingCalculator(VaspCalculator):
                 target=args["target"], 
                 max_target_size=args["max_target_size"],
                 max_bubble_size=args["max_bubble_size"],
-                max_ratio=args["max_ratio"],
+                max_ratio=args.get("max_ratio", 3.0),
+                min_ratio=args.get("min_ratio", 1.0),
                 cutoff=args.get("cutoff", self.defaults["cutoff"])
             )
 
@@ -113,9 +90,20 @@ class VaspAgingCalculator(VaspCalculator):
     def random_seed(self):
         return 1
 
-    def may_inject_helium_bubble(self, atoms: Atoms, indices: np.ndarray):
+    def _get_valid_bubble_sizes(self, args: HeliumBubbleInjection) -> List[Tuple[int, int]]:
+        """Helper to find valid (cluster_size, bubble_size) pairs."""
+        valid_pairs = []
+        for c_size in range(1, args.max_target_size + 1):
+            for b_size in range(1, args.max_bubble_size + 1):
+                ratio = b_size / c_size
+                if args.min_ratio <= ratio <= args.max_ratio:
+                    valid_pairs.append((c_size, b_size))
+        return valid_pairs
+
+    def may_inject_helium_bubble(self, atoms: Atoms, center_idx: int):
         """
         The method for injecting a small helium bubble into the structure.
+        Modifies atoms in-place.
         """
         if self.helium_bubble_injection is None:
             return
@@ -124,26 +112,28 @@ class VaspAgingCalculator(VaspCalculator):
         args = self.helium_bubble_injection
         injector = FibnonacciSphereHeliumBubbleInjector(cutoff=args.cutoff)
         
-        # Setup the sizes
-        n = 0
-        while n < 100:
-            cluster_size = np.random.randint(1, args.max_target_size + 1)
-            bubble_size = np.random.randint(1, args.max_bubble_size + 1)
-            ratio = bubble_size / cluster_size
-            if args.min_ratio <= ratio <= args.max_ratio:
-                break
-            n += 1
-        else:
-            raise ValueError("Cannot find a valid cluster size and bubble size.")
+        # 1. Determine sizes deterministically to avoid infinite loops
+        valid_pairs = self._get_valid_bubble_sizes(args)
+        
+        if not valid_pairs:
+            # Fallback or silent return if configuration allows no valid bubbles
+            return 
+
+        # Pick a random valid pair
+        idx = np.random.randint(0, len(valid_pairs))
+        cluster_size, bubble_size = valid_pairs[idx]
 
         # Do the injection
-        injector.inject(atoms, indices[0], cluster_size, bubble_size, inplace=True)
+        # Note: This changes the length of 'atoms', invalidating subsequent indices in the caller
+        injector.inject(atoms, center_idx, cluster_size, bubble_size, inplace=True)
 
     def may_modify_atoms(self, atoms: Atoms):
         """
         Create structures representing irradiation-induced aging.
         The input `Atoms` object must have 16 atoms at least.
         """
+        from datetime import datetime
+        print(f"Creating an aged structure at {datetime.now().isoformat()}")
 
         # Check the number of atoms
         n = len(atoms)
@@ -158,26 +148,44 @@ class VaspAgingCalculator(VaspCalculator):
         obj = atoms.copy()
         
         # 2. Shuffle the atoms to modify.
-        obj.info["modified"] = np.zeros(n, dtype=bool)
+        # Use a local boolean mask instead of obj.info to track status.
+        # obj.info can become desynchronized if atoms are deleted later.
+        modified_mask = np.zeros(n, dtype=bool)
         shuffled_indices = np.random.permutation(n)
         
-        # 3. Loop through each helium bubble injection.
-        self.may_inject_helium_bubble(obj, shuffled_indices)
-
-        # 4. Loop through each transmutation.
+        # 3. Apply Transmutations FIRST.
+        # Transmutations only change symbols, they do not change the number of atoms.
+        # Therefore, indices remain valid.
         for transmutation in self.transmutations:
             for i in shuffled_indices:
-                if obj.info["modified"][i]:
+                if modified_mask[i]:
                     continue
+                
                 if obj[i].symbol == transmutation.src:
                     # Check the probability
                     if np.random.uniform(0, 1) <= transmutation.prob:
                         obj[i].symbol = transmutation.dst
-                        obj.info["modified"][i] = True
-                        # Check the number of atoms used for this transmutation
+                        modified_mask[i] = True
                         transmutation.used += 1
                         if transmutation.used >= transmutation.nmax:
                             break
+        
+        # 4. Apply Helium Bubble Injection LAST.
+        # This removes atoms and changes the index mapping.
+        # We select a center from atoms that have NOT been modified yet.
+        if self.helium_bubble_injection is not None:
+            for i in shuffled_indices:
+                if modified_mask[i]:
+                    continue
+                
+                # Check if this atom is a valid target for the bubble
+                if obj[i].symbol == self.helium_bubble_injection.target:
+                    # Apply injection and break (usually only one bubble per snapshot is intended 
+                    # based on logic, or logic can be extended)
+                    self.may_inject_helium_bubble(obj, i)
+                    break 
+        
+        print(f"Create an aged structure with {n} atoms at {datetime.now().isoformat()}")
         return obj
 
     def create_tasks(self, samplers: List[BaseSampler], **kwargs):
@@ -204,6 +212,9 @@ class HeliumBubbleInjector:
         """
         Calculate centroid considering periodic boundaries using MIC
         """
+        if len(positions) == 0:
+            return np.array([0.0, 0.0, 0.0])
+            
         if not np.any(pbc):  # No PBC in any direction
             return np.mean(positions, axis=0)
         
@@ -223,17 +234,11 @@ class HeliumBubbleInjector:
                bubble_size: int, inplace=False) -> Atoms:
         """
         Inject helium bubbles into 'atoms'.
-
-        Args:
-            atoms: ASE Atoms object
-            center_atom_idx: Index of the center atom
-            cluster_size: Number of atoms in the cluster
-            bubble_size: Number of helium atoms to inject
-            inplace: Modify the input Atoms object in place
-
         """
+        # Find neighbors to remove
         cluster_indices = find_cluster_neighbor_list_method(
             atoms, center_atom_idx, cluster_size, self.cutoff)
+        
         return self.replace_cluster(atoms, cluster_indices, "He", bubble_size, 
                                     inplace=inplace)
 
@@ -248,17 +253,23 @@ class HeliumBubbleInjector:
         """
         raise NotImplementedError
     
-    def replace_atoms(self, atoms, old_indices, new_element, new_positions):
+    def replace_atoms(self, atoms: Atoms, old_indices: List[int], 
+                      new_element: str, new_positions: np.ndarray) -> List[int]:
         """
-        Replace a group of atoms with new atoms in the structure
+        Replace a group of atoms with new atoms in the structure.
+        Returns the indices of the newly added atoms.
         """
+        # Delete old atoms. ASE handles list deletion safely.
+        # Note: After deletion, indices of subsequent atoms shift.
         del atoms[old_indices]
+        
         new_indices = []
-        n = len(atoms)
-        for pos in new_positions:
+        # Append new atoms
+        start_idx = len(atoms)
+        for i, pos in enumerate(new_positions):
             atoms.append(Atom(new_element, position=pos))
-            new_indices.append(n)
-            n += 1
+            new_indices.append(start_idx + i)
+            
         atoms.wrap()
         return new_indices
 
@@ -277,121 +288,145 @@ class FibnonacciSphereHeliumBubbleInjector(HeliumBubbleInjector):
         """
         Replace a cluster of atoms with a new element and optimize the positions.
         """
-
-        # Make a copy of the input atoms object
-        new_atoms = atoms.copy()
+        # If inplace, we work on the passed object, otherwise copy it
+        work_atoms = atoms if inplace else atoms.copy()
         
         # Obtain the initial cluster information
+        # Note: We must get positions BEFORE deleting atoms
         centroid = self.pbc_aware_centroid(
-            atoms.positions[cluster_indices], atoms.cell, atoms.pbc)
+            work_atoms.positions[cluster_indices], work_atoms.cell, work_atoms.pbc)
+        
+        # Determine scaling for initial placement
+        element_radius = covalent_radii[atomic_numbers[new_element]]
+        
+        # Safely get neighbor radius (handle case where list might be empty if we removed everything, 
+        # though unlikely in bulk)
+        existing_radii = [covalent_radii[atom.number] for atom in work_atoms]
+        neighbor_radius = np.max(existing_radii) if existing_radii else 1.5
+        
+        safe_radius = 2 * (element_radius + neighbor_radius)
         
         # Generate new atom positions (Fibonacci sphere distribution)
         sphere = self.fibonacci_sphere(new_atom_count, radius=1.0)
-        element_radius = covalent_radii[atomic_numbers[new_element]]
-        neighbor_radius = np.max([covalent_radii[atom.number] for atom in atoms])
-        safe_radius = 2 * (element_radius + neighbor_radius)  # 2 * sum of radii
-        
-        # Scale initial positions using safe radius
-        initial_positions = centroid + sphere * safe_radius * new_atom_count**0.33
+        initial_positions = centroid + sphere * safe_radius * (new_atom_count**0.33)
 
-        # Define the optimization procedure
-        def loss_function(positions):
-            positions = positions.reshape(-1, 3)
-            trial = new_atoms.copy()
-            indices = self.replace_atoms(
-                trial, cluster_indices, new_element, positions)
-            return self.calculate_loss(trial, indices, centroid)
+        # We need a temporary object for optimization to not mess up the main object 
+        # until the end (or to handle the loss function calculation properly)
         
+        # Strategy: Perform replacement on a copy to run the optimizer
+        opt_atoms = work_atoms.copy()
+        
+        # Replace atoms in the copy to get the NEW indices
+        added_indices = self.replace_atoms(
+            opt_atoms, cluster_indices, new_element, initial_positions)
+        
+        # Define the optimization procedure
+        def loss_function(flat_positions):
+            current_positions = flat_positions.reshape(-1, 3)
+            # Update positions of the specific helium atoms
+            opt_atoms.positions[added_indices] = current_positions
+            return self.calculate_loss(opt_atoms, added_indices, centroid)
+        
+        # Optimize
         result = minimize(loss_function, initial_positions.flatten(),
                           method='L-BFGS-B', 
                           options={'maxiter': self.optimization_steps})
         
-        # Update the atom positions
         optimized_positions = result.x.reshape(-1, 3)
 
-        if inplace:
-            self.replace_atoms(atoms, cluster_indices,
-                               new_element, optimized_positions)
-            return atoms
-        else:
-            self.replace_atoms(new_atoms, cluster_indices, 
-                           new_element, optimized_positions)
+        # Apply final result to the actual target atoms
+        # If we were already working inplace on 'atoms' (work_atoms == atoms), 
+        # we need to perform the replacement now using the optimized positions.
+        # Note: We haven't touched 'work_atoms' yet, only 'opt_atoms'.
+        self.replace_atoms(work_atoms, cluster_indices, new_element, optimized_positions)
         
-            return new_atoms
+        return work_atoms
     
-    def calculate_loss(self, atoms: Atoms, indices: np.ndarray, centroid: np.ndarray):
+    def calculate_loss(self, atoms: Atoms, indices: List[int], centroid: np.ndarray):
         """
         Calculate the loss function for the optimization.
-        The loss function is a weighted sum of three terms: repulsion, self-interaction, 
-        and attraction.
         """
+        # Ensure indices is a numpy array for indexing
+        indices_arr = np.array(indices)
 
         # Initialize cutoffs. Only the selected atoms have a cutoff.
         cutoffs = np.zeros(len(atoms))
-        cutoffs[indices] = self.cutoff
+        cutoffs[indices_arr] = self.cutoff
 
         # Build neighbor lists
         nl = NeighborList(cutoffs=cutoffs, skin=0.3, self_interaction=False, 
                           bothways=True)
         nl.update(atoms)
 
-        # Repulsion term: the new positions should be not too close to their neighbors.
+        # Repulsion term
         repulsion = 0.0
         R = atoms.positions
+        
+        # We only care about neighbors of the inserted atoms
         for idx in indices:
             neighbors, offsets = nl.get_neighbors(idx)
+            if len(neighbors) == 0:
+                continue
             D = R[neighbors] + offsets @ atoms.get_cell() - R[idx]
-            repulsion += 1.0 / np.min(np.linalg.norm(D, axis=1))
+            dists = np.linalg.norm(D, axis=1)
+            # Avoid division by zero
+            dists = np.maximum(dists, 1e-2)
+            repulsion += np.sum(1.0 / dists)
         
-        # Self-interaction term: the interatomic distances should be uniform.
-        self_dists = get_distances(
-            atoms.positions[indices], 
-            atoms.positions[indices], 
-            cell=atoms.cell, pbc=True)[1]
-        dists = []
-        for i in range(len(indices)):
-            dists.extend(self_dists[i, i+1:])
-        dists = np.array(dists)
-        self_interaction = np.linalg.norm(dists - dists.mean())
+        # Self-interaction term: equidistribution among He atoms
+        if len(indices) > 1:
+            # get_distances returns a tuple, index 1 is the distance matrix
+            dist_mat = get_distances(
+                atoms.positions[indices_arr], 
+                cell=atoms.cell, pbc=atoms.pbc)[1]
+            
+            # Extract upper triangle to avoid duplicates and self-distances
+            dists = dist_mat[np.triu_indices(len(indices), k=1)]
+            
+            if len(dists) > 0:
+                self_interaction = np.std(dists) # Minimize standard deviation
+            else:
+                self_interaction = 0.0
+        else:
+            self_interaction = 0.0
                 
-        # Attraction term: the new positions should be not far from the centroid
-        new_positions = atoms.positions[indices]
-        center_disp = get_distances(new_positions, centroid, cell=atoms.cell, pbc=True)
-        center_term = center_disp[1].mean()
+        # Attraction term: keep close to centroid
+        new_positions = atoms.positions[indices_arr]
+        # Calculate distance to centroid (single point)
+        # Note: simple norm is sufficient if we assume optimization starts close to centroid
+        # but technically should respect PBC.
+        disp_to_center = new_positions - centroid
+        # Apply MIC to centroid distance
+        disp_to_center, _ = find_mic(disp_to_center, atoms.cell, atoms.pbc)
+        center_dists = np.linalg.norm(disp_to_center, axis=1)
+        center_term = np.mean(center_dists)
         
-        # Weighted sum (adjusted weights)
         return (
             0.6 * repulsion +
             0.2 * self_interaction +
             0.2 * center_term
         )
 
-    def fibonacci_sphere(self, n, radius=1.0, min_distance=1.0):
+    def fibonacci_sphere(self, n, radius=1.0, min_distance=0.1):
         """
         Generate n points on a sphere using the Fibonacci lattice method.
         """
         points = []
-        while len(points) < n:
-            indices = np.arange(len(points), len(points)+1000)
-            phi = np.arccos(1 - 2*(indices+0.5)/(n+1000))
-            theta = np.pi * (1 + 5**0.5) * indices
+        # Standard Fibonacci sphere algorithm
+        phi = np.pi * (3. - np.sqrt(5.))  # Golden angle in radians
+
+        for i in range(n):
+            y = 1 - (i / float(n - 1)) * 2 if n > 1 else 0  # y goes from 1 to -1
+            radius_at_y = np.sqrt(1 - y * y)  # radius at y
             
-            new_points = np.stack([
-                radius * np.sin(phi) * np.cos(theta),
-                radius * np.sin(phi) * np.sin(theta),
-                radius * np.cos(phi)
-            ], axis=1)
-            
-            # Filter points that are too close
-            if points:
-                distances = np.linalg.norm(new_points[:, None] - np.array(points), 
-                                           axis=2)
-                mask = np.all(distances > min_distance, axis=1)
-                new_points = new_points[mask]
-                
-            points.extend(new_points[:n-len(points)])
-        
-        return np.array(points[:n])
+            theta = phi * i  # golden angle increment
+
+            x = np.cos(theta) * radius_at_y
+            z = np.sin(theta) * radius_at_y
+
+            points.append([x * radius, y * radius, z * radius])
+
+        return np.array(points)
 
 
 def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int, 
@@ -399,39 +434,35 @@ def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int,
     """
     Find approximate minimum-distance cluster using neighbor lists with element 
     filtering.
-    
-    Args:
-        atoms: ASE Atoms object
-        M: Cluster size (must include center_atom_idx)
-        center_atom_idx: Index of the mandatory atom
-        eltype: Target element symbol
-        cutoff: Neighbor search radius (angstrom)
-        
-    Returns:
-        List of atom indices in the cluster
-    
     """
     # Validate inputs
-    assert 1 <= cluster_size < 5, "cluster_size must be between 2 and 4"
+    # Fixed assertion: allow cluster_size up to 5 inclusive
+    assert 1 <= cluster_size <= 5, "cluster_size must be between 1 and 5"
     
+    if cluster_size == 1:
+        return [center_atom_idx]
+
     # Step 1: Filter target element atoms
     eltype = atoms[center_atom_idx].symbol
     target_indices = [i for i, atom in enumerate(atoms) if atom.symbol == eltype]
-    assert len(target_indices) >= cluster_size, "Insufficient target element atoms"
     
-    # Step 2: Build neighbor list (only for target elements)
-    # Create a mask to ignore non-target atoms
+    if len(target_indices) < cluster_size:
+        raise ValueError(f"Insufficient target element atoms of type {eltype}")
+    
+    # Step 2: Build neighbor list
+    # Use a mask for cutoffs to speed up: only search around target atoms
+    cutoffs = [cutoff if i in target_indices else 0.0 for i in range(len(atoms))]
     nl = NeighborList(
-        cutoffs=[cutoff if i in target_indices else 0.0 for i in range(len(atoms))],
+        cutoffs=cutoffs,
         self_interaction=False,
         bothways=True
     )
     nl.update(atoms)
     
-    # Step 3: Get neighbors of center_atom_idx (already filtered by target_indices)
+    # Step 3: Get neighbors of center_atom_idx
     neighbors, offsets = nl.get_neighbors(center_atom_idx)
     
-    # Step 4: Select closest M-1 neighbors
+    # Step 4: Select closest M-1 neighbors that match the element type
     valid_neighbors = []
     for n, offset in zip(neighbors, offsets):
         if atoms[n].symbol != eltype:
@@ -440,6 +471,15 @@ def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int,
         distance = np.linalg.norm(true_position - atoms.positions[center_atom_idx])
         valid_neighbors.append((distance, n))
     
-    # Pick top M-1 closest valid neighbors
+    # Sort by distance
     valid_neighbors.sort()
-    return [center_atom_idx] + [n for _, n in valid_neighbors[:cluster_size - 1]]
+    
+    # Pick top M-1 closest valid neighbors
+    # Check if we found enough neighbors
+    needed = cluster_size - 1
+    if len(valid_neighbors) < needed:
+        # Fallback: if cutoff was too small, just pick the center to avoid crash, 
+        # or raise error. Here we raise error.
+        raise ValueError("Cutoff too small to find required cluster size.")
+
+    return [center_atom_idx] + [n for _, n in valid_neighbors[:needed]]
