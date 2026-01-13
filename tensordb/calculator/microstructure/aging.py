@@ -37,6 +37,7 @@ class HeliumBubbleInjection:
     max_ratio: float = 3.0
     min_ratio: float = 1.0
     cutoff: float = 4.0
+    algorithm: str = "fibonacci"
 
     def __post_init__(self):
         assert 1 <= self.max_target_size <= 5
@@ -83,7 +84,8 @@ class VaspAgingCalculator(VaspCalculator):
                 max_bubble_size=args["max_bubble_size"],
                 max_ratio=args.get("max_ratio", 3.0),
                 min_ratio=args.get("min_ratio", 1.0),
-                cutoff=args.get("cutoff", self.defaults["cutoff"])
+                cutoff=args.get("cutoff", self.defaults["cutoff"]),
+                algorithm=args.get("algorithm", "fibonacci")
             )
 
     @property
@@ -110,7 +112,11 @@ class VaspAgingCalculator(VaspCalculator):
 
         # Initialize the helium bubble injector
         args = self.helium_bubble_injection
-        injector = FibnonacciSphereHeliumBubbleInjector(cutoff=args.cutoff)
+        algo = self.config.get("helium_bubble_algorithm", "fibonacci").lower()
+        if algo == "dense_packing":
+            injector = DensePackingHeliumBubbleInjector(cutoff=args.cutoff)
+        else:
+            injector = FibnonacciSphereHeliumBubbleInjector(cutoff=args.cutoff)
         
         # 1. Determine sizes deterministically to avoid infinite loops
         valid_pairs = self._get_valid_bubble_sizes(args)
@@ -132,8 +138,6 @@ class VaspAgingCalculator(VaspCalculator):
         Create structures representing irradiation-induced aging.
         The input `Atoms` object must have 16 atoms at least.
         """
-        from datetime import datetime
-        print(f"Creating an aged structure at {datetime.now().isoformat()}")
 
         # Check the number of atoms
         n = len(atoms)
@@ -185,7 +189,6 @@ class VaspAgingCalculator(VaspCalculator):
                     self.may_inject_helium_bubble(obj, i)
                     break 
         
-        print(f"Create an aged structure with {n} atoms at {datetime.now().isoformat()}")
         return obj
 
     def create_tasks(self, samplers: List[BaseSampler], **kwargs):
@@ -483,3 +486,101 @@ def find_cluster_neighbor_list_method(atoms: Atoms, center_atom_idx: int,
         raise ValueError("Cutoff too small to find required cluster size.")
 
     return [center_atom_idx] + [n for _, n in valid_neighbors[:needed]]
+
+
+from scipy.spatial.transform import Rotation
+
+class DensePackingHeliumBubbleInjector(HeliumBubbleInjector):
+    """
+    Injects Helium atoms by cutting a cluster from a dense FCC lattice 
+    and optimizing the geometry. This is better for high-density bubbles 
+    (ratio > 1) compared to the Fibonacci shell method.
+    """
+
+    def replace_cluster(self,
+                        atoms: Atoms, 
+                        cluster_indices: list, 
+                        new_element: str,
+                        new_atom_count: int,
+                        inplace=False) -> Atoms:
+        
+        work_atoms = atoms if inplace else atoms.copy()
+        
+        # 1. Calculate Centroid
+        centroid = self.pbc_aware_centroid(
+            work_atoms.positions[cluster_indices], work_atoms.cell, work_atoms.pbc)
+        
+        # 2. Determine Scale
+        # He-He distance in high pressure bubbles is typically 2.0 - 2.5 Angstroms.
+        # We can estimate it based on the available volume of the removed cluster.
+        # Volume of removed host atoms ~ N_host * (4/3 * pi * r_host^3)
+        # Volume of He atoms ~ N_he * (4/3 * pi * r_he^3)
+        # We start with a dense guess (2.2 A spacing) and let the optimizer relax it.
+        initial_spacing = 2.2 
+
+        # 3. Generate FCC Cluster (Dense Packing)
+        # Generate points centered at (0,0,0)
+        points = self.generate_fcc_cluster(new_atom_count, spacing=initial_spacing)
+        
+        # 4. Random Rotation
+        # Rotate the bubble so the He lattice isn't perfectly aligned with the host lattice
+        # which prevents artificial channeling effects during relaxation.
+        rot = Rotation.random()
+        points = rot.apply(points)
+
+        # 5. Move to Centroid
+        initial_positions = points + centroid
+
+        # 6. Optimization (Same as before)
+        opt_atoms = work_atoms.copy()
+        added_indices = self.replace_atoms(
+            opt_atoms, cluster_indices, new_element, initial_positions)
+        
+        def loss_function(flat_positions):
+            current_positions = flat_positions.reshape(-1, 3)
+            opt_atoms.positions[added_indices] = current_positions
+            return self.calculate_loss(opt_atoms, added_indices, centroid)
+        
+        result = minimize(loss_function, initial_positions.flatten(),
+                          method='L-BFGS-B', 
+                          options={'maxiter': self.optimization_steps})
+        
+        optimized_positions = result.x.reshape(-1, 3)
+        
+        # 7. Apply to final object
+        self.replace_atoms(work_atoms, cluster_indices, new_element, optimized_positions)
+        
+        return work_atoms
+
+    def generate_fcc_cluster(self, n, spacing=2.2):
+        """
+        Generates the N closest points to the origin from a generated FCC grid.
+        """
+        if n == 1:
+            return np.array([[0.0, 0.0, 0.0]])
+
+        # Create a grid large enough to hold N atoms
+        # An FCC unit cell has 4 atoms. We need ceil(N/4) cells roughly.
+        # Make a grid of roughly cubic size.
+        dim = int(np.ceil((n / 4)**(1/3))) + 1
+        
+        basis = np.array([[0,0,0], [0,0.5,0.5], [0.5,0,0.5], [0.5,0.5,0]]) * spacing * np.sqrt(2)
+        
+        points = []
+        for x in range(-dim, dim+1):
+            for y in range(-dim, dim+1):
+                for z in range(-dim, dim+1):
+                    offset = np.array([x, y, z]) * spacing * np.sqrt(2)
+                    points.append(basis + offset)
+        
+        points = np.vstack(points)
+        
+        # Sort by distance from origin
+        dists = np.linalg.norm(points, axis=1)
+        sorted_indices = np.argsort(dists)
+        
+        # Return the N closest points to origin
+        # Use simple centering to ensure the center of mass is close to 0
+        selected = points[sorted_indices[:n]]
+        center_of_mass = np.mean(selected, axis=0)
+        return selected - center_of_mass
