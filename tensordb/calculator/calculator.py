@@ -114,6 +114,8 @@ class BaseCalculator:
         
         # The number of parallel jobs for joblib
         npar = os.getenv("JOBLIB_NPAR", -2)
+        if isinstance(npar, str):
+            npar = int(npar)
 
         # Loop through all samplers
         for _, sampler in samplers.items():
