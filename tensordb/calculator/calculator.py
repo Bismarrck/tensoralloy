@@ -351,6 +351,48 @@ class VaspCalculator(BaseCalculator):
                     f"{self.__class__.__name__} creates "
                     f"{natoms}atoms/group{group_id} ({size} tasks)"
                 )
+    
+    def get_job_status(self, taskdir: Path):
+        metadata = taskdir / "metadata.json"
+        if not metadata.exists():
+            return None
+        with open(metadata, "r") as fp:
+            metadata = json.load(fp)
+        sid, aid = [int(x) for x in metadata["aid"].split(".")]
+        gid = metadata["group_id"]
+        key = (sid, gid)
+        state = Counter({
+            "key": key,
+            "CPU(hours)": 0.0,
+            "GPU(hours)": 0.0,
+            "CPU(jobs)": 0,
+            "GPU(jobs)": 0,
+            "n_converged": 0,
+            "n_total": 1,
+            "n_completed": 0,
+            "taskdir": str(taskdir),
+        })
+        job = VaspJob(taskdir)
+        su = job.get_vasp_job_service_unit()
+        if su is None:
+            return state
+        converged = job.check_vasp_job_scf_convergence()
+        if converged:
+            state["n_converged"] += 1
+        state["n_completed"] += 1
+        if su.device == "cpu":
+            state["CPU(hours)"] += su.hours
+            state["CPU(jobs)"] += 1
+        else:
+            state["GPU(hours)"] += su.hours
+            state["GPU(jobs)"] += 1
+        # Update the metadata
+        with open(taskdir / "metadata.json", "w") as fp:
+            metadata["SU"] = su.__dict__
+            metadata["converged"] = converged
+            json.dump(metadata, fp, indent=2)
+            fp.write("\n")
+        return state
 
     def update_status(self):
         """
@@ -381,16 +423,13 @@ class VaspCalculator(BaseCalculator):
         }
         accumulator = {}
 
-        # Loop through all prepared jobs
-        for taskdir in self.task_iterator():
-            metadata = taskdir / "metadata.json"
-            if not metadata.exists():
+        all_results = joblib.Parallel(n_jobs=-2, verbose=0)(
+            joblib.delayed(self.get_job_status)(taskdir) for taskdir in self.task_iterator()
+        )
+        for state in all_results:
+            if state is None:
                 continue
-            with open(metadata, "r") as fp:
-                metadata = json.load(fp)
-            sid, aid = [int(x) for x in metadata["aid"].split(".")]
-            gid = metadata["group_id"]
-            key = (sid, gid)
+            key = state.pop("key")
             if key not in accumulator:
                 accumulator[key] = Counter(
                     {
@@ -399,35 +438,22 @@ class VaspCalculator(BaseCalculator):
                         "CPU(jobs)": 0,
                         "GPU(jobs)": 0,
                         "n_converged": 0,
-                        "n_total": 1,
+                        "n_total": 0,
                         "completed_tasks": [],
                         "converged_tasks": [],
                     }
                 )
-            else:
-                accumulator[key]["n_total"] += 1
-            job = VaspJob(taskdir)
-            su = job.get_vasp_job_service_unit()
-            if su is None:
-                continue
-            converged = job.check_vasp_job_scf_convergence()
-            if converged:
-                accumulator[key]["n_converged"] += 1
-                accumulator[key]["converged_tasks"].append(str(taskdir))
-            accumulator[key]["n_completed"] += 1
-            accumulator[key]["completed_tasks"].append(str(taskdir))
-            if su.device == "cpu":
-                accumulator[key]["CPU(hours)"] += su.hours
-                accumulator[key]["CPU(jobs)"] += 1
-            else:
-                accumulator[key]["GPU(hours)"] += su.hours
-                accumulator[key]["GPU(jobs)"] += 1
-            # Update the metadata
-            with open(taskdir / "metadata.json", "w") as fp:
-                metadata["SU"] = su.__dict__
-                metadata["converged"] = converged
-                json.dump(metadata, fp, indent=2)
-                fp.write("\n")
+            accumulator[key]["n_total"] += state["n_total"]
+            accumulator[key]["n_completed"] += state["n_completed"]
+            accumulator[key]["n_converged"] += state["n_converged"]
+            accumulator[key]["CPU(hours)"] += state["CPU(hours)"]
+            accumulator[key]["GPU(hours)"] += state["GPU(hours)"]
+            accumulator[key]["CPU(jobs)"] += state["CPU(jobs)"]
+            accumulator[key]["GPU(jobs)"] += state["GPU(jobs)"]
+            if state["n_converged"] > 0:
+                accumulator[key]["converged_tasks"].append(state["taskdir"])
+            if state["n_completed"] > 0:
+                accumulator[key]["completed_tasks"].append(state["taskdir"])
 
         # Save the group metadata
         for key in accumulator:
