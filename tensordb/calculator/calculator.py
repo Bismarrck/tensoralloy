@@ -464,7 +464,9 @@ class VaspCalculator(BaseCalculator):
                 fp.write("\n")
 
         # Print the status
-        for key, value in accumulator.items():
+        sorted_keys = sorted(accumulator.keys(), key=lambda x: (x[0], x[1]))
+        for key in sorted_keys:
+            value = accumulator[key]
             status["group"].append(f"{key[0]}.g{key[1]}")
             status["total_jobs"].append(value["n_total"])
             status["converged_jobs"].append(value["n_converged"])
