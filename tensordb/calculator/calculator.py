@@ -116,6 +116,9 @@ class BaseCalculator:
         npar = os.getenv("JOBLIB_NPAR", -2)
         if isinstance(npar, str):
             npar = int(npar)
+        verb = os.getenv("JOBLIB_VERBOSE", 0)
+        if isinstance(verb, str):
+            verb = int(verb)
 
         # Loop through all samplers
         for _, sampler in samplers.items():
@@ -125,7 +128,7 @@ class BaseCalculator:
                     task=task, 
                     interval=self.sampling_interval, 
                     **kwargs)
-                produced = joblib.Parallel(n_jobs=npar)(
+                produced = joblib.Parallel(n_jobs=npar, verbose=verb)(
                     joblib.delayed(self.may_modify_atoms)(atoms) for atoms in selected
                 )
                 # for atoms in selected:
