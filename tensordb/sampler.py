@@ -388,10 +388,10 @@ class VaspAimdSampler(AimdSampler):
                     setups[self.species[i]] = potcar[len(self.species[i]):]
         else:
             setups["base"] = "recommended"
-        xc = params.get("xc", "pbe")
 
         # Initialize the VASP calculator for AIMD sampling jobs.
         params = getitem(self.config, ["vasp", "sampling"])
+        xc = params.get("xc", "pbe")
         self.vasp = Vasp(
             xc=xc,
             setups=setups,
